@@ -35,6 +35,15 @@ def next_power_of_two(n):
     """
     return 2**(n-1).bit_length()
 
+def parse_csv_antennas(antennas_csv):
+    antennas = antennas_csv.split(",")
+    nantennas = len(antennas)
+    if nantennas == 1 and antennas[0] == '':
+        raise AntennaValidationError("Provided antenna list was empty")
+    names = [antenna.strip() for antenna in antennas]
+    if len(names) != len(set(names)):
+        raise AntennaValidationError("Not all provided antennas were unqiue")
+    return names
 
 ###################
 # Custom exceptions
@@ -304,13 +313,6 @@ class FbfMasterController(AsyncDeviceServer):
         else:
             return self._products[product_id]
 
-    def _parse_csv_antennas(self, antennas_csv):
-        antennas = antennas_csv.split(",")
-        nantennas = len(antennas)
-        if nantennas == 1 and antennas[0] == '':
-            raise AntennaValidationError("Provided antenna list was empty")
-        return [antenna.strip() for antenna in antennas]
-
     @request(Str(), Int())
     @return_reply()
     def request_register_worker_server(self, req, hostname, port):
@@ -440,7 +442,7 @@ class FbfMasterController(AsyncDeviceServer):
         # just assume one antennas worth of data per NIC on our servers, so two antennas per
         # node.
         try:
-            antennas = self._parse_csv_antennas(antennas_csv)
+            antennas = parse_csv_antennas(antennas_csv)
         except AntennaValidationError as error:
             return ("fail", str(error))
 
@@ -463,8 +465,6 @@ class FbfMasterController(AsyncDeviceServer):
             if next_power_of_two(nantennas)//2 < 4:
                 log.warning("Number of antennas was less than than 4 but resources will be allocated assuming 4 antennas.")
             required_servers = max(4, next_power_of_two(nantennas)//2)
-            # This may be removed in future.
-            # Currently if _dummy is set no actual server allocation will be requested.
             kpc = KatportalClientWrapper("portal.mkat.karoo.kat.ac.za")
             futures, observers = [],[]
             for antenna in antennas:
@@ -474,12 +474,14 @@ class FbfMasterController(AsyncDeviceServer):
                 try:
                     observer = yield future
                 except Exception as error:
-                    log.exception("Error on katportalclient call")
+                    log.error("Error on katportalclient call: {}".format(str(error)))
                     req.reply("fail", "Error retrieving katpoint string for antenna {}".format(antennas[ii]))
                     return
                 else:
                     log.debug("Fetched katpoint antenna: {}".format(observer))
                     observers.append(Antenna(observer))
+            # This may be removed in future.
+            # Currently if self._dummy is set no actual server allocation will be requested.
             if not self._dummy:
                 servers = self._server_pool.allocate(required_servers)
             else:
@@ -523,6 +525,50 @@ class FbfMasterController(AsyncDeviceServer):
         return ("ok",)
 
 
+    @request(Str(), Str())
+    @return_reply()
+    def request_target_start(self, req, product_id, target):
+        """
+        @brief      Notify FBFUSE that a new target is being observed
+
+        @param      product_id      This is a name for the data product, used to track which subarray is being deconfigured.
+                                    For example "array_1_bc856M4k".
+
+        @param      target          A KATPOINT target string
+
+        @return     katcp reply object [[[ !target-start ok | (fail [error description]) ]]]
+        """
+        try:
+            product = self._get_product(product_id)
+        except ProductLookupError as error:
+            return ("fail", str(error))
+        try:
+            target = Target(target)
+        except Exception as error:
+            return ("fail", str(error))
+        # Here we will defer to the CA
+        return ("ok",)
+
+
+    @request(Str())
+    @return_reply()
+    def request_target_stop(self, req, product_id):
+        """
+        @brief      Notify FBFUSE that the telescope has stopped observing a target
+
+        @param      product_id      This is a name for the data product, used to track which subarray is being deconfigured.
+                                    For example "array_1_bc856M4k".
+
+        @return     katcp reply object [[[ !target-start ok | (fail [error description]) ]]]
+        """
+        try:
+            product = self._get_product(product_id)
+        except ProductLookupError as error:
+            return ("fail", str(error))
+        # Here we will defer to the CA
+        return ("ok",)
+
+
     @request(Str(), Int(), Str(), Int(), Int())
     @return_reply()
     def request_configure_coherent_beams(self, req, product_id, nbeams, antennas_csv, fscrunch, tscrunch):
@@ -560,9 +606,12 @@ class FbfMasterController(AsyncDeviceServer):
             product = self._get_product(product_id)
         except ProductLookupError as error:
             return ("fail", str(error))
-        antennas = antennas_csv.split(",")
-        product.configure_coherent_beams(nbeams, antennas, fscrunch, tscrunch)
-        return ("ok",)
+        try:
+            product.configure_coherent_beams(nbeams, antennas_csv, fscrunch, tscrunch)
+        except Exception as error:
+            return ("fail", str(error))
+        else:
+            return ("ok",)
 
     @request(Str(), Str(), Int(), Int())
     @return_reply()
@@ -598,9 +647,12 @@ class FbfMasterController(AsyncDeviceServer):
             product = self._get_product(product_id)
         except ProductLookupError as error:
             return ("fail", str(error))
-        antennas = antennas_csv.split(",")
-        product.configure_incoherent_beam(antennas, fscrunch, tscrunch)
-        return ("ok",)
+        try:
+            product.configure_incoherent_beam(antennas_csv, fscrunch, tscrunch)
+        except Exception as error:
+            return ("fail", str(error))
+        else:
+            return ("ok",)
 
     @request(Str())
     @return_reply()
@@ -619,20 +671,20 @@ class FbfMasterController(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !start-beams ok | (fail [error description]) ]]]
         """
-        timeout = 20.0
-        start = time.time()
         try:
             product = self._get_product(product_id)
         except ProductLookupError as error:
             return ("fail", str(error))
         @tornado.gen.coroutine
         def start():
+            timeout = 20.0
+            start = time.time()
             state = product._state_sensor.value()
             if state == FbfProductController.STARTING:
                 while time.time() < start + timeout:
                     yield tornado.gen.sleep(0.5)
                     state = product._state_sensor.value()
-                    if state == FbfProductController.self.CAPTURING:
+                    if state == FbfProductController.CAPTURING:
                         req.reply("ok",)
                         break
                     elif state == FbfProductController.STARTING:
@@ -648,8 +700,6 @@ class FbfMasterController(AsyncDeviceServer):
                 req.reply("fail", "Product is in the process of stopping")
             elif state == FbfProductController.IDLE:
                 product.start_beams()
-                # Here we should proxy the relevant sensors from the delay engine
-                # for the product controller up to this level
                 req.reply("ok",)
 
         self.ioloop.add_callback(start)
@@ -659,18 +709,19 @@ class FbfMasterController(AsyncDeviceServer):
     @return_reply()
     def request_provision_beams(self, req, product_id):
         """
-        @brief      Request that FBFUSE asynchronously start beams streaming
+        @brief      Request that FBFUSE asynchronously prepare to start beams streaming
 
         @detail     Upon this call the provided coherent and incoherent beam configurations will be evaluated
                     to determine if they are physical and can be met with the existing hardware. If the configurations
-                    are acceptable then servers allocated to this instance will be triggered to begin production of beams.
-                    Unlike a call to ?capture-start, ?provision-beams will not wait for completion before returning, instead
-                    it will start the process of beamformer resource alloction and compilation. To determine when the process
-                    is complete, the user must wait on the value of the product "state" sensor becoming "capturing", e.g.
+                    are acceptable then servers allocated to this instance will be triggered to prepare for the production of beams.
+                    Unlike a call to ?capture-start, ?provision-beams will not trigger a connection to multicast groups and will not
+                    wait for completion before returning, instead it will start the process of beamformer resource alloction and compilation.
+                    To determine when the process is complete, the user must wait on the value of the product "state" sensor becoming "prepared",
+                    e.g.
 
                     @code
                         client.sensor['{}-state'.format(proxy_name)].wait(
-                            lambda reading: reading.value == 'capturing')
+                            lambda reading: reading.value == 'prepared')
                     @endcode
 
         @param      req               A katcp request object
@@ -764,7 +815,10 @@ class FbfMasterController(AsyncDeviceServer):
             product = self._get_product(product_id)
         except ProductLookupError as error:
             return ("fail", str(error))
-        target = Target(target)
+        try:
+            target = Target(target)
+        except Exception as error:
+            return ("fail", str(error))
         beam = product.add_beam(target)
         return ("ok", beam.idx)
 
@@ -813,7 +867,10 @@ class FbfMasterController(AsyncDeviceServer):
             product = self._get_product(product_id)
         except ProductLookupError as error:
             return ("fail", str(error))
-        target = Target(target)
+        try:
+            target = Target(target)
+        except Exception as error:
+            return ("fail", str(error))
         tiling = product.add_tiling(target, nbeams, reference_frequency, overlap, epoch)
         return ("ok", tiling.idxs())
 
@@ -860,7 +917,10 @@ class FbfMasterController(AsyncDeviceServer):
             product = self._get_product(product_id)
         except ProductLookupError as error:
             return ("fail", str(error))
-        target = Target(target)
+        try:
+            target = Target(target)
+        except Exception as error:
+            return ("fail", str(error))
         tiling = product.add_tiling(ra, dec, source_name, nbeams, reference_frequency, overlap, epoch)
         return ("ok", tiling.idxs())
 
@@ -899,7 +959,10 @@ class FbfMasterController(AsyncDeviceServer):
             product = self._get_product(product_id)
         except ProductLookupError as error:
             return ("fail", str(error))
-        target = Target(target)
+        try:
+            target = Target(target)
+        except Exception as error:
+            return ("fail", str(error))
         if not product.capturing:
             return ("fail","Product must be capturing before a target confiugration can be set.")
         product.reset_beams()
@@ -1351,7 +1414,7 @@ class FbfProductController(object):
     STATES = ["idle", "starting", "stopping", "capturing"]
     IDLE, STARTING, STOPPING, CAPTURING = STATES
 
-    def __init__(self, parent, product_id, antennas, n_channels, streams, proxy_name, servers):
+    def __init__(self, parent, product_id, katpoint_antennas, n_channels, streams, proxy_name, servers):
         """
         @brief      Construct new instance
 
@@ -1359,7 +1422,7 @@ class FbfProductController(object):
 
         @param      product_id        The name of the product
 
-        @param      antennas          A list of katpoint.Antenna objects
+        @param      katpoint_antennas A list of katpoint.Antenna objects
 
         @param      n_channels        The integer number of frequency channels provided by the CBF.
 
@@ -1370,12 +1433,12 @@ class FbfProductController(object):
         @param      servers           A list of FbfWorkerServer instances allocated to this product controller
         """
         log.debug("Creating new FbfProductController with args: {}".format(
-            ", ".join([str(i) for i in (parent, product_id, antennas, n_channels,
+            ", ".join([str(i) for i in (parent, product_id, katpoint_antennas, n_channels,
                 streams, proxy_name, servers)])))
         self._parent = parent
         self._product_id = product_id
-        self._antennas = ",".join([_.name for _ in antennas])
-        self._katpoint_antennas = antennas
+        self._antennas = ",".join([a.name for a in katpoint_antennas])
+        self._katpoint_antennas = katpoint_antennas
         self._antenna_map = {a.name: a for a in self._katpoint_antennas}
         self._n_channels = n_channels
         self._streams = streams
@@ -1576,8 +1639,8 @@ class FbfProductController(object):
         """
         if not self.idle:
             raise Exception("Configuration calls can only be made on a product in an idle state")
-        if not self._verify_antennas(antennas):
-            raise Exception("Requested antennas are not a subset of the current subarray")
+        if not self._verify_antennas(parse_csv_antennas(antennas)):
+            raise AntennaValidationError("Requested antennas are not a subset of the current subarray")
         self._cbc_nbeams_sensor.set_value(nbeams)
         #need a check here to determine if this is a subset of the subarray antennas
         self._cbc_fscrunch_sensor.set_value(fscrunch)
@@ -1599,8 +1662,8 @@ class FbfProductController(object):
         """
         if not self.idle:
             raise Exception("Configuration calls can only be made on a product in an idle state")
-        if not self._verify_antennas(antennas):
-            raise Exception("Requested antennas are not a subset of the current subarray")
+        if not self._verify_antennas(parse_csv_antennas(antennas)):
+            raise AntennaValidationError("Requested antennas are not a subset of the current subarray")
         #need a check here to determine if this is a subset of the subarray antennas
         self._ibc_fscrunch_sensor.set_value(fscrunch)
         self._ibc_tscrunch_sensor.set_value(tscrunch)
@@ -1619,7 +1682,7 @@ class FbfProductController(object):
         if not self.idle:
             raise Exception("Beams can only be started from an IDLE state")
         self._state_sensor.set_value(self.STARTING)
-        cbc_antennas_names = self._cbc_antennas_sensor.value().split(",")
+        cbc_antennas_names = parse_csv_antennas(self._cbc_antennas_sensor.value())
         cbc_antennas = [self._antenna_map[name] for name in cbc_antennas_names]
         self._beam_manager = BeamManager(self._cbc_nbeams_sensor.value(), cbc_antennas)
         self._delay_engine = DelayEngine("127.0.0.1", 0, self._beam_manager)

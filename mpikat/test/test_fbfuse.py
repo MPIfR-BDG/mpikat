@@ -5,6 +5,7 @@ import logging
 import time
 import sys
 import importlib
+import re
 from urllib2 import urlopen, URLError
 from StringIO import StringIO
 from tornado.ioloop import IOLoop
@@ -24,7 +25,10 @@ PORTAL = "portal.mkat.karoo.kat.ac.za"
 class MockKatportalClientWrapper(mock.Mock):
     @coroutine
     def get_observer_string(self, antenna):
-        raise Return("{}, -30:42:39.8, 21:26:38.0, 1035.0, 13.5".format(antenna))
+        if re.match("^[mM][0-9]{3}$", antenna):
+            raise Return("{}, -30:42:39.8, 21:26:38.0, 1035.0, 13.5".format(antenna))
+        else:
+            raise SensorNotFoundError("No antenna named {}".format(antenna))
 
 def requires_portal(func):
     def wrapped(*args, **kwargs):
@@ -53,7 +57,7 @@ class TestFbfMasterController(AsyncTestCase):
 
     @coroutine
     def _configure_helper(self, product_name, antennas, nchans, streams_json, proxy_name):
-        #Patching isn't working here for some reason (maybe pathing?)
+        #Patching isn't working here for some reason (maybe pathing?), the
         #hack solution is to manually switch to the Mock for the portal
         #client. TODO: Fix the structure of the code so that this can be
         #patched properly
@@ -170,6 +174,11 @@ class TestFbfMasterController(AsyncTestCase):
             self.DEFAULT_STREAMS, 'FBFUSE_test')
 
     @gen_test
+    def test_configure_bad_antennas(self):
+        yield self._send_request_expect_fail('configure', 'test_product', 'NotAnAntenna',
+            self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, 'FBFUSE_test')
+
+    @gen_test
     def test_configure_bad_n_channels(self):
         yield self._send_request_expect_fail('configure', 'test_product', self.DEFAULT_ANTENNAS,
             4097, self.DEFAULT_STREAMS, 'FBFUSE_test')
@@ -179,7 +188,7 @@ class TestFbfMasterController(AsyncTestCase):
         yield self._send_request_expect_fail('configure', 'test_product', self.DEFAULT_ANTENNAS,
             self.DEFAULT_NCHANS, '{}', 'FBFUSE_test')
 
-    @gen_test(timeout=30)
+    @gen_test
     def test_capture_start_during_provisioning(self):
         #Patching isn't working here for some reason (maybe pathing?)
         #hack solution is to manually switch to the Mock for the portal
@@ -199,6 +208,17 @@ class TestFbfMasterController(AsyncTestCase):
         #due to the behaviour of provision-beams, capture-start should return
         #ok even if the system is already capturing
         yield self._send_request_expect_ok('capture-start', product_name)
+
+    @gen_test
+    def test_capture_start_while_stopping(self):
+        product_name = 'test_product'
+        proxy_name = 'FBFUSE_test'
+        product_state_sensor = '{}-state'.format(proxy_name)
+        yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
+            self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
+        product = self.server._products[product_name]
+        product._state_sensor.set_value(FbfProductController.STOPPING)
+        yield self._send_request_expect_fail('capture-start', product_name)
 
     @gen_test
     def test_register_deregister_worker_servers(self):
@@ -230,6 +250,71 @@ class TestFbfMasterController(AsyncTestCase):
     def test_deregister_nonexistant_worker_server(self):
         hostname, port = '127.0.0.1', 60000
         yield self._send_request_expect_ok('deregister-worker-server', hostname, port)
+
+    @gen_test
+    def test_configure_coherent_beams(self):
+        product_name = 'test_product'
+        proxy_name = 'FBFUSE_test'
+        tscrunch = 6
+        fscrunch = 2
+        nbeams = 100
+        yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
+            self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
+        yield self._send_request_expect_ok('configure-coherent-beams', product_name, nbeams,
+            self.DEFAULT_ANTENNAS, fscrunch, tscrunch)
+        yield self._check_sensor_value("{}-coherent-beam-count".format(proxy_name), str(nbeams))
+        yield self._check_sensor_value("{}-coherent-beam-tscrunch".format(proxy_name), str(tscrunch))
+        yield self._check_sensor_value("{}-coherent-beam-fscrunch".format(proxy_name), str(fscrunch))
+        yield self._check_sensor_value("{}-coherent-beam-antennas".format(proxy_name), self.DEFAULT_ANTENNAS)
+
+    @gen_test
+    def test_configure_incoherent_beam(self):
+        product_name = 'test_product'
+        proxy_name = 'FBFUSE_test'
+        tscrunch = 6
+        fscrunch = 2
+        yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
+            self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
+        yield self._send_request_expect_ok('configure-incoherent-beam', product_name,
+            self.DEFAULT_ANTENNAS, fscrunch, tscrunch)
+        yield self._check_sensor_value("{}-incoherent-beam-tscrunch".format(proxy_name), str(tscrunch))
+        yield self._check_sensor_value("{}-incoherent-beam-fscrunch".format(proxy_name), str(fscrunch))
+        yield self._check_sensor_value("{}-incoherent-beam-antennas".format(proxy_name), self.DEFAULT_ANTENNAS)
+
+    @gen_test
+    def test_configure_coherent_beams_invalid_antennas(self):
+        product_name = 'test_product'
+        proxy_name = 'FBFUSE_test'
+        subarray_antennas = 'm007,m008,m009,m010'
+        yield self._send_request_expect_ok('configure', product_name, subarray_antennas,
+            self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
+        #Test invalid antenna combinations
+        yield self._send_request_expect_fail('configure-coherent-beams', product_name, 100,
+            'm007,m008,m011', 1, 16)
+        yield self._send_request_expect_fail('configure-coherent-beams', product_name, 100,
+            'm007,m008,m009,m010,m011', 1, 16)
+        yield self._send_request_expect_fail('configure-coherent-beams', product_name, 100,
+            '', 1, 16)
+        yield self._send_request_expect_fail('configure-coherent-beams', product_name, 100,
+            'm007,m007,m008,m009', 1, 16)
+
+    @gen_test
+    def test_configure_incoherent_beam_invalid_antennas(self):
+        product_name = 'test_product'
+        proxy_name = 'FBFUSE_test'
+        subarray_antennas = 'm007,m008,m009,m010'
+        yield self._send_request_expect_ok('configure', product_name, subarray_antennas,
+            self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
+        #Test invalid antenna combinations
+        yield self._send_request_expect_fail('configure-incoherent-beam', product_name,
+                    'm007,m008,m011', 1, 16)
+        yield self._send_request_expect_fail('configure-incoherent-beam', product_name,
+                    'm007,m008,m009,m010,m011', 1, 16)
+        yield self._send_request_expect_fail('configure-incoherent-beam', product_name,
+                    '', 1, 16)
+        yield self._send_request_expect_fail('configure-incoherent-beam', product_name,
+                    'm007,m007,m008,m009', 1, 16)
+
 
 if __name__ == '__main__':
     FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
