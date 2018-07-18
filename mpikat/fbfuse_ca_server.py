@@ -2,6 +2,7 @@ import logging
 import json
 import tornado
 import signal
+from tornado.gen import Return
 from optparse import OptionParser
 from katcp import Sensor, Message, AsyncDeviceServer
 from katcp.kattypes import request, return_reply, Str
@@ -12,7 +13,7 @@ FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
 logging.basicConfig(format=FORMAT)
 log = logging.getLogger("mpikat.fbfuse_ca_server")
 
-class FbfConfigurationAuthority(AsyncDeviceServer):
+class BaseFbfConfigurationAuthority(AsyncDeviceServer):
     """This is an example/template for how users
     may develop an fbf configuration authority server
     """
@@ -20,14 +21,15 @@ class FbfConfigurationAuthority(AsyncDeviceServer):
     BUILD_INFO = ("mpikat-fbf-ca-implementation", 0, 1, "rc1")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
     def __init__(self, ip, port):
-        super(FbfConfigurationAuthority, self).__init__(ip,port)
-        self._products = {}
+        super(BaseFbfConfigurationAuthority, self).__init__(ip, port)
+        self._configuration_sensors = {}
+        self._configuration_callbacks = {}
 
     def start(self):
         """
-        @brief  Start the FbfConfigurationAuthority server
+        @brief  Start the BaseFbfConfigurationAuthority server
         """
-        super(FbfConfigurationAuthority,self).start()
+        super(BaseFbfConfigurationAuthority,self).start()
 
     def setup_sensors(self):
         """
@@ -39,7 +41,6 @@ class FbfConfigurationAuthority(AsyncDeviceServer):
                 device-status:  Reports the health status of the CA server and associated devices:
                                 Among other things report HW failure, SW failure and observation failure.
 
-                products:   The list of product_ids that the CA server is currently handling
         """
         self._device_status = Sensor.discrete(
             "device-status",
@@ -49,68 +50,82 @@ class FbfConfigurationAuthority(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._device_status)
 
-        self._configuration_sensors = {}
-
     @request(Str(), Str())
     @return_reply(Str())
-    def request_get_schedule_block_configuration(self, req, product_id, sb_id):
+    @tornado.gen.coroutine
+    def request_get_schedule_block_configuration(self, req, proxy_id, sb_id):
         """
         @brief      Get an FBFUSE configuration for the current instance
 
-        @param      product_id  The product identifier
+        @param      proxy_id    The proxy identifier
         @param      sb_id       The schedule block identifier
 
-        @note       The product_id argument may be superfluous, although it allows
-                    the CA server to look up parameters on the unconfigured product
-                    from the FBFUSE sensor set.
+        @note       The proxy_id argument may be superfluous, although it allows
+                    the CA server to look up parameters on the unconfigured proxy
+                    from the FBFUSE sensor set through katportalclient
         """
-        # do something clever with product_id and sb_id
-        # probably boot up katportalclient
+        if proxy_id in self._configuration_sensors:
+            self.remove_sensor(self._configuration_sensors[proxy_id])
+            del self._configuration_sensors[proxy_id]
+            self.mass_inform(Message.inform('interface-changed'))
+        config = yield self.get_sb_config(proxy_id, sb_id)
+        raise Return(("ok", json.dumps(config)))
 
-        if product_id in self._configuration_sensors:
-            self.remove_sensor(self._configuration_sensors[product_id])
-            del self._configuration_sensors[product_id]
-        self.mass_inform(Message.inform('interface-changed'))
-        config = {u'coherent-beams':
-                     {u'antennas': u'm007,m008,m009,m010',
-                      u'fscrunch': 16,
-                      u'nbeams': 100,
-                      u'tscrunch': 16},
-                  u'incoherent-beam':
-                     {u'antennas': u'm007,m008,m009,m010',
-                     u'fscrunch': 16,
-                     u'tscrunch': 1}}
-        return ("ok", json.dumps(config))
+    @tornado.gen.coroutine
+    def get_sb_config(self, proxy_id, sb_id):
+        raise NotImplemented
 
     @request(Str(), Str())
     @return_reply()
-    def request_target_configuration_start(self, req, product_id, target_string):
+    @tornado.gen.coroutine
+    def request_target_configuration_start(self, req, proxy_id, target_string):
         """
         @brief      Set up a beam configuration sensor for the FBFUSE instance
 
-        @param      product_id     The product identifier
+        @param      proxy_id     The proxy identifier
         @param      target_string  A KATPOINT target string (boresight pointing position)
         """
-        if not product_id in self._configuration_sensors:
-            self._configuration_sensors[product_id] = Sensor.string(
-                "{}-beam-position-configuration".format(product_id),
+        if not proxy_id in self._configuration_sensors:
+            self._configuration_sensors[proxy_id] = Sensor.string(
+                "{}-beam-position-configuration".format(proxy_id),
                 description="Configuration description for FBF beam placement",
                 default="",
                 initial_status=Sensor.NOMINAL)
-            self.add_sensor(self._configuration_sensors[product_id])
+            self.add_sensor(self._configuration_sensors[proxy_id])
             self.mass_inform(Message.inform('interface-changed'))
+        initial_config = yield self.get_target_config(proxy_id, target_string)
+        self.update_target_config(proxy_id, initial_config)
+        raise Return(("ok",))
 
-        config = {'beams': ['PSRJ1733+1010,radec,17:33:00,10:10:00',
-            'PSRJ1100+1010,radec,11:00:00,10:10:00'],
-            'tilings': [{'epoch': 1531844084.878784,
-            'nbeams': 30,
-            'overlap': 0.5,
-            'reference_frequency': 1.4e9,
-            'target': 'laduma_field_0,radec,11:00:00,10:10:00'}]}
-        self._configuration_sensors[product_id].set_value(json.dumps(config))
-        # Updates to this sensor will trigger a change in beam configuration on
-        # FBFUSE
-        return ("ok",)
+    @tornado.gen.coroutine
+    def get_target_config(self, proxy_id, target):
+        # This should call update target config
+        raise NotImplemented
+
+    def update_target_config(self, proxy_id, config):
+        self._configuration_sensors[proxy_id].set_value(json.dumps(config))
+
+
+class DefaultConfigurationAuthority(BaseFbfConfigurationAuthority):
+    def __init__(self, host, port):
+        super(DefaultConfigurationAuthority, self).__init__(host, port)
+
+    @tornado.gen.coroutine
+    def get_target_config(self, proxy_id, target):
+        # Return just a boresight beam
+        raise Return({"beams":[target],})
+
+    @tornado.gen.coroutine
+    def get_sb_config(self, proxy_id, sb_id):
+        config = {u'coherent-beams':
+                    {u'fscrunch': 16,
+                     u'nbeams': 400,
+                     u'tscrunch': 16},
+                  u'incoherent-beam':
+                    {u'fscrunch': 16,
+                     u'tscrunch': 1}}
+        raise Return(config)
+
 
 @tornado.gen.coroutine
 def on_shutdown(ioloop, server):
@@ -133,8 +148,8 @@ def main():
     for handler in logging.getLogger('').handlers:
         handler.setFormatter(logging.Formatter(FORMAT))
     ioloop = tornado.ioloop.IOLoop.current()
-    log.info("Starting FbfConfigurationAuthority instance")
-    server = FbfConfigurationAuthority(opts.host, opts.port)
+    log.info("Starting DefaultConfigurationAuthority instance")
+    server = DefaultConfigurationAuthority(opts.host, opts.port)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
     def start_and_display():

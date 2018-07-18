@@ -17,6 +17,7 @@ from katcp.testutils import mock_req, handle_mock_req
 from katportalclient import SensorNotFoundError
 from mpikat import fbfuse
 from mpikat.fbfuse import FbfMasterController, FbfProductController, ProductLookupError, KatportalClientWrapper, FbfWorkerWrapper
+from mpikat.test.utils import MockFbfConfigurationAuthority
 
 log = logging.getLogger('mpikat.test')
 
@@ -138,7 +139,7 @@ class TestFbfMasterController(AsyncTestCase):
         yield self._send_request_expect_fail('configure-coherent-beams', 'test', 0, '', 0, 0)
         yield self._send_request_expect_fail('configure-incoherent-beam', 'test', '', 0, 0)
 
-    @gen_test(timeout=30)
+    @gen_test
     def test_configure_start_stop_deconfigure(self):
         #Patching isn't working here for some reason (maybe pathing?)
         #hack solution is to manually switch to the Mock for the portal
@@ -151,6 +152,13 @@ class TestFbfMasterController(AsyncTestCase):
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
         yield self._check_sensor_value('products', product_name)
         yield self._check_sensor_value(product_state_sensor, FbfProductController.IDLE)
+        yield self._send_request_expect_ok('provision-beams', product_name)
+        # after provision beams we need to wait on the system to get into a ready state
+        product = self.server._products[product_name]
+        while True:
+            yield sleep(0.5)
+            if product.ready: break
+        yield self._check_sensor_value(product_state_sensor, FbfProductController.READY)
         yield self._send_request_expect_ok('capture-start', product_name)
         yield self._check_sensor_value(product_state_sensor, FbfProductController.CAPTURING)
         yield self._send_request_expect_ok('capture-stop', product_name)
@@ -187,27 +195,6 @@ class TestFbfMasterController(AsyncTestCase):
     def test_configure_bad_streams(self):
         yield self._send_request_expect_fail('configure', 'test_product', self.DEFAULT_ANTENNAS,
             self.DEFAULT_NCHANS, '{}', 'FBFUSE_test')
-
-    @gen_test
-    def test_capture_start_during_provisioning(self):
-        #Patching isn't working here for some reason (maybe pathing?)
-        #hack solution is to manually switch to the Mock for the portal
-        #client. TODO: Fix the structure of the code so that this can be
-        #patched properly
-        product_name = 'test_product'
-        proxy_name = 'FBFUSE_test'
-        product_state_sensor = '{}-state'.format(proxy_name)
-        yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
-            self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
-        # provision-beams should return immediately
-        yield self._send_request_expect_ok('provision-beams', product_name)
-        yield self._send_request_expect_ok('capture-start', product_name)
-        yield self._check_sensor_value(product_state_sensor, FbfProductController.CAPTURING)
-        #provision-beams will fail on an already capturing instance
-        yield self._send_request_expect_fail('provision-beams', product_name)
-        #due to the behaviour of provision-beams, capture-start should return
-        #ok even if the system is already capturing
-        yield self._send_request_expect_ok('capture-start', product_name)
 
     @gen_test
     def test_capture_start_while_stopping(self):
@@ -314,6 +301,96 @@ class TestFbfMasterController(AsyncTestCase):
                     '', 1, 16)
         yield self._send_request_expect_fail('configure-incoherent-beam', product_name,
                     'm007,m007,m008,m009', 1, 16)
+
+    @gen_test
+    def test_set_configuration_authority(self):
+        product_name = 'test_product'
+        proxy_name = 'FBFUSE_test'
+        subarray_antennas = 'm007,m008,m009,m010'
+        hostname, port = "127.0.0.1", 60000
+        yield self._send_request_expect_ok('configure', product_name, subarray_antennas,
+            self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
+        yield self._send_request_expect_ok('set-configuration-authority', product_name, hostname, port)
+        address = "{}:{}".format(hostname,port)
+        yield self._check_sensor_value('{}-configuration-authority'.format(proxy_name), address)
+
+    @gen_test
+    def test_get_sb_configuration_from_ca(self):
+        product_name = 'test_product'
+        proxy_name = 'FBFUSE_test'
+        hostname = "127.0.0.1"
+        sb_id = "default_subarray"
+        target = 'test_target,radec,12:00:00,01:00:00'
+        sb_config = {u'coherent-beams':
+                    {u'fscrunch': 2,
+                     u'nbeams': 100,
+                     u'tscrunch': 22},
+                  u'incoherent-beam':
+                    {u'fscrunch': 32,
+                     u'tscrunch': 4}}
+        ca_server = MockFbfConfigurationAuthority(hostname, 0)
+        ca_server.start()
+        ca_server.set_sb_config_return_value(product_name, sb_id, sb_config)
+        port = ca_server.bind_address[1]
+        yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
+            self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
+        yield self._send_request_expect_ok('set-configuration-authority', product_name, hostname, port)
+        yield self._send_request_expect_ok('provision-beams', product_name)
+        product = self.server._products[product_name]
+        while True:
+            yield sleep(0.5)
+            if product.ready: break
+        # Here we need to check if the proxy sensors have been updated
+        yield self._check_sensor_value("{}-coherent-beam-count".format(proxy_name), str(sb_config['coherent-beams']['nbeams']))
+        yield self._check_sensor_value("{}-coherent-beam-tscrunch".format(proxy_name), str(sb_config['coherent-beams']['tscrunch']))
+        yield self._check_sensor_value("{}-coherent-beam-fscrunch".format(proxy_name), str(sb_config['coherent-beams']['fscrunch']))
+        yield self._check_sensor_value("{}-coherent-beam-antennas".format(proxy_name), self.DEFAULT_ANTENNAS)
+        yield self._check_sensor_value("{}-incoherent-beam-tscrunch".format(proxy_name), str(sb_config['incoherent-beam']['tscrunch']))
+        yield self._check_sensor_value("{}-incoherent-beam-fscrunch".format(proxy_name), str(sb_config['incoherent-beam']['fscrunch']))
+        yield self._check_sensor_value("{}-incoherent-beam-antennas".format(proxy_name), self.DEFAULT_ANTENNAS)
+        yield self._send_request_expect_ok('capture-start', product_name)
+
+    @gen_test
+    def test_get_target_configuration_from_ca(self):
+        product_name = 'test_product'
+        proxy_name = 'FBFUSE_test'
+        hostname = "127.0.0.1"
+        sb_id = "default_subarray" #TODO replace this when the sb_id is actually provided to FBF
+        targets = ['test_target0,radec,12:00:00,01:00:00',
+                   'test_target1,radec,13:00:00,02:00:00']
+        ca_server = MockFbfConfigurationAuthority(hostname, 0)
+        ca_server.start()
+        ca_server.set_sb_config_return_value(product_name, sb_id, {})
+        ca_server.set_target_config_return_value(product_name, targets[0], {'beams':targets})
+        port = ca_server.bind_address[1]
+        yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
+            self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
+        yield self._send_request_expect_ok('set-configuration-authority', product_name, hostname, port)
+        yield self._send_request_expect_ok('provision-beams', product_name)
+        product = self.server._products[product_name]
+        while True:
+            yield sleep(0.5)
+            if product.ready: break
+        yield self._send_request_expect_ok('capture-start', product_name)
+        yield self._send_request_expect_ok('target-start', product_name, targets[0])
+        yield self._check_sensor_value('{}-coherent-beam-cfbf00000'.format(proxy_name),
+            Target(targets[0]).format_katcp())
+        yield self._check_sensor_value('{}-coherent-beam-cfbf00001'.format(proxy_name),
+            Target(targets[1]).format_katcp())
+
+        new_targets = ['test_target2,radec,14:00:00,03:00:00',
+                       'test_target3,radec,15:00:00,04:00:00']
+        ca_server.update_target_config(product_name, {'beams':new_targets})
+        # Need to give some time for the update callback to hit the top of the
+        # event loop and change the beam configuration sensors.
+        yield sleep(1)
+        yield self._check_sensor_value('{}-coherent-beam-cfbf00000'.format(proxy_name),
+            Target(new_targets[0]).format_katcp())
+        yield self._check_sensor_value('{}-coherent-beam-cfbf00001'.format(proxy_name),
+            Target(new_targets[1]).format_katcp())
+
+
+
 
 
 if __name__ == '__main__':
