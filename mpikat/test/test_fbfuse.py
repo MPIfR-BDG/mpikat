@@ -19,7 +19,8 @@ from mpikat import fbfuse
 from mpikat.fbfuse import FbfMasterController, FbfProductController, ProductLookupError, KatportalClientWrapper, FbfWorkerWrapper
 from mpikat.test.utils import MockFbfConfigurationAuthority
 
-log = logging.getLogger('mpikat.test')
+root_logger = logging.getLogger('')
+root_logger.setLevel(logging.CRITICAL)
 
 PORTAL = "portal.mkat.karoo.kat.ac.za"
 
@@ -377,7 +378,6 @@ class TestFbfMasterController(AsyncTestCase):
             Target(targets[0]).format_katcp())
         yield self._check_sensor_value('{}-coherent-beam-cfbf00001'.format(proxy_name),
             Target(targets[1]).format_katcp())
-
         new_targets = ['test_target2,radec,14:00:00,03:00:00',
                        'test_target3,radec,15:00:00,04:00:00']
         ca_server.update_target_config(product_name, {'beams':new_targets})
@@ -388,27 +388,24 @@ class TestFbfMasterController(AsyncTestCase):
             Target(new_targets[0]).format_katcp())
         yield self._check_sensor_value('{}-coherent-beam-cfbf00001'.format(proxy_name),
             Target(new_targets[1]).format_katcp())
-
-
+        yield self._send_request_expect_ok('target-stop', product_name)
+        # Put beam configuration back to original:
+        ca_server.update_target_config(product_name, {'beams':targets})
+        yield sleep(1)
+        # At this point the sensor values should NOT have updated
+        yield self._check_sensor_value('{}-coherent-beam-cfbf00000'.format(proxy_name),
+            Target(new_targets[0]).format_katcp())
+        yield self._check_sensor_value('{}-coherent-beam-cfbf00001'.format(proxy_name),
+            Target(new_targets[1]).format_katcp())
+        #Not start up a new target-start
+        yield self._send_request_expect_ok('target-start', product_name, targets[0])
+        yield self._check_sensor_value('{}-coherent-beam-cfbf00000'.format(proxy_name),
+            Target(targets[0]).format_katcp())
+        yield self._check_sensor_value('{}-coherent-beam-cfbf00001'.format(proxy_name),
+            Target(targets[1]).format_katcp())
 
 
 
 if __name__ == '__main__':
-    FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
-    #logging.basicConfig(format=FORMAT, level=logging.DEBUG)
-    #log.setLevel(logging.DEBUG)
-    #stream = StringIO()
-    #handler = logging.StreamHandler(stream=stream)
-    #formatter = logging.Formatter(FORMAT)
-    #handler.setFormatter(formatter)
-    #app_log.addHandler(handler)
-    #app_log = logging.getLogger('mpikat.fbfuse')
-    #app_log.setLevel(logging.WARNING)
-    #for handler in app_log.handlers:
-    #    handler.setFormatter(formatter)
-    #formatter = logging.Formatter(FORMAT)
-    #handler.setFormatter(formatter)
-    #app_log.addHandler(handler)
     unittest.main(buffer=True)
-    #print stream.read()
 

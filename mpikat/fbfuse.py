@@ -560,6 +560,7 @@ class FbfMasterController(AsyncDeviceServer):
 
     @request(Str())
     @return_reply()
+    @coroutine
     def request_target_stop(self, req, product_id):
         """
         @brief      Notify FBFUSE that the telescope has stopped observing a target
