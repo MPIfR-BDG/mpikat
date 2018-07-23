@@ -3,8 +3,8 @@ import json
 import tornado
 import signal
 import time
-import copy
 import numpy as np
+import ipaddress
 import mosaic
 from threading import Lock
 from optparse import OptionParser
@@ -45,6 +45,17 @@ def parse_csv_antennas(antennas_csv):
     if len(names) != len(set(names)):
         raise AntennaValidationError("Not all provided antennas were unqiue")
     return names
+
+def parse_stream(stream):
+    stream = stream.lstrip("spead://")
+    ip_range, port = stream.split(":")
+    port = int(port)
+    try:
+        base_ip, ip_count = ip_range.split("+")
+        ip_count = int(ip_count)
+    except ValueError:
+        base_ip, ip_count = ip_range, 1
+    return [ipaddress.ip_address(unicode(base_ip))+i for i in range(ip_count)], port
 
 ###################
 # Custom exceptions
@@ -1076,7 +1087,6 @@ class Tiling(object):
         psfsim = mosaic.PsfSim(antennas, self.reference_frequency)
         beam_shape = psfsim.get_beam_shape(self.target, epoch)
         tiling = mosaic.generate_nbeams_tiling(beam_shape, self.nbeams, self.overlap)
-        print tiling.coordinates
         for ii in range(tiling.beam_num):
             ra, dec = tiling.coordinates[ii]
             self._beams[ii].target = Target('{},radec,{},{}'.format(self.target.name, ra, dec))
@@ -1089,9 +1099,10 @@ class Tiling(object):
         return ",".join([beam.idx for beam in self._beams])
 
 
+
 class BeamManager(object):
     """Manager class for allocation, deallocation and tracking of
-    individual beams, static and dynamic tilings.
+    individual beams and static tilings.
     """
     def __init__(self, nbeams, antennas):
         """
@@ -1105,6 +1116,9 @@ class BeamManager(object):
         self._nbeams = nbeams
         self._antennas = antennas
         self._beams = [Beam("cfbf%05d"%(i)) for i in range(self._nbeams)]
+        self._free_beams = [beam for beam in self._beams]
+        self._allocated_beams = []
+
         self.reset()
 
     @property
@@ -1123,7 +1137,7 @@ class BeamManager(object):
         """
         for beam in self._beams:
             beam.reset()
-        self._free_beams = copy.copy(self._beams)
+        self._free_beams = [beam for beam in self._beams]
         self._allocated_beams = []
         self._tilings = []
         self._dynamic_tilings = []
@@ -1175,8 +1189,13 @@ class BeamManager(object):
 
         @returns    The created Tiling object
         """
-        tiling = self.__make_tiling(nbeams, Tiling, target,
-            reference_frequency, overlap)
+        if len(self._free_beams) < nbeams:
+            raise Exception("More beams requested than are available.")
+        tiling = Tiling(target, reference_frequency, overlap)
+        for _ in range(nbeams):
+            beam = self._free_beams.pop(0)
+            tiling.add_beam(beam)
+            self._allocated_beams.append(beam)
         self._tilings.append(tiling)
         return tiling
 
@@ -1248,7 +1267,7 @@ class DelayEngine(AsyncDeviceServer):
         self._antennas_sensor = Sensor.string(
             "antennas",
             description="JSON breakdown of the antennas (in KATPOINT format) associated with this delay engine",
-            default="{}",
+            default=json.dumps([a.format_katcp() for a in self._beam_manager.antennas]),
             initial_status=Sensor.NOMINAL)
         self.add_sensor(self._antennas_sensor)
 
@@ -1257,6 +1276,7 @@ class DelayEngine(AsyncDeviceServer):
             description="JSON object containing delays for each beam for each antenna at the current epoch",
             default="",
             initial_status=Sensor.UNKNOWN)
+        self.update_delays()
         self.add_sensor(self._delays_sensor)
 
     def update_delays(self):
@@ -1363,7 +1383,7 @@ class FbfProductController(object):
                   FbfMasterController server as "<proxy_name>-servers" (e.g.
                   "FBFUSE_1-servers").
         """
-        prefix = "{}-".format(self._proxy_name)
+        prefix = "{}.".format(self._product_id)
         if sensor.name.startswith(prefix):
             self._parent.add_sensor(sensor)
         else:
@@ -1539,7 +1559,7 @@ class FbfProductController(object):
     def get_ca_sb_configuration(self, sb_id):
         yield self._ca_client.until_synced()
         try:
-            response = yield self._ca_client.req.get_schedule_block_configuration(self._product_id, sb_id)
+            response = yield self._ca_client.req.get_schedule_block_configuration(self._proxy_name, sb_id)
         except Exception as error:
             log.error("Request for SB configuration to CA failed with error: {}".format(str(error)))
             raise error
@@ -1558,6 +1578,68 @@ class FbfProductController(object):
                 sensor = sensor_map[(key, subkey)]
                 log.info("CA set sensor {} to {}".format(sensor.name, value))
                 sensor.set_value(value)
+
+    def _sanitize_sb_configuration(self,  tscrunch, fscrunch, desired_nbeams, beam_granularity=None):
+        # Constants for data rates and bandwidths
+        # these are hardcoded here for the moment but ultimately
+        # they should be moved to a higher level or even dynamically
+        # specified
+        MAX_RATE_PER_MCAST = 6.8e9 # bits/s
+        MAX_RATE_PER_SERVER = 4.375e9 # bits/s, equivalent to 280 Gb/s over 64 (virtual) nodes
+        BANDWIDTH = 856e6 # MHz
+
+        # Calculate the data rate for each beam assuming 8-bit packing and
+        # no metadata overheads
+        data_rate_per_beam = BANDWIDTH / tscrunch / fscrunch * 8 # bits/s
+        log.debug("Data rate per coherent beam: {} Gb/s".format(data_rate_per_beam/1e9))
+
+        # Calculate the maximum number of beams that will fit in one multicast
+        # group assuming. Each multicast group must be receivable on a 10 GbE
+        # connection so the max rate must be < 8 Gb/s
+        max_beams_per_mcast = MAX_RATE_PER_MCAST // data_rate_per_beam
+        log.debug("Maximum number of beams per multicast group: {}".format(int(max_beams_per_mcast)))
+
+        if max_beams_per_mcast == 0:
+            raise Exception("Data rate per beam is greater than the data rate per multicast group")
+
+        # For instuments such as TUSE, they require a fixed number of beams per node. For their
+        # case we assume that they will only acquire one multicast group per node and as such
+        # the minimum number of beams per multicast group should be whatever TUSE requires.
+        # Multicast groups can contain more beams than this but only in integer multiples of
+        # the minimum
+        if beam_granularity:
+            if max_beams_per_mcast < beam_granularity:
+                log.warning("Cannot fit {} beams into one multicast group, updating number of beams per multicast group to {}".format(
+                    beam_granularity, max_beams_per_mcast))
+                beam_granularity = max_beams_per_mcast
+            beams_per_mcast = beam_granularity * (max_beams_per_mcast // beam_granularity)
+            log.debug("Number of beams per multicast group, accounting for granularity: {}".format(int(beams_per_mcast)))
+        else:
+            beams_per_mcast = max_beams_per_mcast
+
+        # Calculate the total number of beams that could be produced assuming the only
+        # rate limit was that limit per multicast groups
+        max_beams = self.n_mcast_groups * beams_per_mcast
+        log.debug("Maximum possible beams (assuming on multicast group rate limit): {}".format(max_beams))
+
+        if desired_nbeams > max_beams:
+            log.warning("Requested number of beams is greater than theoretical maximum, "
+                "updating setting the number of beams of beams to {}".format(max_beams))
+            desired_nbeams = max_beams
+
+        # Calculate the total number of multicast groups that are required to satisfy
+        # the requested number of beams
+        num_mcast_groups_required = round(desired_nbeams / beams_per_mcast + 0.5)
+        log.debug("Number of multicast groups required for {} beams: {}".format(desired_nbeams, num_mcast_groups_required))
+        actual_nbeams = num_mcast_groups_required * beams_per_mcast
+        nmcast_groups = num_mcast_groups_required
+
+        # Now we need to check the server rate limits
+        if (actual_nbeams * data_rate_per_beam)/self.n_servers > MAX_RATE_PER_SERVER:
+            log.warning("Number of beams limited by output data rate per server")
+        actual_nbeams = MAX_RATE_PER_SERVER*self.n_servers // data_rate_per_beam
+        log.info("Number of beams that can be generated: {}".format(actual_nbeams))
+        return actual_nbeams
 
     @coroutine
     def get_ca_target_configuration(self, target):
@@ -1578,7 +1660,7 @@ class FbfProductController(object):
                 self.add_tiling(target, nbeams, freq, overlap, epoch)
         yield self._ca_client.until_synced()
         try:
-            response = yield self._ca_client.req.target_configuration_start(self._product_id, target.format_katcp())
+            response = yield self._ca_client.req.target_configuration_start(self._proxy_name, target.format_katcp())
         except Exception as error:
             log.error("Request for target configuration to CA failed with error: {}".format(str(error)))
             raise error
@@ -1587,7 +1669,7 @@ class FbfProductController(object):
             log.error("Request for target configuration to CA failed with error: {}".format(str(error)))
             raise error
         yield self._ca_client.until_synced()
-        sensor = self._ca_client.sensor["{}_beam_position_configuration".format(self._product_id)]
+        sensor = self._ca_client.sensor["{}_beam_position_configuration".format(self._proxy_name)]
         sensor.register_listener(ca_target_update_callback)
         self._ca_client.set_sampling_strategy(sensor.name, "event")
 
@@ -1651,7 +1733,7 @@ class FbfProductController(object):
     @coroutine
     def target_stop(self):
         if self._ca_client:
-            sensor_name = "{}_beam_position_configuration".format(self._product_id)
+            sensor_name = "{}_beam_position_configuration".format(self._proxy_name)
             self._ca_client.set_sampling_strategy(sensor_name, "none")
 
     @coroutine
@@ -1666,11 +1748,15 @@ class FbfProductController(object):
             raise FbfStateError([self.IDLE], self.state)
         self._state_sensor.set_value(self.PREPARING)
 
+        # Here we need to parse the streams and assign beams to streams:
+        #mcast_addrs, mcast_port = parse_stream(self._streams['cbf.antenna_channelised_voltage']['i0.antenna-channelised-voltage'])
+
         if not self._ca_client:
             log.warning("No configuration authority found, using default configuration parameters")
         else:
-            #TODO: get the subarray ID into this call from somewhere (configure?)
+            #TODO: get the schedule block ID into this call from somewhere (configure?)
             yield self.get_ca_sb_configuration("default_subarray")
+
 
         cbc_antennas_names = parse_csv_antennas(self._cbc_antennas_sensor.value())
         cbc_antennas = [self._antenna_map[name] for name in cbc_antennas_names]

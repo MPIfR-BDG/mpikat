@@ -127,6 +127,28 @@ class DefaultConfigurationAuthority(BaseFbfConfigurationAuthority):
         raise Return(config)
 
 
+class DefaultConfigurationAuthority(BaseFbfConfigurationAuthority):
+    def __init__(self, host, port):
+        super(DefaultConfigurationAuthority, self).__init__(host, port)
+
+    @tornado.gen.coroutine
+    def get_target_config(self, proxy_id, target):
+        self.targets[proxy_id] = target
+        # Return just a boresight beam
+        raise Return({"beams":[target],})
+
+    @tornado.gen.coroutine
+    def get_sb_config(self, proxy_id, sb_id):
+        config = {u'coherent-beams':
+                    {u'fscrunch': 16,
+                     u'nbeams': 400,
+                     u'tscrunch': 16},
+                  u'incoherent-beam':
+                    {u'fscrunch': 16,
+                     u'tscrunch': 1}}
+        raise Return(config)
+
+
 @tornado.gen.coroutine
 def on_shutdown(ioloop, server):
     log.info("Shutting down server")

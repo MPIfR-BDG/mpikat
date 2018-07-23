@@ -16,7 +16,13 @@ from katcp import AsyncReply
 from katcp.testutils import mock_req, handle_mock_req
 from katportalclient import SensorNotFoundError
 from mpikat import fbfuse
-from mpikat.fbfuse import FbfMasterController, FbfProductController, ProductLookupError, KatportalClientWrapper, FbfWorkerWrapper
+from mpikat.fbfuse import (FbfMasterController,
+                           FbfProductController,
+                           ProductLookupError,
+                           KatportalClientWrapper,
+                           FbfWorkerWrapper,
+                           BeamManager,
+                           DelayEngine)
 from mpikat.test.utils import MockFbfConfigurationAuthority
 
 root_logger = logging.getLogger('')
@@ -148,7 +154,7 @@ class TestFbfMasterController(AsyncTestCase):
         #patched properly
         product_name = 'test_product'
         proxy_name = 'FBFUSE_test'
-        product_state_sensor = '{}-state'.format(proxy_name)
+        product_state_sensor = '{}.state'.format(product_name)
         yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
         yield self._check_sensor_value('products', product_name)
@@ -201,7 +207,7 @@ class TestFbfMasterController(AsyncTestCase):
     def test_capture_start_while_stopping(self):
         product_name = 'test_product'
         proxy_name = 'FBFUSE_test'
-        product_state_sensor = '{}-state'.format(proxy_name)
+        product_state_sensor = '{}.state'.format(product_name)
         yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
         product = self.server._products[product_name]
@@ -250,10 +256,10 @@ class TestFbfMasterController(AsyncTestCase):
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
         yield self._send_request_expect_ok('configure-coherent-beams', product_name, nbeams,
             self.DEFAULT_ANTENNAS, fscrunch, tscrunch)
-        yield self._check_sensor_value("{}-coherent-beam-count".format(proxy_name), str(nbeams))
-        yield self._check_sensor_value("{}-coherent-beam-tscrunch".format(proxy_name), str(tscrunch))
-        yield self._check_sensor_value("{}-coherent-beam-fscrunch".format(proxy_name), str(fscrunch))
-        yield self._check_sensor_value("{}-coherent-beam-antennas".format(proxy_name), self.DEFAULT_ANTENNAS)
+        yield self._check_sensor_value("{}.coherent-beam-count".format(product_name), str(nbeams))
+        yield self._check_sensor_value("{}.coherent-beam-tscrunch".format(product_name), str(tscrunch))
+        yield self._check_sensor_value("{}.coherent-beam-fscrunch".format(product_name), str(fscrunch))
+        yield self._check_sensor_value("{}.coherent-beam-antennas".format(product_name), self.DEFAULT_ANTENNAS)
 
     @gen_test
     def test_configure_incoherent_beam(self):
@@ -265,9 +271,9 @@ class TestFbfMasterController(AsyncTestCase):
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
         yield self._send_request_expect_ok('configure-incoherent-beam', product_name,
             self.DEFAULT_ANTENNAS, fscrunch, tscrunch)
-        yield self._check_sensor_value("{}-incoherent-beam-tscrunch".format(proxy_name), str(tscrunch))
-        yield self._check_sensor_value("{}-incoherent-beam-fscrunch".format(proxy_name), str(fscrunch))
-        yield self._check_sensor_value("{}-incoherent-beam-antennas".format(proxy_name), self.DEFAULT_ANTENNAS)
+        yield self._check_sensor_value("{}.incoherent-beam-tscrunch".format(product_name), str(tscrunch))
+        yield self._check_sensor_value("{}.incoherent-beam-fscrunch".format(product_name), str(fscrunch))
+        yield self._check_sensor_value("{}.incoherent-beam-antennas".format(product_name), self.DEFAULT_ANTENNAS)
 
     @gen_test
     def test_configure_coherent_beams_invalid_antennas(self):
@@ -313,7 +319,7 @@ class TestFbfMasterController(AsyncTestCase):
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
         yield self._send_request_expect_ok('set-configuration-authority', product_name, hostname, port)
         address = "{}:{}".format(hostname,port)
-        yield self._check_sensor_value('{}-configuration-authority'.format(proxy_name), address)
+        yield self._check_sensor_value('{}.configuration-authority'.format(product_name), address)
 
     @gen_test
     def test_get_sb_configuration_from_ca(self):
@@ -331,7 +337,7 @@ class TestFbfMasterController(AsyncTestCase):
                      u'tscrunch': 4}}
         ca_server = MockFbfConfigurationAuthority(hostname, 0)
         ca_server.start()
-        ca_server.set_sb_config_return_value(product_name, sb_id, sb_config)
+        ca_server.set_sb_config_return_value(proxy_name, sb_id, sb_config)
         port = ca_server.bind_address[1]
         yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
@@ -342,13 +348,13 @@ class TestFbfMasterController(AsyncTestCase):
             yield sleep(0.5)
             if product.ready: break
         # Here we need to check if the proxy sensors have been updated
-        yield self._check_sensor_value("{}-coherent-beam-count".format(proxy_name), str(sb_config['coherent-beams']['nbeams']))
-        yield self._check_sensor_value("{}-coherent-beam-tscrunch".format(proxy_name), str(sb_config['coherent-beams']['tscrunch']))
-        yield self._check_sensor_value("{}-coherent-beam-fscrunch".format(proxy_name), str(sb_config['coherent-beams']['fscrunch']))
-        yield self._check_sensor_value("{}-coherent-beam-antennas".format(proxy_name), self.DEFAULT_ANTENNAS)
-        yield self._check_sensor_value("{}-incoherent-beam-tscrunch".format(proxy_name), str(sb_config['incoherent-beam']['tscrunch']))
-        yield self._check_sensor_value("{}-incoherent-beam-fscrunch".format(proxy_name), str(sb_config['incoherent-beam']['fscrunch']))
-        yield self._check_sensor_value("{}-incoherent-beam-antennas".format(proxy_name), self.DEFAULT_ANTENNAS)
+        yield self._check_sensor_value("{}.coherent-beam-count".format(product_name), str(sb_config['coherent-beams']['nbeams']))
+        yield self._check_sensor_value("{}.coherent-beam-tscrunch".format(product_name), str(sb_config['coherent-beams']['tscrunch']))
+        yield self._check_sensor_value("{}.coherent-beam-fscrunch".format(product_name), str(sb_config['coherent-beams']['fscrunch']))
+        yield self._check_sensor_value("{}.coherent-beam-antennas".format(product_name), self.DEFAULT_ANTENNAS)
+        yield self._check_sensor_value("{}.incoherent-beam-tscrunch".format(product_name), str(sb_config['incoherent-beam']['tscrunch']))
+        yield self._check_sensor_value("{}.incoherent-beam-fscrunch".format(product_name), str(sb_config['incoherent-beam']['fscrunch']))
+        yield self._check_sensor_value("{}.incoherent-beam-antennas".format(product_name), self.DEFAULT_ANTENNAS)
         yield self._send_request_expect_ok('capture-start', product_name)
 
     @gen_test
@@ -361,8 +367,8 @@ class TestFbfMasterController(AsyncTestCase):
                    'test_target1,radec,13:00:00,02:00:00']
         ca_server = MockFbfConfigurationAuthority(hostname, 0)
         ca_server.start()
-        ca_server.set_sb_config_return_value(product_name, sb_id, {})
-        ca_server.set_target_config_return_value(product_name, targets[0], {'beams':targets})
+        ca_server.set_sb_config_return_value(proxy_name, sb_id, {})
+        ca_server.set_target_config_return_value(proxy_name, targets[0], {'beams':targets})
         port = ca_server.bind_address[1]
         yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
@@ -374,37 +380,65 @@ class TestFbfMasterController(AsyncTestCase):
             if product.ready: break
         yield self._send_request_expect_ok('capture-start', product_name)
         yield self._send_request_expect_ok('target-start', product_name, targets[0])
-        yield self._check_sensor_value('{}-coherent-beam-cfbf00000'.format(proxy_name),
+        yield self._check_sensor_value('{}.coherent-beam-cfbf00000'.format(product_name),
             Target(targets[0]).format_katcp())
-        yield self._check_sensor_value('{}-coherent-beam-cfbf00001'.format(proxy_name),
+        yield self._check_sensor_value('{}.coherent-beam-cfbf00001'.format(product_name),
             Target(targets[1]).format_katcp())
         new_targets = ['test_target2,radec,14:00:00,03:00:00',
                        'test_target3,radec,15:00:00,04:00:00']
-        ca_server.update_target_config(product_name, {'beams':new_targets})
+        ca_server.update_target_config(proxy_name, {'beams':new_targets})
         # Need to give some time for the update callback to hit the top of the
         # event loop and change the beam configuration sensors.
         yield sleep(1)
-        yield self._check_sensor_value('{}-coherent-beam-cfbf00000'.format(proxy_name),
+        yield self._check_sensor_value('{}.coherent-beam-cfbf00000'.format(product_name),
             Target(new_targets[0]).format_katcp())
-        yield self._check_sensor_value('{}-coherent-beam-cfbf00001'.format(proxy_name),
+        yield self._check_sensor_value('{}.coherent-beam-cfbf00001'.format(product_name),
             Target(new_targets[1]).format_katcp())
         yield self._send_request_expect_ok('target-stop', product_name)
         # Put beam configuration back to original:
-        ca_server.update_target_config(product_name, {'beams':targets})
+        ca_server.update_target_config(proxy_name, {'beams':targets})
         yield sleep(1)
         # At this point the sensor values should NOT have updated
-        yield self._check_sensor_value('{}-coherent-beam-cfbf00000'.format(proxy_name),
+        yield self._check_sensor_value('{}.coherent-beam-cfbf00000'.format(product_name),
             Target(new_targets[0]).format_katcp())
-        yield self._check_sensor_value('{}-coherent-beam-cfbf00001'.format(proxy_name),
+        yield self._check_sensor_value('{}.coherent-beam-cfbf00001'.format(product_name),
             Target(new_targets[1]).format_katcp())
         #Not start up a new target-start
         yield self._send_request_expect_ok('target-start', product_name, targets[0])
-        yield self._check_sensor_value('{}-coherent-beam-cfbf00000'.format(proxy_name),
+        yield self._check_sensor_value('{}.coherent-beam-cfbf00000'.format(product_name),
             Target(targets[0]).format_katcp())
-        yield self._check_sensor_value('{}-coherent-beam-cfbf00001'.format(proxy_name),
+        yield self._check_sensor_value('{}.coherent-beam-cfbf00001'.format(product_name),
             Target(targets[1]).format_katcp())
 
 
+class TestFbfDelayEngine(AsyncTestCase):
+    DEFAULT_ANTENNAS = ['m007, -30:42:39.8, 21:26:38.0, 1035.0, 13.5, -89.5835 -402.7315 2.3675 5864.851 5864.965, 0:21:15.7 0 -0:00:41.8 0:01:56.1 0:00:30.5 -0:00:19.9 -0:23:44.9 -0:00:31.4, 1.22',
+                        'm008, -30:42:39.8, 21:26:38.0, 1035.0, 13.5, -93.523 -535.0255 3.0425 5875.701 5876.213, -0:03:22.5 0 -0:00:43.0 -0:01:01.6 0:00:32.9 -0:00:12.9 -0:12:18.4 0:01:03.5, 1.22',
+                        'm009, -30:42:39.8, 21:26:38.0, 1035.0, 13.5, 32.357 -371.054 2.7315 5851.041 5851.051, 2:46:15.8 0 -0:04:14.1 -0:09:28.6 -0:00:22.6 -0:00:17.7 -0:02:33.5 -0:01:07.4, 1.22',
+                        'm010, -30:42:39.8, 21:26:38.0, 1035.0, 13.5, 88.1005 -511.8735 3.7765 5880.976 5881.857, 0:26:59.5 0 0:01:26.1 -0:00:54.8 0:00:34.2 -0:00:35.0 -0:02:48.1 0:00:38.0, 1.22',
+                        'm011, -30:42:39.8, 21:26:38.0, 1035.0, 13.5, 84.0175 -352.08 2.7535 5859.067 5859.093, -1:57:25.9 0 0:00:03.9 0:02:53.3 0:00:28.1 -0:00:15.1 -0:06:51.8 0:01:50.1, 1.22',
+                        'm012, -30:42:39.8, 21:26:38.0, 1035.0, 13.5, 140.0245 -368.268 3.0505 5864.229 5864.229, -0:17:21.2 0 -0:01:49.7 -0:00:38.2 0:00:15.2 -0:00:08.5 -0:01:11.4 0:01:57.3, 1.22',
+                        'm013, -30:42:39.8, 21:26:38.0, 1035.0, 13.5, 236.7985 -393.4625 3.719 5863.826 5864.44, 0:40:27.9 0 -0:02:35.2 -0:04:58.5 0:00:13.0 0:00:19.2 -0:05:55.6 0:01:09.3, 1.22',
+                        'm014, -30:42:39.8, 21:26:38.0, 1035.0, 13.5, 280.676 -285.792 3.144 5868.151 5868.376, 0:51:40.6 0 -0:01:27.5 0:00:58.0 0:00:11.9 0:00:03.8 -0:02:31.1 0:01:55.5, 1.22',
+                        'm015, -30:42:39.8, 21:26:38.0, 1035.0, 13.5, 210.6505 -219.1425 2.342 5919.036 5919.155, -0:10:22.6 0 0:01:16.7 -0:00:51.5 0:00:28.6 -0:00:38.2 -0:10:57.2 -0:00:43.5, 1.22',
+                        'm016, -30:42:39.8, 21:26:38.0, 1035.0, 13.5, 288.168 -185.868 2.43 5808.71 5808.856, 0:13:42.0 0 -0:02:17.7 0:00:02.0 0:00:04.9 -0:00:12.4 -0:08:00.4 0:02:07.9, 1.22']
+    KATPOINT_ANTENNAS = [Antenna(i) for i in DEFAULT_ANTENNAS]
+    def setUp(self):
+        super(TestFbfDelayEngine, self).setUp()
+
+    def tearDown(self):
+        super(TestFbfDelayEngine, self).tearDown()
+
+    @gen_test
+    def test_delay_engine_startup(self):
+        bm = BeamManager(4, self.KATPOINT_ANTENNAS)
+        de = DelayEngine("127.0.0.1", 0, bm)
+        de.start()
+        bm.add_beam(Target('test_target0,radec,12:00:00,01:00:00'))
+        bm.add_beam(Target('test_target0,radec,12:00:00,01:00:00'))
+        bm.add_beam(Target('test_target0,radec,12:00:00,01:00:00'))
+        bm.add_beam(Target('test_target0,radec,12:00:00,01:00:00'))
+        de.update_delays()
 
 if __name__ == '__main__':
     unittest.main(buffer=True)
