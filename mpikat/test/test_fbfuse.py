@@ -14,7 +14,7 @@ from tornado.testing import AsyncTestCase, gen_test
 from katpoint import Antenna, Target
 from katcp import AsyncReply
 from katcp.testutils import mock_req, handle_mock_req
-from katportalclient import SensorNotFoundError
+from katportalclient import SensorNotFoundError, SensorLookupError
 from mpikat import fbfuse
 from mpikat.fbfuse import (FbfMasterController,
                            FbfProductController,
@@ -28,7 +28,7 @@ from mpikat.test.utils import MockFbfConfigurationAuthority
 root_logger = logging.getLogger('')
 root_logger.setLevel(logging.CRITICAL)
 
-PORTAL = "portal.mkat.karoo.kat.ac.za"
+PORTAL = "monctl.devnmk.camlab.kat.ac.za"
 
 class MockKatportalClientWrapper(mock.Mock):
     @coroutine
@@ -38,15 +38,74 @@ class MockKatportalClientWrapper(mock.Mock):
         else:
             raise SensorNotFoundError("No antenna named {}".format(antenna))
 
-def requires_portal(func):
-    def wrapped(*args, **kwargs):
+    @coroutine
+    def get_antenna_feng_id_map(self, instrument_name, antennas):
+        ant_feng_map = {antenna:ii for ii,antenna in enumerate(antennas)}
+        raise Return(ant_feng_map)
+
+    @coroutine
+    def get_bandwidth(self, stream):
+        raise Return(856e6)
+
+    @coroutine
+    def get_cfreq(self, stream):
+        raise Return(1.28e9)
+
+    @coroutine
+    def get_sideband(self, stream):
+        raise Return("upper")
+
+    @coroutine
+    def gey_sync_epoch(self):
+        raise Return(1532530856)
+
+    @coroutine
+    def get_itrf_reference(self):
+        raise Return((5109318.841, 2006836.367, -3238921.775))
+
+
+class TestKatPortalClientWrapper(AsyncTestCase):
+    PORTAL = "monctl.devnmk.camlab.kat.ac.za"
+    def setUp(self):
+        super(TestKatPortalClientWrapper, self).setUp()
         try:
             urlopen("http://{}".format(PORTAL))
         except URLError:
             raise unittest.SkipTest("No route to {}".format(PORTAL))
-        else:
-            return func(*args, **kwargs)
-    return wrapped
+        self.kpc = KatportalClientWrapper(PORTAL, sub_nr=1)
+
+    def tearDown(self):
+        super(TestKatPortalClientWrapper, self).tearDown()
+
+    @gen_test(timeout=10)
+    def test_katportalclient_wrapper(self):
+        value = yield self.kpc.get_observer_string('m001')
+        try:
+            Antenna(value)
+        except Exception as error:
+            self.fail("Could not convert antenna string to katpoint Antenna instance,"
+                " failed with error {}".format(str(error)))
+
+    @gen_test(timeout=10)
+    def test_katportalclient_wrapper_invalid_antenna(self):
+        try:
+            value = yield self.kpc.get_observer_string('IAmNotAValidAntennaName')
+        except SensorLookupError:
+            pass
+
+    @gen_test(timeout=10)
+    def test_katportalclient_wrapper_get_bandwidth(self):
+        value = yield self.kpc.get_bandwidth('i0.antenna-channelised-voltage')
+
+    @gen_test(timeout=10)
+    def test_katportalclient_wrapper_get_cfreq(self):
+        value = yield self.kpc.get_cfreq('i0.antenna-channelised-voltage')
+
+    @gen_test(timeout=10)
+    def test_katportalclient_wrapper_get_sideband(self):
+        value = yield self.kpc.get_sideband('i0.antenna-channelised-voltage')
+        self.assertIn(value, ['upper','lower'])
+
 
 class TestFbfMasterController(AsyncTestCase):
     DEFAULT_STREAMS = ('{"cam.http": {"camdata": "http://10.8.67.235/api/client/1"}, '
@@ -110,26 +169,6 @@ class TestFbfMasterController(AsyncTestCase):
             reply,informs = yield handle_mock_req(self.server, mock_req(request_name, *args))
         self.assertFalse(reply.reply_ok(), msg=reply)
         raise Return((reply, informs))
-
-    @gen_test(timeout=10)
-    @requires_portal
-    def test_katportalclient_wrapper(self):
-        kpc = KatportalClientWrapper(PORTAL)
-        value = yield kpc.get_observer_string('m009')
-        try:
-            Antenna(value)
-        except Exception as error:
-            self.fail("Could not convert antenna string to katpoint Antenna instance,"
-                " failed with error {}".format(str(error)))
-
-    @gen_test(timeout=10)
-    @requires_portal
-    def test_katportalclient_wrapper_invalid_antenna(self):
-        kpc = KatportalClientWrapper(PORTAL)
-        try:
-            value = yield kpc.get_observer_string('IAmNotAValidAntennaName')
-        except SensorNotFoundError:
-            pass
 
     @gen_test
     def test_product_lookup_errors(self):

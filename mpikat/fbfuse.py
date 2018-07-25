@@ -14,9 +14,17 @@ from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from katportalclient import KATPortalClient
 from katpoint import Antenna, Target
 
+
+# ?halt message means shutdown everything and power off all machines
+
+
 log = logging.getLogger("mpikat.fbfuse")
 
 lock = Lock()
+
+PORTAL = "monctl.devnmk.camlab.kat.ac.za"
+
+FBF_IP_RANGE = "spead://239.11.1.0+127:7147"
 
 ###################
 # Utility functions
@@ -46,7 +54,7 @@ def parse_csv_antennas(antennas_csv):
         raise AntennaValidationError("Not all provided antennas were unqiue")
     return names
 
-def parse_stream(stream):
+def ip_range_from_stream(stream):
     stream = stream.lstrip("spead://")
     ip_range, port = stream.split(":")
     port = int(port)
@@ -55,7 +63,99 @@ def parse_stream(stream):
         ip_count = int(ip_count)
     except ValueError:
         base_ip, ip_count = ip_range, 1
-    return [ipaddress.ip_address(unicode(base_ip))+i for i in range(ip_count)], port
+    return ContiguousIpRange(base_ip, port, ip_count)
+
+class IpRangeAllocationError(Exception):
+    pass
+
+class ContiguousIpRange(object):
+    def __init__(self, base_ip, port, count):
+        self._base_ip = ipaddress.ip_address(unicode(base_ip))
+        self._ips = [self._base_ip+ii for ii in range(count)]
+        self._port = port
+        self._count = count
+
+    @property
+    def count(self):
+        return self._count
+
+    @property
+    def port(self):
+        return self._port
+
+    @property
+    def base_ip(self):
+        return self._base_ip
+
+    def index(self, ip):
+        return self._ips.index(ip)
+
+    def __hash__(self):
+        return hash(self.format_katcp())
+
+    def __iter__(self):
+        return self._ips.__iter__()
+
+    def __repr__(self):
+        return "<{} {}>".format(self.__class__.__name__, self.format_katcp())
+
+    def format_katcp(self):
+        return "spead://{}+{}:{}".format(str(self._base_ip), self._count, self._port)
+
+
+class IpRangeManager(object):
+    def __init__(self, ip_range):
+        self._ip_range = ip_range
+        self._allocated = [False for _ in ip_range]
+        self._allocated_ranges = set()
+
+    def __repr__(self):
+        return "<{} {}>".format(self.__class__.__name__, self._ip_range.format_katcp())
+
+    def format_katcp(self):
+        return self._ip_range.format_katcp()
+
+    def _free_ranges(self):
+        state_ranges = {True:[], False:[]}
+        def find_state_range(idx, state):
+            start_idx = idx
+            while idx < len(self._allocated):
+                if self._allocated[idx] == state:
+                    idx+=1
+                else:
+                    state_ranges[state].append((start_idx, idx-start_idx))
+                    return find_state_range(idx, not state)
+            else:
+                state_ranges[state].append((start_idx, idx-start_idx))
+        find_state_range(0, self._allocated[0])
+        return state_ranges[False]
+
+    def allocate(self, n):
+        ranges = self._free_ranges()
+        best_fit = None
+        for start,span in ranges:
+            if span<n:
+                continue
+            elif best_fit is None:
+                best_fit = (start, span)
+            elif (span-n) < (best_fit[1]-n):
+                best_fit = (start, span)
+        if best_fit is None:
+            raise IpRangeAllocationError("Could not allocate contiguous range of {} addresses".format(n))
+        else:
+            start,span = best_fit
+            for ii in range(n):
+                offset = start+ii
+                self._allocated[offset] = True
+            allocated_range = ContiguousIpRange(str(self._ip_range.base_ip + start), self._ip_range.port, n)
+            self._allocated_ranges.add(allocated_range)
+            return allocated_range
+
+    def free(self, ip_range):
+        self._allocated_ranges.remove(ip_range)
+        for ip in ip_range:
+            self._allocated[self._ip_range.index(ip)] = False
+
 
 ###################
 # Custom exceptions
@@ -82,16 +182,65 @@ class FbfStateError(Exception):
             expected_states, current_state)
         super(FbfStateError, self).__init__(message)
 
+
 class KatportalClientWrapper(object):
-    def __init__(self, host):
-        self._client = KATPortalClient('http://{host}/api/client'.format(host=host),
+    def __init__(self, host, sub_nr=1):
+        self._client = KATPortalClient('http://{host}/api/client/{sub_nr}'.format(
+            host=host, sub_nr=sub_nr),
             on_update_callback=None, logger=logging.getLogger('katcp'))
 
     @coroutine
+    def _query(self, component, sensor):
+        sensor_name = yield self._client.sensor_subarray_lookup(
+            component=component, sensor=sensor, return_katcp_name=False)
+        sensor_sample = yield self._client.sensor_value(sensor_name,
+            include_value_ts=False)
+        raise Return(sensor_sample)
+
+    @coroutine
     def get_observer_string(self, antenna):
-        sensor_name = "{}_observer".format(antenna)
-        sensor_sample = yield self._client.sensor_value(sensor_name, include_value_ts=False)
+        sensor_sample = yield self._query(antenna, "observer")
         raise Return(sensor_sample.value)
+
+    @coroutine
+    def get_antenna_feng_id_map(self, instrument_name, antennas):
+        sensor_sample = yield self._query('cbf', '{}.input-labelling'.format(instrument_name))
+        labels = eval(sensor_sample.value)
+        mapping = {}
+        for input_label, input_index, _, _ in labels:
+            antenna_name = input_label.strip("vh").lower()
+            if antenna_name.startswith("m") and antenna_name in antennas:
+                mapping[antenna_name] = input_index//2
+        print mapping
+        raise Return(mapping)
+
+    @coroutine
+    def get_bandwidth(self, stream):
+        sensor_sample = yield self._query('sub', 'streams.{}.bandwidth'.format(stream))
+        raise Return(sensor_sample.value)
+
+    @coroutine
+    def get_cfreq(self, stream):
+        sensor_sample = yield self._query('sub', 'streams.{}.centre-frequency'.format(stream))
+        raise Return(sensor_sample.value)
+
+    @coroutine
+    def get_sideband(self, stream):
+        sensor_sample = yield self._query('sub', 'streams.{}.sideband'.format(stream))
+        raise Return(sensor_sample.value)
+
+    @coroutine
+    def gey_sync_epoch(self):
+        sensor_sample = yield self._query('sub', 'synchronisation-epoch')
+        raise Return(sensor_sample.value)
+
+    @coroutine
+    def get_itrf_reference(self):
+        sensor_sample = yield self._query('sub', 'array-position-itrf')
+        x, y, z = [float(i) for i in sensor_sample.value.split(",")]
+        raise Return((x, y, z))
+
+
 
 ####################
 # Classes for communicating with and wrapping
@@ -259,7 +408,8 @@ class FbfMasterController(AsyncDeviceServer):
     VERSION_INFO = ("mpikat-fbf-api", 0, 1)
     BUILD_INFO = ("mpikat-fbf-implementation", 0, 1, "rc1")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
-    def __init__(self, ip, port, dummy=True):
+    def __init__(self, ip, port, dummy=True,
+        ip_range = FBF_IP_RANGE):
         """
         @brief       Construct new FbfMasterController instance
 
@@ -271,6 +421,7 @@ class FbfMasterController(AsyncDeviceServer):
                 A valid node pool must still be provided to the instance, but this may point to non-existent nodes.
 
         """
+        self._ip_pool = IpRangeManager(ip_range_from_stream(ip_range))
         super(FbfMasterController, self).__init__(ip,port)
         self._products = {}
         self._dummy = dummy
@@ -321,6 +472,15 @@ class FbfMasterController(AsyncDeviceServer):
             default="",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._products_sensor)
+
+        self._ip_pool_sensor = Sensor.string(
+            "output-ip-range",
+            description="The multicast address allocation for coherent beams",
+            default=self._ip_pool.format_katcp(),
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._ip_pool_sensor)
+
+
 
     def _update_products_sensor(self):
         self._products_sensor.set_value(",".join(self._products.keys()))
@@ -471,10 +631,23 @@ class FbfMasterController(AsyncDeviceServer):
         streams = json.loads(streams_json)
         try:
             streams['cam.http']['camdata']
-            streams['cbf.antenna_channelised_voltage']['i0.antenna-channelised-voltage']
+            # Need to check for endswith('.antenna-channelised-voltage') as the i0 is not
+            # guaranteed to stay the same.
+            # i0 = instrument name
+            # Need to keep this for future sensor lookups
+            streams['cbf.antenna_channelised_voltage']
         except KeyError as error:
             return ("fail", "JSON streams object does not contain required key: {}".format(str(error)))
 
+        for key in streams['cbf.antenna_channelised_voltage'].keys():
+            if key.endswith('.antenna-channelised-voltage'):
+                instrument_name, _ = key.split('.')
+                feng_stream_name = key
+                break
+        else:
+            return ("fail", "Could not determine instrument name (e.g. 'i0') from streams")
+
+        # TODO: change this request to @async_reply and make the whole thing a coroutine
         @coroutine
         def configure():
             nantennas = len(antennas)
@@ -483,7 +656,17 @@ class FbfMasterController(AsyncDeviceServer):
             if next_power_of_two(nantennas)//2 < 4:
                 log.warning("Number of antennas was less than than 4 but resources will be allocated assuming 4 antennas.")
             required_servers = max(4, next_power_of_two(nantennas)//2)
-            kpc = KatportalClientWrapper("portal.mkat.karoo.kat.ac.za")
+
+            # Want to make all the katportalclient calls here, retrieving:
+            # - observer strings
+            # - reference position
+            # - bandwidth
+            # - centre frequency
+            # - sideband
+
+            kpc = KatportalClientWrapper(PORTAL)
+
+            # Get all antenna observer strings
             futures, observers = [],[]
             for antenna in antennas:
                 log.debug("Fetching katpoint string for antenna {}".format(antenna))
@@ -498,6 +681,18 @@ class FbfMasterController(AsyncDeviceServer):
                 else:
                     log.debug("Fetched katpoint antenna: {}".format(observer))
                     observers.append(Antenna(observer))
+
+            # Get bandwidth, cfreq, sideband, f-eng mapping
+            bandwidth_future = kpc.get_bandwidth(feng_stream_name)
+            cfreq_future = kpc.get_cfreq(feng_stream_name)
+            sideband_future = kpc.get_sideband(feng_stream_name)
+            feng_antenna_map_future = kpc.get_antenna_feng_id_map(instrument_name, antennas)
+            bandwidth = yield bandwidth_future
+            cfreq = yield cfreq_future
+            sideband = yield sideband_future
+            feng_antenna_map = yield feng_antenna_map_future
+
+
             # This may be removed in future.
             # Currently if self._dummy is set no actual server allocation will be requested.
             if not self._dummy:
@@ -568,6 +763,8 @@ class FbfMasterController(AsyncDeviceServer):
         yield product.target_start(target)
         raise Return(("ok",))
 
+
+    # DELETE this
 
     @request(Str())
     @return_reply()
@@ -1350,6 +1547,7 @@ class FbfProductController(object):
         self._servers = servers
         self._beam_manager = None
         self._delay_engine = None
+        self._coherent_beam_ip_range = None
         self._ca_client = None
         self._managed_sensors = []
         self.setup_sensors()
@@ -1580,6 +1778,18 @@ class FbfProductController(object):
                 sensor.set_value(value)
 
     def _sanitize_sb_configuration(self,  tscrunch, fscrunch, desired_nbeams, beam_granularity=None):
+
+        # What are the key constraints:
+        # 1. The data rate per multicast group
+        # 2. The aggregate data rate out of the instrument (not as important)
+        # 3. The processing limitations (has to be determined empirically)
+        # 4. The number of multicast groups available
+        # 5. The possible numbers of beams per multicast group (such that TUSE can receive N per node)
+        # 6. Need to use at least 16 multicast groups
+        # 7. Should have even flow across multicast groups, so same number of beams in each
+        # 8. Multicast groups should be contiguous
+
+
         # Constants for data rates and bandwidths
         # these are hardcoded here for the moment but ultimately
         # they should be moved to a higher level or even dynamically
@@ -1611,6 +1821,8 @@ class FbfProductController(object):
             if max_beams_per_mcast < beam_granularity:
                 log.warning("Cannot fit {} beams into one multicast group, updating number of beams per multicast group to {}".format(
                     beam_granularity, max_beams_per_mcast))
+                while np.modf(beam_granularity/max_beams_per_mcast)[0] != 0.0:
+                    max_beams_per_mcast -= 1
                 beam_granularity = max_beams_per_mcast
             beams_per_mcast = beam_granularity * (max_beams_per_mcast // beam_granularity)
             log.debug("Number of beams per multicast group, accounting for granularity: {}".format(int(beams_per_mcast)))
@@ -1772,6 +1984,9 @@ class FbfProductController(object):
         # compile kernels
         # start streaming
         self._delay_engine_sensor.set_value(self._delay_engine.bind_address)
+
+
+        # Need to tear down the beam sensors here
         self._beam_sensors = []
         for beam in self._beam_manager.get_beams():
             sensor = Sensor.string(
@@ -1784,6 +1999,8 @@ class FbfProductController(object):
             self._beam_sensors.append(sensor)
             self.add_sensor(sensor)
         self._state_sensor.set_value(self.READY)
+
+        # Only make this call if the the number of beams has changed
         self._parent.mass_inform(Message.inform('interface-changed'))
 
     def start_capture(self):
