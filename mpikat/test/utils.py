@@ -23,3 +23,4 @@ class MockFbfConfigurationAuthority(BaseFbfConfigurationAuthority):
     @coroutine
     def get_sb_config(self, proxy_id, sb_id):
         raise Return(self.sb_return_values[(proxy_id, sb_id)])
+

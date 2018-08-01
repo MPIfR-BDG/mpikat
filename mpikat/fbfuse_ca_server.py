@@ -1,3 +1,24 @@
+"""
+Copyright (c) 2018 Ewan Barr <ebarr@mpifr-bonn.mpg.de>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
 import logging
 import json
 import tornado
@@ -9,8 +30,6 @@ from katcp.kattypes import request, return_reply, Str
 from katportalclient import KATPortalClient
 from katpoint import Antenna, Target
 
-FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
-logging.basicConfig(format=FORMAT)
 log = logging.getLogger("mpikat.fbfuse_ca_server")
 
 class BaseFbfConfigurationAuthority(AsyncDeviceServer):
@@ -117,35 +136,16 @@ class DefaultConfigurationAuthority(BaseFbfConfigurationAuthority):
 
     @tornado.gen.coroutine
     def get_sb_config(self, proxy_id, sb_id):
-        config = {u'coherent-beams':
-                    {u'fscrunch': 16,
-                     u'nbeams': 400,
-                     u'tscrunch': 16},
-                  u'incoherent-beam':
-                    {u'fscrunch': 16,
-                     u'tscrunch': 1}}
-        raise Return(config)
-
-
-class DefaultConfigurationAuthority(BaseFbfConfigurationAuthority):
-    def __init__(self, host, port):
-        super(DefaultConfigurationAuthority, self).__init__(host, port)
-
-    @tornado.gen.coroutine
-    def get_target_config(self, proxy_id, target):
-        self.targets[proxy_id] = target
-        # Return just a boresight beam
-        raise Return({"beams":[target],})
-
-    @tornado.gen.coroutine
-    def get_sb_config(self, proxy_id, sb_id):
-        config = {u'coherent-beams':
-                    {u'fscrunch': 16,
-                     u'nbeams': 400,
-                     u'tscrunch': 16},
-                  u'incoherent-beam':
-                    {u'fscrunch': 16,
-                     u'tscrunch': 1}}
+        config = {
+            u'coherent-beams-nbeams':100,
+            u'coherent-beams-tscrunch':22,
+            u'coherent-beams-fscrunch':2,
+            u'coherent-beams-antennas':'m007',
+            u'coherent-beams-granularity':6,
+            u'incoherent-beam-tscrunch':16,
+            u'incoherent-beam-fscrunch':1,
+            u'incoherent-beam-antennas':'m008'
+            }
         raise Return(config)
 
 

@@ -10,7 +10,7 @@ from optparse import OptionParser
 from katcp import Sensor, AsyncDeviceServer
 from katcp.kattypes import request, return_reply, Int, Str, Discrete
 
-log = logging.getLogger("psrdada_cpp.meerkat.fbfuse.delay_engine_client")
+log = logging.getLogger("mpikat.fbfuse_worker_server")
 
 lock = Lock()
 
