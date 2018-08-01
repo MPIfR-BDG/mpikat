@@ -37,7 +37,7 @@ from katpoint import Antenna, Target
 from mpikat.ip_manager import IpRangeManager, ip_range_from_stream
 from mpikat.katportalclient_wrapper import KatportalClientWrapper
 from mpikat.fbfuse_worker_wrapper import FbfWorkerPool
-from mpikat.beam_manager import BeamManager
+from mpikat.fbfuse_beam_manager import BeamManager
 from mpikat.ip_manager import IpRangeManager
 from mpikat.fbfuse_product_controller import FbfProductController
 from mpikat.utils import parse_csv_antennas, is_power_of_two, next_power_of_two
