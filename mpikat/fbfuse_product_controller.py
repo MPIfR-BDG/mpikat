@@ -169,28 +169,28 @@ class FbfProductController(object):
             "bandwidth",
             description = "The bandwidth this product is configured to process",
             default = self._default_sb_config['bandwidth'],
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._bandwidth_sensor)
 
         self._nchans_sensor = Sensor.integer(
             "nchannels",
             description = "The number of channels to be processesed",
             default = self._n_channels,
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._nchans_sensor)
 
         self._cfreq_sensor = Sensor.float(
             "centre-frequency",
             description = "The centre frequency of the band this product configured to process",
             default = self._default_sb_config['centre-frequency'],
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._cfreq_sensor)
 
         self._cbc_nbeams_sensor = Sensor.integer(
             "coherent-beam-count",
             description = "The number of coherent beams that this FBF instance can currently produce",
             default = self._default_sb_config['coherent-beams-nbeams'],
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._cbc_nbeams_sensor)
 
         self._cbc_nbeams_per_group = Sensor.integer(
@@ -218,21 +218,21 @@ class FbfProductController(object):
             "coherent-beam-tscrunch",
             description = "The number time samples that will be integrated when producing coherent beams",
             default = self._default_sb_config['coherent-beams-tscrunch'],
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._cbc_tscrunch_sensor)
 
         self._cbc_fscrunch_sensor = Sensor.integer(
             "coherent-beam-fscrunch",
             description = "The number frequency channels that will be integrated when producing coherent beams",
             default = self._default_sb_config['coherent-beams-fscrunch'],
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._cbc_fscrunch_sensor)
 
         self._cbc_antennas_sensor = Sensor.string(
             "coherent-beam-antennas",
             description = "The antennas that will be used when producing coherent beams",
             default = self._default_sb_config['coherent-beams-antennas'],
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._cbc_antennas_sensor)
 
         self._cbc_mcast_groups_sensor = Sensor.string(
@@ -246,28 +246,28 @@ class FbfProductController(object):
             "incoherent-beam-count",
             description = "The number of incoherent beams that this FBF instance can currently produce",
             default = 1,
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._ibc_nbeams_sensor)
 
         self._ibc_tscrunch_sensor = Sensor.integer(
             "incoherent-beam-tscrunch",
             description = "The number time samples that will be integrated when producing incoherent beams",
             default = self._default_sb_config['incoherent-beam-tscrunch'],
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._ibc_tscrunch_sensor)
 
         self._ibc_fscrunch_sensor = Sensor.integer(
             "incoherent-beam-fscrunch",
             description = "The number frequency channels that will be integrated when producing incoherent beams",
             default = self._default_sb_config['incoherent-beam-fscrunch'],
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._ibc_fscrunch_sensor)
 
         self._ibc_antennas_sensor = Sensor.string(
             "incoherent-beam-antennas",
             description = "The antennas that will be used when producing incoherent beams",
             default = self._default_sb_config['incoherent-beam-antennas'],
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._ibc_antennas_sensor)
 
         self._ibc_mcast_group_sensor = Sensor.string(
@@ -281,7 +281,7 @@ class FbfProductController(object):
             "servers",
             description = "The worker server instances currently allocated to this product",
             default = ",".join(["{s.hostname}:{s.port}".format(s=server) for server in self._servers]),
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._servers_sensor)
 
         self._nserver_sets_sensor = Sensor.integer(
@@ -355,6 +355,7 @@ class FbfProductController(object):
 
         @param      antennas   A CSV list of antenna names
         """
+        log.debug("Verifying antenna set: {}".format(antennas))
         antennas_set = set([ant.name for ant in self._katpoint_antennas])
         requested_antennas = set(antennas)
         return requested_antennas.issubset(antennas_set)
@@ -433,6 +434,13 @@ class FbfProductController(object):
         self.reset_sb_configuration()
         config = deepcopy(self._default_sb_config)
         config.update(config_dict)
+
+        requested_cbc_antenna = parse_csv_antennas(config['coherent-beams-antennas'])
+        if not self._verify_antennas(requested_cbc_antenna):
+            raise Exception("Requested coherent beam antennas are not a subset of the available antennas")
+        requested_ibc_antenna = parse_csv_antennas(config['incoherent-beam-antennas'])
+        if not self._verify_antennas(requested_ibc_antenna):
+            raise Exception("Requested incoherent beam antennas are not a subset of the available antennas")
         # first we need to get one ip address for the incoherent beam
         ibc_mcast_group = self._parent._ip_pool.allocate(1)
         self._ip_allocations.append(ibc_mcast_group)
@@ -504,53 +512,6 @@ class FbfProductController(object):
         sensor.register_listener(ca_target_update_callback)
         self._ca_client.set_sampling_strategy(sensor.name, "event")
 
-    def configure_coherent_beams(self, nbeams, antennas, fscrunch, tscrunch):
-        """
-        @brief      Set the configuration for coherent beams producted by this instance
-
-        @param      nbeams          The number of beams that will be produced for the provided product_id
-
-        @param      antennas        A comma separated list of physical antenna names. Only these antennas will be used
-                                    when generating coherent beams (e.g. m007,m008,m009). The antennas provided here must
-                                    be a subset of the antennas in the current subarray. If not an exception will be
-                                    raised.
-
-        @param      fscrunch        The number of frequency channels to integrate over when producing coherent beams.
-
-        @param      tscrunch        The number of time samples to integrate over when producing coherent beams.
-        """
-        if not self.idle:
-            raise FbfProductStateError([self.IDLE], self.state)
-        if not self._verify_antennas(parse_csv_antennas(antennas)):
-            raise AntennaValidationError("Requested antennas are not a subset of the current subarray")
-        self._cbc_nbeams_sensor.set_value(nbeams)
-        #need a check here to determine if this is a subset of the subarray antennas
-        self._cbc_fscrunch_sensor.set_value(fscrunch)
-        self._cbc_tscrunch_sensor.set_value(tscrunch)
-        self._cbc_antennas_sensor.set_value(antennas)
-
-    def configure_incoherent_beam(self, antennas, fscrunch, tscrunch):
-        """
-        @brief      Set the configuration for incoherent beams producted by this instance
-
-        @param      antennas        A comma separated list of physical antenna names. Only these antennas will be used
-                                    when generating incoherent beams (e.g. m007,m008,m009). The antennas provided here must
-                                    be a subset of the antennas in the current subarray. If not an exception will be
-                                    raised.
-
-        @param      fscrunch        The number of frequency channels to integrate over when producing incoherent beams.
-
-        @param      tscrunch        The number of time samples to integrate over when producing incoherent beams.
-        """
-        if not self.idle:
-            raise FbfProductStateError([self.IDLE], self.state)
-        if not self._verify_antennas(parse_csv_antennas(antennas)):
-            raise AntennaValidationError("Requested antennas are not a subset of the current subarray")
-        #need a check here to determine if this is a subset of the subarray antennas
-        self._ibc_fscrunch_sensor.set_value(fscrunch)
-        self._ibc_tscrunch_sensor.set_value(tscrunch)
-        self._ibc_antennas_sensor.set_value(antennas)
-
     def _beam_to_sensor_string(self, beam):
         return beam.target.format_katcp()
 
@@ -587,8 +548,6 @@ class FbfProductController(object):
         else:
             #TODO: get the schedule block ID into this call from somewhere (configure?)
             yield self.get_ca_sb_configuration("default_subarray")
-
-
         cbc_antennas_names = parse_csv_antennas(self._cbc_antennas_sensor.value())
         cbc_antennas = [self._antenna_map[name] for name in cbc_antennas_names]
         self._beam_manager = BeamManager(self._cbc_nbeams_sensor.value(), cbc_antennas)

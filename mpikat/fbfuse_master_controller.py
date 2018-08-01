@@ -140,8 +140,6 @@ class FbfMasterController(AsyncDeviceServer):
             initial_status=Sensor.NOMINAL)
         self.add_sensor(self._ip_pool_sensor)
 
-
-
     def _update_products_sensor(self):
         self._products_sensor.set_value(",".join(self._products.keys()))
 
@@ -428,92 +426,6 @@ class FbfMasterController(AsyncDeviceServer):
             raise Return(("fail", str(error)))
         yield product.target_stop()
         raise Return(("ok",))
-
-
-    @request(Str(), Int(), Str(), Int(), Int())
-    @return_reply()
-    def request_configure_coherent_beams(self, req, product_id, nbeams, antennas_csv, fscrunch, tscrunch):
-        """
-        @brief      Request that FBFUSE configure parameters for coherent beams
-
-        @note       This call can only be made prior to a call to start-beams for the configured product.
-                    This is due to FBFUSE requiring static information up front in order to compile beamformer
-                    kernels, allocate the correct size memory buffers and subscribe to the correct number of
-                    multicast groups.
-
-        @note       The particular configuration passed at this stage will only be evaluated on a call to start-beams.
-                    If the requested configuration is not possible due to hardware and bandwidth limits and error will
-                    be raised on the start-beams call.
-
-        @param      req             A katcp request object
-
-        @param      product_id      This is a name for the data product, used to track which subarray is being deconfigured.
-                                    For example "array_1_bc856M4k".
-
-        @param      nbeams          The number of beams that will be produced for the provided product_id
-
-        @param      antennas_csv    A comma separated list of physical antenna names. Only these antennas will be used
-                                    when generating coherent beams (e.g. m007,m008,m009). The antennas provided here must
-                                    be a subset of the antennas in the current subarray. If not an exception will be
-                                    raised.
-
-        @param      fscrunch        The number of frequency channels to integrate over when producing coherent beams.
-
-        @param      tscrunch        The number of time samples to integrate over when producing coherent beams.
-
-        @return     katcp reply object [[[ !configure-coherent-beams ok | (fail [error description]) ]]]
-        """
-        try:
-            product = self._get_product(product_id)
-        except ProductLookupError as error:
-            return ("fail", str(error))
-        try:
-            product.configure_coherent_beams(nbeams, antennas_csv, fscrunch, tscrunch)
-        except Exception as error:
-            return ("fail", str(error))
-        else:
-            return ("ok",)
-
-    @request(Str(), Str(), Int(), Int())
-    @return_reply()
-    def request_configure_incoherent_beam(self, req, product_id, antennas_csv, fscrunch, tscrunch):
-        """
-        @brief      Request that FBFUSE sets the parameters for the incoherent beam
-
-        @note       The particular configuration passed at this stage will only be evaluated on a call to start-beams.
-                    If the requested configuration is not possible due to hardware and bandwidth limits and error will
-                    be raised on the start-beams call.
-
-        @note       Currently FBFUSE is only set to produce one incoherent beam per instantiation. This may change in future.
-
-        @param      req             A katcp request object
-
-        @param      product_id      This is a name for the data product, used to track which subarray is being deconfigured.
-                                    For example "array_1_bc856M4k".
-
-        @param      nbeams          The number of beams that will be produced for the provided product_id
-
-        @param      antennas_csv    A comma separated list of physical antenna names. Only these antennas will be used
-                                    when generating the incoherent beam (e.g. m007,m008,m009). The antennas provided here must
-                                    be a subset of the antennas in the current subarray. If not an exception will be
-                                    raised.
-
-        @param      fscrunch        The number of frequency channels to integrate over when producing the incoherent beam.
-
-        @param      tscrunch        The number of time samples to integrate over when producing the incoherent beam.
-
-        @return     katcp reply object [[[ !configure-incoherent-beam ok | (fail [error description]) ]]]
-        """
-        try:
-            product = self._get_product(product_id)
-        except ProductLookupError as error:
-            return ("fail", str(error))
-        try:
-            product.configure_incoherent_beam(antennas_csv, fscrunch, tscrunch)
-        except Exception as error:
-            return ("fail", str(error))
-        else:
-            return ("ok",)
 
     @request(Str())
     @return_reply()

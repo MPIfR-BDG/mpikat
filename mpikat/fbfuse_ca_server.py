@@ -130,13 +130,11 @@ class DefaultConfigurationAuthority(BaseFbfConfigurationAuthority):
         super(DefaultConfigurationAuthority, self).__init__(host, port)
         self.default_config = {
             u'coherent-beams-nbeams':100,
-            u'coherent-beams-tscrunch':22,
-            u'coherent-beams-fscrunch':2,
-            u'coherent-beams-antennas':'m007',
+            u'coherent-beams-tscrunch':16,
+            u'coherent-beams-fscrunch':1,
             u'coherent-beams-granularity':6,
             u'incoherent-beam-tscrunch':16,
             u'incoherent-beam-fscrunch':1,
-            u'incoherent-beam-antennas':'m008'
             }
 
     @tornado.gen.coroutine
