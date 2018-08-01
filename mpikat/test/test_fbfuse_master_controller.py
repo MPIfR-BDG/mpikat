@@ -197,6 +197,7 @@ class TestFbfMasterController(AsyncTestCase):
         product_name = 'test_product'
         proxy_name = 'FBFUSE_test'
         product_state_sensor = '{}.state'.format(product_name)
+        self._add_n_servers(64)
         yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
         yield self._check_sensor_value('products', product_name)

@@ -57,6 +57,8 @@ class WorkerPool(object):
             wrapper.start()
             log.debug("Adding {} to server set".format(wrapper))
             self._servers.add(wrapper)
+        else:
+            log.debug("Worker instance {} already exists".format(wrapper))
 
     def remove(self, hostname, port):
         """

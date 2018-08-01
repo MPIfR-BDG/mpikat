@@ -24,7 +24,7 @@ import logging
 import json
 import time
 from copy import deepcopy
-from tornado.gen import coroutine
+from tornado.gen import coroutine, Return
 from katcp import Sensor, Message, KATCPClientResource
 from katpoint import  Target
 from mpikat.fbfuse_beam_manager import BeamManager
@@ -583,6 +583,12 @@ class FbfProductController(object):
 
         # Only make this call if the the number of beams has changed
         self._parent.mass_inform(Message.inform('interface-changed'))
+
+    def deconfigure(self):
+        self.stop_beams()
+        if self._delay_engine:
+            self._delay_engine.stop()
+        self.reset_sb_configuration()
 
     def start_capture(self):
         if not self.ready:

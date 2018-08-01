@@ -93,6 +93,10 @@ class FbfMasterController(AsyncDeviceServer):
         """
         super(FbfMasterController,self).start()
 
+    def add_sensor(self, sensor):
+        log.debug("Adding sensor: {}".format(sensor.name))
+        super(FbfMasterController, self).add_sensor(sensor)
+
     def setup_sensors(self):
         """
         @brief  Set up monitoring sensors.
@@ -164,6 +168,8 @@ class FbfMasterController(AsyncDeviceServer):
                  unit of compute comprised of one CPU, one GPU and one NIC (i.e. one NUMA
                  node on an FBFUSE compute server).
         """
+        log.debug("Received request to register worker server at {}:{}".format(
+            hostname, port))
         self._server_pool.add(hostname, port)
         return ("ok",)
 
@@ -179,9 +185,13 @@ class FbfMasterController(AsyncDeviceServer):
         @detail  The graceful way of removing a server from rotation. If the server is
                  currently actively processing an exception will be raised.
         """
+        log.debug("Received request to deregister worker server at {}:{}".format(
+            hostname, port))
         try:
             self._server_pool.remove(hostname, port)
         except ServerDeallocationError as error:
+            log.error("Request to deregister worker server at {}:{} failed with error: {}".format(
+                hostname, port, str(error)))
             return ("fail", str(error))
         else:
             return ("ok",)
@@ -268,6 +278,14 @@ class FbfMasterController(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
+
+        msg = ("Configuring new FBFUSE product",
+            "Product ID: {}".format(product_id),
+            "Antennas: {}".format(antennas_csv),
+            "Nchannels: {}".format(n_channels),
+            "Streams: {}".format(streams_json),
+            "Proxy name: {}".format(proxy_name))
+        log.info("\n".join(msg))
         # Test if product_id already exists
         if product_id in self._products:
             return ("fail", "FBF already has a configured product with ID: {}".format(product_id))
@@ -301,6 +319,7 @@ class FbfMasterController(AsyncDeviceServer):
             if key.endswith('.antenna-channelised-voltage'):
                 instrument_name, _ = key.split('.')
                 feng_stream_name = key
+                log.debug("Parsed instrument name from streams: {}".format(instrument_name))
                 break
         else:
             return ("fail", "Could not determine instrument name (e.g. 'i0') from streams")
@@ -309,7 +328,6 @@ class FbfMasterController(AsyncDeviceServer):
         @coroutine
         def configure():
             kpc = self._katportal_wrapper_type(streams['cam.http']['camdata'])
-
             # Get all antenna observer strings
             futures, observers = [],[]
             for antenna in antennas:
@@ -327,6 +345,7 @@ class FbfMasterController(AsyncDeviceServer):
                     observers.append(Antenna(observer))
 
             # Get bandwidth, cfreq, sideband, f-eng mapping
+            log.debug("Fetching F-engine and subarray configuration information")
             bandwidth_future = kpc.get_bandwidth(feng_stream_name)
             cfreq_future = kpc.get_cfreq(feng_stream_name)
             sideband_future = kpc.get_sideband(feng_stream_name)
@@ -339,9 +358,12 @@ class FbfMasterController(AsyncDeviceServer):
                 'bandwidth':bandwidth,
                 'centre-frequency':cfreq,
                 'sideband':sideband,
-                'feng_antenna_map':feng_antenna_map
+                'feng-antenna-map':feng_antenna_map
             }
-            product = FbfProductController(self, product_id, observers, n_channels, streams, proxy_name, feng_config)
+            for key, value in feng_config.items():
+                log.debug("{}: {}".format(key, value))
+            product = FbfProductController(self, product_id, observers, n_channels,
+                streams, proxy_name, feng_config)
             self._products[product_id] = product
             self._update_products_sensor()
             req.reply("ok",)
@@ -364,16 +386,16 @@ class FbfMasterController(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]
         """
+        log.info("Deconfiguring FBFUSE instace with ID '{}'".format(product_id))
         # Test if product exists
         try:
             product = self._get_product(product_id)
         except ProductLookupError as error:
             return ("fail", str(error))
         try:
-            product.stop_beams()
+            product.deconfigure()
         except Exception as error:
             return ("fail", str(error))
-        self._server_pool.deallocate(product.servers)
         product.teardown_sensors()
         del self._products[product_id]
         self._update_products_sensor()
@@ -394,6 +416,7 @@ class FbfMasterController(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !target-start ok | (fail [error description]) ]]]
         """
+        log.info("Received new target: {}".format(target))
         try:
             product = self._get_product(product_id)
         except ProductLookupError as error:
