@@ -393,7 +393,42 @@ class FbfProductController(object):
         """
         @brief  Set the schedule block configuration for this product
 
-        @param  config_dict  A dictionary specifying configuation parameters
+        @param  config_dict  A dictionary specifying configuation parameters, e.g.
+                             @code
+                                   {
+                                   u'coherent-beams-nbeams':100,
+                                   u'coherent-beams-tscrunch':22,
+                                   u'coherent-beams-fscrunch':2,
+                                   u'coherent-beams-antennas':'m007',
+                                   u'coherent-beams-granularity':6,
+                                   u'incoherent-beam-tscrunch':16,
+                                   u'incoherent-beam-fscrunch':1,
+                                   u'incoherent-beam-antennas':'m008'
+                                   }
+                             @endcode
+
+        @detail Valid parameters for the configuration dictionary are as follows:
+
+                 coherent-beams-nbeams      - The desired number of coherent beams to produce
+                 coherent-beams-tscrunch    - The number of spectra to integrate in the coherent beamformer
+                 coherent-beams-fscrunch    - The number of channels to integrate in the coherent beamformer
+                 coherent-beams-antennas    - The specific antennas to use for the coherent beamformer
+                 coherent-beams-granularity - The number of beams per output mutlicast group
+                                              (an integer divisor or multiplier of this number will be used)
+                 incoherent-beam-tscrunch   - The number of spectra to integrate in the incoherent beamformer
+                 incoherent-beam-fscrunch   - The number of channels to integrate in the incoherent beamformer
+                 incoherent-beam-antennas   - The specific antennas to use for the incoherent beamformer
+                 centre-frequency           - The desired centre frequency in Hz
+                 bandwidth                  - The desired bandwidth in Hz
+
+        @note   FBFUSE reasonably assumes that the user does not know the possible configurations at
+                any given time. As such it tries to satisfy the users request but will not throw an
+                error if the requested configuration is not acheivable, instead opting to provide a
+                reduced configuration. For example the user may request 1000 beams and 6 beams per
+                multicast group but FBFUSE may configure to produce 860 beams and 24 beams per multicast
+                group. If the user can only use 6 beams per multcast group, then in the 24-beam case
+                they must subscribe to the same multicast group 4 times on different nodes.
+
         """
         self.reset_sb_configuration()
         config = deepcopy(self._default_sb_config)

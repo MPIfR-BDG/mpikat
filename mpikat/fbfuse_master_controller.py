@@ -48,8 +48,6 @@ from mpikat.utils import parse_csv_antennas, is_power_of_two, next_power_of_two
 log = logging.getLogger("mpikat.fbfuse_master_controller")
 lock = Lock()
 
-PORTAL = "monctl.devnmk.camlab.kat.ac.za"
-
 FBF_IP_RANGE = "spead://239.11.1.0+127:7147"
 
 class ProductLookupError(Exception):

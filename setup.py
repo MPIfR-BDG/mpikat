@@ -11,6 +11,7 @@ setup(name='mpikat',
       install_requires=[
           'katpoint',
           'katcp',
+          'ipaddress',
           'katportalclient',
           'mosaic'
       ],

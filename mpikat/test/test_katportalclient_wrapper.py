@@ -35,17 +35,16 @@ from mpikat.katportalclient_wrapper import KatportalClientWrapper
 root_logger = logging.getLogger('')
 root_logger.setLevel(logging.CRITICAL)
 
-PORTAL = "monctl.devnmk.camlab.kat.ac.za"
+PORTAL = "http://monctl.devnmk.camlab.kat.ac.za/api/client/1"
 
 class TestKatPortalClientWrapper(AsyncTestCase):
-    PORTAL = "monctl.devnmk.camlab.kat.ac.za"
     def setUp(self):
         super(TestKatPortalClientWrapper, self).setUp()
         try:
-            urlopen("http://{}".format(PORTAL))
+            urlopen(PORTAL)
         except URLError:
             raise unittest.SkipTest("No route to {}".format(PORTAL))
-        self.kpc = KatportalClientWrapper(PORTAL, sub_nr=1)
+        self.kpc = KatportalClientWrapper(PORTAL)
 
     def tearDown(self):
         super(TestKatPortalClientWrapper, self).tearDown()

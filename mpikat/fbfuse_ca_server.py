@@ -128,15 +128,7 @@ class BaseFbfConfigurationAuthority(AsyncDeviceServer):
 class DefaultConfigurationAuthority(BaseFbfConfigurationAuthority):
     def __init__(self, host, port):
         super(DefaultConfigurationAuthority, self).__init__(host, port)
-
-    @tornado.gen.coroutine
-    def get_target_config(self, proxy_id, target):
-        # Return just a boresight beam
-        raise Return({"beams":[target],})
-
-    @tornado.gen.coroutine
-    def get_sb_config(self, proxy_id, sb_id):
-        config = {
+        self.default_config = {
             u'coherent-beams-nbeams':100,
             u'coherent-beams-tscrunch':22,
             u'coherent-beams-fscrunch':2,
@@ -146,7 +138,25 @@ class DefaultConfigurationAuthority(BaseFbfConfigurationAuthority):
             u'incoherent-beam-fscrunch':1,
             u'incoherent-beam-antennas':'m008'
             }
-        raise Return(config)
+
+    @tornado.gen.coroutine
+    def get_target_config(self, proxy_id, target):
+        # Return just a boresight beam
+        raise Return({"beams":[target],})
+
+    @tornado.gen.coroutine
+    def get_sb_config(self, proxy_id, sb_id):
+        raise Return(self.default_config)
+
+    @request(Str())
+    @return_reply()
+    def request_update_default_sb_config(self, req, config_json):
+        """
+        @brief      Update the default config returned on a get_sb_config call.
+                    This is intended for testing purposes only.
+        """
+        self.default_config.update(json.loads(config_json))
+        return ("ok",)
 
 
 @tornado.gen.coroutine
