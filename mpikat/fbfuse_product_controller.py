@@ -383,7 +383,7 @@ class FbfProductController(object):
         except Exception as error:
             log.error("Could not parse CA SB configuration with error: {}".format(str(error)))
             raise error
-        self.set_sb_configuration(config_dict)
+        raise Return(config_dict)
 
     def reset_sb_configuration(self):
         self._parent._server_pool.deallocate(self._servers)
@@ -545,9 +545,12 @@ class FbfProductController(object):
 
         if not self._ca_client:
             log.warning("No configuration authority found, using default configuration parameters")
+            self.set_sb_configuration(self._default_sb_config)
         else:
             #TODO: get the schedule block ID into this call from somewhere (configure?)
-            yield self.get_ca_sb_configuration("default_subarray")
+            config = yield self.get_ca_sb_configuration("default_subarray")
+            self.set_sb_configuration(config)
+
         cbc_antennas_names = parse_csv_antennas(self._cbc_antennas_sensor.value())
         cbc_antennas = [self._antenna_map[name] for name in cbc_antennas_names]
         self._beam_manager = BeamManager(self._cbc_nbeams_sensor.value(), cbc_antennas)
