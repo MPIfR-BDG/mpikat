@@ -15,7 +15,7 @@ setup(name='mpikat',
           'mosaic'
       ],
       dependency_links=[
-          'git://github.com/ska-sa/katportalclient.git',
+          'git+https://github.com/ska-sa/katportalclient.git',
           'git+https://gitlab.mpifr-bonn.mpg.de/wchen/Beamforming.git' #mosaic
       ],
       zip_safe=False)
