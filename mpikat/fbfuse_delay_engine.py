@@ -26,7 +26,7 @@ import time
 import mosaic
 from katcp import Sensor, AsyncDeviceServer
 from katcp.kattypes import request, return_reply, Float
-from katpoint import Antenna
+from katpoint import Antenna, Target
 
 log = logging.getLogger("mpikat.delay_engine")
 
@@ -49,6 +49,7 @@ class DelayEngine(AsyncDeviceServer):
         @param   beam_manager  A BeamManager instance that will be used to create delays
         """
         self._beam_manager = beam_manager
+        self._reference_target = None
         super(DelayEngine, self).__init__(ip,port)
 
     def setup_sensors(self):
@@ -90,19 +91,27 @@ class DelayEngine(AsyncDeviceServer):
             initial_status=Sensor.NOMINAL)
         self.add_sensor(self._antennas_sensor)
 
+        self._phase_reference_sensor = Sensor.string(
+            "phase-reference",
+            description="A KATPOINT target string denoting the F-engine phasing centre",
+            default="unset,radec,0,0",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._phase_reference_sensor)
+
         self._delays_sensor = Sensor.string(
             "delays",
             description="JSON object containing delays for each beam for each antenna at the current epoch",
             default="",
             initial_status=Sensor.UNKNOWN)
-        self.update_delays()
         self.add_sensor(self._delays_sensor)
 
     def update_delays(self):
+        reference_target = Target(self._phase_reference_sensor.value())
         reference_antenna = Antenna("reference,{ref.lat},{ref.lon},{ref.elev}".format(
             ref=self._beam_manager.antennas[0].ref_observer))
         targets = [beam.target for beam in self._beam_manager.get_beams()]
-        delay_calc = mosaic.DelayPolynomial(self._beam_manager.antennas, targets, reference_antenna)
+        delay_calc = mosaic.DelayPolynomial(self._beam_manager.antennas, reference_target,
+            targets, reference_antenna)
         poly = delay_calc.get_delay_polynomials(time.time(), duration=self._update_rate_sensor.value()*2)
         #poly has format: beam, antenna, (delay, rate)
         output = {}
@@ -124,6 +133,4 @@ class DelayEngine(AsyncDeviceServer):
         """
         self._update_rate_sensor.set_value(rate)
         # This should make a change to the beam manager object
-
-        self.update_delays()
         return ("ok",)

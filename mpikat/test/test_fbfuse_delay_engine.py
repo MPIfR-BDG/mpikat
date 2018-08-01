@@ -48,9 +48,9 @@ class TestDelayEngine(AsyncTestCase):
         de = DelayEngine("127.0.0.1", 0, bm)
         de.start()
         bm.add_beam(Target('test_target0,radec,12:00:00,01:00:00'))
-        bm.add_beam(Target('test_target0,radec,12:00:00,01:00:00'))
-        bm.add_beam(Target('test_target0,radec,12:00:00,01:00:00'))
-        bm.add_beam(Target('test_target0,radec,12:00:00,01:00:00'))
+        bm.add_beam(Target('test_target1,radec,12:00:00,01:00:00'))
+        bm.add_beam(Target('test_target2,radec,12:00:00,01:00:00'))
+        bm.add_beam(Target('test_target3,radec,12:00:00,01:00:00'))
         de.update_delays()
 
 if __name__ == '__main__':
