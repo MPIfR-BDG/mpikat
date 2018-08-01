@@ -86,6 +86,9 @@ class FbfMasterController(AsyncDeviceServer):
         self._dummy = dummy
         self._katportal_wrapper_type = KatportalClientWrapper
         self._server_pool = FbfWorkerPool()
+        if self._dummy:
+            for ii in range(64):
+                self._server_pool.add("127.0.0.1", 50000+ii)
 
     def start(self):
         """
