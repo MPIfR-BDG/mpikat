@@ -40,6 +40,12 @@ class FbfProductStateError(Exception):
             expected_states, current_state)
         super(FbfProductStateError, self).__init__(message)
 
+class LoggingSensor(Sensor):
+    def set_value(self, value):
+        log.debug("Sensor '{}' changed from '{}' to '{}'".format(
+            self.name, self.value(), value))
+        super(LoggingSensor, self).set_value(value)
+
 class FbfProductController(object):
     """
     Wrapper class for an FBFUSE product.
@@ -143,7 +149,7 @@ class FbfProductController(object):
                   is required to let connected clients know that the proxy interface has
                   changed.
         """
-        self._state_sensor = Sensor.discrete(
+        self._state_sensor = LoggingSensor.discrete(
             "state",
             description = "Denotes the state of this FBF instance",
             params = self.STATES,
@@ -372,6 +378,7 @@ class FbfProductController(object):
 
     @coroutine
     def get_ca_sb_configuration(self, sb_id):
+        log.debug("Retrieving schedule block configuration from configuration authority")
         yield self._ca_client.until_synced()
         try:
             response = yield self._ca_client.req.get_schedule_block_configuration(self._proxy_name, sb_id)
@@ -383,9 +390,11 @@ class FbfProductController(object):
         except Exception as error:
             log.error("Could not parse CA SB configuration with error: {}".format(str(error)))
             raise error
+        log.debug("Configuration authority returned: {}".format(config_dict))
         raise Return(config_dict)
 
     def reset_sb_configuration(self):
+        log.debug("Reseting schedule block configuration")
         self._parent._server_pool.deallocate(self._servers)
         for ip_range in self._ip_allocations:
             self._parent._ip_pool.free(ip_range)
@@ -432,9 +441,10 @@ class FbfProductController(object):
 
         """
         self.reset_sb_configuration()
+        log.info("Setting schedule block configuration")
         config = deepcopy(self._default_sb_config)
         config.update(config_dict)
-
+        log.info("Configuring using: {}".format(config))
         requested_cbc_antenna = parse_csv_antennas(config['coherent-beams-antennas'])
         if not self._verify_antennas(requested_cbc_antenna):
             raise Exception("Requested coherent beam antennas are not a subset of the available antennas")
@@ -538,7 +548,9 @@ class FbfProductController(object):
         """
         if not self.idle:
             raise FbfProductStateError([self.IDLE], self.state)
+        log.info("Preparing FBFUSE product")
         self._state_sensor.set_value(self.PREPARING)
+        log.debug("Product moved to 'preparing' state")
 
         # Here we need to parse the streams and assign beams to streams:
         #mcast_addrs, mcast_port = parse_stream(self._streams['cbf.antenna_channelised_voltage']['i0.antenna-channelised-voltage'])
@@ -548,14 +560,20 @@ class FbfProductController(object):
             self.set_sb_configuration(self._default_sb_config)
         else:
             #TODO: get the schedule block ID into this call from somewhere (configure?)
-            config = yield self.get_ca_sb_configuration("default_subarray")
-            self.set_sb_configuration(config)
+            try:
+                config = yield self.get_ca_sb_configuration("default_subarray")
+                self.set_sb_configuration(config)
+            except Exception as error:
+                log.error("Configuring from CA failed with error: {}".format(str(error)))
+                log.warning("Reverting to default configuration")
+                self.set_sb_configuration(self._default_sb_config)
 
         cbc_antennas_names = parse_csv_antennas(self._cbc_antennas_sensor.value())
         cbc_antennas = [self._antenna_map[name] for name in cbc_antennas_names]
         self._beam_manager = BeamManager(self._cbc_nbeams_sensor.value(), cbc_antennas)
         self._delay_engine = DelayEngine("127.0.0.1", 0, self._beam_manager)
         self._delay_engine.start()
+        log.info("Started delay engine at: {}".format(self._delay_engine.bind_address))
 
         for server in self._servers:
             # each server will take 4 consequtive multicast groups
@@ -583,6 +601,8 @@ class FbfProductController(object):
 
         # Only make this call if the the number of beams has changed
         self._parent.mass_inform(Message.inform('interface-changed'))
+        log.info("Successfully prepared FBFUSE product")
+        log.debug("Product moved to 'ready' state")
 
     def deconfigure(self):
         self.stop_beams()
@@ -594,6 +614,7 @@ class FbfProductController(object):
         if not self.ready:
             raise FbfProductStateError([self.READY], self.state)
         self._state_sensor.set_value(self.STARTING)
+        log.debug("Product moved to 'starting' state")
         """
         futures = []
         for server in self._servers:
@@ -605,6 +626,7 @@ class FbfProductController(object):
                 pass
         """
         self._state_sensor.set_value(self.CAPTURING)
+        log.debug("Product moved to 'capturing' state")
 
     def stop_beams(self):
         """

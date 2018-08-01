@@ -97,6 +97,10 @@ class FbfMasterController(AsyncDeviceServer):
         log.debug("Adding sensor: {}".format(sensor.name))
         super(FbfMasterController, self).add_sensor(sensor)
 
+    def remove_sensor(self, sensor):
+        log.debug("Removing sensor: {}".format(sensor.name))
+        super(FbfMasterController, self).remove_sensor(sensor)
+
     def setup_sensors(self):
         """
         @brief  Set up monitoring sensors.
@@ -367,6 +371,7 @@ class FbfMasterController(AsyncDeviceServer):
             self._products[product_id] = product
             self._update_products_sensor()
             req.reply("ok",)
+            log.debug("Configured FBFUSE instance with ID: {}".format(product_id))
         self.ioloop.add_callback(configure)
         raise AsyncReply
 

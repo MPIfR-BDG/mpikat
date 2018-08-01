@@ -52,7 +52,6 @@ class KatportalClientWrapper(object):
             antenna_name = input_label.strip("vh").lower()
             if antenna_name.startswith("m") and antenna_name in antennas:
                 mapping[antenna_name] = input_index//2
-        print mapping
         raise Return(mapping)
 
     @coroutine
