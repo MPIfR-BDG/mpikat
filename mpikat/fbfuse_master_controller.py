@@ -775,7 +775,7 @@ def main():
     (opts, args) = parser.parse_args()
     FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
     logger = logging.getLogger('mpikat')
-    logging.basicConfig(format=FORMAT)
+    logger.setFormatter(logging.Formatter(FORMAT))
     logger.setLevel(opts.log_level.upper())
     logging.getLogger('katcp').setLevel('INFO')
     ioloop = tornado.ioloop.IOLoop.current()
