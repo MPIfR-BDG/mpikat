@@ -779,6 +779,7 @@ def main():
         fmt="[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s",
         level=opts.log_level.upper(),
         logger=logger)
+    logging.getLogger('katcp').setLevel('INFO')
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting FbfMasterController instance")
     server = FbfMasterController(opts.host, opts.port, dummy=opts.dummy)
