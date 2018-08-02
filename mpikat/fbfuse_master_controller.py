@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 import logging
+import coloredlogs
 import json
 import tornado
 import signal
@@ -773,11 +774,11 @@ def main():
     parser.add_option('', '--dummy',action="store_true", dest='dummy',
         help='Set status server to dummy')
     (opts, args) = parser.parse_args()
-    FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
+    coloredlogs.install(fmt="[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s")
     logger = logging.getLogger('mpikat')
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter(FORMAT))
-    logger.addHandler(handler)
+    #handler = logging.StreamHandler()
+    #handler.setFormatter(logging.Formatter(FORMAT))
+    #logger.addHandler(handler)
     logger.setLevel(opts.log_level.upper())
     logging.getLogger('katcp').setLevel('INFO')
     ioloop = tornado.ioloop.IOLoop.current()
