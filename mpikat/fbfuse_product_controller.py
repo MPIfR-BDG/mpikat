@@ -321,6 +321,7 @@ class FbfProductController(object):
         """
         for sensor in self._managed_sensors:
             self._parent.remove_sensor(sensor)
+        self._managed_sensors = []
         self._parent.mass_inform(Message.inform('interface-changed'))
 
     @property
@@ -398,6 +399,8 @@ class FbfProductController(object):
         self._parent._server_pool.deallocate(self._servers)
         for ip_range in self._ip_allocations:
             self._parent._ip_pool.free(ip_range)
+        self._ip_allocations = []
+        self._servers = []
 
     def set_sb_configuration(self, config_dict):
         """
