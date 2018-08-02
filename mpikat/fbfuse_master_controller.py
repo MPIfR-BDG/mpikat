@@ -459,6 +459,19 @@ class FbfMasterController(AsyncDeviceServer):
         yield product.target_stop()
         raise Return(("ok",))
 
+
+    @request(Str())
+    @return_reply()
+    def request_capture_init(self, req, product_id):
+        """NOOP"""
+        return ("ok",)
+
+    @request(Str())
+    @return_reply()
+    def request_capture_done(self, req, product_id):
+        """NOOP"""
+        return ("ok",)
+
     @request(Str())
     @return_reply()
     def request_capture_start(self, req, product_id):
@@ -548,7 +561,7 @@ class FbfMasterController(AsyncDeviceServer):
             return ("fail", str(error))
         @coroutine
         def stop():
-            product.stop_beams()
+            product.stop_capture()
             req.reply("ok",)
         self.ioloop.add_callback(stop)
         raise AsyncReply

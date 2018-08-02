@@ -50,8 +50,8 @@ class FbfProductController(object):
     """
     Wrapper class for an FBFUSE product.
     """
-    STATES = ["idle", "preparing", "ready", "starting", "capturing", "stopping"]
-    IDLE, PREPARING, READY, STARTING, CAPTURING, STOPPING = STATES
+    STATES = ["idle", "preparing", "ready", "starting", "capturing", "stopping", "error"]
+    IDLE, PREPARING, READY, STARTING, CAPTURING, STOPPING, ERROR = STATES
 
     def __init__(self, parent, product_id, katpoint_antennas,
                  n_channels, streams, proxy_name, feng_config):
@@ -89,6 +89,7 @@ class FbfProductController(object):
         self._delay_engine = None
         self._coherent_beam_ip_range = None
         self._ca_client = None
+        self._previous_sb_config = None
         self._managed_sensors = []
         self._ip_allocations = []
         self._default_sb_config = {
@@ -353,6 +354,10 @@ class FbfProductController(object):
         return self.state == self.PREPARING
 
     @property
+    def error(self):
+        return self.state == self.ERROR
+
+    @property
     def state(self):
         return self._state_sensor.value()
 
@@ -443,6 +448,11 @@ class FbfProductController(object):
                 they must subscribe to the same multicast group 4 times on different nodes.
 
         """
+        if self._previous_sb_config == config_dict:
+            log.info("Configuration is unchanged, proceeding with existing configuration")
+            return
+        else:
+            self._previous_sb_config = config_dict
         self.reset_sb_configuration()
         log.info("Setting schedule block configuration")
         config = deepcopy(self._default_sb_config)
@@ -505,7 +515,7 @@ class FbfProductController(object):
                 self.add_beam(target)
             for tiling in config_dict.get('tilings',[]):
                 target  = Target(tiling['target']) #required
-                freq    = float(tiling.get('reference_frequency', 1.4e9))
+                freq    = float(tiling.get('reference_frequency', self._cfreq_sensor.value()))
                 nbeams  = int(tiling['nbeams'])
                 overlap = float(tiling.get('overlap', 0.5))
                 epoch   = float(tiling.get('epoch', time.time()))
@@ -554,7 +564,6 @@ class FbfProductController(object):
         log.info("Preparing FBFUSE product")
         self._state_sensor.set_value(self.PREPARING)
         log.debug("Product moved to 'preparing' state")
-
         # Here we need to parse the streams and assign beams to streams:
         #mcast_addrs, mcast_port = parse_stream(self._streams['cbf.antenna_channelised_voltage']['i0.antenna-channelised-voltage'])
 
@@ -607,7 +616,7 @@ class FbfProductController(object):
         log.debug("Product moved to 'ready' state")
 
     def deconfigure(self):
-        self.stop_beams()
+        self.stop_capture()
         if self._delay_engine:
             self._delay_engine.stop()
         self.reset_sb_configuration()
@@ -630,11 +639,11 @@ class FbfProductController(object):
         self._state_sensor.set_value(self.CAPTURING)
         log.debug("Product moved to 'capturing' state")
 
-    def stop_beams(self):
+    def stop_capture(self):
         """
         @brief      Stops the beamformer servers streaming.
         """
-        if not self.capturing:
+        if not self.capturing and not self.error:
             return
         self._state_sensor.set_value(self.STOPPING)
         for server in self._servers:
@@ -679,7 +688,10 @@ class FbfProductController(object):
         if not self.state in valid_states:
             raise FbfProductStateError(valid_states, self.state)
         tiling = self._beam_manager.add_tiling(target, number_of_beams, reference_frequency, overlap)
-        tiling.generate(self._katpoint_antennas, epoch)
+        try:
+            tiling.generate(self._katpoint_antennas, epoch)
+        except Exception as error:
+            log.error("Failed to generate tiling pattern with error: {}".format(str(error)))
         return tiling
 
     def reset_beams(self):

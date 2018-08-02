@@ -56,7 +56,7 @@ class FbfWorkerWrapper(object):
         self._started = True
 
     def __repr__(self):
-        return "<{} for {}:{}>".format(self.__class__, self.hostname, self.port)
+        return "<{} @ {}:{}>".format(self.__class__.__name__, self.hostname, self.port)
 
     def __hash__(self):
         # This has override is required to allow these wrappers
