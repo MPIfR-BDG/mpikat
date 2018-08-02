@@ -1,3 +1,6 @@
+import logging
+FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
+logging.basicConfig(format=FORMAT)
 # FBFUSE specific imports
 from .fbfuse_master_controller import FbfMasterController
 from .fbfuse_product_controller import FbfProductController

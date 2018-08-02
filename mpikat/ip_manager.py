@@ -127,6 +127,7 @@ class IpRangeManager(object):
 
         @return     A ContiguousIpRange object describing the allocated range
         """
+        log.debug("Allocating {} contiguous multicast groups".format(n))
         ranges = self._free_ranges()
         best_fit = None
         for start,span in ranges:
@@ -145,6 +146,7 @@ class IpRangeManager(object):
                 self._allocated[offset] = True
             allocated_range = ContiguousIpRange(str(self._ip_range.base_ip + start), self._ip_range.port, n)
             self._allocated_ranges.add(allocated_range)
+            log.debug("Allocated range: {}".format(allocated_range.format_katcp()))
             return allocated_range
 
     def free(self, ip_range):
@@ -154,6 +156,7 @@ class IpRangeManager(object):
         @param      ip_range  A ContiguousIpRange object allocated through a call to the
                               'allocate' method.
         """
+        log.debug("Freeing range: {}".format(ip_range.format_katcp()))
         self._allocated_ranges.remove(ip_range)
         for ip in ip_range:
             self._allocated[self._ip_range.index(ip)] = False
