@@ -774,13 +774,11 @@ def main():
     parser.add_option('', '--dummy',action="store_true", dest='dummy',
         help='Set status server to dummy')
     (opts, args) = parser.parse_args()
-    coloredlogs.install(fmt="[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s")
     logger = logging.getLogger('mpikat')
-    #handler = logging.StreamHandler()
-    #handler.setFormatter(logging.Formatter(FORMAT))
-    #logger.addHandler(handler)
-    logger.setLevel(opts.log_level.upper())
-    logging.getLogger('katcp').setLevel('INFO')
+    coloredlogs.install(
+        fmt="[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s",
+        level=opts.log_level.upper(),
+        logger=logger)
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting FbfMasterController instance")
     server = FbfMasterController(opts.host, opts.port, dummy=opts.dummy)
