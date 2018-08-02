@@ -490,9 +490,9 @@ class FbfMasterController(AsyncDeviceServer):
         self.ioloop.add_callback(start)
         raise AsyncReply
 
-    @request(Str())
+    @request(Str(), Str())
     @return_reply()
-    def request_provision_beams(self, req, product_id):
+    def request_provision_beams(self, req, product_id, sb_id):
         """
         @brief      Request that FBFUSE asynchronously prepare to start beams streaming
 
@@ -514,6 +514,8 @@ class FbfMasterController(AsyncDeviceServer):
         @param      product_id        This is a name for the data product, used to track which subarray is being deconfigured.
                                       For example "array_1_bc856M4k".
 
+        @param      sb_id             Schedule block ID for the commencing schedule block
+
         @return     katcp reply object [[[ !start-beams ok | (fail [error description]) ]]]
         """
         # Note: the state of the product won't be updated until the start call hits the top of the
@@ -527,7 +529,7 @@ class FbfMasterController(AsyncDeviceServer):
         # should return immediately
         if not product.idle:
             return ("fail", "Can only provision beams on an idle FBF product")
-        self.ioloop.add_callback(product.prepare)
+        self.ioloop.add_callback(lambda : product.prepare(sb_id))
         return ("ok",)
 
     @request(Str())

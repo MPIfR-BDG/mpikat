@@ -101,12 +101,13 @@ class TestFbfMasterController(AsyncTestCase):
 
     def setUp(self):
         super(TestFbfMasterController, self).setUp()
-        self.server = FbfMasterController('127.0.0.1', 0, dummy=True)
+        self.server = FbfMasterController('127.0.0.1', 0, dummy=False)
         self.server._katportal_wrapper_type = MockKatportalClientWrapper
         self.server.start()
 
     def tearDown(self):
         super(TestFbfMasterController, self).tearDown()
+        self.server = None
 
     def _add_n_servers(self, n):
         base_ip = ipaddress.ip_address(u'192.168.1.150')
@@ -178,7 +179,7 @@ class TestFbfMasterController(AsyncTestCase):
         #Test that calls that require products fail if not configured
         yield self._send_request_expect_fail('capture-start', 'test')
         yield self._send_request_expect_fail('capture-stop', 'test')
-        yield self._send_request_expect_fail('provision-beams', 'test')
+        yield self._send_request_expect_fail('provision-beams', 'test', 'random_schedule_block_id')
         yield self._send_request_expect_fail('reset-beams', 'test')
         yield self._send_request_expect_fail('deconfigure', 'test')
         yield self._send_request_expect_fail('set-default-target-configuration', 'test', '')
@@ -202,7 +203,7 @@ class TestFbfMasterController(AsyncTestCase):
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
         yield self._check_sensor_value('products', product_name)
         yield self._check_sensor_value(product_state_sensor, FbfProductController.IDLE)
-        yield self._send_request_expect_ok('provision-beams', product_name)
+        yield self._send_request_expect_ok('provision-beams', product_name, 'random_schedule_block_id')
         # after provision beams we need to wait on the system to get into a ready state
         product = self.server._products[product_name]
         while True:
@@ -262,7 +263,7 @@ class TestFbfMasterController(AsyncTestCase):
         hostname = '127.0.0.1'
         port = 10000
         yield self._send_request_expect_ok('register-worker-server', hostname, port)
-        server = self.server._server_pool.available()[-1]
+        server = self.server._server_pool.available()[0]
         self.assertEqual(server.hostname, hostname)
         self.assertEqual(server.port, port)
         other = FbfWorkerWrapper(hostname, port)
@@ -280,7 +281,7 @@ class TestFbfMasterController(AsyncTestCase):
     def test_deregister_allocated_worker_server(self):
         hostname, port = '127.0.0.1', 60000
         yield self._send_request_expect_ok('register-worker-server', hostname, port)
-        server = self.server._server_pool.allocate(1)[0]
+        server = self.server._server_pool.allocate(1)[-1]
         yield self._send_request_expect_fail('deregister-worker-server', hostname, port)
 
     @gen_test
@@ -325,7 +326,7 @@ class TestFbfMasterController(AsyncTestCase):
         yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
         yield self._send_request_expect_ok('set-configuration-authority', product_name, hostname, port)
-        yield self._send_request_expect_ok('provision-beams', product_name)
+        yield self._send_request_expect_ok('provision-beams', product_name, sb_id)
         product = self.server._products[product_name]
         while True:
             yield sleep(0.5)
@@ -366,7 +367,7 @@ class TestFbfMasterController(AsyncTestCase):
         yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
         yield self._send_request_expect_ok('set-configuration-authority', product_name, hostname, port)
-        yield self._send_request_expect_ok('provision-beams', product_name)
+        yield self._send_request_expect_ok('provision-beams', product_name, 'random_schedule_block_id')
         product = self.server._products[product_name]
         while True:
             yield sleep(0.5)

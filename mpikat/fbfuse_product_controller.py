@@ -539,7 +539,7 @@ class FbfProductController(object):
             self._ca_client.set_sampling_strategy(sensor_name, "none")
 
     @coroutine
-    def prepare(self):
+    def prepare(self, sb_id):
         """
         @brief      Prepare the beamformer for streaming
 
@@ -561,7 +561,7 @@ class FbfProductController(object):
         else:
             #TODO: get the schedule block ID into this call from somewhere (configure?)
             try:
-                config = yield self.get_ca_sb_configuration("default_subarray")
+                config = yield self.get_ca_sb_configuration(sb_id)
                 self.set_sb_configuration(config)
             except Exception as error:
                 log.error("Configuring from CA failed with error: {}".format(str(error)))

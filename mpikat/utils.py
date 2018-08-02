@@ -45,3 +45,4 @@ def parse_csv_antennas(antennas_csv):
     if len(names) != len(set(names)):
         raise AntennaValidationError("Not all provided antennas were unqiue")
     return names
+
