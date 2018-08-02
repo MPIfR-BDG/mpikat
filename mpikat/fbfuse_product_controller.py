@@ -597,10 +597,10 @@ class FbfProductController(object):
                 sensor.set_value(self._beam_to_sensor_string(beam)))
             self._beam_sensors.append(sensor)
             self.add_sensor(sensor)
+        self._parent.mass_inform(Message.inform('interface-changed'))
         self._state_sensor.set_value(self.READY)
 
         # Only make this call if the the number of beams has changed
-        self._parent.mass_inform(Message.inform('interface-changed'))
         log.info("Successfully prepared FBFUSE product")
         log.debug("Product moved to 'ready' state")
 
