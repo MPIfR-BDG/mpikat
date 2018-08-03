@@ -496,7 +496,7 @@ class FbfMasterController(AsyncDeviceServer):
         @coroutine
         def start():
             try:
-                product.start_capture()
+                product.capture_start()
             except Exception as error:
                 req.reply("fail", str(error))
             else:
@@ -561,7 +561,7 @@ class FbfMasterController(AsyncDeviceServer):
             return ("fail", str(error))
         @coroutine
         def stop():
-            product.stop_capture()
+            product.capture_stop()
             req.reply("ok",)
         self.ioloop.add_callback(stop)
         raise AsyncReply

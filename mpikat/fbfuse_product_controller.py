@@ -407,6 +407,11 @@ class FbfProductController(object):
         self._ip_allocations = []
         self._servers = []
 
+    def set_error_state(self, message):
+        self.capture_stop()
+        self.reset_sb_configuration()
+        self._state_sensor.set_value(self.ERROR)
+
     def set_sb_configuration(self, config_dict):
         """
         @brief  Set the schedule block configuration for this product
@@ -596,7 +601,6 @@ class FbfProductController(object):
         # start streaming
         self._delay_engine_sensor.set_value(self._delay_engine.bind_address)
 
-
         # Need to tear down the beam sensors here
         self._beam_sensors = []
         for beam in self._beam_manager.get_beams():
@@ -616,12 +620,18 @@ class FbfProductController(object):
         log.debug("Product moved to 'ready' state")
 
     def deconfigure(self):
-        self.stop_capture()
+        """
+        @brief  Deconfigure the product. To be called on a subarray deconfigure.
+
+        @detail This is the final cleanup operation for the product, it should delete all sensors
+                and ensure the release of all resource allocations.
+        """
+        self.capture_stop()
         if self._delay_engine:
             self._delay_engine.stop()
         self.reset_sb_configuration()
 
-    def start_capture(self):
+    def capture_start(self):
         if not self.ready:
             raise FbfProductStateError([self.READY], self.state)
         self._state_sensor.set_value(self.STARTING)
@@ -639,13 +649,19 @@ class FbfProductController(object):
         self._state_sensor.set_value(self.CAPTURING)
         log.debug("Product moved to 'capturing' state")
 
-    def stop_capture(self):
+    def capture_stop(self):
         """
         @brief      Stops the beamformer servers streaming.
+
+        @detail     This should only be called on a schedule block reconfiguration
+                    if the same configuration persists between schedule blocks then
+                    it is preferable to continue streaming rather than stopping and
+                    starting again.
         """
         if not self.capturing and not self.error:
             return
         self._state_sensor.set_value(self.STOPPING)
+        self.target_stop()
         for server in self._servers:
             #yield server.req.deconfigure()
             pass
