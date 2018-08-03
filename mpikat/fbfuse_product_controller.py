@@ -96,11 +96,11 @@ class FbfProductController(object):
         self._servers = []
         self._beam_manager = None
         self._delay_engine = None
-        self._coherent_beam_ip_range = None
         self._ca_client = None
         self._previous_sb_config = None
         self._managed_sensors = []
-        self._ip_allocations = []
+        self._ibc_mcast_group = None
+        self._cbc_mcast_groups = None
         self._default_sb_config = {
             u'coherent-beams-nbeams':400,
             u'coherent-beams-tscrunch':16,
@@ -259,6 +259,13 @@ class FbfProductController(object):
             initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._cbc_mcast_groups_sensor)
 
+        self._cbc_mcast_groups_mapping_sensor = Sensor.string(
+            "coherent-beam-multicast-group-mapping",
+            description = "Mapping of mutlicast group address to the coherent beams in that group",
+            default= "",
+            initial_status = Sensor.UNKNOWN)
+        self.add_sensor(self._cbc_mcast_groups_mapping_sensor)
+
         self._ibc_nbeams_sensor = Sensor.integer(
             "incoherent-beam-count",
             description = "The number of incoherent beams that this FBF instance can currently produce",
@@ -416,9 +423,13 @@ class FbfProductController(object):
         except Exception as error:
             self.log.warning("Received error while attempting capture stop: {}".format(str(error)))
         self._parent._server_pool.deallocate(self._servers)
-        for ip_range in self._ip_allocations:
-            self._parent._ip_pool.free(ip_range)
-        self._ip_allocations = []
+
+        if self._ibc_mcast_group:
+            self._parent._ip_pool.free(self._ibc_mcast_group)
+        if self._cbc_mcast_groups:
+            self._parent._ip_pool.free(self._cbc_mcast_groups)
+        self._cbc_mcast_groups = None
+        self._ibc_mcast_group = None
         self._servers = []
         if self._delay_engine:
             self._delay_engine.stop()
@@ -488,9 +499,8 @@ class FbfProductController(object):
         if not self._verify_antennas(requested_ibc_antenna):
             raise Exception("Requested incoherent beam antennas are not a subset of the available antennas")
         # first we need to get one ip address for the incoherent beam
-        ibc_mcast_group = self._parent._ip_pool.allocate(1)
-        self._ip_allocations.append(ibc_mcast_group)
-        self._ibc_mcast_group_sensor.set_value(ibc_mcast_group.format_katcp())
+        self._ibc_mcast_group = self._parent._ip_pool.allocate(1)
+        self._ibc_mcast_group_sensor.set_value(self._ibc_mcast_group.format_katcp())
         largest_ip_range = self._parent._ip_pool.largest_free_range()
         nworkers_available = self._parent._server_pool.navailable()
         cm = FbfConfigurationManager(len(self._katpoint_antennas),
@@ -522,9 +532,8 @@ class FbfProductController(object):
         self._servers_sensor.set_value(server_str)
         self._nserver_sets_sensor.set_value(mcast_config['num_worker_sets'])
         self._nservers_per_set_sensor.set_value(mcast_config['num_workers_per_set'])
-        cbc_mcast_groups = self._parent._ip_pool.allocate(mcast_config['num_mcast_groups'])
-        self._ip_allocations.append(cbc_mcast_groups)
-        self._cbc_mcast_groups_sensor.set_value(cbc_mcast_groups.format_katcp())
+        self._cbc_mcast_groups = self._parent._ip_pool.allocate(mcast_config['num_mcast_groups'])
+        self._cbc_mcast_groups_sensor.set_value(self._cbc_mcast_groups.format_katcp())
 
     @coroutine
     def get_ca_target_configuration(self, target):
@@ -621,6 +630,19 @@ class FbfProductController(object):
 
         # Need to tear down the beam sensors here
         self._beam_sensors = []
+        mcast_to_beam_map = {}
+        groups = [ip for ip in self._cbc_mcast_groups]
+        idxs = [beam.idx for beam in self._beam_manager.get_beams()]
+        for group in groups:
+            self.log.debug("Allocating beams to {}".format(str(group)))
+            key = str(group)
+            for _ in range(self._cbc_nbeams_per_group.value()):
+                if not key in mcast_to_beam_map:
+                    mcast_to_beam_map[str(group)] = []
+                value = idxs.pop(0)
+                self.log.debug("--> Allocated {} to {}".format(value, str(group)))
+                mcast_to_beam_map[str(group)].append(value)
+        self._cbc_mcast_groups_mapping_sensor.set_value(json.dumps(mcast_to_beam_map))
         for beam in self._beam_manager.get_beams():
             sensor = Sensor.string(
                 "coherent-beam-{}".format(beam.idx),
@@ -631,6 +653,7 @@ class FbfProductController(object):
                 sensor.set_value(self._beam_to_sensor_string(beam)))
             self._beam_sensors.append(sensor)
             self.add_sensor(sensor)
+        # Here calculate the beam to multicast map
         self._parent.mass_inform(Message.inform('interface-changed'))
         self._state_sensor.set_value(self.READY)
         # Only make this call if the the number of beams has changed
