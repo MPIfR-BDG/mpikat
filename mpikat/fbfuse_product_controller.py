@@ -41,10 +41,18 @@ class FbfProductStateError(Exception):
         super(FbfProductStateError, self).__init__(message)
 
 class LoggingSensor(Sensor):
+    def __init__(self, *args, **kwargs):
+        self.logger = None
+        super(LoggingSensor, self).__init__(*args, **kwargs)
+
     def set_value(self, value):
-        log.debug("Sensor '{}' changed from '{}' to '{}'".format(
-            self.name, self.value(), value))
+        if self.logger:
+            self.logger.debug("Sensor '{}' changed from '{}' to '{}'".format(
+                self.name, self.value(), value))
         super(LoggingSensor, self).set_value(value)
+
+    def set_logger(self, logger):
+        self.logger = logger
 
 class FbfProductController(object):
     """
@@ -157,6 +165,7 @@ class FbfProductController(object):
             params = self.STATES,
             default = self.IDLE,
             initial_status = Sensor.NOMINAL)
+        self._state_sensor.set_logger(self.log)
         self.add_sensor(self._state_sensor)
 
         self._ca_address_sensor = Sensor.string(
