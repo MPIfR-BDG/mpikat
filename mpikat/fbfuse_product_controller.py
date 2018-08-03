@@ -72,7 +72,8 @@ class FbfProductController(object):
 
         @param      servers           A list of FbfWorkerServer instances allocated to this product controller
         """
-        log.debug("Creating new FbfProductController with args: {}".format(
+        self.log = logging.getLogger("mpikat.fbfuse_product_controller.{}".format(product_id))
+        self.log.debug("Creating new FbfProductController with args: {}".format(
             ", ".join([str(i) for i in (parent, product_id, katpoint_antennas, n_channels,
                 streams, proxy_name, feng_config)])))
         self._parent = parent
@@ -367,7 +368,7 @@ class FbfProductController(object):
 
         @param      antennas   A CSV list of antenna names
         """
-        log.debug("Verifying antenna set: {}".format(antennas))
+        self.log.debug("Verifying antenna set: {}".format(antennas))
         antennas_set = set([ant.name for ant in self._katpoint_antennas])
         requested_antennas = set(antennas)
         return requested_antennas.issubset(antennas_set)
@@ -384,27 +385,27 @@ class FbfProductController(object):
 
     @coroutine
     def get_ca_sb_configuration(self, sb_id):
-        log.debug("Retrieving schedule block configuration from configuration authority")
+        self.log.debug("Retrieving schedule block configuration from configuration authority")
         yield self._ca_client.until_synced()
         try:
             response = yield self._ca_client.req.get_schedule_block_configuration(self._proxy_name, sb_id)
         except Exception as error:
-            log.error("Request for SB configuration to CA failed with error: {}".format(str(error)))
+            self.log.error("Request for SB configuration to CA failed with error: {}".format(str(error)))
             raise error
         try:
             config_dict = json.loads(response.reply.arguments[1])
         except Exception as error:
-            log.error("Could not parse CA SB configuration with error: {}".format(str(error)))
+            self.log.error("Could not parse CA SB configuration with error: {}".format(str(error)))
             raise error
-        log.debug("Configuration authority returned: {}".format(config_dict))
+        self.log.debug("Configuration authority returned: {}".format(config_dict))
         raise Return(config_dict)
 
     def reset_sb_configuration(self):
-        log.debug("Reseting schedule block configuration")
+        self.log.debug("Reseting schedule block configuration")
         try:
             self.capture_stop()
         except Exception as error:
-            log.warning("Received error while attempting capture stop: {}".format(str(error)))
+            self.log.warning("Received error while attempting capture stop: {}".format(str(error)))
         self._parent._server_pool.deallocate(self._servers)
         for ip_range in self._ip_allocations:
             self._parent._ip_pool.free(ip_range)
@@ -462,15 +463,15 @@ class FbfProductController(object):
 
         """
         if self._previous_sb_config == config_dict:
-            log.info("Configuration is unchanged, proceeding with existing configuration")
+            self.log.info("Configuration is unchanged, proceeding with existing configuration")
             return
         else:
             self._previous_sb_config = config_dict
         self.reset_sb_configuration()
-        log.info("Setting schedule block configuration")
+        self.log.info("Setting schedule block configuration")
         config = deepcopy(self._default_sb_config)
         config.update(config_dict)
-        log.info("Configuring using: {}".format(config))
+        self.log.info("Configuring using: {}".format(config))
         requested_cbc_antenna = parse_csv_antennas(config['coherent-beams-antennas'])
         if not self._verify_antennas(requested_cbc_antenna):
             raise Exception("Requested coherent beam antennas are not a subset of the available antennas")
@@ -537,11 +538,11 @@ class FbfProductController(object):
         try:
             response = yield self._ca_client.req.target_configuration_start(self._proxy_name, target.format_katcp())
         except Exception as error:
-            log.error("Request for target configuration to CA failed with error: {}".format(str(error)))
+            self.log.error("Request for target configuration to CA failed with error: {}".format(str(error)))
             raise error
         if not response.reply.reply_ok():
             error = Exception(response.reply.arguments[1])
-            log.error("Request for target configuration to CA failed with error: {}".format(str(error)))
+            self.log.error("Request for target configuration to CA failed with error: {}".format(str(error)))
             raise error
         yield self._ca_client.until_synced()
         sensor = self._ca_client.sensor["{}_beam_position_configuration".format(self._proxy_name)]
@@ -556,7 +557,7 @@ class FbfProductController(object):
         if self._ca_client:
             yield self.get_ca_target_configuration(target)
         else:
-            log.warning("No configuration authority is set, using default beam configuration")
+            self.log.warning("No configuration authority is set, using default beam configuration")
 
     @coroutine
     def target_stop(self):
@@ -574,14 +575,14 @@ class FbfProductController(object):
         """
         if not self.idle:
             raise FbfProductStateError([self.IDLE], self.state)
-        log.info("Preparing FBFUSE product")
+        self.log.info("Preparing FBFUSE product")
         self._state_sensor.set_value(self.PREPARING)
-        log.debug("Product moved to 'preparing' state")
+        self.log.debug("Product moved to 'preparing' state")
         # Here we need to parse the streams and assign beams to streams:
         #mcast_addrs, mcast_port = parse_stream(self._streams['cbf.antenna_channelised_voltage']['i0.antenna-channelised-voltage'])
 
         if not self._ca_client:
-            log.warning("No configuration authority found, using default configuration parameters")
+            self.log.warning("No configuration authority found, using default configuration parameters")
             self.set_sb_configuration(self._default_sb_config)
         else:
             #TODO: get the schedule block ID into this call from somewhere (configure?)
@@ -589,8 +590,8 @@ class FbfProductController(object):
                 config = yield self.get_ca_sb_configuration(sb_id)
                 self.set_sb_configuration(config)
             except Exception as error:
-                log.error("Configuring from CA failed with error: {}".format(str(error)))
-                log.warning("Reverting to default configuration")
+                self.log.error("Configuring from CA failed with error: {}".format(str(error)))
+                self.log.warning("Reverting to default configuration")
                 self.set_sb_configuration(self._default_sb_config)
 
         cbc_antennas_names = parse_csv_antennas(self._cbc_antennas_sensor.value())
@@ -598,7 +599,7 @@ class FbfProductController(object):
         self._beam_manager = BeamManager(self._cbc_nbeams_sensor.value(), cbc_antennas)
         self._delay_engine = DelayEngine("127.0.0.1", 0, self._beam_manager)
         self._delay_engine.start()
-        log.info("Started delay engine at: {}".format(self._delay_engine.bind_address))
+        self.log.info("Started delay engine at: {}".format(self._delay_engine.bind_address))
 
         for server in self._servers:
             # each server will take 4 consequtive multicast groups
@@ -624,8 +625,8 @@ class FbfProductController(object):
         self._parent.mass_inform(Message.inform('interface-changed'))
         self._state_sensor.set_value(self.READY)
         # Only make this call if the the number of beams has changed
-        log.info("Successfully prepared FBFUSE product")
-        log.debug("Product moved to 'ready' state")
+        self.log.info("Successfully prepared FBFUSE product")
+        self.log.debug("Product moved to 'ready' state")
 
     def deconfigure(self):
         """
@@ -641,7 +642,7 @@ class FbfProductController(object):
         if not self.ready:
             raise FbfProductStateError([self.READY], self.state)
         self._state_sensor.set_value(self.STARTING)
-        log.debug("Product moved to 'starting' state")
+        self.log.debug("Product moved to 'starting' state")
         """
         futures = []
         for server in self._servers:
@@ -653,7 +654,7 @@ class FbfProductController(object):
                 pass
         """
         self._state_sensor.set_value(self.CAPTURING)
-        log.debug("Product moved to 'capturing' state")
+        self.log.debug("Product moved to 'capturing' state")
 
     def capture_stop(self):
         """
@@ -713,7 +714,7 @@ class FbfProductController(object):
         try:
             tiling.generate(self._katpoint_antennas, epoch)
         except Exception as error:
-            log.error("Failed to generate tiling pattern with error: {}".format(str(error)))
+            self.log.error("Failed to generate tiling pattern with error: {}".format(str(error)))
         return tiling
 
     def reset_beams(self):

@@ -788,7 +788,7 @@ def main():
     (opts, args) = parser.parse_args()
     logger = logging.getLogger('mpikat')
     coloredlogs.install(
-        fmt="[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s",
+        fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
         level=opts.log_level.upper(),
         logger=logger)
     logging.getLogger('katcp').setLevel('INFO')
