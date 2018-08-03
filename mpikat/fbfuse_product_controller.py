@@ -401,14 +401,21 @@ class FbfProductController(object):
 
     def reset_sb_configuration(self):
         log.debug("Reseting schedule block configuration")
+        try:
+            self.capture_stop()
+        except Exception as error:
+            log.warning("Received error while attempting capture stop: {}".format(str(error)))
         self._parent._server_pool.deallocate(self._servers)
         for ip_range in self._ip_allocations:
             self._parent._ip_pool.free(ip_range)
         self._ip_allocations = []
         self._servers = []
+        if self._delay_engine:
+            self._delay_engine.stop()
+            self._delay_engine = None
+        self._beam_manager = None
 
     def set_error_state(self, message):
-        self.capture_stop()
         self.reset_sb_configuration()
         self._state_sensor.set_value(self.ERROR)
 
@@ -433,6 +440,7 @@ class FbfProductController(object):
         @detail Valid parameters for the configuration dictionary are as follows:
 
                  coherent-beams-nbeams      - The desired number of coherent beams to produce
+                 coherent-beams-tscrunch    - The number of spectra to integrate in the coherent beamformer
                  coherent-beams-tscrunch    - The number of spectra to integrate in the coherent beamformer
                  coherent-beams-fscrunch    - The number of channels to integrate in the coherent beamformer
                  coherent-beams-antennas    - The specific antennas to use for the coherent beamformer
@@ -626,10 +634,8 @@ class FbfProductController(object):
         @detail This is the final cleanup operation for the product, it should delete all sensors
                 and ensure the release of all resource allocations.
         """
-        self.capture_stop()
-        if self._delay_engine:
-            self._delay_engine.stop()
         self.reset_sb_configuration()
+        self.teardown_sensors()
 
     def capture_start(self):
         if not self.ready:

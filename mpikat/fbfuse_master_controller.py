@@ -405,7 +405,6 @@ class FbfMasterController(AsyncDeviceServer):
             product.deconfigure()
         except Exception as error:
             return ("fail", str(error))
-        product.teardown_sensors()
         del self._products[product_id]
         self._update_products_sensor()
         return ("ok",)
