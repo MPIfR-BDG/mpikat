@@ -68,6 +68,8 @@ class FbfProductController(object):
 
         @param      proxy_name        The name of the proxy associated with this subarray (used as a sensor prefix)
 
+        #NEED FENG CONFIG
+
         @param      servers           A list of FbfWorkerServer instances allocated to this product controller
         """
         self.log = logging.getLogger("mpikat.fbfuse_product_controller.{}".format(product_id))

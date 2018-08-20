@@ -35,23 +35,18 @@ from katcp import Sensor, Message, AsyncDeviceServer, KATCPClientResource, Async
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from katportalclient import KATPortalClient
 from katpoint import Antenna, Target
+from mpikat.master_controller import MasterController
 from mpikat.katportalclient_wrapper import KatportalClientWrapper
 from mpikat.apsuse_worker_wrapper import ApsWorkerPool
 from mpikat.utils import parse_csv_antennas, is_power_of_two, next_power_of_two
+from mpikat.exceptions import ProductLookupError, ProductExistsError
 
 # ?halt message means shutdown everything and power off all machines
-
 
 log = logging.getLogger("mpikat.apsuse_master_controller")
 lock = Lock()
 
-class ProductLookupError(Exception):
-    pass
-
-class ProductExistsError(Exception):
-    pass
-
-class ApsMasterController(AsyncDeviceServer):
+class ApsMasterController(MasterController):
     """This is the main KATCP interface for the APSUSE
     pulsar searching system on MeerKAT. This controller only
     holds responsibility for capture of data from the CBF
@@ -70,137 +65,15 @@ class ApsMasterController(AsyncDeviceServer):
         @params  ip       The IP address on which the server should listen
         @params  port     The port that the server should bind to
         """
-        super(ApsMasterController, self).__init__(ip,port)
-        self._products = {}
-        self._katportal_wrapper_type = KatportalClientWrapper
-        self._server_pool = ApsWorkerPool()
+        super(ApsMasterController, self).__init__(ip, port, ApsWorkerPool())
         self._dummy = dummy
         if self._dummy:
             for ii in range(16):
                 self._server_pool.add("127.0.0.1", 50000+ii)
 
-    def start(self):
-        """
-        @brief  Start the ApsMasterController server
-        """
-        super(ApsMasterController,self).start()
-
-    def add_sensor(self, sensor):
-        log.debug("Adding sensor: {}".format(sensor.name))
-        super(ApsMasterController, self).add_sensor(sensor)
-
-    def remove_sensor(self, sensor):
-        log.debug("Removing sensor: {}".format(sensor.name))
-        super(ApsMasterController, self).remove_sensor(sensor)
-
-    def setup_sensors(self):
-        """
-        @brief  Set up monitoring sensors.
-
-        @note   The following sensors are made available on top of default sensors
-                implemented in AsynDeviceServer and its base classes.
-
-                device-status:  Reports the health status of the APSUSE and associated devices:
-                                Among other things report HW failure, SW failure and observation failure.
-
-                local-time-synced:  Indicates whether the local time of APSUSE servers
-                                    is synchronised to the master time reference (use NTP).
-                                    This sensor is aggregated from all nodes that are part
-                                    of FBF and will return "not sync'd" if any nodes are
-                                    unsyncronised.
-
-                products:   The list of product_ids that APSUSE is currently handling
-        """
-        self._device_status = Sensor.discrete(
-            "device-status",
-            description="Health status of APSUSE",
-            params=self.DEVICE_STATUSES,
-            default="ok",
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._device_status)
-
-        self._local_time_synced = Sensor.boolean(
-            "local-time-synced",
-            description="Indicates FBF is NTP syncronised.",
-            default=True,
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._local_time_synced)
-
-        self._products_sensor = Sensor.string(
-            "products",
-            description="The names of the currently configured products",
-            default="",
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._products_sensor)
-
-    def _update_products_sensor(self):
-        self._products_sensor.set_value(",".join(self._products.keys()))
-
-    def _get_product(self, product_id):
-        if product_id not in self._products:
-            raise ProductLookupError("No product configured with ID: {}".format(product_id))
-        else:
-            return self._products[product_id]
-
-    @request(Str(), Int())
-    @return_reply()
-    def request_register_worker_server(self, req, hostname, port):
-        """
-        @brief   Register an ApsWorker instance
-
-        @params hostname The hostname for the worker server
-        @params port     The port number that the worker server serves on
-
-        @detail  Register an ApsWorker instance that can be used for APSUSE
-                 computation. APSUSE has no preference for the order in which control
-                 servers are allocated to a subarray. An ApsWorker wraps an atomic
-                 unit of compute comprised of one CPU and one NIC (i.e. one NUMA
-                 node on an APSUSE compute server).
-        """
-        log.debug("Received request to register worker server at {}:{}".format(
-            hostname, port))
-        self._server_pool.add(hostname, port)
-        return ("ok",)
-
-    @request(Str(), Int())
-    @return_reply()
-    def request_deregister_worker_server(self, req, hostname, port):
-        """
-        @brief   Deregister an ApsWorker instance
-
-        @params hostname The hostname for the worker server
-        @params port     The port number that the worker server serves on
-
-        @detail  The graceful way of removing a server from rotation. If the server is
-                 currently actively processing an exception will be raised.
-        """
-        log.debug("Received request to deregister worker server at {}:{}".format(
-            hostname, port))
-        try:
-            self._server_pool.remove(hostname, port)
-        except ServerDeallocationError as error:
-            log.error("Request to deregister worker server at {}:{} failed with error: {}".format(
-                hostname, port, str(error)))
-            return ("fail", str(error))
-        else:
-            return ("ok",)
-
-    @request()
-    @return_reply(Int())
-    def request_worker_server_list(self, req):
-        """
-        @brief   List all control servers and provide minimal metadata
-        """
-        for server in self._server_pool.used():
-            req.inform("{} allocated".format(server))
-        for server in self._server_pool.available():
-            req.inform("{} free".format(server))
-        return ("ok", len(self._server_pool.used()) + len(self._server_pool.available()))
-
-
     @request(Str(), Str(), Int(), Str(), Str())
     @return_reply()
-    def request_configure(self, req, product_id, antennas_csv, n_channels, streams_json, proxy_name):
+    def request_configure(self, req, product_id, streams_json, proxy_name):
         """
         @brief      Configure APSUSE to receive and process data from a subarray
 
@@ -211,11 +84,6 @@ class ApsMasterController(AsyncDeviceServer):
 
         @param      product_id        This is a name for the data product, which is a useful tag to include
                                       in the data, but should not be analysed further. For example "array_1_bc856M4k".
-
-        @param      antennas_csv      A comma separated list of physical antenna names used in particular sub-array
-                                      to which the data products belongs (e.g. m007,m008,m009).
-
-        @param      n_channels        The integer number of frequency channels provided by the CBF.
 
         @param      streams_json      a JSON struct containing config keys and values describing the streams.
 
@@ -270,91 +138,31 @@ class ApsMasterController(AsyncDeviceServer):
 
         msg = ("Configuring new APSUSE product",
             "Product ID: {}".format(product_id),
-            "Antennas: {}".format(antennas_csv),
-            "Nchannels: {}".format(n_channels),
             "Streams: {}".format(streams_json),
             "Proxy name: {}".format(proxy_name))
         log.info("\n".join(msg))
         # Test if product_id already exists
         if product_id in self._products:
-            return ("fail", "FBF already has a configured product with ID: {}".format(product_id))
+            return ("fail", "APS already has a configured product with ID: {}".format(product_id))
         # Determine number of nodes required based on number of antennas in subarray
         # Note this is a poor way of handling this that may be updated later. In theory
         # there is a throughput measure as a function of bandwidth, polarisations and number
         # of antennas that allows one to determine the number of nodes to run. Currently we
         # just assume one antennas worth of data per NIC on our servers, so two antennas per
         # node.
-        try:
-            antennas = parse_csv_antennas(antennas_csv)
-        except AntennaValidationError as error:
-            return ("fail", str(error))
-
-        valid_n_channels = [1024, 4096, 32768]
-        if not n_channels in valid_n_channels:
-            return ("fail", "The provided number of channels ({}) is not valid. Valid options are {}".format(n_channels, valid_n_channels))
-
         streams = json.loads(streams_json)
         try:
             streams['cam.http']['camdata']
-            # Need to check for endswith('.antenna-channelised-voltage') as the i0 is not
-            # guaranteed to stay the same.
-            # i0 = instrument name
-            # Need to keep this for future sensor lookups
-            streams['cbf.antenna_channelised_voltage']
         except KeyError as error:
             return ("fail", "JSON streams object does not contain required key: {}".format(str(error)))
-
-        for key in streams['cbf.antenna_channelised_voltage'].keys():
-            if key.endswith('.antenna-channelised-voltage'):
-                instrument_name, _ = key.split('.')
-                feng_stream_name = key
-                log.debug("Parsed instrument name from streams: {}".format(instrument_name))
-                break
-        else:
-            return ("fail", "Could not determine instrument name (e.g. 'i0') from streams")
 
         # TODO: change this request to @async_reply and make the whole thing a coroutine
         @coroutine
         def configure():
             kpc = self._katportal_wrapper_type(streams['cam.http']['camdata'])
             # Get all antenna observer strings
-            futures, observers = [],[]
-            for antenna in antennas:
-                log.debug("Fetching katpoint string for antenna {}".format(antenna))
-                futures.append(kpc.get_observer_string(antenna))
-            for ii,future in enumerate(futures):
-                try:
-                    observer = yield future
-                except Exception as error:
-                    log.error("Error on katportalclient call: {}".format(str(error)))
-                    req.reply("fail", "Error retrieving katpoint string for antenna {}".format(antennas[ii]))
-                    return
-                else:
-                    log.debug("Fetched katpoint antenna: {}".format(observer))
-                    observers.append(Antenna(observer))
-
-            # Get bandwidth, cfreq, sideband, f-eng mapping
-            log.debug("Fetching F-engine and subarray configuration information")
-            bandwidth_future = kpc.get_bandwidth(feng_stream_name)
-            cfreq_future = kpc.get_cfreq(feng_stream_name)
-            sideband_future = kpc.get_sideband(feng_stream_name)
-            feng_antenna_map_future = kpc.get_antenna_feng_id_map(instrument_name, antennas)
-            bandwidth = yield bandwidth_future
-            cfreq = yield cfreq_future
-            sideband = yield sideband_future
-            feng_antenna_map = yield feng_antenna_map_future
-            feng_config = {
-                'bandwidth':bandwidth,
-                'centre-frequency':cfreq,
-                'sideband':sideband,
-                'feng-antenna-map':feng_antenna_map
-            }
-            feng_groups = ip_range_from_stream(feng_stream_name)
-
-            for key, value in feng_config.items():
-                log.debug("{}: {}".format(key, value))
-            product = ApsProductController(self, product_id, observers, n_channels,
-                feng_groups, proxy_name, feng_config)
+            log.debug("Fetching FBFUSE and subarray configuration information")
+            raise NotImplementedw
             self._products[product_id] = product
             self._update_products_sensor()
             req.reply("ok",)
@@ -524,7 +332,7 @@ class ApsMasterController(AsyncDeviceServer):
         # This check needs to happen here as this call
         # should return immediately
         if not product.idle:
-            return ("fail", "Can only provision beams on an idle FBF product")
+            return ("fail", "Can only provision beams on an idle APS product")
         self.ioloop.add_callback(lambda : product.prepare(sb_id))
         return ("ok",)
 
@@ -552,7 +360,7 @@ class ApsMasterController(AsyncDeviceServer):
     @return_reply()
     def request_set_configuration_authority(self, req, product_id, hostname, port):
         """
-        @brief     Set the configuration authority for an FBF product
+        @brief     Set the configuration authority for an APS product
 
         @detail    The parameters passed here specify the address of a server that
                    can be triggered to provide APSUSE with configuration information

@@ -9,6 +9,8 @@ from subprocess import Popen, PIPE, check_call
 from optparse import OptionParser
 from katcp import Sensor, AsyncDeviceServer
 from katcp.kattypes import request, return_reply, Int, Str, Discrete
+from mpikat.ip_manager import ip_range_from_stream
+from mpikar.fbfuse_mkrecv_config import make_mkrecv_header
 from mpikat.utils import LoggingSensor, parse_csv_antennas
 
 log = logging.getLogger("mpikat.fbfuse_worker_server")
@@ -213,6 +215,13 @@ class FbfWorkerServer(AsyncDeviceServer):
             initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._antenna_capture_order_sensor)
 
+        self._mkrecv_header_sensor = Sensor.string(
+            "mkrecv-headerr",
+            description = "The MKRECV/DADA header used for configuring capture with MKRECV",
+            default = "",
+            initial_status = Sensor.UNKNOWN)
+        self.add_sensor(self._mkrecv_header_sensor)
+
 
     def _system_call_wrapper(self, cmd):
         log.debug("System call: '{}'".format(" ".join(cmd)))
@@ -261,7 +270,7 @@ class FbfWorkerServer(AsyncDeviceServer):
     @request(Str(), Int(), Int(), Float(), Float(), Str(), Str(), Str(), Str(), Str(), Int())
     @return_reply()
     def request_prepare(self, req, feng_groups, nchans_per_group, chan0_idx, chan0_freq,
-                        chan_bw, mcast_to_beam_map, antenna_to_feng_id_map, coherent_beam_config,
+                        chan_bw, mcast_to_beam_map, feng_config, coherent_beam_config,
                         incoherent_beam_config, de_ip, de_port):
         """
         @brief      Prepare FBFUSE to receive and process data from a subarray
@@ -293,14 +302,7 @@ class FbfWorkerServer(AsyncDeviceServer):
 
                                            }
 
-        @param      antenna_to_feng_id_map A JSON mapping between antenna names and F-engine IDs in the form:
-
-                                           @code
-                                              {
-                                                'm001':1,
-                                                'm009':2,
-                                                'm010':3
-                                              }
+       #NEED FENG CONFIG
 
         @param      coherent_beam_config   A JSON object specifying the coherent beam configuration in the form:
 
@@ -338,13 +340,48 @@ class FbfWorkerServer(AsyncDeviceServer):
             self._delay_engine.start()
             self._delay_engine_sensor.set_value("{}:{}".format(de_ip, de_port))
 
+            antenna_to_feng_id_map = feng_config['feng-antenna-map']
             feng_capture_order_info = self._determine_feng_capture_order(antenna_to_feng_id_map, coherent_beam_config,
                 incoherent_beam_config)
             feng_to_antenna_map = {value:key for key,value in antenna_to_feng_id_map.items()}
             antenna_capture_order_csv = ",".join([feng_to_antenna_map[feng_id] for feng_id in feng_capture_order_info['order']])
             self._antenna_capture_order_sensor.set_value(antenna_capture_order_csv)
 
+            self._dada_input_key = 0xdada
+            self._dada_coh_output_key = 0xcaca
+            self._dada_incoh_output_key = 0xbaba
 
+            capture_range = ip_range_from_stream(feng_groups)
+            ngroups = capture_range.count
+            partition_nchans = nchans_per_group * ngroups
+            partition_bandwidth = partition_nchans * chan_bw
+            npol = 2
+            ndim = 2
+            nbits = 8
+            tsamp = 1.0 / (feng_config['bandwidth'] / feng_config['nchans'])
+            sample_clock = feng_config['bandwidth'] * 2
+            timestamp_step =  feng_config['nchans'] * 2 * 256 # WARNING: This is only valid in 4k mode
+            frequency_ids = [chan0_idx+nchans_per_group*ii for ii in range(ngroups)] #WARNING: Assumes contigous groups
+            mkrecv_config = {
+            'frequency_mhz': (chan0_freq + nchans_tot/2.0 * chan_bw) / 1e6,
+            'bandwidth': partition_bandwidth,
+            'tsamp_us': tsamp * 1e6,
+            'bytes_per_second': partition_bandwidth * npol * ndim * nbits,
+            'nchan': partition_nchans,
+            'dada_key':
+            'nantennas': len(feng_capture_order_info['order']),
+            'antennas_csv': antenna_capture_order_csv,
+            'sync_epoch': feng_config['sync-epoch'],
+            'sample_clock': sample_clock,
+            'mcast_sources': ",".join([str(group) for group in capture_range]),
+            'mcast_port': capture_range.port,
+            'interface': "192.168.0.1",
+            'timestamp_step': timestamp_step,
+            'ordered_feng_ids_csv': ",".join(feng_capture_order_info['order']),
+            'frequency_partition_ids_csv': ",".join(frequency_ids)
+            }
+            mkrecv_header = make_mkrecv_header(mkrecv_config)
+            self._mkrecv_header_sensor.set_value(mkrecv_header)
 
             """
             Tasks:

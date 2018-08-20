@@ -35,12 +35,13 @@ from katcp import Sensor, Message, AsyncDeviceServer, KATCPClientResource, Async
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from katportalclient import KATPortalClient
 from katpoint import Antenna, Target
+from mpikat.master_controller import MasterController
 from mpikat.ip_manager import IpRangeManager, ip_range_from_stream
 from mpikat.katportalclient_wrapper import KatportalClientWrapper
 from mpikat.fbfuse_worker_wrapper import FbfWorkerPool
 from mpikat.fbfuse_beam_manager import BeamManager
 from mpikat.fbfuse_product_controller import FbfProductController
-from mpikat.utils import parse_csv_antennas, is_power_of_two, next_power_of_two
+from mpikat.utils import parse_csv_antennas, is_power_of_two, next_power_of_two, AntennaValidationError
 
 # ?halt message means shutdown everything and power off all machines
 
@@ -56,7 +57,7 @@ class ProductLookupError(Exception):
 class ProductExistsError(Exception):
     pass
 
-class FbfMasterController(AsyncDeviceServer):
+class FbfMasterController(MasterController):
     """This is the main KATCP interface for the FBFUSE
     multi-beam beamformer on MeerKAT.
 
@@ -81,140 +82,24 @@ class FbfMasterController(AsyncDeviceServer):
 
         """
         self._ip_pool = IpRangeManager(ip_range_from_stream(ip_range))
-        super(FbfMasterController, self).__init__(ip,port)
-        self._products = {}
+        super(FbfMasterController, self).__init__(ip, port, FbfWorkerPool())
         self._dummy = dummy
-        self._katportal_wrapper_type = KatportalClientWrapper
-        self._server_pool = FbfWorkerPool()
         if self._dummy:
             for ii in range(64):
                 self._server_pool.add("127.0.0.1", 50000+ii)
 
-    def start(self):
-        """
-        @brief  Start the FbfMasterController server
-        """
-        super(FbfMasterController,self).start()
-
-    def add_sensor(self, sensor):
-        log.debug("Adding sensor: {}".format(sensor.name))
-        super(FbfMasterController, self).add_sensor(sensor)
-
-    def remove_sensor(self, sensor):
-        log.debug("Removing sensor: {}".format(sensor.name))
-        super(FbfMasterController, self).remove_sensor(sensor)
 
     def setup_sensors(self):
         """
         @brief  Set up monitoring sensors.
-
-        @note   The following sensors are made available on top of default sensors
-                implemented in AsynDeviceServer and its base classes.
-
-                device-status:  Reports the health status of the FBFUSE and associated devices:
-                                Among other things report HW failure, SW failure and observation failure.
-
-                local-time-synced:  Indicates whether the local time of FBFUSE servers
-                                    is synchronised to the master time reference (use NTP).
-                                    This sensor is aggregated from all nodes that are part
-                                    of FBF and will return "not sync'd" if any nodes are
-                                    unsyncronised.
-
-                products:   The list of product_ids that FBFUSE is currently handling
         """
-        self._device_status = Sensor.discrete(
-            "device-status",
-            description="Health status of FBFUSE",
-            params=self.DEVICE_STATUSES,
-            default="ok",
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._device_status)
-
-        self._local_time_synced = Sensor.boolean(
-            "local-time-synced",
-            description="Indicates FBF is NTP syncronised.",
-            default=True,
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._local_time_synced)
-
-        self._products_sensor = Sensor.string(
-            "products",
-            description="The names of the currently configured products",
-            default="",
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._products_sensor)
-
+        super(FbfMasterController, self).setup_sensors()
         self._ip_pool_sensor = Sensor.string(
             "output-ip-range",
             description="The multicast address allocation for coherent beams",
             default=self._ip_pool.format_katcp(),
             initial_status=Sensor.NOMINAL)
         self.add_sensor(self._ip_pool_sensor)
-
-    def _update_products_sensor(self):
-        self._products_sensor.set_value(",".join(self._products.keys()))
-
-    def _get_product(self, product_id):
-        if product_id not in self._products:
-            raise ProductLookupError("No product configured with ID: {}".format(product_id))
-        else:
-            return self._products[product_id]
-
-    @request(Str(), Int())
-    @return_reply()
-    def request_register_worker_server(self, req, hostname, port):
-        """
-        @brief   Register an FbfWorker instance
-
-        @params hostname The hostname for the worker server
-        @params port     The port number that the worker server serves on
-
-        @detail  Register an FbfWorker instance that can be used for FBFUSE
-                 computation. FBFUSE has no preference for the order in which control
-                 servers are allocated to a subarray. An FbfWorker wraps an atomic
-                 unit of compute comprised of one CPU, one GPU and one NIC (i.e. one NUMA
-                 node on an FBFUSE compute server).
-        """
-        log.debug("Received request to register worker server at {}:{}".format(
-            hostname, port))
-        self._server_pool.add(hostname, port)
-        return ("ok",)
-
-    @request(Str(), Int())
-    @return_reply()
-    def request_deregister_worker_server(self, req, hostname, port):
-        """
-        @brief   Deregister an FbfWorker instance
-
-        @params hostname The hostname for the worker server
-        @params port     The port number that the worker server serves on
-
-        @detail  The graceful way of removing a server from rotation. If the server is
-                 currently actively processing an exception will be raised.
-        """
-        log.debug("Received request to deregister worker server at {}:{}".format(
-            hostname, port))
-        try:
-            self._server_pool.remove(hostname, port)
-        except ServerDeallocationError as error:
-            log.error("Request to deregister worker server at {}:{} failed with error: {}".format(
-                hostname, port, str(error)))
-            return ("fail", str(error))
-        else:
-            return ("ok",)
-
-    @request()
-    @return_reply(Int())
-    def request_worker_server_list(self, req):
-        """
-        @brief   List all control servers and provide minimal metadata
-        """
-        for server in self._server_pool.used():
-            req.inform("{} allocated".format(server))
-        for server in self._server_pool.available():
-            req.inform("{} free".format(server))
-        return ("ok", len(self._server_pool.used()) + len(self._server_pool.available()))
-
 
     @request(Str(), Str(), Int(), Str(), Str())
     @return_reply()
@@ -353,20 +238,27 @@ class FbfMasterController(AsyncDeviceServer):
                     observers.append(Antenna(observer))
 
             # Get bandwidth, cfreq, sideband, f-eng mapping
+
+            #TODO: Also get sync-epoch
+
             log.debug("Fetching F-engine and subarray configuration information")
             bandwidth_future = kpc.get_bandwidth(feng_stream_name)
             cfreq_future = kpc.get_cfreq(feng_stream_name)
             sideband_future = kpc.get_sideband(feng_stream_name)
             feng_antenna_map_future = kpc.get_antenna_feng_id_map(instrument_name, antennas)
+            sync_epoch_future = kpc.get_sync_epoch()
             bandwidth = yield bandwidth_future
             cfreq = yield cfreq_future
             sideband = yield sideband_future
             feng_antenna_map = yield feng_antenna_map_future
+            sync_epoch = yield sync_epoch_future
             feng_config = {
-                'bandwidth':bandwidth,
-                'centre-frequency':cfreq,
-                'sideband':sideband,
-                'feng-antenna-map':feng_antenna_map
+                'bandwidth': bandwidth,
+                'centre-frequency': cfreq,
+                'sideband': sideband,
+                'feng-antenna-map': feng_antenna_map,
+                'sync-epoch': sync_epoch,
+                'nchans': n_channels
             }
             for key, value in feng_config.items():
                 log.debug("{}: {}".format(key, value))

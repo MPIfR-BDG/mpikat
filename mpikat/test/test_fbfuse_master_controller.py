@@ -84,7 +84,7 @@ class MockKatportalClientWrapper(mock.Mock):
         raise Return("upper")
 
     @coroutine
-    def gey_sync_epoch(self):
+    def get_sync_epoch(self):
         raise Return(1532530856)
 
     @coroutine
