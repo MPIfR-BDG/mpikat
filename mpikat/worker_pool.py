@@ -21,6 +21,7 @@ SOFTWARE.
 """
 import logging
 from threading import Lock
+from katcp import KATCPClientResource
 
 log = logging.getLogger('mpikat.worker_pool')
 lock = Lock()
@@ -134,4 +135,56 @@ class WorkerPool(object):
 
     def nused(self):
         return len(self.used())
+
+
+class WorkerWrapper(object):
+    """Wrapper around a client to an FbfWorkerServer
+    instance.
+    """
+    def __init__(self, hostname, port):
+        """
+        @brief  Create a new wrapper around a client to a worker server
+
+        @params hostname The hostname for the worker server
+        @params port     The port number that the worker server serves on
+        """
+        log.debug("Building client to worker at {}:{}".format(hostname, port))
+        self._client = KATCPClientResource(dict(
+            name="worker-server-client",
+            address=(hostname, port),
+            controlled=True))
+        self.hostname = hostname
+        self.port = port
+        self.priority = 0 # Currently no priority mechanism is implemented
+        self._started = False
+
+    def start(self):
+        """
+        @brief  Start the client to the worker server
+        """
+        log.debug("Starting client to worker at {}:{}".format(self.hostname, self.port))
+        self._client.start()
+        self._started = True
+
+    def __repr__(self):
+        return "<{} @ {}:{}>".format(self.__class__.__name__, self.hostname, self.port)
+
+    def __hash__(self):
+        # This has override is required to allow these wrappers
+        # to be used with set() objects. The implication is that
+        # the combination of hostname and port is unique for a
+        # worker server
+        return hash((self.hostname, self.port))
+
+    def __eq__(self, other):
+        # Also implemented to help with hashing
+        # for sets
+        return self.__hash__() == hash(other)
+
+    def __del__(self):
+        if self._started:
+            try:
+                self._client.stop()
+            except Exception as error:
+                log.exception(str(error))
 

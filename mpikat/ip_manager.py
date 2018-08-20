@@ -71,6 +71,18 @@ class ContiguousIpRange(object):
     def __repr__(self):
         return "<{} {}>".format(self.__class__.__name__, self.format_katcp())
 
+    def split(self, n):
+        """
+        @brief   Split the Ip range into n subsubsets of preferably equal length
+        """
+        allocated = 0
+        splits = []
+        while allocated < self._count:
+            available = min(self._count-allocated, n)
+            splits.append(ContiguousIpRange(str(self._base_ip+allocated), self._port, available))
+            allocated+=available
+        return splits
+
     def format_katcp(self):
         """
         @brief  Return a description of this IP range in a KATCP friendly format,
@@ -176,7 +188,7 @@ def ip_range_from_stream(stream):
     port = int(port)
     try:
         base_ip, ip_count = ip_range.split("+")
-        ip_count = int(ip_count)
+        ip_count = int(ip_count)+1
     except ValueError:
         base_ip, ip_count = ip_range, 1
     return ContiguousIpRange(base_ip, port, ip_count)

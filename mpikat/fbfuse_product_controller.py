@@ -30,7 +30,10 @@ from katpoint import  Target
 from mpikat.fbfuse_beam_manager import BeamManager
 from mpikat.fbfuse_delay_engine import DelayEngine
 from mpikat.fbfuse_config import FbfConfigurationManager
-from mpikat.utils import parse_csv_antennas
+from mpikat.ip_manager import ip_range_from_stream
+from mpikat.utils import parse_csv_antennas, LoggingSensor
+
+N_FENG_STREAMS_PER_WORKER = 4
 
 log = logging.getLogger("mpikat.fbfuse_product_controller")
 
@@ -40,20 +43,6 @@ class FbfProductStateError(Exception):
             expected_states, current_state)
         super(FbfProductStateError, self).__init__(message)
 
-class LoggingSensor(Sensor):
-    def __init__(self, *args, **kwargs):
-        self.logger = None
-        super(LoggingSensor, self).__init__(*args, **kwargs)
-
-    def set_value(self, value):
-        if self.logger:
-            self.logger.debug("Sensor '{}' changed from '{}' to '{}'".format(
-                self.name, self.value(), value))
-        super(LoggingSensor, self).set_value(value)
-
-    def set_logger(self, logger):
-        self.logger = logger
-
 class FbfProductController(object):
     """
     Wrapper class for an FBFUSE product.
@@ -62,7 +51,7 @@ class FbfProductController(object):
     IDLE, PREPARING, READY, STARTING, CAPTURING, STOPPING, ERROR = STATES
 
     def __init__(self, parent, product_id, katpoint_antennas,
-                 n_channels, streams, proxy_name, feng_config):
+                 n_channels, feng_streams, proxy_name, feng_config):
         """
         @brief      Construct new instance
 
@@ -74,7 +63,8 @@ class FbfProductController(object):
 
         @param      n_channels        The integer number of frequency channels provided by the CBF.
 
-        @param      streams           A dictionary containing config keys and values describing the streams.
+        @param      feng_streams      A string describing the multicast groups containing F-enging data
+                                      (in the form: spead://239.11.1.150+15:7147)
 
         @param      proxy_name        The name of the proxy associated with this subarray (used as a sensor prefix)
 
@@ -83,14 +73,14 @@ class FbfProductController(object):
         self.log = logging.getLogger("mpikat.fbfuse_product_controller.{}".format(product_id))
         self.log.debug("Creating new FbfProductController with args: {}".format(
             ", ".join([str(i) for i in (parent, product_id, katpoint_antennas, n_channels,
-                streams, proxy_name, feng_config)])))
+                feng_streams, proxy_name, feng_config)])))
         self._parent = parent
         self._product_id = product_id
         self._antennas = ",".join([a.name for a in katpoint_antennas])
         self._katpoint_antennas = katpoint_antennas
         self._antenna_map = {a.name: a for a in self._katpoint_antennas}
         self._n_channels = n_channels
-        self._streams = streams
+        self._streams = ip_range_from_stream(feng_streams)
         self._proxy_name = proxy_name
         self._feng_config = feng_config
         self._servers = []
@@ -534,6 +524,7 @@ class FbfProductController(object):
         self._nservers_per_set_sensor.set_value(mcast_config['num_workers_per_set'])
         self._cbc_mcast_groups = self._parent._ip_pool.allocate(mcast_config['num_mcast_groups'])
         self._cbc_mcast_groups_sensor.set_value(self._cbc_mcast_groups.format_katcp())
+        return cm
 
     @coroutine
     def get_ca_target_configuration(self, target):
@@ -601,16 +592,16 @@ class FbfProductController(object):
 
         if not self._ca_client:
             self.log.warning("No configuration authority found, using default configuration parameters")
-            self.set_sb_configuration(self._default_sb_config)
+            cm = self.set_sb_configuration(self._default_sb_config)
         else:
             #TODO: get the schedule block ID into this call from somewhere (configure?)
             try:
                 config = yield self.get_ca_sb_configuration(sb_id)
-                self.set_sb_configuration(config)
+                cm = self.set_sb_configuration(config)
             except Exception as error:
                 self.log.error("Configuring from CA failed with error: {}".format(str(error)))
                 self.log.warning("Reverting to default configuration")
-                self.set_sb_configuration(self._default_sb_config)
+                cm = self.set_sb_configuration(self._default_sb_config)
 
         cbc_antennas_names = parse_csv_antennas(self._cbc_antennas_sensor.value())
         cbc_antennas = [self._antenna_map[name] for name in cbc_antennas_names]
@@ -618,17 +609,11 @@ class FbfProductController(object):
         self._delay_engine = DelayEngine("127.0.0.1", 0, self._beam_manager)
         self._delay_engine.start()
         self.log.info("Started delay engine at: {}".format(self._delay_engine.bind_address))
-
-        for server in self._servers:
-            # each server will take 4 consequtive multicast groups
-            pass
-
-        # set up delay engine
-        # compile kernels
-        # start streaming
-        self._delay_engine_sensor.set_value(self._delay_engine.bind_address)
+        de_ip, de_port = self._delay_engine.bind_address
+        self._delay_engine_sensor.set_value((de_ip, de_port))
 
         # Need to tear down the beam sensors here
+        # Here calculate the beam to multicast map
         self._beam_sensors = []
         mcast_to_beam_map = {}
         groups = [ip for ip in self._cbc_mcast_groups]
@@ -653,12 +638,49 @@ class FbfProductController(object):
                 sensor.set_value(self._beam_to_sensor_string(beam)))
             self._beam_sensors.append(sensor)
             self.add_sensor(sensor)
-        # Here calculate the beam to multicast map
         self._parent.mass_inform(Message.inform('interface-changed'))
-        self._state_sensor.set_value(self.READY)
-        # Only make this call if the the number of beams has changed
-        self.log.info("Successfully prepared FBFUSE product")
-        self.log.debug("Product moved to 'ready' state")
+
+        #Here we actually start to prepare the remote workers
+        ip_splits = self._streams.split(N_FENG_STREAMS_PER_WORKER)
+
+        # This is assuming lower sideband and bandwidth is always +ve
+        fbottom = self._feng_config['centre-frequency'] - self._feng_config['bandwidth']/2.
+
+        coherent_beam_config = {
+        'tscrunch':self._cbc_tscrunch_sensor.value(),
+        'fscrunch':self._cbc_fscrunch_sensor.value(),
+        'antennas':self._cbc_antennas_sensor.value()
+        }
+
+        incoherent_beam_config = {
+        'tscrunch':self._ibc_tscrunch_sensor.value(),
+        'fscrunch':self._ibc_fscrunch_sensor.value(),
+        'antennas':self._ibc_antennas_sensor.value()
+        }
+
+        prepare_futures = []
+        for ii, (server, ip_range) in enumerate(zip(self._servers, ip_splits)):
+            chan0_idx = cm.nchans_per_worker * ii
+            chan0_freq =  fbottom + chan0_idx * cm.channel_bandwidth
+            future = server.prepare(ip_range.format_katcp(), cm.nchans_per_group, chan0_idx, chan0_freq,
+                        cm.channel_bandwidth, mcast_to_beam_map, self._feng_config['feng-antenna-map'],
+                        coherent_beam_config, incoherent_beam_config, de_ip, de_port)
+            prepare_futures.append(future)
+
+        failure_count = 0
+        for future in prepare_futures:
+            try:
+                yield future
+            except Exception as error:
+                log.error("Failed to configure server with error: {}".format(str(error)))
+                failure_count += 1
+
+        if failure_count > 0:
+            self._state_sensor.set_value(self.ERROR)
+            self.log.info("Failed to prepare FBFUSE product")
+        else:
+            self._state_sensor.set_value(self.READY)
+            self.log.info("Successfully prepared FBFUSE product")
 
     def deconfigure(self):
         """

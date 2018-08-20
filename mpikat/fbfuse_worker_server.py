@@ -9,6 +9,7 @@ from subprocess import Popen, PIPE, check_call
 from optparse import OptionParser
 from katcp import Sensor, AsyncDeviceServer
 from katcp.kattypes import request, return_reply, Int, Str, Discrete
+from mpikat.utils import LoggingSensor, parse_csv_antennas
 
 log = logging.getLogger("mpikat.fbfuse_worker_server")
 
@@ -143,8 +144,8 @@ class FbfWorkerServer(AsyncDeviceServer):
     VERSION_INFO = ("fbf-control-server-api", 0, 1)
     BUILD_INFO = ("fbf-control-server-implementation", 0, 1, "rc1")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
-    STATES = ["idle", "preparing", "ready", "starting", "capturing", "stopping"]
-    IDLE, PREPARING, READY, STARTING, CAPTURING, STOPPING = STATES
+    STATES = ["idle", "preparing", "ready", "starting", "capturing", "stopping", "error"]
+    IDLE, PREPARING, READY, STARTING, CAPTURING, STOPPING, ERROR = STATES
 
     def __init__(self, ip, port, dummy=False):
         """
@@ -156,8 +157,6 @@ class FbfWorkerServer(AsyncDeviceServer):
         @params  de_port  The port number for the delay engine server
 
         """
-        self._de_ip = None
-        self._de_port = None
         self._delay_engine = None
         self._delays = None
         self._dummy = dummy
@@ -191,12 +190,13 @@ class FbfWorkerServer(AsyncDeviceServer):
             initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._device_status_sensor)
 
-        self._state_sensor = Sensor.discrete(
+        self._state_sensor = LoggingSensor.discrete(
             "state",
             params = STATES,
             description = "The current state of this worker instance",
             default = self.IDLE,
             initial_status = Sensor.NOMINAL)
+        self._state_sensor.set_logger(log)
         self.add_sensor(self._state_sensor)
 
         self._delay_engine_sensor = Sensor.string(
@@ -205,6 +205,13 @@ class FbfWorkerServer(AsyncDeviceServer):
             default = "",
             initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._delay_engine_sensor)
+
+        self._antenna_capture_order_sensor = Sensor.string(
+            "antenna-capture-order",
+            description = "The order in which the worker will capture antennas internally",
+            default = "",
+            initial_status = Sensor.UNKNOWN)
+        self.add_sensor(self._antenna_capture_order_sensor)
 
 
     def _system_call_wrapper(self, cmd):
@@ -215,137 +222,115 @@ class FbfWorkerServer(AsyncDeviceServer):
             check_call(cmd)
 
 
-    # What arguments are required here (want to avoid KatportalClient usage):
-    # - mapping of multicast groups to beams
-    # - multicast groups to listen to for F-engine data (and frequencies?)
-    # - Delay engine should also be passed here
-    # - Information for beamformer compilation:
-    #   - The coherent and incoherent beam configurations
-    #   - Which antennas to use for the coherent/incoherent beamforming
-    #   - The F-engine ID for each antenna (from where?)
-    #   - The number of beams
-    #   - The number of output multicast groups
-    #   - The number of frequency channels being captured
-    # F-engine capture order can be determined here
-    # Beam output order must be determined at the master controller level
-    # Should pass configurations as some JSON object:
-    # {
-    #    'mode':'standard',
-    #    'coherent_beam_config':
-    #    {
-    #        'nbeams':1000,
-    #        'tscrunch':16,
-    #        'fscrunch':1,
-    #        'feng-ids':[0,1,2,3]
-    #    },
-    #    'incoherent_beam_config':
-    #    {
-    #        'tscrunch':16,
-    #        'fscrunch':1,
-    #        'feng-ids':[0,1,2,3,4,5,6]',
-    #    }
-    # }
-    #
-    # So refined set of arguments:
-    #
-    # streams_json:
-    #
-    # {
-    #     'f-engine':['239.1.1.150:7147',
-    #                 '239.1.1.151:7147',
-    #                 '239.1.1.152:7147',
-    #                 '239.1.1.153:7147'],
-    #     'coherent_beams':
-    #     {
-    #         '239.1.2.150:7147':'cfbf00001,cfbf00002',
-    #         '239.1.2.151:7147':'cfbf00003,cfbf00004',
-    #         '239.1.2.152:7147':'cfbf00005,cfbf00006',
-    #         '239.1.2.153:7147':'cfbf00007,cfbf00008',
-    #         '239.1.2.154:7147':'cfbf00009,cfbf00010',
-    #         '239.1.2.155:7147':'cfbf00011,cfbf00012',
-    #         '239.1.2.156:7147':'cfbf00013,cfbf00014',
-    #         '239.1.2.157:7147':'cfbf00015,cfbf00016',
-    #         '239.1.2.158:7147':'cfbf00017,cfbf00018',
-    #     },
-    #     'incoherent_beam': '239.1.3.150:7147'
-    # }
-    #
-    #
-    # Also need the index of the first channel in the set of F-engine
-    # groups that are being listened to
+    def _determine_feng_capture_order(self, antenna_to_feng_id_map, coherent_beam_config, incoherent_beam_config):
+        # Need to sort the f-engine IDs into 4 states
+        # 1. Incoherent but not coherent
+        # 2. Incoherent and coherent
+        # 3. Coherent but not incoherent
+        # 4. Neither coherent nor incoherent
+        #
+        # We must catch all antennas as even in case 4 the data is required for the
+        # transient buffer.
+        #
+        # To make this split, we first create the three sets, coherent, incoherent and all.
+        mapping = antenna_to_feng_id_map
+        all_feng_ids = set(mapping.values())
+        coherent_feng_ids = set(mapping[antenna] for antenna in parse_csv_antennas(coherent_beam_config['antennas']))
+        incoherent_feng_ids = set(mapping[antenna] for antenna in parse_csv_antennas(incoherent_beam_config['antennas']))
+        incoh_not_coh = incoherent_feng_ids.difference(coherent_feng_ids)
+        incoh_and_coh = incoherent_feng_ids.intersection(coherent_feng_ids)
+        coh_not_incoh = coherent_feng_ids.difference(incoherent_feng_ids)
+        used_fengs = incoh_not_coh.union(incoh_and_coh).union(coh_not_incoh)
+        unused_fengs = all_feng_ids.difference(used_fengs)
+        # Output final order
+        final_order = list(incoh_not_coh) + list(incoh_and_coh) + list(coh_not_incoh) + list(unused_fengs)
+        start_of_incoherent_fengs = 0
+        end_of_incoherent_fengs = len(incoh_not_coh) + len(incoh_and_coh)
+        start_of_coherent_fengs = len(incoh_not_coh)
+        end_of_coherent_fengs = len(incoh_not_coh) + len(incoh_and_coh) + len(coh_not_incoh)
+        start_of_unused_fengs = end_of_coherent_fengs
+        end_of_unused_fengs = len(all_feng_ids)
+        info = {
+            "order": final_order,
+            "incoherent_span":(start_of_incoherent_fengs, end_of_incoherent_fengs),
+            "coherent_span":(start_of_coherent_fengs, end_of_coherent_fengs),
+            "unused_span":(start_of_unused_fengs, end_of_unused_fengs)
+        }
+        return info
 
-
-
-
-    @request(Str(), Str(), Int(), Int(), Int())
+    @request(Str(), Int(), Int(), Float(), Float(), Str(), Str(), Str(), Str(), Str(), Int())
     @return_reply()
-    def request_prepare(self, req, mcast_groups_json, feng_ids_csv,
-        beam_feng_ids_csv, nbeams, nchannels, beams_to_mcast_map, antennas_to_feng_ids_map):
+    def request_prepare(self, req, feng_groups, nchans_per_group, chan0_idx, chan0_freq,
+                        chan_bw, mcast_to_beam_map, antenna_to_feng_id_map, coherent_beam_config,
+                        incoherent_beam_config, de_ip, de_port):
         """
         @brief      Prepare FBFUSE to receive and process data from a subarray
 
-        @detail     REQUEST ?configure product_id antennas_csv n_channels streams_json proxy_name
+        @detail     REQUEST ?configure feng_groups, nchans_per_group, chan0_idx, chan0_freq,
+                        chan_bw, mcast_to_beam_map, antenna_to_feng_id_map, coherent_beam_config,
+                        incoherent_beam_config
                     Configure FBFUSE for the particular data products
 
-        @param      req               A katcp request object
+        @param      req                 A katcp request object
 
-        @param      antennas_csv      A comma separated list of physical antenna names used in particular sub-array
-                                      to which the data products belongs.
+        @param      feng_groups         The contiguous range of multicast groups to capture F-engine data from,
+                                        the parameter is formatted in stream notation, e.g.: spead://239.11.1.150+3:7147
 
-        @param      n_channels        The integer number of frequency channels provided by the CBF.
+        @param      nchans_per_group    The number of frequency channels per multicast group
 
-        @param      streams_json      a JSON struct containing config keys and values describing the streams.
+        @param      chan0_idx           The index of the first channel in the set of multicast groups
 
-                                      For example:
+        @param      chan0_freq          The frequency in Hz of the first channel in the set of multicast groups
 
-                                      @code
-                                         {'stream_type1': {
-                                             'stream_name1': 'stream_address1',
-                                             'stream_name2': 'stream_address2',
-                                             ...},
-                                             'stream_type2': {
-                                             'stream_name1': 'stream_address1',
-                                             'stream_name2': 'stream_address2',
-                                             ...},
-                                          ...}
-                                      @endcode
+        @param      chan_bw             The channel bandwidth in Hz
 
-                                      The steam type keys indicate the source of the data and the type, e.g. cam.http.
-                                      stream_address will be a URI.  For SPEAD streams, the format will be spead://<ip>[+<count>]:<port>,
-                                      representing SPEAD stream multicast groups. When a single logical stream requires too much bandwidth
-                                      to accommodate as a single multicast group, the count parameter indicates the number of additional
-                                      consecutively numbered multicast group ip addresses, and sharing the same UDP port number.
-                                      stream_name is the name used to identify the stream in CAM.
-                                      A Python example is shown below, for five streams:
-                                      One CAM stream, with type cam.http.  The camdata stream provides the connection string for katportalclient
-                                      (for the subarray that this FBFUSE instance is being configured on).
-                                      One F-engine stream, with type:  cbf.antenna_channelised_voltage.
-                                      One X-engine stream, with type:  cbf.baseline_correlation_products.
-                                      Two beam streams, with type: cbf.tied_array_channelised_voltage.  The stream names ending in x are
-                                      horizontally polarised, and those ending in y are vertically polarised.
+        @param      mcast_to_beam_map   A JSON mapping between output multicast addresses and beam IDs. This is the sole
+                                        authority for the number of beams that will be produced and their indexes. The map
+                                        is in the form:
 
-                                      @code
-                                         pprint(streams_dict)
-                                         {'cam.http':
-                                             {'camdata':'http://10.8.67.235/api/client/1'},
-                                          'cbf.antenna_channelised_voltage':
-                                             {'i0.antenna-channelised-voltage':'spead://239.2.1.154+4:7148'},
-                                          'cbf.coherent_filterbanked_beam':
-                                             {'i0.coherent-filterbanked-beam':'spead://239.2.2.150+128:7148'},
-                                          'cbf.incoherent_filterbanked_beam':
-                                             {'i0.incoherent-filterbanked-beam':'spead://239.2.3.150:7148'},
-                                          ...}
-                                      @endcode
+                                        @code
+                                           {
 
-                                      If using katportalclient to get information from CAM, then reconnect and re-subscribe to all sensors
-                                      of interest at this time.
+                                           }
 
-        @note       A configure call will result in the generation of a new subarray instance in FBFUSE that will be added to the clients list.
+        @param      antenna_to_feng_id_map A JSON mapping between antenna names and F-engine IDs in the form:
+
+                                           @code
+                                              {
+                                                'm001':1,
+                                                'm009':2,
+                                                'm010':3
+                                              }
+
+        @param      coherent_beam_config   A JSON object specifying the coherent beam configuration in the form:
+
+                                           @code
+                                              {
+                                                'tscrunch':16,
+                                                'fscrunch':1,
+                                                'antennas':'m007,m008,m009'
+                                              }
+                                           @endcode
+
+        @param      incoherent_beam_config  A JSON object specifying the incoherent beam configuration in the form:
+
+                                           @code
+                                              {
+                                                'tscrunch':16,
+                                                'fscrunch':1,
+                                                'antennas':'m007,m008,m009'
+                                              }
+                                           @endcode
+
+        @params  de_ip    The IP address of the delay engine server
+
+        @params  de_port  The port number for the delay engine server
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
         @tornado.gen.coroutine
         def configure():
+            self._state_sensor.set_value(self.PREPARING)
             self._delay_engine = KATCPClientResource(dict(
                 name="delay-engine-client",
                 address=(de_ip, de_port),
@@ -353,20 +338,19 @@ class FbfWorkerServer(AsyncDeviceServer):
             self._delay_engine.start()
             self._delay_engine_sensor.set_value("{}:{}".format(de_ip, de_port))
 
+            feng_capture_order_info = self._determine_feng_capture_order(antenna_to_feng_id_map, coherent_beam_config,
+                incoherent_beam_config)
+            feng_to_antenna_map = {value:key for key,value in antenna_to_feng_id_map.items()}
+            antenna_capture_order_csv = ",".join([feng_to_antenna_map[feng_id] for feng_id in feng_capture_order_info['order']])
+            self._antenna_capture_order_sensor.set_value(antenna_capture_order_csv)
+
+
 
             """
             Tasks:
                 - compile kernels
                 - create shared memory banks
             """
-            # Parse feng ids
-            feng_ids = [int(idx) for idx in feng_ids_csv.split(",")]
-            beam_feng_ids = [int(idx) for idx in beam_feng_ids_csv.split(",")]
-
-            # This is the order in which different fengines should be captured by the capture code
-            # This is also then the order of the weights in the delay buffer for each beam
-            ordered_feng_ids = sorted(beam_feng_ids) + sorted(list((set(feng_ids) - set(beam_feng_ids))))
-
             # Compile beamformer
             # TBD
 
@@ -398,9 +382,9 @@ class FbfWorkerServer(AsyncDeviceServer):
             # one docker container that will be preallocated with the right CPU set, GPUs, memory
             # etc. This means that the configurations need to be unique by NUMA node... [Note: no
             # they don't, we can use the container IPC channel which isolates the IPC namespaces.]
-            self._delay_buffer_controller = DelayBufferController(self._delay_engine, nbeams,
-                len(beam_feng_ids), configuration_id, 1)
-
+            if not self.dummy:
+                self._delay_buffer_controller = DelayBufferController(self._delay_engine, nbeams,
+                    len(beam_feng_ids), configuration_id, 1)
             # Start beamformer instance
             # TBD
 

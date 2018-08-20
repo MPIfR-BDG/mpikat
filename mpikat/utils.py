@@ -19,6 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+from katcp import Sensor
+
 class AntennaValidationError(Exception):
     pass
 
@@ -46,3 +48,16 @@ def parse_csv_antennas(antennas_csv):
         raise AntennaValidationError("Not all provided antennas were unqiue")
     return names
 
+class LoggingSensor(Sensor):
+    def __init__(self, *args, **kwargs):
+        self.logger = None
+        super(LoggingSensor, self).__init__(*args, **kwargs)
+
+    def set_value(self, value):
+        if self.logger:
+            self.logger.debug("Sensor '{}' changed from '{}' to '{}'".format(
+                self.name, self.value(), value))
+        super(LoggingSensor, self).set_value(value)
+
+    def set_logger(self, logger):
+        self.logger = logger

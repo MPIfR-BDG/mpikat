@@ -35,20 +35,15 @@ from katcp import Sensor, Message, AsyncDeviceServer, KATCPClientResource, Async
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from katportalclient import KATPortalClient
 from katpoint import Antenna, Target
-from mpikat.ip_manager import IpRangeManager, ip_range_from_stream
 from mpikat.katportalclient_wrapper import KatportalClientWrapper
-from mpikat.fbfuse_worker_wrapper import FbfWorkerPool
-from mpikat.fbfuse_beam_manager import BeamManager
-from mpikat.fbfuse_product_controller import FbfProductController
+from mpikat.apsuse_worker_wrapper import ApsWorkerPool
 from mpikat.utils import parse_csv_antennas, is_power_of_two, next_power_of_two
 
 # ?halt message means shutdown everything and power off all machines
 
 
-log = logging.getLogger("mpikat.fbfuse_master_controller")
+log = logging.getLogger("mpikat.apsuse_master_controller")
 lock = Lock()
-
-FBF_IP_RANGE = "spead://239.11.1.0+127:7147"
 
 class ProductLookupError(Exception):
     pass
@@ -56,53 +51,47 @@ class ProductLookupError(Exception):
 class ProductExistsError(Exception):
     pass
 
-class FbfMasterController(AsyncDeviceServer):
-    """This is the main KATCP interface for the FBFUSE
-    multi-beam beamformer on MeerKAT.
+class ApsMasterController(AsyncDeviceServer):
+    """This is the main KATCP interface for the APSUSE
+    pulsar searching system on MeerKAT. This controller only
+    holds responsibility for capture of data from the CBF
+    network and writing of that data to disk.
 
     This interface satisfies the following ICDs:
-    CAM-FBFUSE: <link>
-    TUSE-FBFUSE: <link>
+    CAM-APSUSE: <link>
     """
-    VERSION_INFO = ("mpikat-fbf-api", 0, 1)
-    BUILD_INFO = ("mpikat-fbf-implementation", 0, 1, "rc1")
+    VERSION_INFO = ("mpikat-aps-api", 0, 1)
+    BUILD_INFO = ("mpikat-aps-implementation", 0, 1, "rc1")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
-    def __init__(self, ip, port, dummy=True,
-        ip_range = FBF_IP_RANGE):
+    def __init__(self, ip, port, dummy=False):
         """
-        @brief       Construct new FbfMasterController instance
+        @brief       Construct new ApsMasterController instance
 
         @params  ip       The IP address on which the server should listen
         @params  port     The port that the server should bind to
-        @params  dummy    Specifies if the instance is running in a dummy mode
-
-        @note   In dummy mode, the controller will act as a mock interface only, sending no requests to nodes.
-                A valid node pool must still be provided to the instance, but this may point to non-existent nodes.
-
         """
-        self._ip_pool = IpRangeManager(ip_range_from_stream(ip_range))
-        super(FbfMasterController, self).__init__(ip,port)
+        super(ApsMasterController, self).__init__(ip,port)
         self._products = {}
-        self._dummy = dummy
         self._katportal_wrapper_type = KatportalClientWrapper
-        self._server_pool = FbfWorkerPool()
+        self._server_pool = ApsWorkerPool()
+        self._dummy = dummy
         if self._dummy:
-            for ii in range(64):
+            for ii in range(16):
                 self._server_pool.add("127.0.0.1", 50000+ii)
 
     def start(self):
         """
-        @brief  Start the FbfMasterController server
+        @brief  Start the ApsMasterController server
         """
-        super(FbfMasterController,self).start()
+        super(ApsMasterController,self).start()
 
     def add_sensor(self, sensor):
         log.debug("Adding sensor: {}".format(sensor.name))
-        super(FbfMasterController, self).add_sensor(sensor)
+        super(ApsMasterController, self).add_sensor(sensor)
 
     def remove_sensor(self, sensor):
         log.debug("Removing sensor: {}".format(sensor.name))
-        super(FbfMasterController, self).remove_sensor(sensor)
+        super(ApsMasterController, self).remove_sensor(sensor)
 
     def setup_sensors(self):
         """
@@ -111,20 +100,20 @@ class FbfMasterController(AsyncDeviceServer):
         @note   The following sensors are made available on top of default sensors
                 implemented in AsynDeviceServer and its base classes.
 
-                device-status:  Reports the health status of the FBFUSE and associated devices:
+                device-status:  Reports the health status of the APSUSE and associated devices:
                                 Among other things report HW failure, SW failure and observation failure.
 
-                local-time-synced:  Indicates whether the local time of FBFUSE servers
+                local-time-synced:  Indicates whether the local time of APSUSE servers
                                     is synchronised to the master time reference (use NTP).
                                     This sensor is aggregated from all nodes that are part
                                     of FBF and will return "not sync'd" if any nodes are
                                     unsyncronised.
 
-                products:   The list of product_ids that FBFUSE is currently handling
+                products:   The list of product_ids that APSUSE is currently handling
         """
         self._device_status = Sensor.discrete(
             "device-status",
-            description="Health status of FBFUSE",
+            description="Health status of APSUSE",
             params=self.DEVICE_STATUSES,
             default="ok",
             initial_status=Sensor.UNKNOWN)
@@ -144,13 +133,6 @@ class FbfMasterController(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._products_sensor)
 
-        self._ip_pool_sensor = Sensor.string(
-            "output-ip-range",
-            description="The multicast address allocation for coherent beams",
-            default=self._ip_pool.format_katcp(),
-            initial_status=Sensor.NOMINAL)
-        self.add_sensor(self._ip_pool_sensor)
-
     def _update_products_sensor(self):
         self._products_sensor.set_value(",".join(self._products.keys()))
 
@@ -164,16 +146,16 @@ class FbfMasterController(AsyncDeviceServer):
     @return_reply()
     def request_register_worker_server(self, req, hostname, port):
         """
-        @brief   Register an FbfWorker instance
+        @brief   Register an ApsWorker instance
 
         @params hostname The hostname for the worker server
         @params port     The port number that the worker server serves on
 
-        @detail  Register an FbfWorker instance that can be used for FBFUSE
-                 computation. FBFUSE has no preference for the order in which control
-                 servers are allocated to a subarray. An FbfWorker wraps an atomic
-                 unit of compute comprised of one CPU, one GPU and one NIC (i.e. one NUMA
-                 node on an FBFUSE compute server).
+        @detail  Register an ApsWorker instance that can be used for APSUSE
+                 computation. APSUSE has no preference for the order in which control
+                 servers are allocated to a subarray. An ApsWorker wraps an atomic
+                 unit of compute comprised of one CPU and one NIC (i.e. one NUMA
+                 node on an APSUSE compute server).
         """
         log.debug("Received request to register worker server at {}:{}".format(
             hostname, port))
@@ -184,7 +166,7 @@ class FbfMasterController(AsyncDeviceServer):
     @return_reply()
     def request_deregister_worker_server(self, req, hostname, port):
         """
-        @brief   Deregister an FbfWorker instance
+        @brief   Deregister an ApsWorker instance
 
         @params hostname The hostname for the worker server
         @params port     The port number that the worker server serves on
@@ -220,10 +202,10 @@ class FbfMasterController(AsyncDeviceServer):
     @return_reply()
     def request_configure(self, req, product_id, antennas_csv, n_channels, streams_json, proxy_name):
         """
-        @brief      Configure FBFUSE to receive and process data from a subarray
+        @brief      Configure APSUSE to receive and process data from a subarray
 
         @detail     REQUEST ?configure product_id antennas_csv n_channels streams_json proxy_name
-                    Configure FBFUSE for the particular data products
+                    Configure APSUSE for the particular data products
 
         @param      req               A katcp request object
 
@@ -259,7 +241,7 @@ class FbfMasterController(AsyncDeviceServer):
                                       stream_name is the name used to identify the stream in CAM.
                                       A Python example is shown below, for five streams:
                                       One CAM stream, with type cam.http.  The camdata stream provides the connection string for katportalclient
-                                      (for the subarray that this FBFUSE instance is being configured on).
+                                      (for the subarray that this APSUSE instance is being configured on).
                                       One F-engine stream, with type:  cbf.antenna_channelised_voltage.
                                       One X-engine stream, with type:  cbf.baseline_correlation_products.
                                       Two beam streams, with type: cbf.tied_array_channelised_voltage.  The stream names ending in x are
@@ -277,16 +259,16 @@ class FbfMasterController(AsyncDeviceServer):
                                       If using katportalclient to get information from CAM, then reconnect and re-subscribe to all sensors
                                       of interest at this time.
 
-        @param      proxy_name        The CAM name for the instance of the FBFUSE data proxy that is being configured.
-                                      For example, "FBFUSE_3".  This can be used to query sensors on the correct proxy,
+        @param      proxy_name        The CAM name for the instance of the APSUSE data proxy that is being configured.
+                                      For example, "APSUSE_3".  This can be used to query sensors on the correct proxy,
                                       in the event that there are multiple instances in the same subarray.
 
-        @note       A configure call will result in the generation of a new subarray instance in FBFUSE that will be added to the clients list.
+        @note       A configure call will result in the generation of a new subarray instance in APSUSE that will be added to the clients list.
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
 
-        msg = ("Configuring new FBFUSE product",
+        msg = ("Configuring new APSUSE product",
             "Product ID: {}".format(product_id),
             "Antennas: {}".format(antennas_csv),
             "Nchannels: {}".format(n_channels),
@@ -322,11 +304,10 @@ class FbfMasterController(AsyncDeviceServer):
         except KeyError as error:
             return ("fail", "JSON streams object does not contain required key: {}".format(str(error)))
 
-        for key, value in streams['cbf.antenna_channelised_voltage'].items():
+        for key in streams['cbf.antenna_channelised_voltage'].keys():
             if key.endswith('.antenna-channelised-voltage'):
                 instrument_name, _ = key.split('.')
                 feng_stream_name = key
-                feng_groups = value
                 log.debug("Parsed instrument name from streams: {}".format(instrument_name))
                 break
         else:
@@ -368,14 +349,16 @@ class FbfMasterController(AsyncDeviceServer):
                 'sideband':sideband,
                 'feng-antenna-map':feng_antenna_map
             }
+            feng_groups = ip_range_from_stream(feng_stream_name)
+
             for key, value in feng_config.items():
                 log.debug("{}: {}".format(key, value))
-            product = FbfProductController(self, product_id, observers, n_channels,
+            product = ApsProductController(self, product_id, observers, n_channels,
                 feng_groups, proxy_name, feng_config)
             self._products[product_id] = product
             self._update_products_sensor()
             req.reply("ok",)
-            log.debug("Configured FBFUSE instance with ID: {}".format(product_id))
+            log.debug("Configured APSUSE instance with ID: {}".format(product_id))
         self.ioloop.add_callback(configure)
         raise AsyncReply
 
@@ -383,9 +366,9 @@ class FbfMasterController(AsyncDeviceServer):
     @return_reply()
     def request_deconfigure(self, req, product_id):
         """
-        @brief      Deconfigure the FBFUSE instance.
+        @brief      Deconfigure the APSUSE instance.
 
-        @note       Deconfigure the FBFUSE instance. If FBFUSE uses katportalclient to get information
+        @note       Deconfigure the APSUSE instance. If APSUSE uses katportalclient to get information
                     from CAM, then it should disconnect at this time.
 
         @param      req               A katcp request object
@@ -395,7 +378,7 @@ class FbfMasterController(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]
         """
-        log.info("Deconfiguring FBFUSE instace with ID '{}'".format(product_id))
+        log.info("Deconfiguring APSUSE instace with ID '{}'".format(product_id))
         # Test if product exists
         try:
             product = self._get_product(product_id)
@@ -415,7 +398,7 @@ class FbfMasterController(AsyncDeviceServer):
     @coroutine
     def request_target_start(self, req, product_id, target):
         """
-        @brief      Notify FBFUSE that a new target is being observed
+        @brief      Notify APSUSE that a new target is being observed
 
         @param      product_id      This is a name for the data product, used to track which subarray is being deconfigured.
                                     For example "array_1_bc856M4k".
@@ -444,7 +427,7 @@ class FbfMasterController(AsyncDeviceServer):
     @coroutine
     def request_target_stop(self, req, product_id):
         """
-        @brief      Notify FBFUSE that the telescope has stopped observing a target
+        @brief      Notify APSUSE that the telescope has stopped observing a target
 
         @param      product_id      This is a name for the data product, used to track which subarray is being deconfigured.
                                     For example "array_1_bc856M4k".
@@ -475,7 +458,7 @@ class FbfMasterController(AsyncDeviceServer):
     @return_reply()
     def request_capture_start(self, req, product_id):
         """
-        @brief      Request that FBFUSE start beams streaming
+        @brief      Request that APSUSE start beams streaming
 
         @detail     Upon this call the provided coherent and incoherent beam configurations will be evaluated
                     to determine if they are physical and can be met with the existing hardware. If the configurations
@@ -507,7 +490,7 @@ class FbfMasterController(AsyncDeviceServer):
     @return_reply()
     def request_provision_beams(self, req, product_id, sb_id):
         """
-        @brief      Request that FBFUSE asynchronously prepare to start beams streaming
+        @brief      Request that APSUSE asynchronously prepare to start beams streaming
 
         @detail     Upon this call the provided coherent and incoherent beam configurations will be evaluated
                     to determine if they are physical and can be met with the existing hardware. If the configurations
@@ -549,7 +532,7 @@ class FbfMasterController(AsyncDeviceServer):
     @return_reply()
     def request_capture_stop(self, req, product_id):
         """
-        @brief      Stop FBFUSE streaming
+        @brief      Stop APSUSE streaming
 
         @param      product_id      This is a name for the data product, used to track which subarray is being deconfigured.
                                     For example "array_1_bc856M4k".
@@ -572,7 +555,7 @@ class FbfMasterController(AsyncDeviceServer):
         @brief     Set the configuration authority for an FBF product
 
         @detail    The parameters passed here specify the address of a server that
-                   can be triggered to provide FBFUSE with configuration information
+                   can be triggered to provide APSUSE with configuration information
                    at schedule block and target boundaries. The configuration authority
                    must be a valid KATCP server.
         """
@@ -712,7 +695,7 @@ class FbfMasterController(AsyncDeviceServer):
     @return_reply()
     def request_set_default_target_configuration(self, req, product_id, target):
         """
-        @brief      Set the configuration of FBFUSE from the FBFUSE configuration server
+        @brief      Set the configuration of APSUSE from the APSUSE configuration server
 
         @param      product_id      This is a name for the data product, used to track which subarray is being deconfigured.
                                     For example "array_1_bc856M4k".
@@ -745,12 +728,12 @@ class FbfMasterController(AsyncDeviceServer):
     @return_reply()
     def request_set_default_sb_configuration(self, req, product_id, sb_id):
         """
-        @brief      Set the configuration of FBFUSE from the FBFUSE configuration server
+        @brief      Set the configuration of APSUSE from the APSUSE configuration server
 
         @param      product_id      This is a name for the data product, used to track which subarray is being deconfigured.
                                     For example "array_1_bc856M4k".
 
-        @param      sb_id           The schedule block ID. Decisions of the configuarion of FBFUSE will be made dependent on
+        @param      sb_id           The schedule block ID. Decisions of the configuarion of APSUSE will be made dependent on
                                     the configuration of the current subarray, the primary and secondary science projects
                                     active and the targets expected to be visted during the execution of the schedule block.
         """
@@ -793,8 +776,8 @@ def main():
         logger=logger)
     logging.getLogger('katcp').setLevel('INFO')
     ioloop = tornado.ioloop.IOLoop.current()
-    log.info("Starting FbfMasterController instance")
-    server = FbfMasterController(opts.host, opts.port, dummy=opts.dummy)
+    log.info("Starting ApsMasterController instance")
+    server = ApsMasterController(opts.host, opts.port, dummy=opts.dummy)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
     def start_and_display():

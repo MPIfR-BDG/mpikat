@@ -49,6 +49,10 @@ class FbfConfigurationManager(object):
         if self.effective_nantennas < MIN_ANTENNAS:
             self.effective_nantennas = MIN_ANTENNAS
         self.nchans_per_worker = self.total_nchans / self.effective_nantennas
+        self.nchans_per_group = self.nchans_per_worker // 4
+        self.bandwidth_per_group = self.nchans_per_group * self.total_bandwidth / self.total_nchans
+        self.bandwidth_per_worker = self.bandwidth_per_group * 4
+        self.channel_bandwidth = self.total_bandwidth / self.total_nchans
 
     def _get_minimum_required_workers(self, nchans):
         return int(ceil(nchans / float(self.nchans_per_worker)))
