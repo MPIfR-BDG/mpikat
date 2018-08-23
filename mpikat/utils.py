@@ -19,6 +19,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+import subprocess
 from katcp import Sensor
 
 class AntennaValidationError(Exception):
@@ -61,3 +62,12 @@ class LoggingSensor(Sensor):
 
     def set_logger(self, logger):
         self.logger = logger
+
+def check_ntp_sync():
+    output = subprocess.check_output(['timedatectl','status'])
+    for line in output.splitlines():
+        if line.startswith("NTP synchronized"):
+            if line.split(":")[-1].strip().lower() == "yes":
+                return True
+    return False
+

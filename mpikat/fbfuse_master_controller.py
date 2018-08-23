@@ -35,7 +35,7 @@ from katcp import Sensor, Message, AsyncDeviceServer, KATCPClientResource, Async
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from katportalclient import KATPortalClient
 from katpoint import Antenna, Target
-from mpikat.master_controller import MasterController
+from mpikat.master_controller import MasterController, ProductLookupError, ProductExistsError
 from mpikat.ip_manager import IpRangeManager, ip_range_from_stream
 from mpikat.katportalclient_wrapper import KatportalClientWrapper
 from mpikat.fbfuse_worker_wrapper import FbfWorkerPool
@@ -51,11 +51,6 @@ lock = Lock()
 
 FBF_IP_RANGE = "spead://239.11.1.0+127:7147"
 
-class ProductLookupError(Exception):
-    pass
-
-class ProductExistsError(Exception):
-    pass
 
 class FbfMasterController(MasterController):
     """This is the main KATCP interface for the FBFUSE

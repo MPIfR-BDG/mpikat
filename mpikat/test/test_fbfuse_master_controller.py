@@ -33,7 +33,7 @@ from urllib2 import urlopen, URLError
 from StringIO import StringIO
 from tornado.ioloop import IOLoop
 from tornado.gen import coroutine, Return, sleep
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.testing import gen_test
 from katpoint import Antenna, Target
 from katcp import AsyncReply
 from katcp.testutils import mock_req, handle_mock_req
@@ -44,19 +44,11 @@ from mpikat import (
     FbfWorkerWrapper
     )
 from mpikat.katportalclient_wrapper import KatportalClientWrapper
-from mpikat.test.utils import MockFbfConfigurationAuthority
+from mpikat.test.utils import MockFbfConfigurationAuthority, AsyncServerTester
 from mpikat.ip_manager import ContiguousIpRange, ip_range_from_stream
 
 root_logger = logging.getLogger('')
 root_logger.setLevel(logging.CRITICAL)
-
-
-def type_converter(value):
-    try: return int(value)
-    except: pass
-    try: return float(value)
-    except: pass
-    return value
 
 class MockKatportalClientWrapper(mock.Mock):
     @coroutine
@@ -92,7 +84,7 @@ class MockKatportalClientWrapper(mock.Mock):
         raise Return((5109318.841, 2006836.367, -3238921.775))
 
 
-class TestFbfMasterController(AsyncTestCase):
+class TestFbfMasterController(AsyncServerTester):
     DEFAULT_STREAMS = ('{"cam.http": {"camdata": "http://10.8.67.235/api/client/1"}, '
         '"cbf.antenna_channelised_voltage": {"i0.antenna-channelised-voltage": '
         '"spead://239.2.1.150+15:7148"}}')
@@ -125,53 +117,6 @@ class TestFbfMasterController(AsyncTestCase):
         req = mock_req('configure', product_name, antennas, nchans, streams_json, proxy_name)
         reply,informs = yield handle_mock_req(self.server, req)
         #mpikat.KatportalClientWrapper = KatportalClientWrapper
-        raise Return((reply, informs))
-
-    @coroutine
-    def _get_sensor_reading(self, sensor_name):
-        req = mock_req('sensor-value', sensor_name)
-        reply,informs = yield handle_mock_req(self.server, req)
-        self.assertTrue(reply.reply_ok(), msg=reply)
-        status, value = informs[0].arguments[-2:]
-        value = type_converter(value)
-        raise Return((status, value))
-
-    @coroutine
-    def _check_sensor_value(self, sensor_name, expected_value, expected_status='nominal', tolerance=None):
-        #Test that the products sensor has been updated
-        status, value = yield self._get_sensor_reading(sensor_name)
-        value = type_converter(value)
-        self.assertEqual(status, expected_status)
-        if not tolerance:
-            self.assertEqual(value, expected_value)
-        else:
-            max_value = value + value*tolerance
-            min_value = value - value*tolerance
-            self.assertTrue((value<=max_value) and (value>=min_value))
-
-    @coroutine
-    def _check_sensor_exists(self, sensor_name):
-        #Test that the products sensor has been updated
-        req = mock_req('sensor-list', sensor_name)
-        reply,informs = yield handle_mock_req(self.server, req)
-        raise Return(reply.reply_ok())
-
-    @coroutine
-    def _send_request_expect_ok(self, request_name, *args):
-        if request_name == 'configure':
-            reply, informs = yield self._configure_helper(*args)
-        else:
-            reply,informs = yield handle_mock_req(self.server, mock_req(request_name, *args))
-        self.assertTrue(reply.reply_ok(), msg=reply)
-        raise Return((reply, informs))
-
-    @coroutine
-    def _send_request_expect_fail(self, request_name, *args):
-        if request_name == 'configure':
-            reply, informs = yield self._configure_helper(*args)
-        else:
-            reply,informs = yield handle_mock_req(self.server, mock_req(request_name, *args))
-        self.assertFalse(reply.reply_ok(), msg=reply)
         raise Return((reply, informs))
 
     @gen_test

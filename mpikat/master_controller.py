@@ -24,10 +24,19 @@ import json
 import tornado
 import time
 from tornado.gen import Return, coroutine
+from tornado.ioloop import PeriodicCallback
 from katcp import Sensor, AsyncDeviceServer
 from katcp.kattypes import request, return_reply, Int, Str
 from mpikat.katportalclient_wrapper import KatportalClientWrapper
-from mpikat.exceptions import ProductLookupError, ProductExistsError
+from mpikat.utils import check_ntp_sync
+
+NTP_CALLBACK_PERIOD = 60 * 5 # 5 minutes
+
+class ProductLookupError(Exception):
+    pass
+
+class ProductExistsError(Exception):
+    pass
 
 # ?halt message means shutdown everything and power off all machines
 log = logging.getLogger("mpikat.master_controller")
@@ -92,7 +101,7 @@ class MasterController(AsyncDeviceServer):
             description="Health status of FBFUSE",
             params=self.DEVICE_STATUSES,
             default="ok",
-            initial_status=Sensor.UNKNOWN)
+            initial_status=Sensor.NOMINAL)
         self.add_sensor(self._device_status)
 
         self._local_time_synced = Sensor.boolean(
@@ -101,6 +110,19 @@ class MasterController(AsyncDeviceServer):
             default=True,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._local_time_synced)
+
+        def ntp_callback():
+            try:
+                synced = check_ntp_sync()
+            except Exception as error:
+                log.exception("Unable to check NTP sync")
+                self._local_time_synced.set_value(False)
+            else:
+                if not synced:
+                    log.warning("Server is not NTP synced")
+                self._local_time_synced.set_value(synced)
+        self._ntp_callback = PeriodicCallback(ntp_callback, NTP_CALLBACK_PERIOD)
+        self._ntp_callback.start()
 
         self._products_sensor = Sensor.string(
             "products",
