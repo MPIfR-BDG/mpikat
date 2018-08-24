@@ -1,8 +1,11 @@
+import mock
+import re
 from tornado.gen import coroutine, Return
 from tornado.testing import AsyncTestCase
 from katcp.testutils import mock_req, handle_mock_req
 from katpoint import Target
 from mpikat.fbfuse_ca_server import BaseFbfConfigurationAuthority
+
 
 class MockFbfConfigurationAuthority(BaseFbfConfigurationAuthority):
     def __init__(self, host, port):
@@ -25,6 +28,40 @@ class MockFbfConfigurationAuthority(BaseFbfConfigurationAuthority):
     @coroutine
     def get_sb_config(self, proxy_id, sb_id):
         raise Return(self.sb_return_values[(proxy_id, sb_id)])
+
+
+class MockKatportalClientWrapper(mock.Mock):
+    @coroutine
+    def get_observer_string(self, antenna):
+        if re.match("^[mM][0-9]{3}$", antenna):
+            raise Return("{}, -30:42:39.8, 21:26:38.0, 1035.0, 13.5".format(antenna))
+        else:
+            raise SensorNotFoundError("No antenna named {}".format(antenna))
+
+    @coroutine
+    def get_antenna_feng_id_map(self, instrument_name, antennas):
+        ant_feng_map = {antenna:ii for ii,antenna in enumerate(antennas)}
+        raise Return(ant_feng_map)
+
+    @coroutine
+    def get_bandwidth(self, stream):
+        raise Return(856e6)
+
+    @coroutine
+    def get_cfreq(self, stream):
+        raise Return(1.28e9)
+
+    @coroutine
+    def get_sideband(self, stream):
+        raise Return("upper")
+
+    @coroutine
+    def get_sync_epoch(self):
+        raise Return(1532530856)
+
+    @coroutine
+    def get_itrf_reference(self):
+        raise Return((5109318.841, 2006836.367, -3238921.775))
 
 
 def type_converter(value):

@@ -26,9 +26,9 @@ import time
 from copy import deepcopy
 from tornado.gen import coroutine, Return
 from katcp import Sensor, Message, KATCPClientResource
-from katpoint import  Target
+from katpoint import  Target, Antenna
 from mpikat.fbfuse_beam_manager import BeamManager
-from mpikat.fbfuse_delay_engine import DelayEngine
+from mpikat.fbfuse_delay_configuration_server import DelayConfigurationServer
 from mpikat.fbfuse_config import FbfConfigurationManager
 from mpikat.ip_manager import ip_range_from_stream
 from mpikat.utils import parse_csv_antennas, LoggingSensor
@@ -87,7 +87,7 @@ class FbfProductController(object):
         self._feng_config = feng_config
         self._servers = []
         self._beam_manager = None
-        self._delay_engine = None
+        self._delay_config_server = None
         self._ca_client = None
         self._previous_sb_config = None
         self._managed_sensors = []
@@ -170,9 +170,25 @@ class FbfProductController(object):
         self._available_antennas_sensor = Sensor.string(
             "available-antennas",
             description = "The antennas that are currently available for beamforming",
-            default = self._antennas,
+            default = json.dumps({antenna.name:antenna.format_katcp() for antenna in self._katpoint_antennas}),
             initial_status = Sensor.NOMINAL)
         self.add_sensor(self._available_antennas_sensor)
+
+        self._phase_reference_sensor = Sensor.string(
+            "phase-reference",
+            description="A KATPOINT target string denoting the F-engine phasing centre",
+            default="unset,radec,0,0",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._phase_reference_sensor)
+
+        reference_antenna = Antenna("reference,{ref.lat},{ref.lon},{ref.elev}".format(
+            ref=self._katpoint_antennas[0].ref_observer))
+        self._reference_antenna_sensor = Sensor.string(
+            "reference-antenna",
+            description="A KATPOINT antenna string denoting the reference antenna",
+            default=reference_antenna.format_katcp(),
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._reference_antenna_sensor)
 
         self._bandwidth_sensor = Sensor.float(
             "bandwidth",
@@ -314,13 +330,12 @@ class FbfProductController(object):
             initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._nservers_per_set_sensor)
 
-        self._delay_engine_sensor = Sensor.string(
-            "delay-engines",
-            description = "The addresses of the delay engines serving this product",
+        self._delay_config_server_sensor = Sensor.string(
+            "delay-config-server",
+            description = "The address of the delay configuration server for this product",
             default = "",
             initial_status = Sensor.UNKNOWN)
-        self.add_sensor(self._delay_engine_sensor)
-        self._parent.mass_inform(Message.inform('interface-changed'))
+        self.add_sensor(self._delay_config_server_sensor)
 
     def teardown_sensors(self):
         """
@@ -423,9 +438,9 @@ class FbfProductController(object):
         self._cbc_mcast_groups = None
         self._ibc_mcast_group = None
         self._servers = []
-        if self._delay_engine:
-            self._delay_engine.stop()
-            self._delay_engine = None
+        if self._delay_config_server:
+            self._delay_config_server.stop()
+            self._delay_config_server = None
         self._beam_manager = None
 
     def set_error_state(self, message):
@@ -565,6 +580,7 @@ class FbfProductController(object):
 
     @coroutine
     def target_start(self, target):
+        self._phase_reference_sensor.set_value(target)
         if self._ca_client:
             yield self.get_ca_target_configuration(target)
         else:
@@ -608,11 +624,11 @@ class FbfProductController(object):
         cbc_antennas_names = parse_csv_antennas(self._cbc_antennas_sensor.value())
         cbc_antennas = [self._antenna_map[name] for name in cbc_antennas_names]
         self._beam_manager = BeamManager(self._cbc_nbeams_sensor.value(), cbc_antennas)
-        self._delay_engine = DelayEngine("127.0.0.1", 0, self._beam_manager)
-        self._delay_engine.start()
-        self.log.info("Started delay engine at: {}".format(self._delay_engine.bind_address))
-        de_ip, de_port = self._delay_engine.bind_address
-        self._delay_engine_sensor.set_value((de_ip, de_port))
+        self._delay_config_server = DelayConfigurationServer("127.0.0.1", 0, self._beam_manager)
+        self._delay_config_server.start()
+        self.log.info("Started delay engine at: {}".format(self._delay_config_server.bind_address))
+        de_ip, de_port = self._delay_config_server.bind_address
+        self._delay_config_server_sensor.set_value((de_ip, de_port))
 
         # Need to tear down the beam sensors here
         # Here calculate the beam to multicast map
@@ -664,9 +680,10 @@ class FbfProductController(object):
         for ii, (server, ip_range) in enumerate(zip(self._servers, ip_splits)):
             chan0_idx = cm.nchans_per_worker * ii
             chan0_freq =  fbottom + chan0_idx * cm.channel_bandwidth
-            future = server.prepare(ip_range.format_katcp(), cm.nchans_per_group, chan0_idx, chan0_freq,
-                        cm.channel_bandwidth, mcast_to_beam_map, self._feng_config['feng-antenna-map'],
-                        coherent_beam_config, incoherent_beam_config, de_ip, de_port)
+            future = server.prepare(ip_range.format_katcp(), cm.nchans_per_group,
+                        chan0_idx, chan0_freq, cm.channel_bandwidth, mcast_to_beam_map,
+                        self._feng_config['feng-antenna-map'], coherent_beam_config,
+                        incoherent_beam_config, de_ip, de_port)
             prepare_futures.append(future)
 
         failure_count = 0

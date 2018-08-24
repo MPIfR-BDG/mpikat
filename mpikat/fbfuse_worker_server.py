@@ -1,197 +1,40 @@
+"""
+Copyright (c) 2018 Ewan Barr <ebarr@mpifr-bonn.mpg.de>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
 import logging
 import json
 import tornado
 import signal
-import posix_ipc
-import ctypes
 import time
-import numpy as np
-from mmap import mmap
-from threading import Lock
 from subprocess import Popen, PIPE, check_call
 from optparse import OptionParser
-from tornado.gen import coroutine, Return
+from tornado.gen import coroutine, Return, sleep
 from katcp import Sensor, AsyncDeviceServer, AsyncReply, KATCPClientResource
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from mpikat.ip_manager import ip_range_from_stream
 from mpikat.fbfuse_mkrecv_config import make_mkrecv_header
+from mpikat.fbfuse_delay_buffer_controller import DelayBufferController
 from mpikat.utils import LoggingSensor, parse_csv_antennas
 
 log = logging.getLogger("mpikat.fbfuse_worker_server")
-
-lock = Lock()
-
-"""
-The FbfWorkerServer wraps deployment of the FBFUSE beamformer.
-This covers both NUMA nodes on one machine and so the configuration
-should be based on the full capabilities of a node.
-It performs the following:
-    - Registration with the FBFUSE master controller
-    - Receives configuration information
-    - Initialises necessary DADA buffers
-    - JIT compilation of beamformer kernels
-    - Starts SPEAD transmitters
-        - Needs to know output beam ordering
-        - Needs to know output multicast groups
-        - Combine this under a beam to multicast map
-        - Generate cfg file for transmitter
-    - Starts beamformer
-    - Starts SPEAD receiver
-        - Generate cfg file for receiver that includes fengine order
-    - Maintains a share memory buffer with delay polynomials
-        - Common to all beanfarmer instances running on the node
-    - Samples incoming data stream for monitoring purposes
-    - Provides sensors relating to beamformer performance (TBD, could just sample beamformer stdout)
-"""
-
-class DelayBufferController(object):
-    def __init__(self, delay_engine, ordered_beams, ordered_antennas, nreaders):
-        """
-        @brief    Controls shared memory delay buffers that are accessed by one or more
-                  beamformer instances.
-
-        @params   delay_engine       A KATCPResourceClient connected to an FBFUSE delay engine server
-        @params   nbeams             The number of coherent beams to expect from the delay engine
-        @params   nantennas          The number of antennas to expect from the delay engine
-        @params   nreaders           The number of posix shared memory readers that will access the memory
-                                     buffers that are managed by this instance.
-        """
-        self._nreaders = nreaders
-        self._delay_engine = delay_engine
-        self._beam_antenna_map = {}
-        self._ordered_antennas = ordered_antennas
-        self._ordered_beams = ordered_beams
-
-        nbeams = len(ordered_beams)
-        nantennas = len(ordered_antennas)
-
-        idx = 0
-        for beam in ordered_beams:
-            for antenna in ordered_antennas:
-                self._beam_antenna_map[(beam, antenna)] = idx
-                idx += 1
-        self._delays_array = self._delays = np.rec.recarray(nbeams * nantennas,
-            dtype=[
-            ("delay_rate","float32"),("delay_offset","float32")
-            ])
-        as_bytes = self._delays_array.tobytes()
-
-        self.shared_buffer_key = "delay_buffer"
-        self.mutex_semaphore_key = "delay_buffer_mutex"
-        self.counting_semaphore_key = "delay_buffer_count"
-
-        # Try to remove any previous buffers with these names:
-        try:
-            posix_ipc.unlink_semaphore(self.counting_semaphore_key)
-        except posix_ipc.ExistentialError:
-            pass
-        try:
-            posix_ipc.unlink_semaphore(self.mutex_semaphore_key)
-        except posix_ipc.ExistentialError:
-            pass
-        try:
-            posix_ipc.unlink_shared_memory(self.shared_buffer_key)
-        except posix_ipc.ExistentialError:
-            pass
-
-        # This semaphore is required to protect access to the shared_buffer
-        # so that it is not read and written simultaneously
-        # The value is set to two such that two processes can read simultaneously
-        log.info("Creating mutex semaphore, key='{}'".format(self.mutex_semaphore_key))
-        self._mutex_semaphore = posix_ipc.Semaphore(
-            self.mutex_semaphore_key,
-            flags=posix_ipc.O_CREX,
-            initial_value=self._nreaders)
-
-        # This semaphore is used to notify beamformer instances of a change to the
-        # delay models. Upon any change its value is simply incremented by one.
-        log.info("Creating counting semaphore, key='{}'".format(self.counting_semaphore_key))
-        self._counting_semaphore = posix_ipc.Semaphore(self.counting_semaphore_key,
-            flags=posix_ipc.O_CREX,
-            initial_value=0)
-
-        # This is the share memory buffer that contains the delay models for the
-        log.info("Creating shared memory, key='{}'".format(self.shared_buffer_key))
-        self._shared_buffer = posix_ipc.SharedMemory(
-            self.shared_buffer_key,
-            flags=posix_ipc.O_CREX,
-            size=len(as_bytes))
-        self._shared_buffer_mmap = mmap(self._shared_buffer.fd, self._shared_buffer.size)
-
-        log.info("Regestering delay model update callback")
-        self._delay_engine.sensor.delays.set_sampling_strategy('event')
-        self._delay_engine.sensor.delays.register_listener(self._safe_update)
-
-    def __del__(self):
-        log.info("Deregestering delay model update callback")
-        self._delay_engine.sensor.delays.unregister_listener(self._safe_update)
-        log.info("Removing shared memory, key='{}'".format(self.shared_buffer_key))
-        self._shared_buffer.fd_close()
-        self._shared_buffer_mmap.close()
-        self._shared_buffer.remove()
-        log.info("Removing counting semaphore, key='{}'".format(self.counting_semaphore_key))
-        self._counting_semaphore.remove()
-        log.info("Removing mutex semaphore, key='{}'".format(self.mutex_semaphore_key))
-        self._mutex_semaphore.remove()
-
-    def _safe_update(self, rt, t, status, value):
-        try:
-            self._update(rt, t, status, value)
-        except Exception as error:
-            log.exception("Failure detected during delays update")
-
-    def _update(self, rt, t, status, value):
-        # This is a sensor callback to be triggered on
-        # the change of the delay models
-        log.debug("Delay model update triggered - rt:{}, t:{}, status:{}".format(rt,t,status))
-        if status == Sensor.STATUSES[Sensor.UNKNOWN]:
-            return
-        log.debug("Delay model value: {}".format(value))
-        log.debug("Delay model size: {} bytes".format(len(value)))
-
-        start_time = time.time()
-        try:
-            model = json.loads(value)
-        except Exception as error:
-            log.exception("Failed to parse delay model JSON: {}".format(value))
-            return
-
-        beams = model["beams"]
-        antennas = model["antennas"]
-        reorder = [self._ordered_antennas.index(ant) for ant in antennas]
-        log.debug("Reordering mapping: {}".format(reorder))
-
-
-        delays = np.array(model["model"], dtype="float32")
-        delays = delays[:,(reorder),:]
-
-        end_time = time.time()
-        duration = end_time - start_time
-        log.debug("Parsing JSON delays took {} seconds on worker side".format(duration))
-
-        # Acquire the semaphore for each possible reader
-        log.debug("Acquiring semaphore for each reader")
-        for ii in range(self._nreaders):
-            self._mutex_semaphore.acquire()
-
-        # Update the schared memory with the newly acquired model
-        log.debug("Writing delay model to shared memory buffer")
-        self._shared_buffer_mmap.seek(0)
-        self._shared_buffer_mmap.write(delays.tobytes())
-
-        # Increment the counting semaphore to notify the readers
-        # that a new model is available
-        log.debug("Incrementing counting semaphore")
-        self._counting_semaphore.release()
-
-        # Release the semaphore for each reader
-        log.debug("Releasing semaphore for each reader")
-        for ii in range(self._nreaders):
-            self._mutex_semaphore.release()
-        end_time = time.time()
-        duration = end_time - start_time
-        log.debug("Delay model update took {} seconds on worker side".format(duration))
-
 
 class FbfWorkerServer(AsyncDeviceServer):
     VERSION_INFO = ("fbf-control-server-api", 0, 1)
@@ -210,7 +53,10 @@ class FbfWorkerServer(AsyncDeviceServer):
         @params  de_port  The port number for the delay engine server
 
         """
-        self._delay_engine = None
+        self._dc_ip = None
+        self._dc_port = None
+        self._delay_client = None
+        self._delay_client = None
         self._delays = None
         self._dummy = dummy
         self._dada_input_key = 0xdada
@@ -218,9 +64,15 @@ class FbfWorkerServer(AsyncDeviceServer):
         self._dada_incoh_output_key = 0xbaba
         super(FbfWorkerServer, self).__init__(ip,port)
 
+    @coroutine
     def start(self):
         """Start FbfWorkerServer server"""
         super(FbfWorkerServer,self).start()
+
+    @coroutine
+    def stop(self):
+        yield self.deregister()
+        yield super(FbfWorkerServer,self).stop()
 
     def setup_sensors(self):
         """
@@ -255,12 +107,12 @@ class FbfWorkerServer(AsyncDeviceServer):
         self._state_sensor.set_logger(log)
         self.add_sensor(self._state_sensor)
 
-        self._delay_engine_sensor = Sensor.string(
+        self._delay_client_sensor = Sensor.string(
             "delay-engine-server",
             description = "The address of the currently set delay engine",
             default = "",
             initial_status = Sensor.UNKNOWN)
-        self.add_sensor(self._delay_engine_sensor)
+        self.add_sensor(self._delay_client_sensor)
 
         self._antenna_capture_order_sensor = Sensor.string(
             "antenna-capture-order",
@@ -276,6 +128,37 @@ class FbfWorkerServer(AsyncDeviceServer):
             initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._mkrecv_header_sensor)
 
+    @property
+    def capturing(self):
+        return self.state == self.CAPTURING
+
+    @property
+    def idle(self):
+        return self.state == self.IDLE
+
+    @property
+    def starting(self):
+        return self.state == self.STARTING
+
+    @property
+    def stopping(self):
+        return self.state == self.STOPPING
+
+    @property
+    def ready(self):
+        return self.state == self.READY
+
+    @property
+    def preparing(self):
+        return self.state == self.PREPARING
+
+    @property
+    def error(self):
+        return self.state == self.ERROR
+
+    @property
+    def state(self):
+        return self._state_sensor.value()
 
     def _system_call_wrapper(self, cmd):
         log.debug("System call: '{}'".format(" ".join(cmd)))
@@ -283,7 +166,6 @@ class FbfWorkerServer(AsyncDeviceServer):
             log.debug("Server is running in dummy mode, system call will be ignored")
         else:
             check_call(cmd)
-
 
     def _determine_feng_capture_order(self, antenna_to_feng_id_map, coherent_beam_config, incoherent_beam_config):
         # Need to sort the f-engine IDs into 4 states
@@ -325,7 +207,7 @@ class FbfWorkerServer(AsyncDeviceServer):
     @return_reply()
     def request_prepare(self, req, feng_groups, nchans_per_group, chan0_idx, chan0_freq,
                         chan_bw, mcast_to_beam_map, feng_config, coherent_beam_config,
-                        incoherent_beam_config, de_ip, de_port):
+                        incoherent_beam_config, dc_ip, dc_port):
         """
         @brief      Prepare FBFUSE to receive and process data from a subarray
 
@@ -389,12 +271,11 @@ class FbfWorkerServer(AsyncDeviceServer):
                                               }
                                            @endcode
 
-        @params  de_ip    The IP address of the delay engine server
-
-        @params  de_port  The port number for the delay engine server
-
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
+        if not self.idle:
+            return ("fail", "FBF worker not in IDLE state")
+
         log.info("Preparing worker server instance")
         try:
             feng_config = json.loads(feng_config)
@@ -413,18 +294,15 @@ class FbfWorkerServer(AsyncDeviceServer):
         except Exception as error:
             return ("fail", "Unable to parse incoherent beam config with error: {}".format(str(error)))
 
-        @tornado.gen.coroutine
+        @coroutine
         def configure():
             self._state_sensor.set_value(self.PREPARING)
-
-            log.debug("Starting delay engine client")
-            self._delay_engine = KATCPClientResource(dict(
-                name="delay-engine-client",
-                address=(de_ip, de_port),
-                controlled=False))
-            self._delay_engine.start()
-            self._delay_engine_sensor.set_value("{}:{}".format(de_ip, de_port))
-            yield self._delay_engine.until_synced()
+            log.debug("Starting delay configuration server client")
+            self._delay_client = KATCPClientResource(dict(
+                name="delay-configuration-client",
+                address=(dc_ip, dc_port),
+                controlled=True))
+            self._delay_client.start()
 
             log.debug("Determining F-engine capture order")
             feng_capture_order_info = self._determine_feng_capture_order(feng_config['feng-antenna-map'], coherent_beam_config,
@@ -530,9 +408,10 @@ class FbfWorkerServer(AsyncDeviceServer):
             if not self._dummy:
                 n_coherent_beams = len(coherent_beam_to_group_map)
                 coherent_beam_antennas = parse_csv_antennas(coherent_beam_config['antennas'])
-                self._delay_buffer_controller = DelayBufferController(self._delay_engine,
+                self._delay_buffer_controller = DelayBufferController(self._delay_client,
                     coherent_beam_to_group_map.keys(),
                     coherent_beam_antenna_capture_order, 1)
+                yield self._delay_buffer_controller.start()
             # Start beamformer instance
             # TBD
 
@@ -564,7 +443,7 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         # Need to delete all allocated DADA buffers:
 
-        @tornado.gen.coroutine
+        @coroutine
         def deconfigure():
             log.info("Destroying dada buffer for input with key '{}'".format(self._dada_input_key))
             self._system_call_wrapper(["dada_db","-k",self._dada_input_key,"-d"])
@@ -595,7 +474,8 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !capture-init ok | (fail [error description]) ]]]
         """
-
+        if not self.ready:
+            return ("fail", "FBF worker not in READY state")
         # Here we start MKRECV running into the input dada buffer
         self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
         return ("ok",)
@@ -616,8 +496,10 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !capture-done ok | (fail [error description]) ]]]
         """
+        if not self.capturing and not self.error:
+            return ("ok",)
 
-        @tornado.gen.coroutine
+        @coroutine
         def stop_mkrecv_capture():
             #send SIGTERM to MKRECV
             log.info("Sending SIGTERM to MKRECV process")
@@ -631,7 +513,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                     log.info("MKRECV returned a return value of {}".format(retval))
                     break
                 else:
-                    time.sleep(0.5)
+                    yield sleep(0.5)
             else:
                 log.warning("MKRECV failed to terminate in alloted time")
                 log.info("Killing MKRECV process")
@@ -641,7 +523,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         raise AsyncReply
 
 
-@tornado.gen.coroutine
+@coroutine
 def on_shutdown(ioloop, server):
     log.info("Shutting down server")
     yield server.stop()

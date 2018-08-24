@@ -3,7 +3,7 @@ from .fbfuse_master_controller import FbfMasterController
 from .fbfuse_product_controller import FbfProductController
 from .fbfuse_worker_server import FbfWorkerServer
 #from .fbfuse_worker_server import FbfWorkerServer
+from .fbfuse_delay_configuration_server import DelayConfigurationServer
 from .fbfuse_ca_server import BaseFbfConfigurationAuthority, DefaultConfigurationAuthority
-from .fbfuse_delay_engine import DelayEngine
 from .fbfuse_beam_manager import BeamManager
 from .fbfuse_worker_wrapper import FbfWorkerWrapper, FbfWorkerPool

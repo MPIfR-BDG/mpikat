@@ -44,45 +44,11 @@ from mpikat import (
     FbfWorkerWrapper
     )
 from mpikat.katportalclient_wrapper import KatportalClientWrapper
-from mpikat.test.utils import MockFbfConfigurationAuthority, AsyncServerTester
+from mpikat.test.utils import MockFbfConfigurationAuthority, AsyncServerTester, MockKatportalClientWrapper
 from mpikat.ip_manager import ContiguousIpRange, ip_range_from_stream
 
 root_logger = logging.getLogger('')
 root_logger.setLevel(logging.CRITICAL)
-
-class MockKatportalClientWrapper(mock.Mock):
-    @coroutine
-    def get_observer_string(self, antenna):
-        if re.match("^[mM][0-9]{3}$", antenna):
-            raise Return("{}, -30:42:39.8, 21:26:38.0, 1035.0, 13.5".format(antenna))
-        else:
-            raise SensorNotFoundError("No antenna named {}".format(antenna))
-
-    @coroutine
-    def get_antenna_feng_id_map(self, instrument_name, antennas):
-        ant_feng_map = {antenna:ii for ii,antenna in enumerate(antennas)}
-        raise Return(ant_feng_map)
-
-    @coroutine
-    def get_bandwidth(self, stream):
-        raise Return(856e6)
-
-    @coroutine
-    def get_cfreq(self, stream):
-        raise Return(1.28e9)
-
-    @coroutine
-    def get_sideband(self, stream):
-        raise Return("upper")
-
-    @coroutine
-    def get_sync_epoch(self):
-        raise Return(1532530856)
-
-    @coroutine
-    def get_itrf_reference(self):
-        raise Return((5109318.841, 2006836.367, -3238921.775))
-
 
 class TestFbfMasterController(AsyncServerTester):
     DEFAULT_STREAMS = ('{"cam.http": {"camdata": "http://10.8.67.235/api/client/1"}, '
@@ -108,15 +74,8 @@ class TestFbfMasterController(AsyncServerTester):
 
     @coroutine
     def _configure_helper(self, product_name, antennas, nchans, streams_json, proxy_name):
-        #Patching isn't working here for some reason (maybe pathing?), the
-        #hack solution is to manually switch to the Mock for the portal
-        #client. TODO: Fix the structure of the code so that this can be
-        #patched properly
-        #Test that a valid configure call goes through
-        #mpikat.KatportalClientWrapper = MockKatportalClientWrapper
         req = mock_req('configure', product_name, antennas, nchans, streams_json, proxy_name)
         reply,informs = yield handle_mock_req(self.server, req)
-        #mpikat.KatportalClientWrapper = KatportalClientWrapper
         raise Return((reply, informs))
 
     @gen_test

@@ -30,7 +30,7 @@ from katcp.kattypes import request, return_reply, Int, Str
 from mpikat.katportalclient_wrapper import KatportalClientWrapper
 from mpikat.utils import check_ntp_sync
 
-NTP_CALLBACK_PERIOD = 60 * 5 # 5 minutes
+NTP_CALLBACK_PERIOD = 60 * 5 * 1000 # 5 minutes (in milliseconds)
 
 class ProductLookupError(Exception):
     pass

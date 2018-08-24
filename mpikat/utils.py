@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 import subprocess
+import time
 from katcp import Sensor
 
 class AntennaValidationError(Exception):
@@ -70,4 +71,14 @@ def check_ntp_sync():
             if line.split(":")[-1].strip().lower() == "yes":
                 return True
     return False
+
+class Timer(object):
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self._start = time.time()
+
+    def elapsed(self):
+        return time.time() - self._start
 
