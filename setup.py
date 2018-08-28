@@ -13,7 +13,9 @@ setup(name='mpikat',
           'katcp',
           'ipaddress',
           'katportalclient',
-          'mosaic'
+          'mosaic',
+          'posix_ipc',
+          'jinja2'
       ],
       dependency_links=[
           'git+https://github.com/ska-sa/katportalclient.git',
