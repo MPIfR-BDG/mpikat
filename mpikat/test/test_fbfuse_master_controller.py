@@ -72,11 +72,11 @@ class TestFbfMasterController(AsyncServerTester):
         for ii in range(n):
             self.server._server_pool.add(str(base_ip+ii), 5000)
 
-    @coroutine
-    def _configure_helper(self, product_name, antennas, nchans, streams_json, proxy_name):
-        req = mock_req('configure', product_name, antennas, nchans, streams_json, proxy_name)
-        reply,informs = yield handle_mock_req(self.server, req)
-        raise Return((reply, informs))
+    #@coroutine
+    #def _configure_helper(self, product_name, antennas, nchans, streams_json, proxy_name):
+    #    req = mock_req('configure', product_name, antennas, nchans, streams_json, proxy_name)
+    #    reply,informs = yield handle_mock_req(self.server, req)
+    #    raise Return((reply, informs))
 
     @gen_test
     def test_product_lookup_errors(self):
@@ -90,8 +90,6 @@ class TestFbfMasterController(AsyncServerTester):
         yield self._send_request_expect_fail('set-default-sb-configuration', 'test', '')
         yield self._send_request_expect_fail('add-beam', 'test', '')
         yield self._send_request_expect_fail('add-tiling', 'test', '', 0, 0, 0, 0)
-        yield self._send_request_expect_fail('configure-coherent-beams', 'test', 0, '', 0, 0)
-        yield self._send_request_expect_fail('configure-incoherent-beam', 'test', '', 0, 0)
 
     @gen_test
     def test_configure_start_stop_deconfigure(self):

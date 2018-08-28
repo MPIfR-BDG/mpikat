@@ -89,5 +89,6 @@ class TestKatPortalClientWrapper(AsyncTestCase):
     def test_get_sync_epoch(self):
         value = yield self.kpc.get_sync_epoch()
 
+
 if __name__ == '__main__':
     unittest.main(buffer=True)

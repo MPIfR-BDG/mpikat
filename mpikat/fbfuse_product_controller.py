@@ -116,7 +116,7 @@ class FbfProductController(object):
         out = {
             "antennas":self._antennas,
             "nservers":len(self.servers),
-            "capturing":self.capturing,
+            "state":self.state,
             "streams":self._streams,
             "nchannels":self._n_channels,
             "proxy_name":self._proxy_name
@@ -336,6 +336,7 @@ class FbfProductController(object):
             default = "",
             initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._delay_config_server_sensor)
+        self._parent.mass_inform(Message.inform('interface-changed'))
 
     def teardown_sensors(self):
         """

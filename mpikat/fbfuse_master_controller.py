@@ -348,18 +348,6 @@ class FbfMasterController(MasterController):
 
     @request(Str())
     @return_reply()
-    def request_capture_init(self, req, product_id):
-        """NOOP"""
-        return ("ok",)
-
-    @request(Str())
-    @return_reply()
-    def request_capture_done(self, req, product_id):
-        """NOOP"""
-        return ("ok",)
-
-    @request(Str())
-    @return_reply()
     def request_capture_start(self, req, product_id):
         """
         @brief      Request that FBFUSE start beams streaming
@@ -574,26 +562,6 @@ class FbfMasterController(MasterController):
             return ("fail", str(error))
         tiling = product.add_tiling(target, nbeams, reference_frequency, overlap, epoch)
         return ("ok", tiling.idxs())
-
-    @request()
-    @return_reply(Int())
-    def request_product_list(self, req):
-        """
-        @brief      List all currently registered products and their states
-
-        @param      req               A katcp request object
-
-        @note       The details of each product are provided via an #inform
-                    as a JSON string containing information on the product state.
-
-        @return     katcp reply object [[[ !product-list ok | (fail [error description]) <number of configured products> ]]],
-        """
-        for product_id,product in self._products.items():
-            info = {}
-            info[product_id] = product.info()
-            as_json = json.dumps(info)
-            req.inform(as_json)
-        return ("ok",len(self._products))
 
     @request(Str(), Str())
     @return_reply()

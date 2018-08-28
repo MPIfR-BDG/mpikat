@@ -29,7 +29,6 @@ class MockFbfConfigurationAuthority(BaseFbfConfigurationAuthority):
     def get_sb_config(self, proxy_id, sb_id):
         raise Return(self.sb_return_values[(proxy_id, sb_id)])
 
-
 class MockKatportalClientWrapper(mock.Mock):
     @coroutine
     def get_observer_string(self, antenna):
@@ -63,6 +62,40 @@ class MockKatportalClientWrapper(mock.Mock):
     def get_itrf_reference(self):
         raise Return((5109318.841, 2006836.367, -3238921.775))
 
+
+class MockFbfKatportalMonitor(mock.Mock):
+    DEFAULTS = {
+        "available-antennas": "m007,m008",
+        "phase-reference": "unset, radec, 0.0, 0.0",
+        "bandwidth": 856000000.0,
+        "nchannels": 4096,
+        "centre-frequency": 1270000000.0,
+        "coherent-beam-count": 32,
+        "coherent-beam-count-per-group": 16,
+        "coherent-beam-ngroups": 2,
+        "coherent-beam-tscrunch": 16,
+        "coherent-beam-fscrunch": 1,
+        "coherent-beam-antennas": "m007,m008",
+        "coherent-beam-multicast-groups": "spead://239.11.2.150+1:7147",
+        "coherent-beam-multicast-group-mapping": "{}",
+        "incoherent-beam-count": 1,
+        "incoherent-beam-tscrunch": 16,
+        "incoherent-beam-fscrunch": 1,
+        "incoherent-beam-antennas": "m007,m008",
+        "incoherent-beam-multicast-group": "spead://239.11.2.152:7147"
+        }
+
+    @coroutine
+    def get_sb_config(self):
+        raise Return(self.DEFAULTS)
+
+    @coroutine
+    def subscribe_to_beams(self):
+        pass
+
+    @coroutine
+    def unsubscribe_from_beams(self):
+        pass
 
 def type_converter(value):
     try: return int(value)
@@ -109,19 +142,13 @@ class AsyncServerTester(AsyncTestCase):
 
     @coroutine
     def _send_request_expect_ok(self, request_name, *args):
-        if request_name == 'configure':
-            reply, informs = yield self._configure_helper(*args)
-        else:
-            reply,informs = yield handle_mock_req(self.server, mock_req(request_name, *args))
+        reply,informs = yield handle_mock_req(self.server, mock_req(request_name, *args))
         self.assertTrue(reply.reply_ok(), msg=reply)
         raise Return((reply, informs))
 
     @coroutine
     def _send_request_expect_fail(self, request_name, *args):
-        if request_name == 'configure':
-            reply, informs = yield self._configure_helper(*args)
-        else:
-            reply,informs = yield handle_mock_req(self.server, mock_req(request_name, *args))
+        reply,informs = yield handle_mock_req(self.server, mock_req(request_name, *args))
         self.assertFalse(reply.reply_ok(), msg=reply)
         raise Return((reply, informs))
 
