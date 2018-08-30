@@ -110,7 +110,6 @@ class MasterController(AsyncDeviceServer):
             default=True,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._local_time_synced)
-
         def ntp_callback():
             try:
                 synced = check_ntp_sync()
@@ -121,6 +120,7 @@ class MasterController(AsyncDeviceServer):
                 if not synced:
                     log.warning("Server is not NTP synced")
                 self._local_time_synced.set_value(synced)
+        ntp_callback()
         self._ntp_callback = PeriodicCallback(ntp_callback, NTP_CALLBACK_PERIOD)
         self._ntp_callback.start()
 
