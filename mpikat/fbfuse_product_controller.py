@@ -279,7 +279,7 @@ class FbfProductController(object):
             "coherent-beam-multicast-groups-data-rate",
             description = "The data rate in each coherent beam multicast group",
             default = 0.0,
-            units = "bits/s",
+            unit = "bits/s",
             initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._cbc_mcast_group_data_rate_sensor)
 
