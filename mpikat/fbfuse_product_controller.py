@@ -322,7 +322,7 @@ class FbfProductController(object):
             "incoherent-beam-multicast-group-data-rate",
             description = "The data rate in the incoherent beam multicast group",
             default = 0.0,
-            units = "bits/s",
+            unit = "bits/s",
             initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._ibc_mcast_group_data_rate_sensor)
 
