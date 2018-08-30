@@ -233,7 +233,9 @@ class FbfConfigurationManager(object):
             "num_workers_per_set":min_num_workers,
             "num_worker_sets":num_worker_sets_to_be_used,
             "num_workers_total":num_worker_sets_to_be_used*min_num_workers,
-            "num_beams_per_worker_set": num_beams_per_worker_set
+            "num_beams_per_worker_set": num_beams_per_worker_set,
+            "data_rate_per_group": rate_per_beam * max_valid_nbeam_per_mcast,
+            "used_bandwidth": bandwidth
         }
         log.info("Final coniguration: {}".format(config))
         return config

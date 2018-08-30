@@ -128,7 +128,7 @@ class MasterController(AsyncDeviceServer):
             "products",
             description="The names of the currently configured products",
             default="",
-            initial_status=Sensor.UNKNOWN)
+            initial_status=Sensor.NOMINAL)
         self.add_sensor(self._products_sensor)
 
     def _update_products_sensor(self):

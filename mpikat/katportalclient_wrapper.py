@@ -104,11 +104,13 @@ class FbfKatportalMonitor(KatportalClientWrapper):
         "coherent-beam-antennas",
         "coherent-beam-multicast-groups",
         "coherent-beam-multicast-group-mapping",
+        "coherent-beam-multicast-groups-data-rate",
         "incoherent-beam-count",
         "incoherent-beam-tscrunch",
         "incoherent-beam-fscrunch",
         "incoherent-beam-antennas",
-        "incoherent-beam-multicast-group"
+        "incoherent-beam-multicast-group",
+        "incoherent-beam-multicast-group-data-rate",
     ]
 
     def __init__(self, host, product_id):
