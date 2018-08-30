@@ -64,13 +64,33 @@ class LoggingSensor(Sensor):
     def set_logger(self, logger):
         self.logger = logger
 
-def check_ntp_sync():
+def check_ntp_sync_timedatectl():
     output = subprocess.check_output(['timedatectl','status'])
     for line in output.splitlines():
         if line.startswith("NTP synchronized"):
             if line.split(":")[-1].strip().lower() == "yes":
                 return True
     return False
+
+def check_ntp_sync_ntpstat():
+    try:
+        subprocess.check_call(['ntpstat'])
+    except subprocess.CalledProcessError:
+        return False
+    else:
+        return True
+
+def check_ntp_sync():
+    methods = [check_ntp_sync_timedatectl,
+               check_ntp_sync_ntpstat]
+    for method in methods:
+        try:
+            return method()
+        except:
+            continue
+    else:
+        return False
+
 
 class Timer(object):
     def __init__(self):
