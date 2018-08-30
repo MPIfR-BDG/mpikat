@@ -93,6 +93,7 @@ class FbfProductController(object):
         self._managed_sensors = []
         self._ibc_mcast_group = None
         self._cbc_mcast_groups = None
+        self._current_configuration = None
         self._default_sb_config = {
             u'coherent-beams-nbeams':400,
             u'coherent-beams-tscrunch':16,
@@ -274,6 +275,14 @@ class FbfProductController(object):
             initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._cbc_mcast_groups_mapping_sensor)
 
+        self._cbc_mcast_group_data_rate_sensor = Sensor.float(
+            "coherent-beam-multicast-groups-data-rate",
+            description = "The data rate in each coherent beam multicast group",
+            default = 0.0,
+            units = "bits/s",
+            initial_status = Sensor.UNKNOWN)
+        self.add_sensor(self._cbc_mcast_group_data_rate_sensor)
+
         self._ibc_nbeams_sensor = Sensor.integer(
             "incoherent-beam-count",
             description = "The number of incoherent beams that this FBF instance can currently produce",
@@ -308,6 +317,14 @@ class FbfProductController(object):
             default = "",
             initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._ibc_mcast_group_sensor)
+
+        self._ibc_mcast_group_data_rate_sensor = Sensor.float(
+            "incoherent-beam-multicast-group-data-rate",
+            description = "The data rate in the incoherent beam multicast group",
+            default = 0.0,
+            units = "bits/s",
+            initial_status = Sensor.UNKNOWN)
+        self.add_sensor(self._ibc_mcast_group_data_rate_sensor)
 
         self._servers_sensor = Sensor.string(
             "servers",
@@ -492,7 +509,7 @@ class FbfProductController(object):
         """
         if self._previous_sb_config == config_dict:
             self.log.info("Configuration is unchanged, proceeding with existing configuration")
-            return
+            return self._current_configuration
         else:
             self._previous_sb_config = config_dict
         self.reset_sb_configuration()
@@ -529,12 +546,17 @@ class FbfProductController(object):
         self._cbc_nbeams_per_group.set_value(mcast_config['num_beams_per_mcast_group'])
         self._cbc_ngroups.set_value(mcast_config['num_mcast_groups'])
         self._cbc_nbeams_per_server_set.set_value(mcast_config['num_beams_per_worker_set'])
+        self._cbc_mcast_group_data_rate_sensor.set_value(mcast_config['data_rate_per_group'])
         self._cbc_tscrunch_sensor.set_value(config['coherent-beams-tscrunch'])
         self._cbc_fscrunch_sensor.set_value(config['coherent-beams-fscrunch'])
         self._cbc_antennas_sensor.set_value(config['coherent-beams-antennas'])
         self._ibc_tscrunch_sensor.set_value(config['incoherent-beam-tscrunch'])
         self._ibc_fscrunch_sensor.set_value(config['incoherent-beam-fscrunch'])
         self._ibc_antennas_sensor.set_value(config['incoherent-beam-antennas'])
+        # This doesn't really belong here
+        ibc_group_rate = (mcast_config['used_bandwidth'] / config['incoherent-beam-tscrunch']
+            / config['coherent-beams-fscrunch'] * 8)
+        self._ibc_mcast_group_data_rate_sensor.set_value(ibc_group_rate)
         self._servers = self._parent._server_pool.allocate(mcast_config['num_workers_total'])
         server_str = ",".join(["{s.hostname}:{s.port}".format(s=server) for server in self._servers])
         self._servers_sensor.set_value(server_str)
@@ -542,6 +564,7 @@ class FbfProductController(object):
         self._nservers_per_set_sensor.set_value(mcast_config['num_workers_per_set'])
         self._cbc_mcast_groups = self._parent._ip_pool.allocate(mcast_config['num_mcast_groups'])
         self._cbc_mcast_groups_sensor.set_value(self._cbc_mcast_groups.format_katcp())
+        self._current_configuration = cm
         return cm
 
     @coroutine
