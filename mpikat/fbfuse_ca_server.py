@@ -83,6 +83,7 @@ class BaseFbfConfigurationAuthority(AsyncDeviceServer):
                     the CA server to look up parameters on the unconfigured product
                     from the FBFUSE sensor set through katportalclient
         """
+        log.info("Received SB configuration request for '{}' and schedule block: {}".format(product_id, sb_id))
         if product_id in self._configuration_sensors:
             self.remove_sensor(self._configuration_sensors[product_id])
             del self._configuration_sensors[product_id]
@@ -104,12 +105,14 @@ class BaseFbfConfigurationAuthority(AsyncDeviceServer):
         @param      product_id     The product identifier
         @param      target_string  A KATPOINT target string (boresight pointing position)
         """
+        log.info("Received target configuration request for '{}' with target: {}".format(product_id, target_string))
         if not product_id in self._configuration_sensors:
+            log.debug("Creating configuration sensor for '{}'".format(product_id))
             self._configuration_sensors[product_id] = Sensor.string(
                 "{}-beam-position-configuration".format(product_id),
                 description="Configuration description for FBF beam placement",
                 default="",
-                initial_status=Sensor.NOMINAL)
+                initial_status=Sensor.UNKNOWN)
             self.add_sensor(self._configuration_sensors[product_id])
             self.mass_inform(Message.inform('interface-changed'))
         initial_config = yield self.get_target_config(product_id, target_string)
@@ -122,6 +125,7 @@ class BaseFbfConfigurationAuthority(AsyncDeviceServer):
         raise NotImplemented
 
     def update_target_config(self, product_id, config):
+        log.debug("Updating target config on '{}' with config: {}".format(product_id, config))
         self._configuration_sensors[product_id].set_value(json.dumps(config))
 
 
