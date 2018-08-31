@@ -23,6 +23,7 @@ import logging
 import json
 import tornado
 import signal
+import time
 from tornado.gen import Return
 from optparse import OptionParser
 from katcp import Sensor, Message, AsyncDeviceServer
