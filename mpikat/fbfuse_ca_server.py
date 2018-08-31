@@ -144,7 +144,7 @@ class DefaultConfigurationAuthority(BaseFbfConfigurationAuthority):
     @tornado.gen.coroutine
     def get_target_config(self, product_id, target):
         # Return just a boresight beam
-        raise Return({"beams":[target],})
+        raise Return({"beams":[target]})
 
     @tornado.gen.coroutine
     def get_sb_config(self, product_id, sb_id):
