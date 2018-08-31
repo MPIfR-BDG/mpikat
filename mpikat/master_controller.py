@@ -111,6 +111,7 @@ class MasterController(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._local_time_synced)
         def ntp_callback():
+            log.debug("Checking NTP sync")
             try:
                 synced = check_ntp_sync()
             except Exception as error:
