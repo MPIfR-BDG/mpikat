@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 import subprocess
+import os
 import time
 from katcp import Sensor
 
@@ -65,7 +66,8 @@ class LoggingSensor(Sensor):
         self.logger = logger
 
 def check_ntp_sync_timedatectl():
-    output = subprocess.check_output(['timedatectl','status'])
+    with open(os.devnull) as fnull:
+        output = subprocess.check_output(['timedatectl','status'], stdout=fnull, stderr=fnull)
     for line in output.splitlines():
         if line.startswith("NTP synchronized"):
             if line.split(":")[-1].strip().lower() == "yes":
@@ -74,7 +76,8 @@ def check_ntp_sync_timedatectl():
 
 def check_ntp_sync_ntpstat():
     try:
-        subprocess.check_call(['ntpstat'])
+        with open(os.devnull) as fnull:
+            subprocess.check_call(['ntpstat'], stdout=fnull, stderr=fnull)
     except subprocess.CalledProcessError:
         return False
     else:
