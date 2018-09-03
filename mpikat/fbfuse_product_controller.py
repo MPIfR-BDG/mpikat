@@ -118,7 +118,7 @@ class FbfProductController(object):
             "antennas":self._antennas,
             "nservers":len(self.servers),
             "state":self.state,
-            "streams":std(self._streams),
+            "streams":str(self._streams),
             "nchannels":self._n_channels,
             "proxy_name":self._proxy_name
         }
