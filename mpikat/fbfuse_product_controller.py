@@ -118,7 +118,7 @@ class FbfProductController(object):
             "antennas":self._antennas,
             "nservers":len(self.servers),
             "state":self.state,
-            "streams":self._streams,
+            "streams":std(self._streams),
             "nchannels":self._n_channels,
             "proxy_name":self._proxy_name
         }
@@ -448,6 +448,7 @@ class FbfProductController(object):
         except Exception as error:
             self.log.warning("Received error while attempting capture stop: {}".format(str(error)))
         self._parent._server_pool.deallocate(self._servers)
+        self._servers = []
 
         if self._ibc_mcast_group:
             self._parent._ip_pool.free(self._ibc_mcast_group)
@@ -455,7 +456,6 @@ class FbfProductController(object):
             self._parent._ip_pool.free(self._cbc_mcast_groups)
         self._cbc_mcast_groups = None
         self._ibc_mcast_group = None
-        self._servers = []
         if self._delay_config_server:
             self._delay_config_server.stop()
             self._delay_config_server = None
@@ -732,7 +732,13 @@ class FbfProductController(object):
         @detail This is the final cleanup operation for the product, it should delete all sensors
                 and ensure the release of all resource allocations.
         """
-        self.reset_sb_configuration()
+        try:
+            self.reset_sb_configuration()
+        except Exception as error:
+            if self._servers:
+                log.error("Warning servers are still allocated to this"
+                    " product that cannot be freed for future use.")
+            raise error
         self.teardown_sensors()
 
     def capture_start(self):

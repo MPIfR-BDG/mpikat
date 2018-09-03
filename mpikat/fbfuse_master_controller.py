@@ -291,7 +291,9 @@ class FbfMasterController(MasterController):
         try:
             product.deconfigure()
         except Exception as error:
-            return ("fail", str(error))
+            log.exception("Encountered error while deconfiguring product '{}'".format(product_id))
+            log.warning("Forcing product deconfigure. This action may have unintented consequences"
+                " if any worker servers are still allocated to the product")
         del self._products[product_id]
         self._update_products_sensor()
         return ("ok",)
