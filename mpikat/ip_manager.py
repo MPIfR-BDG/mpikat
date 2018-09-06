@@ -88,7 +88,7 @@ class ContiguousIpRange(object):
         @brief  Return a description of this IP range in a KATCP friendly format,
                 e.g. 'spead://239.11.1.150+15:7147'
         """
-        return "spead://{}+{}:{}".format(str(self._base_ip), self._count, self._port)
+        return "spead://{}+{}:{}".format(str(self._base_ip), self._count-1, self._port)
 
 
 class IpRangeManager(object):
