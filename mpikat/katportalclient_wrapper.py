@@ -26,9 +26,8 @@ from katportalclient import KATPortalClient
 log = logging.getLogger('mpikat.katportalclient_wrapper')
 
 class KatportalClientWrapper(object):
-    def __init__(self, host, sub_nr=1):
-        self._client = KATPortalClient('http://{host}/api/client/{sub_nr}'.format(
-            host=host, sub_nr=sub_nr),
+    def __init__(self, host):
+        self._client = KATPortalClient(host,
             on_update_callback=None, logger=logging.getLogger('katcp'))
 
     @coroutine
@@ -53,7 +52,6 @@ class KatportalClientWrapper(object):
             antenna_name = input_label.strip("vh").lower()
             if antenna_name.startswith("m") and antenna_name in antennas:
                 mapping[antenna_name] = input_index//2
-        print mapping
         raise Return(mapping)
 
     @coroutine

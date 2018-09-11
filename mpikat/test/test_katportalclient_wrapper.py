@@ -35,24 +35,26 @@ from mpikat.katportalclient_wrapper import KatportalClientWrapper
 root_logger = logging.getLogger('')
 root_logger.setLevel(logging.CRITICAL)
 
-PORTAL = "monctl.devnmk.camlab.kat.ac.za"
+PORTAL = "http://monctl.devnmk.camlab.kat.ac.za/api/client/1"
 
 class TestKatPortalClientWrapper(AsyncTestCase):
-    PORTAL = "monctl.devnmk.camlab.kat.ac.za"
     def setUp(self):
         super(TestKatPortalClientWrapper, self).setUp()
         try:
-            urlopen("http://{}".format(PORTAL))
+            urlopen(PORTAL)
         except URLError:
             raise unittest.SkipTest("No route to {}".format(PORTAL))
-        self.kpc = KatportalClientWrapper(PORTAL, sub_nr=1)
+        self.kpc = KatportalClientWrapper(PORTAL)
 
     def tearDown(self):
         super(TestKatPortalClientWrapper, self).tearDown()
 
     @gen_test(timeout=10)
     def test_get_observer_string(self):
-        value = yield self.kpc.get_observer_string('m001')
+        try:
+            value = yield self.kpc.get_observer_string('m001')
+        except:
+            raise unittest.SkipTest("m001 not available on current portal instance")
         try:
             Antenna(value)
         except Exception as error:

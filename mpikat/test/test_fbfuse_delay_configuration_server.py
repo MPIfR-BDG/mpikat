@@ -25,7 +25,7 @@ import os
 import unittest
 from tornado.testing import AsyncTestCase, gen_test
 from katpoint import Antenna, Target
-from mpikat import DelayEngine, BeamManager
+from mpikat import DelayConfigurationServer, BeamManager
 
 root_logger = logging.getLogger('')
 root_logger.setLevel(logging.CRITICAL)
@@ -35,23 +35,22 @@ with open(DEFAULT_ANTENNAS_FILE, "r") as f:
     DEFAULT_ANTENNAS = f.read().strip().splitlines()
 KATPOINT_ANTENNAS = [Antenna(i) for i in DEFAULT_ANTENNAS]
 
-class TestDelayEngine(AsyncTestCase):
+class TestDelayConfigurationServer(AsyncTestCase):
     def setUp(self):
-        super(TestDelayEngine, self).setUp()
+        super(TestDelayConfigurationServer, self).setUp()
 
     def tearDown(self):
-        super(TestDelayEngine, self).tearDown()
+        super(TestDelayConfigurationServer, self).tearDown()
 
     @gen_test
-    def test_delay_engine_startup(self):
+    def test_startup(self):
         bm = BeamManager(4, KATPOINT_ANTENNAS)
-        de = DelayEngine("127.0.0.1", 0, bm)
+        de = DelayConfigurationServer("127.0.0.1", 0, bm)
         de.start()
         bm.add_beam(Target('test_target0,radec,12:00:00,01:00:00'))
-        bm.add_beam(Target('test_target0,radec,12:00:00,01:00:00'))
-        bm.add_beam(Target('test_target0,radec,12:00:00,01:00:00'))
-        bm.add_beam(Target('test_target0,radec,12:00:00,01:00:00'))
-        de.update_delays()
+        bm.add_beam(Target('test_target1,radec,12:00:00,01:00:00'))
+        bm.add_beam(Target('test_target2,radec,12:00:00,01:00:00'))
+        bm.add_beam(Target('test_target3,radec,12:00:00,01:00:00'))
 
 if __name__ == '__main__':
     unittest.main(buffer=True)

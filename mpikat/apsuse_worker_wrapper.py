@@ -21,14 +21,13 @@ SOFTWARE.
 """
 
 import logging
-from tornado.gen import coroutine
 from katcp import KATCPClientResource
 from mpikat.worker_pool import WorkerPool, WorkerWrapper
 
-log = logging.getLogger("mpikat.fbfuse_worker_wrapper")
+log = logging.getLogger("mpikat.apsuse_worker_wrapper")
 
-class FbfWorkerWrapper(WorkerWrapper):
-    """Wrapper around a client to an FbfWorkerServer
+class ApsWorkerWrapper(WorkerWrapper):
+    """Wrapper around a client to an ApsWorkerServer
     instance.
     """
     def __init__(self, hostname, port):
@@ -38,12 +37,11 @@ class FbfWorkerWrapper(WorkerWrapper):
         @params hostname The hostname for the worker server
         @params port     The port number that the worker server serves on
         """
-        super(FbfWorkerWrapper, self).__init__(hostname, port)
+        super(ApsWorkerWrapper, self).__init__(hostname, port)
 
-    @coroutine
-    def prepare(self, *args, **kwargs):
-        pass
 
-class FbfWorkerPool(WorkerPool):
+
+
+class ApsWorkerPool(WorkerPool):
     def make_wrapper(self, hostname, port):
-        return FbfWorkerWrapper(hostname, port)
+        return ApsWorkerWrapper(hostname, port)

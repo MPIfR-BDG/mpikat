@@ -19,31 +19,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+class ProductLookupError(Exception):
+    pass
 
-import logging
-from tornado.gen import coroutine
-from katcp import KATCPClientResource
-from mpikat.worker_pool import WorkerPool, WorkerWrapper
-
-log = logging.getLogger("mpikat.fbfuse_worker_wrapper")
-
-class FbfWorkerWrapper(WorkerWrapper):
-    """Wrapper around a client to an FbfWorkerServer
-    instance.
-    """
-    def __init__(self, hostname, port):
-        """
-        @brief  Create a new wrapper around a client to a worker server
-
-        @params hostname The hostname for the worker server
-        @params port     The port number that the worker server serves on
-        """
-        super(FbfWorkerWrapper, self).__init__(hostname, port)
-
-    @coroutine
-    def prepare(self, *args, **kwargs):
-        pass
-
-class FbfWorkerPool(WorkerPool):
-    def make_wrapper(self, hostname, port):
-        return FbfWorkerWrapper(hostname, port)
+class ProductExistsError(Exception):
+    pass

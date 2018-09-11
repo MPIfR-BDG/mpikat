@@ -1,150 +1,47 @@
+"""
+Copyright (c) 2018 Ewan Barr <ebarr@mpifr-bonn.mpg.de>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
 import logging
 import json
 import tornado
 import signal
-import posix_ipc
-import ctypes
-from threading import Lock
+import time
 from subprocess import Popen, PIPE, check_call
 from optparse import OptionParser
-from katcp import Sensor, AsyncDeviceServer
-from katcp.kattypes import request, return_reply, Int, Str, Discrete
+from tornado.gen import coroutine, Return, sleep
+from katcp import Sensor, AsyncDeviceServer, AsyncReply, KATCPClientResource
+from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
+from mpikat.ip_manager import ip_range_from_stream
+from mpikat.fbfuse_mkrecv_config import make_mkrecv_header
+from mpikat.fbfuse_delay_buffer_controller import DelayBufferController
+from mpikat.utils import LoggingSensor, parse_csv_antennas
 
 log = logging.getLogger("mpikat.fbfuse_worker_server")
-
-lock = Lock()
-
-"""
-The FbfWorkerServer wraps deployment of the FBFUSE beamformer.
-This covers both NUMA nodes on one machine and so the configuration
-should be based on the full capabilities of a node.
-It performs the following:
-    - Registration with the FBFUSE master controller
-    - Receives configuration information
-    - Initialises necessary DADA buffers
-    - JIT compilation of beamformer kernels
-    - Starts SPEAD transmitters
-        - Needs to know output beam ordering
-        - Needs to know output multicast groups
-        - Combine this under a beam to multicast map
-        - Generate cfg file for transmitter
-    - Starts beamformer
-    - Starts SPEAD receiver
-        - Generate cfg file for receiver that includes fengine order
-    - Maintains a share memory buffer with delay polynomials
-        - Common to all beanfarmer instances running on the node
-    - Samples incoming data stream for monitoring purposes
-    - Provides sensors relating to beamformer performance (TBD, could just sample beamformer stdout)
-"""
-
-class DelayBufferController(object):
-    def __init__(self, delay_engine, nbeams, nantennas, nreaders):
-        """
-        @brief    Controls shared memory delay buffers that are accessed by one or more
-                  beamformer instances.
-
-        @params   delay_engine       A KATCPResourceClient connected to an FBFUSE delay engine server
-        @params   nbeams             The number of coherent beams to expect from the delay engine
-        @params   nantennas          The number of antennas to expect from the delay engine
-        @params   nreaders           The number of posix shared memory readers that will access the memory
-                                     buffers that are managed by this instance.
-        """
-        self._nreaders = nreaders
-        self._delay_engine = delay_engine
-        self._beam_antenna_map = {}
-        self._delays_array = self._delays = np.rec.recarray(nbeams * natennas,
-            dtype=[
-            ("delay_rate","float32"),("delay_offset","float32")
-            ])
-        as_bytes = self._delays_array.tobytes()
-
-        self.shared_buffer_key = "delay_buffer"
-        self.mutex_semaphore_key = "delay_buffer"
-        self.counting_semaphore_key = "delay_buffer_count"
-
-        # This semaphore is required to protect access to the shared_buffer
-        # so that it is not read and written simultaneously
-        # The value is set to two such that two processes can read simultaneously
-        log.info("Creating mutex semaphore, key='{}'".format(self.mutex_semaphore_key))
-        self._mutex_semaphore = posix_ipc.Semaphore(
-            self.mutex_semaphore_key,
-            flags=posix_ipc.O_CREX,
-            initial_value=self._nreaders)
-
-        # This semaphore is used to notify beamformer instances of a change to the
-        # delay models. Upon any change its value is simply incremented by one.
-        log.info("Creating counting semaphore, key='{}'".format(self.counting_semaphore_key))
-        self._counting_semaphore = posix_ipc.Semaphore(self.counting_semaphore_key,
-            flags=posix_ipc.O_CREX,
-            initial_value=0)
-
-        # This is the share memory buffer that contains the delay models for the
-        log.info("Creating shared memory, key='{}'".format(self.shared_buffer_key))
-        self._shared_buffer = posix_ipc.SharedMemory(
-            self.shared_buffer_key,
-            flags=posix_ipc.O_CREX,
-            size=len(as_bytes))
-
-        log.info("Regestering delay model update callback")
-        self._delay_engine.sensor.delay_model.set_sampling_strategy('event')
-        self._delay_engine.sensor.delay_model.register_listener(self._update)
-
-    def __del__(self):
-        log.info("Deregestering delay model update callback")
-        self._delay_engine.sensor.delay_model.unregister_listener(self._update)
-        log.info("Removing shared memory, key='{}'".format(self.shared_buffer_key))
-        self._shared_buffer.remove()
-        log.info("Removing counting semaphore, key='{}'".format(self.counting_semaphore_key))
-        self._counting_semaphore.remove()
-        log.info("Removing mutex semaphore, key='{}'".format(self.mutex_semaphore_key))
-        self._mutex_semaphore.remove()
-
-    def _update(self, rt, t, status, value):
-        # This is a sensor callback to be triggered on
-        # the change of the delay models
-
-        log.info("Delay model update triggered - rt:{}, t:{}, status:{}".format(rt,t,status))
-
-        try:
-            model = json.loads(value)
-        except Exception as error:
-            log.exception("Failed to parse delay model JSON: {}".format(value))
-
-        beams = model["beams"]
-        antennas = model["antennas"]
-        delays = model["model"]
-        for ii,beam in enumerate(beams):
-            for jj,antenna in enumerate(antennas):
-                rate = float(delays[ii,jj,0])
-                offset = float(delays[ii,jj,1])
-                self._delays_array[self._beam_antenna_map[(beam,antenna)]] = (rate, offset)
-
-        # Acquire the semaphore for each possible reader
-        log.debug("Acquiring semaphore for each reader")
-        for ii in range(self._nreaders):
-            self._mutex_semaphore.acquire()
-
-        # Update the schared memory with the newly acquired model
-        log.debug("Writing delay model to shared memory buffer")
-        self._shared_buffer.write(self._delays_array.tobytes())
-
-        # Increment the counting semaphore to notify the readers
-        # that a new model is available
-        log.debug("Incrementing counting semaphore")
-        self._counting_semaphore.release()
-
-        # Release the semaphore for each reader
-        log.debug("Releasing semaphore for each reader")
-        for ii in range(self._nreaders):
-            self._mutex_semaphore.release()
-
 
 class FbfWorkerServer(AsyncDeviceServer):
     VERSION_INFO = ("fbf-control-server-api", 0, 1)
     BUILD_INFO = ("fbf-control-server-implementation", 0, 1, "rc1")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
-    STATES = ["idle", "preparing", "ready", "starting", "capturing", "stopping"]
-    IDLE, PREPARING, READY, STARTING, CAPTURING, STOPPING = STATES
+    STATES = ["idle", "preparing", "ready", "starting", "capturing", "stopping", "error"]
+    IDLE, PREPARING, READY, STARTING, CAPTURING, STOPPING, ERROR = STATES
 
     def __init__(self, ip, port, dummy=False):
         """
@@ -156,16 +53,26 @@ class FbfWorkerServer(AsyncDeviceServer):
         @params  de_port  The port number for the delay engine server
 
         """
-        self._de_ip = None
-        self._de_port = None
-        self._delay_engine = None
+        self._dc_ip = None
+        self._dc_port = None
+        self._delay_client = None
+        self._delay_client = None
         self._delays = None
         self._dummy = dummy
+        self._dada_input_key = 0xdada
+        self._dada_coh_output_key = 0xcaca
+        self._dada_incoh_output_key = 0xbaba
         super(FbfWorkerServer, self).__init__(ip,port)
 
+    @coroutine
     def start(self):
         """Start FbfWorkerServer server"""
         super(FbfWorkerServer,self).start()
+
+    @coroutine
+    def stop(self):
+        yield self.deregister()
+        yield super(FbfWorkerServer,self).stop()
 
     def setup_sensors(self):
         """
@@ -188,170 +95,275 @@ class FbfWorkerServer(AsyncDeviceServer):
             description = "Health status of FbfWorkerServer instance",
             params = self.DEVICE_STATUSES,
             default = "ok",
-            initial_status = Sensor.UNKNOWN)
+            initial_status = Sensor.NOMINAL)
         self.add_sensor(self._device_status_sensor)
 
-        self._state_sensor = Sensor.discrete(
+        self._state_sensor = LoggingSensor.discrete(
             "state",
-            params = STATES,
+            params = self.STATES,
             description = "The current state of this worker instance",
             default = self.IDLE,
             initial_status = Sensor.NOMINAL)
+        self._state_sensor.set_logger(log)
         self.add_sensor(self._state_sensor)
 
-        self._delay_engine_sensor = Sensor.string(
+        self._delay_client_sensor = Sensor.string(
             "delay-engine-server",
             description = "The address of the currently set delay engine",
             default = "",
             initial_status = Sensor.UNKNOWN)
-        self.add_sensor(self._delay_engine_sensor)
+        self.add_sensor(self._delay_client_sensor)
 
+        self._antenna_capture_order_sensor = Sensor.string(
+            "antenna-capture-order",
+            description = "The order in which the worker will capture antennas internally",
+            default = "",
+            initial_status = Sensor.UNKNOWN)
+        self.add_sensor(self._antenna_capture_order_sensor)
+
+        self._mkrecv_header_sensor = Sensor.string(
+            "mkrecv-header",
+            description = "The MKRECV/DADA header used for configuring capture with MKRECV",
+            default = "",
+            initial_status = Sensor.UNKNOWN)
+        self.add_sensor(self._mkrecv_header_sensor)
+
+    @property
+    def capturing(self):
+        return self.state == self.CAPTURING
+
+    @property
+    def idle(self):
+        return self.state == self.IDLE
+
+    @property
+    def starting(self):
+        return self.state == self.STARTING
+
+    @property
+    def stopping(self):
+        return self.state == self.STOPPING
+
+    @property
+    def ready(self):
+        return self.state == self.READY
+
+    @property
+    def preparing(self):
+        return self.state == self.PREPARING
+
+    @property
+    def error(self):
+        return self.state == self.ERROR
+
+    @property
+    def state(self):
+        return self._state_sensor.value()
 
     def _system_call_wrapper(self, cmd):
         log.debug("System call: '{}'".format(" ".join(cmd)))
         if self._dummy:
-            log.debug("Server is running in dummy mode, system call will be ignored").
+            log.debug("Server is running in dummy mode, system call will be ignored")
         else:
             check_call(cmd)
 
+    def _determine_feng_capture_order(self, antenna_to_feng_id_map, coherent_beam_config, incoherent_beam_config):
+        # Need to sort the f-engine IDs into 4 states
+        # 1. Incoherent but not coherent
+        # 2. Incoherent and coherent
+        # 3. Coherent but not incoherent
+        # 4. Neither coherent nor incoherent
+        #
+        # We must catch all antennas as even in case 4 the data is required for the
+        # transient buffer.
+        #
+        # To make this split, we first create the three sets, coherent, incoherent and all.
+        mapping = antenna_to_feng_id_map
+        all_feng_ids = set(mapping.values())
+        coherent_feng_ids = set(mapping[antenna] for antenna in parse_csv_antennas(coherent_beam_config['antennas']))
+        incoherent_feng_ids = set(mapping[antenna] for antenna in parse_csv_antennas(incoherent_beam_config['antennas']))
+        incoh_not_coh = incoherent_feng_ids.difference(coherent_feng_ids)
+        incoh_and_coh = incoherent_feng_ids.intersection(coherent_feng_ids)
+        coh_not_incoh = coherent_feng_ids.difference(incoherent_feng_ids)
+        used_fengs = incoh_not_coh.union(incoh_and_coh).union(coh_not_incoh)
+        unused_fengs = all_feng_ids.difference(used_fengs)
+        # Output final order
+        final_order = list(incoh_not_coh) + list(incoh_and_coh) + list(coh_not_incoh) + list(unused_fengs)
+        start_of_incoherent_fengs = 0
+        end_of_incoherent_fengs = len(incoh_not_coh) + len(incoh_and_coh)
+        start_of_coherent_fengs = len(incoh_not_coh)
+        end_of_coherent_fengs = len(incoh_not_coh) + len(incoh_and_coh) + len(coh_not_incoh)
+        start_of_unused_fengs = end_of_coherent_fengs
+        end_of_unused_fengs = len(all_feng_ids)
+        info = {
+            "order": final_order,
+            "incoherent_span":(start_of_incoherent_fengs, end_of_incoherent_fengs),
+            "coherent_span":(start_of_coherent_fengs, end_of_coherent_fengs),
+            "unused_span":(start_of_unused_fengs, end_of_unused_fengs)
+        }
+        return info
 
-    # What arguments are required here (want to avoid KatportalClient usage):
-    # - mapping of multicast groups to beams
-    # - multicast groups to listen to for F-engine data (and frequencies?)
-    # - Delay engine should also be passed here
-    # - Information for beamformer compilation:
-    #   - The coherent and incoherent beam configurations
-    #   - Which antennas to use for the coherent/incoherent beamforming
-    #   - The F-engine ID for each antenna (from where?)
-    #   - The number of beams
-    #   - The number of output multicast groups
-    #   - The number of frequency channels being captured
-    # F-engine capture order can be determined here
-    # Beam output order must be determined at the master controller level
-    # Should pass configurations as some JSON object:
-    # {
-    #    'mode':'standard',
-    #    'coherent_beam_config':
-    #    {
-    #        'nbeams':1000,
-    #        'tscrunch':16,
-    #        'fscrunch':1,
-    #        'feng-ids':[0,1,2,3]
-    #    },
-    #    'incoherent_beam_config':
-    #    {
-    #        'tscrunch':16,
-    #        'fscrunch':1,
-    #        'feng-ids':[0,1,2,3,4,5,6]',
-    #    }
-    # }
-    #
-    # So refined set of arguments:
-    #
-    # streams_json:
-    #
-    # {
-    #     'f-engine':['239.1.1.150:7147',
-    #                 '239.1.1.151:7147',
-    #                 '239.1.1.152:7147',
-    #                 '239.1.1.153:7147'],
-    #     'coherent_beams':
-    #     {
-    #         '239.1.2.150:7147':'cfbf00001,cfbf00002',
-    #         '239.1.2.151:7147':'cfbf00003,cfbf00004',
-    #         '239.1.2.152:7147':'cfbf00005,cfbf00006',
-    #         '239.1.2.153:7147':'cfbf00007,cfbf00008',
-    #         '239.1.2.154:7147':'cfbf00009,cfbf00010',
-    #         '239.1.2.155:7147':'cfbf00011,cfbf00012',
-    #         '239.1.2.156:7147':'cfbf00013,cfbf00014',
-    #         '239.1.2.157:7147':'cfbf00015,cfbf00016',
-    #         '239.1.2.158:7147':'cfbf00017,cfbf00018',
-    #     },
-    #     'incoherent_beam': '239.1.3.150:7147'
-    # }
-    #
-    #
-    # Also need the index of the first channel in the set of F-engine
-    # groups that are being listened to
-
-
-
-
-    @request(Str(), Str(), Int(), Int(), Int())
+    @request(Str(), Int(), Int(), Float(), Float(), Str(), Str(), Str(), Str(), Str(), Int())
     @return_reply()
-    def request_prepare(self, req, mcast_groups_json, feng_ids_csv,
-        beam_feng_ids_csv, nbeams, nchannels, beams_to_mcast_map, antennas_to_feng_ids_map):
+    def request_prepare(self, req, feng_groups, nchans_per_group, chan0_idx, chan0_freq,
+                        chan_bw, mcast_to_beam_map, feng_config, coherent_beam_config,
+                        incoherent_beam_config, dc_ip, dc_port):
         """
         @brief      Prepare FBFUSE to receive and process data from a subarray
 
-        @detail     REQUEST ?configure product_id antennas_csv n_channels streams_json proxy_name
+        @detail     REQUEST ?configure feng_groups, nchans_per_group, chan0_idx, chan0_freq,
+                        chan_bw, mcast_to_beam_map, antenna_to_feng_id_map, coherent_beam_config,
+                        incoherent_beam_config
                     Configure FBFUSE for the particular data products
 
-        @param      req               A katcp request object
+        @param      req                 A katcp request object
 
-        @param      antennas_csv      A comma separated list of physical antenna names used in particular sub-array
-                                      to which the data products belongs.
+        @param      feng_groups         The contiguous range of multicast groups to capture F-engine data from,
+                                        the parameter is formatted in stream notation, e.g.: spead://239.11.1.150+3:7147
 
-        @param      n_channels        The integer number of frequency channels provided by the CBF.
+        @param      nchans_per_group    The number of frequency channels per multicast group
 
-        @param      streams_json      a JSON struct containing config keys and values describing the streams.
+        @param      chan0_idx           The index of the first channel in the set of multicast groups
 
-                                      For example:
+        @param      chan0_freq          The frequency in Hz of the first channel in the set of multicast groups
 
-                                      @code
-                                         {'stream_type1': {
-                                             'stream_name1': 'stream_address1',
-                                             'stream_name2': 'stream_address2',
-                                             ...},
-                                             'stream_type2': {
-                                             'stream_name1': 'stream_address1',
-                                             'stream_name2': 'stream_address2',
-                                             ...},
-                                          ...}
-                                      @endcode
+        @param      chan_bw             The channel bandwidth in Hz
 
-                                      The steam type keys indicate the source of the data and the type, e.g. cam.http.
-                                      stream_address will be a URI.  For SPEAD streams, the format will be spead://<ip>[+<count>]:<port>,
-                                      representing SPEAD stream multicast groups. When a single logical stream requires too much bandwidth
-                                      to accommodate as a single multicast group, the count parameter indicates the number of additional
-                                      consecutively numbered multicast group ip addresses, and sharing the same UDP port number.
-                                      stream_name is the name used to identify the stream in CAM.
-                                      A Python example is shown below, for five streams:
-                                      One CAM stream, with type cam.http.  The camdata stream provides the connection string for katportalclient
-                                      (for the subarray that this FBFUSE instance is being configured on).
-                                      One F-engine stream, with type:  cbf.antenna_channelised_voltage.
-                                      One X-engine stream, with type:  cbf.baseline_correlation_products.
-                                      Two beam streams, with type: cbf.tied_array_channelised_voltage.  The stream names ending in x are
-                                      horizontally polarised, and those ending in y are vertically polarised.
+        @param      mcast_to_beam_map   A JSON mapping between output multicast addresses and beam IDs. This is the sole
+                                        authority for the number of beams that will be produced and their indexes. The map
+                                        is in the form:
 
-                                      @code
-                                         pprint(streams_dict)
-                                         {'cam.http':
-                                             {'camdata':'http://10.8.67.235/api/client/1'},
-                                          'cbf.antenna_channelised_voltage':
-                                             {'i0.antenna-channelised-voltage':'spead://239.2.1.154+4:7148'},
-                                          'cbf.coherent_filterbanked_beam':
-                                             {'i0.coherent-filterbanked-beam':'spead://239.2.2.150+128:7148'},
-                                          'cbf.incoherent_filterbanked_beam':
-                                             {'i0.incoherent-filterbanked-beam':'spead://239.2.3.150:7148'},
-                                          ...}
-                                      @endcode
+                                        @code
+                                           {
+                                              "spead://239.11.2.150:7147":"cfbf00001,cfbf00002,cfbf00003,cfbf00004",
+                                              "spead://239.11.2.151:7147":"ifbf00001"
+                                           }
 
-                                      If using katportalclient to get information from CAM, then reconnect and re-subscribe to all sensors
-                                      of interest at this time.
+        @param      feng_config    JSON dictionary containing general F-engine parameters.
 
-        @note       A configure call will result in the generation of a new subarray instance in FBFUSE that will be added to the clients list.
+                                        @code
+                                           {
+                                              'bandwidth': 856e6,
+                                              'centre-frequency': 1200e6,
+                                              'sideband': 'upper',
+                                              'feng-antenna-map': {...},
+                                              'sync-epoch': 12353524243.0,
+                                              'nchans': 4096
+                                           }
+
+        @param      coherent_beam_config   A JSON object specifying the coherent beam configuration in the form:
+
+                                           @code
+                                              {
+                                                'tscrunch':16,
+                                                'fscrunch':1,
+                                                'antennas':'m007,m008,m009'
+                                              }
+                                           @endcode
+
+        @param      incoherent_beam_config  A JSON object specifying the incoherent beam configuration in the form:
+
+                                           @code
+                                              {
+                                                'tscrunch':16,
+                                                'fscrunch':1,
+                                                'antennas':'m007,m008,m009'
+                                              }
+                                           @endcode
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
-        @tornado.gen.coroutine
+        if not self.idle:
+            return ("fail", "FBF worker not in IDLE state")
+
+        log.info("Preparing worker server instance")
+        try:
+            feng_config = json.loads(feng_config)
+        except Exception as error:
+            return ("fail", "Unable to parse F-eng config with error: {}".format(str(error)))
+        try:
+            mcast_to_beam_map = json.loads(mcast_to_beam_map)
+        except Exception as error:
+            return ("fail", "Unable to parse multicast beam mapping with error: {}".format(str(error)))
+        try:
+            coherent_beam_config = json.loads(coherent_beam_config)
+        except Exception as error:
+            return ("fail", "Unable to parse coherent beam config with error: {}".format(str(error)))
+        try:
+            incoherent_beam_config = json.loads(incoherent_beam_config)
+        except Exception as error:
+            return ("fail", "Unable to parse incoherent beam config with error: {}".format(str(error)))
+
+        @coroutine
         def configure():
-            self._delay_engine = KATCPClientResource(dict(
-                name="delay-engine-client",
-                address=(de_ip, de_port),
-                controlled=False))
-            self._delay_engine.start()
-            self._delay_engine_sensor.set_value("{}:{}".format(de_ip, de_port))
+            self._state_sensor.set_value(self.PREPARING)
+            log.debug("Starting delay configuration server client")
+            self._delay_client = KATCPClientResource(dict(
+                name="delay-configuration-client",
+                address=(dc_ip, dc_port),
+                controlled=True))
+            self._delay_client.start()
+
+            log.debug("Determining F-engine capture order")
+            feng_capture_order_info = self._determine_feng_capture_order(feng_config['feng-antenna-map'], coherent_beam_config,
+                incoherent_beam_config)
+            log.debug("Capture order info: {}".format(feng_capture_order_info))
+            feng_to_antenna_map = {value:key for key,value in feng_config['feng-antenna-map'].items()}
+            antenna_capture_order_csv = ",".join([feng_to_antenna_map[feng_id] for feng_id in feng_capture_order_info['order']])
+            self._antenna_capture_order_sensor.set_value(antenna_capture_order_csv)
+
+            log.debug("Parsing F-engines to capture: {}".format(feng_groups))
+            capture_range = ip_range_from_stream(feng_groups)
+            ngroups = capture_range.count
+            partition_nchans = nchans_per_group * ngroups
+            partition_bandwidth = partition_nchans * chan_bw
+            npol = 2
+            ndim = 2
+            nbits = 8
+            tsamp = 1.0 / (feng_config['bandwidth'] / feng_config['nchans'])
+            sample_clock = feng_config['bandwidth'] * 2
+            timestamp_step =  feng_config['nchans'] * 2 * 256 # WARNING: This is only valid in 4k mode
+            frequency_ids = [chan0_idx+nchans_per_group*ii for ii in range(ngroups)] #WARNING: Assumes contigous groups
+            mkrecv_config = {
+                'frequency_mhz': (chan0_freq + feng_config['nchans']/2.0 * chan_bw) / 1e6,
+                'bandwidth': partition_bandwidth,
+                'tsamp_us': tsamp * 1e6,
+                'bytes_per_second': partition_bandwidth * npol * ndim * nbits,
+                'nchan': partition_nchans,
+                'dada_key': self._dada_input_key,
+                'nantennas': len(feng_capture_order_info['order']),
+                'antennas_csv': antenna_capture_order_csv,
+                'sync_epoch': feng_config['sync-epoch'],
+                'sample_clock': sample_clock,
+                'mcast_sources': ",".join([str(group) for group in capture_range]),
+                'mcast_port': capture_range.port,
+                'interface': "192.168.0.1",
+                'timestamp_step': timestamp_step,
+                'ordered_feng_ids_csv': ",".join(map(str, feng_capture_order_info['order'])),
+                'frequency_partition_ids_csv': ",".join(map(str,frequency_ids))
+            }
+            mkrecv_header = make_mkrecv_header(mkrecv_config)
+            self._mkrecv_header_sensor.set_value(mkrecv_header)
+            log.info("Determined MKRECV configuration:\n{}".format(mkrecv_header))
+
+
+            log.debug("Parsing beam to multicast mapping")
+            incoherent_beam = None
+            incoherent_beam_group = None
+            coherent_beam_to_group_map = {}
+            for group, beams in mcast_to_beam_map.items():
+                for beam in beams.split(","):
+                    if beam.startswith("cfbf"):
+                        coherent_beam_to_group_map[beam] = group
+                    if beam.startswith("ifbf"):
+                        incoherent_beam = beam
+                        incoherent_beam_group = group
+
+            log.debug("Determined coherent beam to multicast mapping: {}".format(coherent_beam_to_group_map))
+            if incoherent_beam:
+                log.debug("Incoherent beam will be sent to: {}".format(incoherent_beam_group))
+            else:
+                log.debug("No incoherent beam specified")
 
 
             """
@@ -359,32 +371,21 @@ class FbfWorkerServer(AsyncDeviceServer):
                 - compile kernels
                 - create shared memory banks
             """
-            # Parse feng ids
-            feng_ids = [int(idx) for idx in feng_ids_csv.split(",")]
-            beam_feng_ids = [int(idx) for idx in beam_feng_ids_csv.split(",")]
-
-            # This is the order in which different fengines should be captured by the capture code
-            # This is also then the order of the weights in the delay buffer for each beam
-            ordered_feng_ids = sorted(beam_feng_ids) + sorted(list((set(feng_ids) - set(beam_feng_ids))))
-
             # Compile beamformer
             # TBD
 
             # Need to come up with a good way to allocate keys for dada buffers
 
             # Create input DADA buffer
-            self._dada_input_key = 0xdada
-            log.info("Creating dada buffer for input with key '{}'".format(self._dada_input_key))
+            log.debug("Creating dada buffer for input with key '{}'".format("%x"%self._dada_input_key))
             #self._system_call_wrapper(["dada_db","-k",self._dada_input_key,"-n","64","-l","-p"])
 
             # Create coherent beam output DADA buffer
-            self._dada_coh_output_key = 0xcaca
-            log.info("Creating dada buffer for coherent beam output with key '{}'".format(self._dada_coh_output_key))
+            log.debug("Creating dada buffer for coherent beam output with key '{}'".format("%x"%self._dada_coh_output_key))
             #self._system_call_wrapper(["dada_db","-k",self._dada_coh_output_key,"-n","64","-l","-p"])
 
             # Create incoherent beam output DADA buffer
-            self._dada_incoh_output_key = 0xbaba
-            log.info("Creating dada buffer for incoherent beam output with key '{}'".format(self._dada_incoh_output_key))
+            log.debug("Creating dada buffer for incoherent beam output with key '{}'".format("%x"%self._dada_incoh_output_key))
             #self._system_call_wrapper(["dada_db","-k",self._dada_incoh_output_key,"-n","64","-l","-p"])
 
             # Create SPEAD transmitter for coherent beams
@@ -393,23 +394,34 @@ class FbfWorkerServer(AsyncDeviceServer):
             # Create SPEAD transmitter for incoherent beam
             # Call to MKSEND
 
+            # Need to pass the delay buffer controller the F-engine capture order but only for the coherent beams
+            cstart, cend = feng_capture_order_info['coherent_span']
+            coherent_beam_feng_capture_order = feng_capture_order_info['order'][cstart:cend]
+            coherent_beam_antenna_capture_order = [feng_to_antenna_map[idx] for idx in coherent_beam_feng_capture_order]
+
+
             # Start DelayBufferController instance
             # Here we are going to make the assumption that the server and processing all run in
             # one docker container that will be preallocated with the right CPU set, GPUs, memory
             # etc. This means that the configurations need to be unique by NUMA node... [Note: no
             # they don't, we can use the container IPC channel which isolates the IPC namespaces.]
-            self._delay_buffer_controller = DelayBufferController(self._delay_engine, nbeams,
-                len(beam_feng_ids), configuration_id, 1)
-
+            if not self._dummy:
+                n_coherent_beams = len(coherent_beam_to_group_map)
+                coherent_beam_antennas = parse_csv_antennas(coherent_beam_config['antennas'])
+                self._delay_buffer_controller = DelayBufferController(self._delay_client,
+                    coherent_beam_to_group_map.keys(),
+                    coherent_beam_antenna_capture_order, 1)
+                yield self._delay_buffer_controller.start()
             # Start beamformer instance
             # TBD
 
             # Define MKRECV configuration file
 
             # SPEAD receiver does not get started until a capture init call
-
+            self._state_sensor.set_value(self.READY)
             req.reply("ok",)
 
+        self.ioloop.add_callback(configure)
         raise AsyncReply
 
     @request(Str())
@@ -431,7 +443,7 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         # Need to delete all allocated DADA buffers:
 
-        @tornado.gen.coroutine
+        @coroutine
         def deconfigure():
             log.info("Destroying dada buffer for input with key '{}'".format(self._dada_input_key))
             self._system_call_wrapper(["dada_db","-k",self._dada_input_key,"-d"])
@@ -462,7 +474,8 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !capture-init ok | (fail [error description]) ]]]
         """
-
+        if not self.ready:
+            return ("fail", "FBF worker not in READY state")
         # Here we start MKRECV running into the input dada buffer
         self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
         return ("ok",)
@@ -483,8 +496,10 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !capture-done ok | (fail [error description]) ]]]
         """
+        if not self.capturing and not self.error:
+            return ("ok",)
 
-        @tornado.gen.coroutine
+        @coroutine
         def stop_mkrecv_capture():
             #send SIGTERM to MKRECV
             log.info("Sending SIGTERM to MKRECV process")
@@ -498,7 +513,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                     log.info("MKRECV returned a return value of {}".format(retval))
                     break
                 else:
-                    time.sleep(0.5)
+                    yield sleep(0.5)
             else:
                 log.warning("MKRECV failed to terminate in alloted time")
                 log.info("Killing MKRECV process")
@@ -508,7 +523,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         raise AsyncReply
 
 
-@tornado.gen.coroutine
+@coroutine
 def on_shutdown(ioloop, server):
     log.info("Shutting down server")
     yield server.stop()
@@ -529,19 +544,13 @@ def main():
         help='Path to file containing list of available nodes')
     (opts, args) = parser.parse_args()
     FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
-    logger = logging.getLogger('reynard')
+    logger = logging.getLogger('mpikat.fbfuse_worker_server')
     logging.basicConfig(format=FORMAT)
     logger.setLevel(opts.log_level.upper())
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting FbfWorkerServer instance")
 
-    if opts.nodes is not None:
-        with open(opts.nodes) as f:
-            nodes = f.read()
-    else:
-        nodes = test_nodes
-
-    server = FbfWorkerServer(opts.host, opts.port, nodes, dummy=opts.dummy)
+    server = FbfWorkerServer(opts.host, opts.port, dummy=opts.dummy)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
 

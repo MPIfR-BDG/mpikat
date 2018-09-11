@@ -19,6 +19,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+import subprocess
+import time
+from katcp import Sensor
+
 class AntennaValidationError(Exception):
     pass
 
@@ -45,3 +49,36 @@ def parse_csv_antennas(antennas_csv):
     if len(names) != len(set(names)):
         raise AntennaValidationError("Not all provided antennas were unqiue")
     return names
+
+class LoggingSensor(Sensor):
+    def __init__(self, *args, **kwargs):
+        self.logger = None
+        super(LoggingSensor, self).__init__(*args, **kwargs)
+
+    def set_value(self, value):
+        if self.logger:
+            self.logger.debug("Sensor '{}' changed from '{}' to '{}'".format(
+                self.name, self.value(), value))
+        super(LoggingSensor, self).set_value(value)
+
+    def set_logger(self, logger):
+        self.logger = logger
+
+def check_ntp_sync():
+    output = subprocess.check_output(['timedatectl','status'])
+    for line in output.splitlines():
+        if line.startswith("NTP synchronized"):
+            if line.split(":")[-1].strip().lower() == "yes":
+                return True
+    return False
+
+class Timer(object):
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self._start = time.time()
+
+    def elapsed(self):
+        return time.time() - self._start
+

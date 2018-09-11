@@ -72,81 +72,89 @@ class BaseFbfConfigurationAuthority(AsyncDeviceServer):
     @request(Str(), Str())
     @return_reply(Str())
     @tornado.gen.coroutine
-    def request_get_schedule_block_configuration(self, req, proxy_id, sb_id):
+    def request_get_schedule_block_configuration(self, req, product_id, sb_id):
         """
         @brief      Get an FBFUSE configuration for the current instance
 
-        @param      proxy_id    The proxy identifier
+        @param      product_id  The product identifier
         @param      sb_id       The schedule block identifier
 
-        @note       The proxy_id argument may be superfluous, although it allows
-                    the CA server to look up parameters on the unconfigured proxy
+        @note       The product_id argument may be superfluous, although it allows
+                    the CA server to look up parameters on the unconfigured product
                     from the FBFUSE sensor set through katportalclient
         """
-        if proxy_id in self._configuration_sensors:
-            self.remove_sensor(self._configuration_sensors[proxy_id])
-            del self._configuration_sensors[proxy_id]
+        if product_id in self._configuration_sensors:
+            self.remove_sensor(self._configuration_sensors[product_id])
+            del self._configuration_sensors[product_id]
             self.mass_inform(Message.inform('interface-changed'))
-        config = yield self.get_sb_config(proxy_id, sb_id)
+        config = yield self.get_sb_config(product_id, sb_id)
         raise Return(("ok", json.dumps(config)))
 
     @tornado.gen.coroutine
-    def get_sb_config(self, proxy_id, sb_id):
+    def get_sb_config(self, product_id, sb_id):
         raise NotImplemented
 
     @request(Str(), Str())
     @return_reply()
     @tornado.gen.coroutine
-    def request_target_configuration_start(self, req, proxy_id, target_string):
+    def request_target_configuration_start(self, req, product_id, target_string):
         """
         @brief      Set up a beam configuration sensor for the FBFUSE instance
 
-        @param      proxy_id     The proxy identifier
+        @param      product_id     The product identifier
         @param      target_string  A KATPOINT target string (boresight pointing position)
         """
-        if not proxy_id in self._configuration_sensors:
-            self._configuration_sensors[proxy_id] = Sensor.string(
-                "{}-beam-position-configuration".format(proxy_id),
+        if not product_id in self._configuration_sensors:
+            self._configuration_sensors[product_id] = Sensor.string(
+                "{}-beam-position-configuration".format(product_id),
                 description="Configuration description for FBF beam placement",
                 default="",
                 initial_status=Sensor.NOMINAL)
-            self.add_sensor(self._configuration_sensors[proxy_id])
+            self.add_sensor(self._configuration_sensors[product_id])
             self.mass_inform(Message.inform('interface-changed'))
-        initial_config = yield self.get_target_config(proxy_id, target_string)
-        self.update_target_config(proxy_id, initial_config)
+        initial_config = yield self.get_target_config(product_id, target_string)
+        self.update_target_config(product_id, initial_config)
         raise Return(("ok",))
 
     @tornado.gen.coroutine
-    def get_target_config(self, proxy_id, target):
+    def get_target_config(self, product_id, target):
         # This should call update target config
         raise NotImplemented
 
-    def update_target_config(self, proxy_id, config):
-        self._configuration_sensors[proxy_id].set_value(json.dumps(config))
+    def update_target_config(self, product_id, config):
+        self._configuration_sensors[product_id].set_value(json.dumps(config))
 
 
 class DefaultConfigurationAuthority(BaseFbfConfigurationAuthority):
     def __init__(self, host, port):
         super(DefaultConfigurationAuthority, self).__init__(host, port)
+        self.default_config = {
+            u'coherent-beams-nbeams':100,
+            u'coherent-beams-tscrunch':16,
+            u'coherent-beams-fscrunch':1,
+            u'coherent-beams-granularity':6,
+            u'incoherent-beam-tscrunch':16,
+            u'incoherent-beam-fscrunch':1,
+            }
 
     @tornado.gen.coroutine
-    def get_target_config(self, proxy_id, target):
+    def get_target_config(self, product_id, target):
         # Return just a boresight beam
         raise Return({"beams":[target],})
 
     @tornado.gen.coroutine
-    def get_sb_config(self, proxy_id, sb_id):
-        config = {
-            u'coherent-beams-nbeams':100,
-            u'coherent-beams-tscrunch':22,
-            u'coherent-beams-fscrunch':2,
-            u'coherent-beams-antennas':'m007',
-            u'coherent-beams-granularity':6,
-            u'incoherent-beam-tscrunch':16,
-            u'incoherent-beam-fscrunch':1,
-            u'incoherent-beam-antennas':'m008'
-            }
-        raise Return(config)
+    def get_sb_config(self, product_id, sb_id):
+        raise Return(self.default_config)
+
+    @request(Str())
+    @return_reply()
+    def request_update_default_sb_config(self, req, config_json):
+        """
+        @brief      Update the default config returned on a get_sb_config call.
+                    This is intended for testing purposes only.
+        """
+        self.default_config.update(json.loads(config_json))
+        return ("ok",)
 
 
 @tornado.gen.coroutine

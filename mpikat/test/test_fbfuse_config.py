@@ -36,13 +36,15 @@ def make_worker_pool_mock(nworkers):
     return worker_pool
 
 class TestFbfConfigurationManager(unittest.TestCase):
-    def _verify_configuration(self, cm, tscrunch, fscrunch, bandwidth, nbeams, nantennas, granularity):
+    def _verify_configuration(self, cm, tscrunch, fscrunch, bandwidth,
+        nbeams, nantennas, granularity):
         max_allowable_nbeams = nbeams+NBEAMS_OVERFLOW_TOLERANCE*nbeams
         if max_allowable_nbeams < MIN_NBEAMS:
             max_allowable_nbeams = MIN_NBEAMS
         min_allowable_nbeams = MIN_NBEAMS
         config = cm.get_configuration(tscrunch, fscrunch, nbeams, nantennas, bandwidth, granularity)
-        self.assertTrue(config['num_beams'] <= max_allowable_nbeams, "Actual number of beams {}".format(config['num_beams']))
+        self.assertTrue(config['num_beams'] <= max_allowable_nbeams,
+            "Actual number of beams {}".format(config['num_beams']))
         self.assertTrue(config['num_beams'] >= min_allowable_nbeams)
         self.assertTrue(config['num_mcast_groups'] <= cm.nips)
         self.assertTrue(config['num_workers_total'] <= cm.nworkers)

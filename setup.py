@@ -11,10 +11,12 @@ setup(name='mpikat',
       install_requires=[
           'katpoint',
           'katcp',
+          'ipaddress',
           'katportalclient',
           'mosaic'
       ],
       dependency_links=[
+          'git+https://github.com/ska-sa/katportalclient.git',
           'git+https://gitlab.mpifr-bonn.mpg.de/wchen/Beamforming.git' #mosaic
       ],
       zip_safe=False)

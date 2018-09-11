@@ -33,7 +33,7 @@ from urllib2 import urlopen, URLError
 from StringIO import StringIO
 from tornado.ioloop import IOLoop
 from tornado.gen import coroutine, Return, sleep
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.testing import gen_test
 from katpoint import Antenna, Target
 from katcp import AsyncReply
 from katcp.testutils import mock_req, handle_mock_req
@@ -44,55 +44,13 @@ from mpikat import (
     FbfWorkerWrapper
     )
 from mpikat.katportalclient_wrapper import KatportalClientWrapper
-from mpikat.test.utils import MockFbfConfigurationAuthority
+from mpikat.test.utils import MockFbfConfigurationAuthority, AsyncServerTester, MockKatportalClientWrapper
 from mpikat.ip_manager import ContiguousIpRange, ip_range_from_stream
 
 root_logger = logging.getLogger('')
 root_logger.setLevel(logging.CRITICAL)
 
-
-def type_converter(value):
-    try: return int(value)
-    except: pass
-    try: return float(value)
-    except: pass
-    return value
-
-class MockKatportalClientWrapper(mock.Mock):
-    @coroutine
-    def get_observer_string(self, antenna):
-        if re.match("^[mM][0-9]{3}$", antenna):
-            raise Return("{}, -30:42:39.8, 21:26:38.0, 1035.0, 13.5".format(antenna))
-        else:
-            raise SensorNotFoundError("No antenna named {}".format(antenna))
-
-    @coroutine
-    def get_antenna_feng_id_map(self, instrument_name, antennas):
-        ant_feng_map = {antenna:ii for ii,antenna in enumerate(antennas)}
-        raise Return(ant_feng_map)
-
-    @coroutine
-    def get_bandwidth(self, stream):
-        raise Return(856e6)
-
-    @coroutine
-    def get_cfreq(self, stream):
-        raise Return(1.28e9)
-
-    @coroutine
-    def get_sideband(self, stream):
-        raise Return("upper")
-
-    @coroutine
-    def gey_sync_epoch(self):
-        raise Return(1532530856)
-
-    @coroutine
-    def get_itrf_reference(self):
-        raise Return((5109318.841, 2006836.367, -3238921.775))
-
-
-class TestFbfMasterController(AsyncTestCase):
+class TestFbfMasterController(AsyncServerTester):
     DEFAULT_STREAMS = ('{"cam.http": {"camdata": "http://10.8.67.235/api/client/1"}, '
         '"cbf.antenna_channelised_voltage": {"i0.antenna-channelised-voltage": '
         '"spead://239.2.1.150+15:7148"}}')
@@ -101,12 +59,13 @@ class TestFbfMasterController(AsyncTestCase):
 
     def setUp(self):
         super(TestFbfMasterController, self).setUp()
-        self.server = FbfMasterController('127.0.0.1', 0, dummy=True)
+        self.server = FbfMasterController('127.0.0.1', 0, dummy=False)
         self.server._katportal_wrapper_type = MockKatportalClientWrapper
         self.server.start()
 
     def tearDown(self):
         super(TestFbfMasterController, self).tearDown()
+        self.server = None
 
     def _add_n_servers(self, n):
         base_ip = ipaddress.ip_address(u'192.168.1.150')
@@ -115,62 +74,8 @@ class TestFbfMasterController(AsyncTestCase):
 
     @coroutine
     def _configure_helper(self, product_name, antennas, nchans, streams_json, proxy_name):
-        #Patching isn't working here for some reason (maybe pathing?), the
-        #hack solution is to manually switch to the Mock for the portal
-        #client. TODO: Fix the structure of the code so that this can be
-        #patched properly
-        #Test that a valid configure call goes through
-        #mpikat.KatportalClientWrapper = MockKatportalClientWrapper
         req = mock_req('configure', product_name, antennas, nchans, streams_json, proxy_name)
         reply,informs = yield handle_mock_req(self.server, req)
-        #mpikat.KatportalClientWrapper = KatportalClientWrapper
-        raise Return((reply, informs))
-
-    @coroutine
-    def _get_sensor_reading(self, sensor_name):
-        req = mock_req('sensor-value', sensor_name)
-        reply,informs = yield handle_mock_req(self.server, req)
-        self.assertTrue(reply.reply_ok(), msg=reply)
-        status, value = informs[0].arguments[-2:]
-        value = type_converter(value)
-        raise Return((status, value))
-
-    @coroutine
-    def _check_sensor_value(self, sensor_name, expected_value, expected_status='nominal', tolerance=None):
-        #Test that the products sensor has been updated
-        status, value = yield self._get_sensor_reading(sensor_name)
-        value = type_converter(value)
-        self.assertEqual(status, expected_status)
-        if not tolerance:
-            self.assertEqual(value, expected_value)
-        else:
-            max_value = value + value*tolerance
-            min_value = value - value*tolerance
-            self.assertTrue((value<=max_value) and (value>=min_value))
-
-    @coroutine
-    def _check_sensor_exists(self, sensor_name):
-        #Test that the products sensor has been updated
-        req = mock_req('sensor-list', sensor_name)
-        reply,informs = yield handle_mock_req(self.server, req)
-        raise Return(reply.reply_ok())
-
-    @coroutine
-    def _send_request_expect_ok(self, request_name, *args):
-        if request_name == 'configure':
-            reply, informs = yield self._configure_helper(*args)
-        else:
-            reply,informs = yield handle_mock_req(self.server, mock_req(request_name, *args))
-        self.assertTrue(reply.reply_ok(), msg=reply)
-        raise Return((reply, informs))
-
-    @coroutine
-    def _send_request_expect_fail(self, request_name, *args):
-        if request_name == 'configure':
-            reply, informs = yield self._configure_helper(*args)
-        else:
-            reply,informs = yield handle_mock_req(self.server, mock_req(request_name, *args))
-        self.assertFalse(reply.reply_ok(), msg=reply)
         raise Return((reply, informs))
 
     @gen_test
@@ -178,7 +83,7 @@ class TestFbfMasterController(AsyncTestCase):
         #Test that calls that require products fail if not configured
         yield self._send_request_expect_fail('capture-start', 'test')
         yield self._send_request_expect_fail('capture-stop', 'test')
-        yield self._send_request_expect_fail('provision-beams', 'test')
+        yield self._send_request_expect_fail('provision-beams', 'test', 'random_schedule_block_id')
         yield self._send_request_expect_fail('reset-beams', 'test')
         yield self._send_request_expect_fail('deconfigure', 'test')
         yield self._send_request_expect_fail('set-default-target-configuration', 'test', '')
@@ -197,11 +102,12 @@ class TestFbfMasterController(AsyncTestCase):
         product_name = 'test_product'
         proxy_name = 'FBFUSE_test'
         product_state_sensor = '{}.state'.format(product_name)
+        self._add_n_servers(64)
         yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
         yield self._check_sensor_value('products', product_name)
         yield self._check_sensor_value(product_state_sensor, FbfProductController.IDLE)
-        yield self._send_request_expect_ok('provision-beams', product_name)
+        yield self._send_request_expect_ok('provision-beams', product_name, 'random_schedule_block_id')
         # after provision beams we need to wait on the system to get into a ready state
         product = self.server._products[product_name]
         while True:
@@ -261,7 +167,7 @@ class TestFbfMasterController(AsyncTestCase):
         hostname = '127.0.0.1'
         port = 10000
         yield self._send_request_expect_ok('register-worker-server', hostname, port)
-        server = self.server._server_pool.available()[-1]
+        server = self.server._server_pool.available()[0]
         self.assertEqual(server.hostname, hostname)
         self.assertEqual(server.port, port)
         other = FbfWorkerWrapper(hostname, port)
@@ -279,77 +185,13 @@ class TestFbfMasterController(AsyncTestCase):
     def test_deregister_allocated_worker_server(self):
         hostname, port = '127.0.0.1', 60000
         yield self._send_request_expect_ok('register-worker-server', hostname, port)
-        server = self.server._server_pool.allocate(1)[0]
+        server = self.server._server_pool.allocate(1)[-1]
         yield self._send_request_expect_fail('deregister-worker-server', hostname, port)
 
     @gen_test
     def test_deregister_nonexistant_worker_server(self):
         hostname, port = '192.168.1.150', 60000
         yield self._send_request_expect_ok('deregister-worker-server', hostname, port)
-
-    @gen_test
-    def test_configure_coherent_beams(self):
-        product_name = 'test_product'
-        proxy_name = 'FBFUSE_test'
-        tscrunch = 6
-        fscrunch = 2
-        nbeams = 100
-        yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
-            self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
-        yield self._send_request_expect_ok('configure-coherent-beams', product_name, nbeams,
-            self.DEFAULT_ANTENNAS, fscrunch, tscrunch)
-        yield self._check_sensor_value("{}.coherent-beam-count".format(product_name), nbeams)
-        yield self._check_sensor_value("{}.coherent-beam-tscrunch".format(product_name), tscrunch)
-        yield self._check_sensor_value("{}.coherent-beam-fscrunch".format(product_name), fscrunch)
-        yield self._check_sensor_value("{}.coherent-beam-antennas".format(product_name), self.DEFAULT_ANTENNAS)
-
-    @gen_test
-    def test_configure_incoherent_beam(self):
-        product_name = 'test_product'
-        proxy_name = 'FBFUSE_test'
-        tscrunch = 6
-        fscrunch = 2
-        yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
-            self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
-        yield self._send_request_expect_ok('configure-incoherent-beam', product_name,
-            self.DEFAULT_ANTENNAS, fscrunch, tscrunch)
-        yield self._check_sensor_value("{}.incoherent-beam-tscrunch".format(product_name), tscrunch)
-        yield self._check_sensor_value("{}.incoherent-beam-fscrunch".format(product_name), fscrunch)
-        yield self._check_sensor_value("{}.incoherent-beam-antennas".format(product_name), self.DEFAULT_ANTENNAS)
-
-    @gen_test
-    def test_configure_coherent_beams_invalid_antennas(self):
-        product_name = 'test_product'
-        proxy_name = 'FBFUSE_test'
-        subarray_antennas = 'm007,m008,m009,m010'
-        yield self._send_request_expect_ok('configure', product_name, subarray_antennas,
-            self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
-        #Test invalid antenna combinations
-        yield self._send_request_expect_fail('configure-coherent-beams', product_name, 100,
-            'm007,m008,m011', 1, 16)
-        yield self._send_request_expect_fail('configure-coherent-beams', product_name, 100,
-            'm007,m008,m009,m010,m011', 1, 16)
-        yield self._send_request_expect_fail('configure-coherent-beams', product_name, 100,
-            '', 1, 16)
-        yield self._send_request_expect_fail('configure-coherent-beams', product_name, 100,
-            'm007,m007,m008,m009', 1, 16)
-
-    @gen_test
-    def test_configure_incoherent_beam_invalid_antennas(self):
-        product_name = 'test_product'
-        proxy_name = 'FBFUSE_test'
-        subarray_antennas = 'm007,m008,m009,m010'
-        yield self._send_request_expect_ok('configure', product_name, subarray_antennas,
-            self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
-        #Test invalid antenna combinations
-        yield self._send_request_expect_fail('configure-incoherent-beam', product_name,
-                    'm007,m008,m011', 1, 16)
-        yield self._send_request_expect_fail('configure-incoherent-beam', product_name,
-                    'm007,m008,m009,m010,m011', 1, 16)
-        yield self._send_request_expect_fail('configure-incoherent-beam', product_name,
-                    '', 1, 16)
-        yield self._send_request_expect_fail('configure-incoherent-beam', product_name,
-                    'm007,m007,m008,m009', 1, 16)
 
     @gen_test
     def test_set_configuration_authority(self):
@@ -388,7 +230,7 @@ class TestFbfMasterController(AsyncTestCase):
         yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
         yield self._send_request_expect_ok('set-configuration-authority', product_name, hostname, port)
-        yield self._send_request_expect_ok('provision-beams', product_name)
+        yield self._send_request_expect_ok('provision-beams', product_name, sb_id)
         product = self.server._products[product_name]
         while True:
             yield sleep(0.5)
@@ -429,7 +271,7 @@ class TestFbfMasterController(AsyncTestCase):
         yield self._send_request_expect_ok('configure', product_name, self.DEFAULT_ANTENNAS,
             self.DEFAULT_NCHANS, self.DEFAULT_STREAMS, proxy_name)
         yield self._send_request_expect_ok('set-configuration-authority', product_name, hostname, port)
-        yield self._send_request_expect_ok('provision-beams', product_name)
+        yield self._send_request_expect_ok('provision-beams', product_name, 'random_schedule_block_id')
         product = self.server._products[product_name]
         while True:
             yield sleep(0.5)
