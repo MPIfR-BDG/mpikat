@@ -27,7 +27,9 @@ from copy import deepcopy
 from tornado.gen import coroutine, Return
 from katcp import Sensor, Message, KATCPClientResource
 from katpoint import  Target, Antenna
+from mpikat.worker_pool import WorkerAllocationError
 from mpikat.ip_manager import ip_range_from_stream
+from mpikat.apsuse_config import get_required_workers
 from mpikat.utils import parse_csv_antennas, LoggingSensor
 
 N_FENG_STREAMS_PER_WORKER = 4
@@ -216,11 +218,24 @@ class ApsProductController(object):
         self.log.debug("Product moved to 'starting' state")
         fbf_sb_config = yield self._fbf_monitor.get_sb_config()
         yield self._fbf_monitor.subscribe_to_beams()
-
-        # allocate servers
-
-        # Here we talk to the servers and do something clever
-
+        worker_configs = get_required_workers(fbf_sb_config)
+        capture_start_futures = []
+        for worker_config in worker_configs:
+            try:
+                server = self._parent._server_pool.allocate(1)
+            except WorkerAllocationError:
+                self.log.warning("Could not allocate enough workers to catch all FBFUSE data")
+                break
+            else:
+                self._servers.append(server)
+                #capture_start_future = server.capture_start(worker_config)
+                #capture_start_futures.append(capture_start_future)
+                #
+        for future in capture_start_futures:
+            result = yield future
+            #do something with future
+        server_str = ",".join(["{s.hostname}:{s.port}".format(s=server) for server in self._servers])
+        self._servers_sensor.set_value(server_str)
         self._state_sensor.set_value(self.CAPTURING)
         self.log.debug("Product moved to 'capturing' state")
 

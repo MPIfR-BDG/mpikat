@@ -51,7 +51,6 @@ lock = Lock()
 
 FBF_IP_RANGE = "spead://239.11.1.0+127:7147"
 
-
 class FbfMasterController(MasterController):
     """This is the main KATCP interface for the FBFUSE
     multi-beam beamformer on MeerKAT.
