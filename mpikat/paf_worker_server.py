@@ -151,7 +151,7 @@ class PafWorkerServer(AsyncDeviceServer):
         if self._pipeline_sensor_status.value() == "configured":
             self.ioloop.add_callback(start_pipeline)
             raise AsyncReply
-        else :
+        else:
             msg = "pipeline is not in the state of configured, status = {} ".format(self._pipeline_sensor_status.value())
             log.info("{}".format(msg))
             return ("fail", msg)
@@ -179,7 +179,7 @@ class PafWorkerServer(AsyncDeviceServer):
             log.info("{}".format(msg))
             req.reply("ok", msg)
 
-            self._pipeline_sensor_status.set_value("stopped")
+            self._pipeline_sensor_status.set_value("configured")
 
         if self._pipeline_sensor_status.value() == "running":
             self.ioloop.add_callback(stop_pipeline)
@@ -212,7 +212,7 @@ class PafWorkerServer(AsyncDeviceServer):
             msg = "Deconfigured pipeline {}".format(self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
             req.reply("ok", msg)
-            self._pipeline_sensor_status.set_value("deconfigured")
+            self._pipeline_sensor_status.set_value("idle")
             self._pipeline_sensor_name.set_value("")
         if self._pipeline_sensor_status.value() == "configured":   
             self.ioloop.add_callback(deconfigure)
