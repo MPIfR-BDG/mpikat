@@ -114,7 +114,7 @@ class PafProductController(object):
             initial_status = Sensor.UNKNOWN)
         self.add_sensor(self._servers_sensor)
         self._parent.mass_inform(Message.inform('interface-changed'))
-        self._state_sensor.set_value(self.READY)
+        self._state_sensor.set_value(self.IDLE)
 
     def teardown_sensors(self):
         """
@@ -188,7 +188,7 @@ class PafProductController(object):
         self.log.debug("Product moved to 'preparing' state")
         # Here we always allocate all servers to the backend
         nservers = self._parent._server_pool.navailable()
-        servers = self._parent.allocate(nservers)
+        servers = self._parent._server_pool.allocate(nservers)
         configure_futures = []
         for server in servers:
             self._servers.append(server)
@@ -208,7 +208,6 @@ class PafProductController(object):
         self.log.debug("Product moved to 'starting' state")
         start_futures = []
         for server in self._servers:
-            self._servers.append(server)
             start_futures.append(server._client.req.start_capture())
         for future in start_futures:
             result = yield future
@@ -231,7 +230,6 @@ class PafProductController(object):
         self.log.debug("Product moved to 'stopping' state")
         stop_futures = []
         for server in self._servers:
-            self._servers.append(server)
             stop_futures.append(server._client.req.stop_capture())
         for future in stop_futures:
             result = yield future
