@@ -122,8 +122,14 @@ class PafMasterController(MasterController):
             return ("fail", "PAF already has a configured data product")
         self._products[PAF_PRODUCT_ID] = PafProductController(self, PAF_PRODUCT_ID)
         self._update_products_sensor()
-        log.debug("Configured PAF instance with ID: {}".format(PAF_PRODUCT_ID))
-        raise Return(("ok",))
+        try:
+            yield self._products[PAF_PRODUCT_ID].configure(dummy_config_string)
+        except Exception as error:
+            log.error("Failed to configure product with error: {}".format(str(error)))
+            raise Return(("ok", str(error)))
+        else:
+            log.debug("Configured PAF instance with ID: {}".format(PAF_PRODUCT_ID))
+            raise Return(("ok",))
 
     @request()
     @return_reply()
