@@ -119,7 +119,7 @@ class PafMasterController(MasterController):
     def configure(self, dummy_config_string):
         log.info("Configuring PAF processing")
         if self._products:
-            return ("fail", "PAF already has a configured data product")
+            raise Return(("fail", "PAF already has a configured data product"))
         self._products[PAF_PRODUCT_ID] = PafProductController(self, PAF_PRODUCT_ID)
         self._update_products_sensor()
         try:
