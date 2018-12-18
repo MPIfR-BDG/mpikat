@@ -2,11 +2,9 @@ import tornado
 import logging
 import signal
 import json
-import igui_sidecar as sidecar
 from optparse import OptionParser
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import (Str, request, return_reply)
-#from firmware_server import FIRMWARES
 from paf_pipeline_server import PIPELINES #whatever the pipeline class will be
 
 PIPELINE = {}
@@ -19,7 +17,7 @@ class PafWorkerServer(AsyncDeviceServer):
     VERSION_INFO = ("example-api", 1, 0)
     BUILD_INFO = ("example-implementation", 0, 1, "")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
-    PIPELINE_STATUSES = ["running", "done", "fail", "not running"]
+    PIPELINE_STATUSES = ["running", "fail", "stopped", "configured", "deconfigured"]
 
     # Optionally set the KATCP protocol version and features. Defaults to
     # the latest implemented version of KATCP, with all supported optional
@@ -54,21 +52,21 @@ class PafWorkerServer(AsyncDeviceServer):
             "device-status",
             description="Health status of R2RM",
             params=self.DEVICE_STATUSES,
-            default="ok",
+            default="deconfigured",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._device_status)
 
-        self._pipeline_name = Sensor.string("pipeline-name",
+        self._pipeline_sensor_name = Sensor.string("pipeline-name",
             "the name of the pipeline", "")
-        self.add_sensor(self._pipeline_name)
+        self.add_sensor(self._pipeline_sensor_name)
 
-        self._pipeline_status = Sensor.discrete(
+        self._pipeline_sensor_status = Sensor.discrete(
             "pipeline-status",
             description="Status of the pipeline",
             params=self.PIPELINE_STATUSES,
-            default="not running",
+            default="None",
             initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._device_status)      
+        self.add_sensor(self._pipeline_sensor_status)      
 
     @request(Str(), Str(), Str())
     @return_reply()
@@ -89,21 +87,25 @@ class PafWorkerServer(AsyncDeviceServer):
             except KeyError as error:
                 log.error("No pipeline called '{}', available pipeline are: \n{}".format(self.pipeline, "\n".join(PIPELINES.keys())))
                 req.reply("fail", "Error on pipeline load: {}".format(str(error)))
+                self.pipeline = None
                 raise error
-            self._pipeline_instance = _firmware_type('parameters to be pass')
+            self._pipeline_instance = _firmware_type(bw, something)
             try:
                 self._pipeline_instance.configure()
             except Exception as error:
                 log.error("Couldn't start configure pipeline instance {}".format(error))
                 req.reply("fail", "Error on pipeline load: {}".format(str(error)))
+                self.pipeline = None
                 raise error
+            self._pipeline_status.set_value("configured")
             log.info("pipeline instance configured")
-            req.reply("ok","pipeline instance configured")   
-        if self.pipeline == None:
+            req.reply("ok","pipeline instance configured")
+            self.configured = 'Y'
+        if self.configured == "N":
             self.ioloop.add_callback(configure_pipeline)
             raise AsyncReply
         else:
-            msg = "No, there is already one pipline configured/started/stop"
+            msg = "No, there is already pipline configured/started/stopped"
             log.info("{}".format(msg))
             return ("fail", msg)
         
@@ -120,12 +122,19 @@ class PafWorkerServer(AsyncDeviceServer):
                 self._pipeline_instance.start()
             except Exception as error:
                 log.error("Couldn't start pipeline server {}".format(error))
-                req.reply("Couldn't start pipeline server {}".format(error))
+                req.reply("fail", "Couldn't start pipeline server {}".format(error))
                 raise error
             log.info("Start pipeline server {}".format(self.pipeline))    
-            req.reply("Start pipeline server {}".format(self.pipeline))
-        self.ioloop.add_callback(start_pipeline)
-        raise AsyncReply
+            req.reply("ok", "Start pipeline server {}".format(self.pipeline))
+            self._pipeline_sensor_status.set_value("running")
+            self.pipeline_status = "running"            
+        if self.configured == "Y" && not (self.pipeline_status == "running"):
+            self.ioloop.add_callback(start_pipeline)
+            raise AsyncReply
+        else :
+            req.info("pipeline is not configured/stopped")
+            return ("fail", "pipeline is not configured/stopped")
+        
         
     @request()
     @return_reply()
@@ -140,13 +149,18 @@ class PafWorkerServer(AsyncDeviceServer):
                 self._pipeline_instance.stop()
             except Exception as error:
                 log.error("Couldn't stop pipeline {}".format(error))
-                req.reply("Couldn't stop pipeline {}".format(error))
+                req.reply("fail", "Couldn't stop pipeline {}".format(error))
                 raise error
             log.info("Stop pipeline {}".format(self.pipeline))
-            req.reply("Stop pipeline {}".format(self.pipeline))
-            self.configured = 'N'
-        self.ioloop.add_callback(stop_pipeline)
-        raise AsyncReply
+            req.reply("ok", "Stop pipeline {}".format(self.pipeline))
+            self._pipeline_sensor_status.set_value("stopped")
+        if self.pipeline_status == "running":
+            self.ioloop.add_callback(stop_pipeline)
+            raise AsyncReply
+        else :
+            req.info("pipeline is not running, nothing to stop")
+            return ("fail", "pipeline is not running, nothing to stop")
+
 
     @request()
     @return_reply()
@@ -162,11 +176,13 @@ class PafWorkerServer(AsyncDeviceServer):
                 self._pipeline_instance.deconfigure()
             except Exception as error:
                 log.error("Couldn't deconfigure pipeline {}".format(error))
-                req.reply("Couldn't deconfigure pipeline {}".format(error))
+                req.reply("fail", "Couldn't deconfigure pipeline {}".format(error))
                 raise error
-            log.info("Stop pipeline {}".format(self.pipeline))
-            req.reply("Stop pipeline {}".format(self.pipeline))
-            self.pipeline = None   
+            log.info("Deconfigured pipeline {}".format(self.pipeline))
+            req.reply("ok", "Deconfigured pipeline {}".format(self.pipeline))
+            self._pipeline_status.set_value("deconfigure")
+            self.pipeline = None
+        if self.pipeline_status     
         self.ioloop.add_callback(deconfigure)
         raise AsyncReply
 
