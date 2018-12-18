@@ -17,7 +17,8 @@ class PafWorkerServer(AsyncDeviceServer):
     VERSION_INFO = ("example-api", 1, 0)
     BUILD_INFO = ("example-implementation", 0, 1, "")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
-    PIPELINE_STATUSES = ["running", "fail", "stopped", "configured", "deconfigured"]
+    PIPELINE_STATUSES = ["idle", "configuring", "configured", "starting", "running", "stopping", "deconfiguring", "error"]
+
 
     # Optionally set the KATCP protocol version and features. Defaults to
     # the latest implemented version of KATCP, with all supported optional
@@ -38,8 +39,7 @@ class PafWorkerServer(AsyncDeviceServer):
         """
         super(PafWorkerServer, self).__init__(ip, port)
         self.pipeline = None
-        self.configured = 'N'
-        self.pipeline_status = None
+        self.pipeline_status = "idle"
 
     def start(self):
        super(PafWorkerServer, self).start()
@@ -52,7 +52,7 @@ class PafWorkerServer(AsyncDeviceServer):
             "device-status",
             description="Health status of R2RM",
             params=self.DEVICE_STATUSES,
-            default="deconfigured",
+            default="ok",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._device_status)
 
@@ -64,7 +64,7 @@ class PafWorkerServer(AsyncDeviceServer):
             "pipeline-status",
             description="Status of the pipeline",
             params=self.PIPELINE_STATUSES,
-            default="None",
+            default="idle",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._pipeline_sensor_status)      
 
@@ -72,7 +72,7 @@ class PafWorkerServer(AsyncDeviceServer):
     @return_reply()
     def configure(self, pipeline, bw , something):
         """
-        @brief      Configure firmware for a user
+        @brief      Configure pipeline
 
         @param      pipeline    name of the pipeline
         @param      bw          bandwidth per se
@@ -82,30 +82,38 @@ class PafWorkerServer(AsyncDeviceServer):
         def configure_pipeline():
             self.pipeline = pipeline
             log.info("Configuring pipeline {}".format(self.pipeline))
+            self.pipeline_status = "configuring"
+            self._pipeline_sensor_status.set_value("configuring")
             try:
-                _pipeline_type = FIRMWARES[self.pipeline]
+                _pipeline_type = PIPELINES[self.pipeline]
             except KeyError as error:
                 log.error("No pipeline called '{}', available pipeline are: \n{}".format(self.pipeline, "\n".join(PIPELINES.keys())))
                 req.reply("fail", "Error on pipeline load: {}".format(str(error)))
+                self.pipeline_status = "error"
+                self._pipeline_sensor_status.set_value("error")
                 self.pipeline = None
                 raise error
-            self._pipeline_instance = _firmware_type(bw, something)
+            self._pipeline_instance = _pipeline_type(bw, something)
             try:
                 self._pipeline_instance.configure()
             except Exception as error:
                 log.error("Couldn't start configure pipeline instance {}".format(error))
                 req.reply("fail", "Error on pipeline load: {}".format(str(error)))
+                self.pipeline_status = "error"
+                self._pipeline_sensor_status.set_value("error")
                 self.pipeline = None
                 raise error
-            self._pipeline_status.set_value("configured")
+
+            self.pipeline_status = "configured"
+            self._pipeline_sensor_status.set_value("configured")
             log.info("pipeline instance configured")
             req.reply("ok","pipeline instance configured")
-            self.configured = 'Y'
-        if self.configured == "N":
+
+        if self.pipeline_status == "idle":
             self.ioloop.add_callback(configure_pipeline)
             raise AsyncReply
         else:
-            msg = "No, there is already pipline configured/started/stopped"
+            msg = "Can't Configure, status = ".format(self.pipeline_status)
             log.info("{}".format(msg))
             return ("fail", msg)
         
@@ -118,22 +126,27 @@ class PafWorkerServer(AsyncDeviceServer):
         """
         @tornado.gen.coroutine        
         def start_pipeline():
+            self.pipeline_status = "starting"
+            self._pipeline_sensor_status.set_value("starting")
             try:
                 self._pipeline_instance.start()
             except Exception as error:
                 log.error("Couldn't start pipeline server {}".format(error))
                 req.reply("fail", "Couldn't start pipeline server {}".format(error))
+                self.pipeline_status = "error"
+                self._pipeline_sensor_status.set_value("error")
                 raise error
-            log.info("Start pipeline server {}".format(self.pipeline))    
-            req.reply("ok", "Start pipeline server {}".format(self.pipeline))
+            log.info("Start pipeline {}".format(self.pipeline))    
+            req.reply("ok", "Start pipeline {}".format(self.pipeline))
             self._pipeline_sensor_status.set_value("running")
-            self.pipeline_status = "running"            
-        if self.configured == "Y" && not (self.pipeline_status == "running"):
+            self.pipeline_status = "running"
+
+        if self.pipeline_status == "configured":
             self.ioloop.add_callback(start_pipeline)
             raise AsyncReply
         else :
-            req.info("pipeline is not configured/stopped")
-            return ("fail", "pipeline is not configured/stopped")
+            req.info("pipeline is not in the state of configured, status = ".format(self.pipeline_status))
+            return ("fail", "pipeline is not in the state of configured, status = ".format(self.pipeline_status))
         
         
     @request()
@@ -145,21 +158,27 @@ class PafWorkerServer(AsyncDeviceServer):
         """
         @tornado.gen.coroutine
         def stop_pipeline():
+            self.pipeline_status = "stopping"
+            self._pipeline_sensor_status.set_value("stopping")
             try:
                 self._pipeline_instance.stop()
             except Exception as error:
                 log.error("Couldn't stop pipeline {}".format(error))
                 req.reply("fail", "Couldn't stop pipeline {}".format(error))
+                self.pipeline_status = "error"
+                self._pipeline_sensor_status.set_value("error")
                 raise error
             log.info("Stop pipeline {}".format(self.pipeline))
             req.reply("ok", "Stop pipeline {}".format(self.pipeline))
+            self.pipeline_status = "stopped"
             self._pipeline_sensor_status.set_value("stopped")
+
         if self.pipeline_status == "running":
             self.ioloop.add_callback(stop_pipeline)
             raise AsyncReply
         else :
-            req.info("pipeline is not running, nothing to stop")
-            return ("fail", "pipeline is not running, nothing to stop")
+            req.info("nothing to stop, status = {}".format(self.pipeline_status))
+            return ("fail", "nothing to stop, status = {}".format(self.pipeline_status))
 
 
     @request()
@@ -171,20 +190,29 @@ class PafWorkerServer(AsyncDeviceServer):
         """
         @tornado.gen.coroutine
         def deconfigure():
-            log.info("Deconfiguring")
+            log.info("deconfiguring pipeline {}".format(self.pipeline))
+            self.pipeline_status = "deconfiguring"
+            self._pipeline_sensor_status.set_value("deconfiguring")
             try:
                 self._pipeline_instance.deconfigure()
             except Exception as error:
                 log.error("Couldn't deconfigure pipeline {}".format(error))
                 req.reply("fail", "Couldn't deconfigure pipeline {}".format(error))
+                self.pipeline_status = "error"
+                self._pipeline_sensor_status.set_value("error")
                 raise error
             log.info("Deconfigured pipeline {}".format(self.pipeline))
             req.reply("ok", "Deconfigured pipeline {}".format(self.pipeline))
-            self._pipeline_status.set_value("deconfigure")
+            self.pipeline_status = "deconfigured"
+            self._pipeline_sensor_status.set_value("deconfigured")
             self.pipeline = None
-        if self.pipeline_status     
-        self.ioloop.add_callback(deconfigure)
-        raise AsyncReply
+
+        if self.pipeline_status == "configured":   
+            self.ioloop.add_callback(deconfigure)
+            raise AsyncReply
+        else:
+            req.info("nothing to deconfigure, status = {}".format(self.pipeline_status))
+            return ("fail", "nothing to deconfigure, status = {}".format(self.pipeline_status))
 
 @tornado.gen.coroutine
 def on_shutdown(ioloop, server):
