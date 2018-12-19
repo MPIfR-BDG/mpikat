@@ -209,7 +209,7 @@ class PafWorkerServer(AsyncDeviceServer):
                 req.reply("fail", msg)
                 self._pipeline_sensor_status.set_value("error")
                 raise error
-            msg = "Deconfigured pipeline {}".format(self._pipeline_sensor_name.value())
+            msg = "deconfigured pipeline {}".format(self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
             req.reply("ok", msg)
             self._pipeline_sensor_status.set_value("idle")
@@ -224,7 +224,7 @@ class PafWorkerServer(AsyncDeviceServer):
 
 @tornado.gen.coroutine
 def on_shutdown(ioloop, server):
-    print('Shutting down')
+    log.info('Shutting down server')
     yield server.stop()
     ioloop.stop()
 
@@ -245,6 +245,7 @@ def main():
         logger=logger)
     logging.getLogger('katcp').setLevel('INFO')
     ioloop = tornado.ioloop.IOLoop.current()
+    log.info("Starting PafWorkerServer instance")
     server = PafWorkerServer(opts.host, opts.port)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
