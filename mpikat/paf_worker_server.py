@@ -1,9 +1,10 @@
 import tornado
+import coloredlogs
 import logging
 import signal
 import json
 import mock
-import coloredlogs
+import os
 from optparse import OptionParser
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import (Str, request, return_reply)
@@ -12,7 +13,6 @@ from katcp.kattypes import (Str, request, return_reply)
 log = logging.getLogger("mpikat.paf_worker_server")
 
 PIPELINES = {"mock":mock.Mock()}
-
 
 class PafWorkerServer(AsyncDeviceServer):
     """
@@ -55,7 +55,7 @@ class PafWorkerServer(AsyncDeviceServer):
         """
         self._device_status = Sensor.discrete(
             "device-status",
-            description="Health status of PafWorkerServer",
+            "Health status of PafWorkerServer",
             params=self.DEVICE_STATUSES,
             default="ok",
             initial_status=Sensor.UNKNOWN)
@@ -74,9 +74,9 @@ class PafWorkerServer(AsyncDeviceServer):
         self.add_sensor(self._pipeline_sensor_status) 
 
         self._ip_address = Sensor.string("ip",
-            "the ip of the node controller", "")
+            description="the ip address of the node controller", 
+            default=os.environ['PAF_DATA_INTERFACE'])
         self.add_sensor(self._ip_address)
-
 
     @request(Str())
     @return_reply(Str())
