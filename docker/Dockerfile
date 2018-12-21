@@ -17,6 +17,8 @@ RUN echo 'deb http://us.archive.ubuntu.com/ubuntu trusty main multiverse' >> /et
     apt-get clean && \
     rm -rf /var/lib/apt/lists && \
     easy_install pip
+
+RUN pip install coloredlogs jinja2 posix_ipc mock 
 	
 RUN pip install -e \
 	git+https://github.com/ska-sa/katportalclient.git#egg=katportalclient \
