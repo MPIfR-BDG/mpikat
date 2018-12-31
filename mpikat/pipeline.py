@@ -9,10 +9,44 @@ import astropy.units as units
 import multiprocessing
 import numpy as np
 import socket
+import struct
 
-EXECUTE     = 1
+EXECUTE     = 0
 SECDAY      = 86400.0
 
+class Watchdog(Thread):
+    def __init__(self, name, standdown, callback):
+        Thread.__init__(self)
+        self._client = docker.from_env()
+        self._name = name
+        self._disable = standdown
+        self._callback = callback
+        self.daemon = True
+
+    def _is_dead(self, event):
+        return (event["Type"] == "container" and
+                event["Actor"]["Attributes"]["name"] == self._name and
+                event["status"] == "die")
+
+    def run(self):
+        log.debug("Setting watchdog on container '{0}'".format(self._name))
+        for event in self._client.events(decode=True):
+            if self._disable.is_set():
+                log.debug(
+                    "Watchdog standing down on container '{0}'".format(
+                        self._name))
+                break
+            elif self._is_dead(event):
+                exit_code = int(event["Actor"]["Attributes"]["exitCode"])
+                log.debug(
+                    "Watchdog activated on container '{0}'".format(
+                        self._name))
+                log.debug(
+                    "Container logs: {0}".format(
+                        self._client.api.logs(
+                            self._name)))
+                self._callback(exit_code)
+    
 # Epoch of BMF timing system, it updates every 0.5 year, [UTC datetime, EPOCH]
 EPOCHS = [
     Time("2025-07-01T00:00:00", format='isot', scale='utc'),
@@ -104,7 +138,12 @@ class Pipeline(object):
         socket.setdefaulttimeout(prd)  # Force to timeout after one data frame period
         server_address = (ip, port)
         sock.bind(server_address)
-    
+
+        nbyte, address = sock.recvfrom_into(data, pktsz)
+        data_uint64 = np.fromstring(str(data), 'uint64')
+        hdr_uint64  = np.uint64(struct.unpack("<Q", struct.pack(">Q", data_uint64[0]))[0])
+        print ((np.uint64(struct.unpack("<Q", struct.pack(">Q", data_uint64[1]))[0]) & np.uint64(0x00000000fc000000)) >> np.uint64(26)), ((hdr_uint64 & np.uint64(0x3fffffff00000000)) >> np.uint64(32)), (hdr_uint64 & np.uint64(0x00000000ffffffff))  
+                
         try:
             nbyte, address = sock.recvfrom_into(data, pktsz)
             if (nbyte != pktsz):
@@ -119,6 +158,7 @@ class Pipeline(object):
         except:
             alive = 0        
 
+        sock.close()
         return alive, nchk_alive
     
     def utc2refinfo(self, utc_start):
@@ -132,9 +172,9 @@ class Pipeline(object):
                 break
 
         delta_second = utc_start.unix - epoch.unix
-        sec = int(delta_second - (delta_second%self.prd)) + 21
+        sec = int(delta_second - (delta_second%self.prd))
         idf = int((delta_second%self.prd)/self.df_res)
-        
+                
         return int(epoch.unix/SECDAY), sec, idf
     
     def create_rbuf(self, key, blksz, 
@@ -227,9 +267,10 @@ class SearchModeFileTwoProcess(Pipeline):
     def __init__(self):
         super(SearchModeFileTwoProcess, self).__init__()
 
-    def configure(self, fname, node, numa):
+    def configure(self, fname, ip):
         self.nprocess       = 2
         self.fname          = fname
+        self.ip             = ip
         
         self.nchan_baseband       = 336
         self.nchk_baseband        = 48
@@ -256,12 +297,10 @@ class SearchModeFileTwoProcess(Pipeline):
         self.nstream         	 = 2
         self.nrepeat         	 = int(self.rbuf_filterbank_ndf_chk/(self.ndf_stream * self.nstream))
         self.seek_byte       	 = 0
-        self.node            	 = node
-        self.numa            	 = numa
         
         runtime_dir = []
         for i in range(self.nprocess):
-            runtime_dir.append("/beegfs/DENG/pacifix{}_numa{}_process{}".format(node, numa, i))
+            runtime_dir.append("/beegfs/DENG/{}_process{}".format(self.ip, i))
         self.runtime_dir         = runtime_dir
         
         self.detect_thresh   = 10
@@ -334,8 +373,9 @@ class SearchModeFileOneProcess(Pipeline):
     def __init__(self):
         super(SearchModeFileOneProcess, self).__init__()
 
-    def configure(self, fname, node, numa):
+    def configure(self, fname, ip):
         self.fname                   = fname
+        self.ip                      = ip
         
         self.nchan_baseband          = 336
         self.nchk_baseband           = 48
@@ -361,9 +401,7 @@ class SearchModeFileOneProcess(Pipeline):
         self.nstream         = 2
         self.nrepeat         = int(self.rbuf_filterbank_ndf_chk/(self.ndf_stream * self.nstream))
         self.seek_byte       = 0
-        self.node            = node
-        self.numa            = numa
-        self.runtime_dir         = "/beegfs/DENG/pacifix{}_numa{}_process0".format(self.node, self.numa)
+        self.runtime_dir     = "/beegfs/DENG/{}_process0".format(self.ip)
         
         self.detect_thresh   = 10
         self.dm              = [1, 1000]
@@ -430,9 +468,9 @@ class SearchModeStreamTwoProcess(Pipeline):
     def __init__(self):
         super(SearchModeStreamTwoProcess, self).__init__()  
 
-    def configure(self, utc_start, freq, node, numa):
+    def configure(self, utc_start, freq, ip):
         self.utc_start     = utc_start
-        self.ip            = "10.17.{}.{}".format(node, numa + 1)
+        self.ip            = ip
         self.freq          = freq
 
         self.dada_hdr_fname = "/home/pulsar/xinping/phased-array-feed/config/header_16bit.txt"
@@ -467,8 +505,6 @@ class SearchModeStreamTwoProcess(Pipeline):
         self.nstream         	 = 2
         self.nrepeat             = int(self.rbuf_filterbank_ndf_chk/(self.ndf_stream * self.nstream))
         self.seek_byte       	 = 0
-        self.node            	 = node
-        self.numa            	 = numa
         self.bind                = 1 
                 
         runtime_dir = []
@@ -476,8 +512,8 @@ class SearchModeStreamTwoProcess(Pipeline):
         ctrl_socket = []
         
         for i in range(self.nprocess):
-            runtime_dir.append("/beegfs/DENG/pacifix{}_numa{}_process{}".format(node, numa, i))
-            socket_addr.append("/beegfs/DENG/pacifix{}_numa{}_process{}/capture.socket".format(node, numa, i))
+            runtime_dir.append("/beegfs/DENG/{}_process{}".format(self.ip, i))
+            socket_addr.append("/beegfs/DENG/{}_process{}/capture.socket".format(self.ip, i))
             ctrl_socket.append(socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM))
             
         self.runtime_dir         = runtime_dir
@@ -588,9 +624,9 @@ class SearchModeStreamOneProcess(Pipeline):
     def __init__(self):
         super(SearchModeStreamOneProcess, self).__init__()
         
-    def configure(self,  utc_start, freq, node, numa):
+    def configure(self,  utc_start, freq, ip):
         self.utc_start     = utc_start
-        self.ip            = "10.17.{}.{}".format(node, numa + 1)
+        self.ip            = ip
         self.freq          = freq
 
         self.dada_hdr_fname = "/home/pulsar/xinping/phased-array-feed/config/header_16bit.txt"
@@ -624,20 +660,20 @@ class SearchModeStreamOneProcess(Pipeline):
         self.nstream         	 = 2
         self.nrepeat             = int(self.rbuf_filterbank_ndf_chk/(self.ndf_stream * self.nstream))
         self.seek_byte       	 = 0
-        self.node            	 = node
-        self.numa            	 = numa
         self.bind                = 1 
                 
-        self.runtime_dir         = "/beegfs/DENG/pacifix{}_numa{}_process0".format(node, numa)
-        self.socket_addr         = "/beegfs/DENG/pacifix{}_numa{}_process0/capture.socket".format(node, numa)
+        self.runtime_dir         = "/beegfs/DENG/{}_process0".format(self.ip)
+        self.socket_addr         = "/beegfs/DENG/{}_process0/capture.socket".format(self.ip)
         self.ctrl_socket         = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         
         self.detect_thresh   = 10
         self.dm              = [1, 1000]
         self.zap_chans       = [[512, 1023], [304, 310]]
         
-        self.rbuf_heimdall_blksz   = int(self.nchan_filterbank * self.rbuf_filterbank_blksz*self.nbyte_filterbank*self.npol_samp_filterbank*self.ndim_pol_filterbank/
-                                         float(self.nbyte_baseband*self.npol_samp_baseband*self.ndim_pol_baseband*self.nchan_baseband*self.cufft_nx))
+        self.rbuf_heimdall_blksz   = int(self.nchan_filterbank * self.rbuf_filterbank_blksz*
+                                         self.nbyte_filterbank*self.npol_samp_filterbank*self.ndim_pol_filterbank/
+                                         float(self.nbyte_baseband*self.npol_samp_baseband*
+                                               self.ndim_pol_baseband*self.nchan_baseband*self.cufft_nx))
 
         # Create ring buffers
         threads = []
@@ -728,21 +764,44 @@ class SearchModeStreamOneProcess(Pipeline):
       
 if __name__ == "__main__":
     # Question, why the reference seconds is 21 seconds less than the BMF number
+    # The number is random. Everytime reconfigure stream, it will change the reference seconds, sometimes it is multiple times of 27 seconds, but in most case, it is not
+    # To do, find a way to sync capture of beams
+    # understand why the capture does not works sometimes, or try VMA;
     freq          = 1340.5
     fname         = "/beegfs/DENG/AUG/baseband/J1819-1458/J1819-1458.dada"
     utc_start     = Time.now() + 0*units.s # Has to be "YYYY-MM-DDThh:mm:ss"
+    
+    #pktsz = 7232
+    #prd   = 27
+    #ip   = "10.17.8.1"
+    #port = 17100
+    #data = bytearray(pktsz) 
+    #sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #socket.setdefaulttimeout(prd)  # Force to timeout after one data frame period
+    #server_address = (ip, port)
+    #sock.bind(server_address)
+    #
+    #nbyte, address = sock.recvfrom_into(data, pktsz)
+    #
+    #data_uint64 = np.fromstring(str(data), 'uint64')
+    #hdr_uint64  = np.uint64(struct.unpack("<Q", struct.pack(">Q", data_uint64[0]))[0])
+    #second      = ((hdr_uint64 & np.uint64(0x3fffffff00000000)) >> np.uint64(32))
+    #idf         = (hdr_uint64 & np.uint64(0x00000000ffffffff))  
+    #print ((np.uint64(struct.unpack("<Q", struct.pack(">Q", data_uint64[1]))[0]) & np.uint64(0x00000000fc000000)) >> np.uint64(26)), second, idf
+    #print int(second/27)*27-second
+    #sock.close()
+        
     source_name   = "UNKNOWN"
     ra            = "00 00 00.00"
     dec           = "00 00 00.00"
     start_buf     = 0
-    node          = 8
-    numa          = 0
+    ip            = "10.17.8.1"
 
     #print "\nCreate pipeline ...\n"
     #search_mode = SearchModeFileOneProcess()
     #search_mode = SearchModeFileTwoProcess()
     #print "\nConfigure it ...\n"
-    #search_mode.configure(fname, node, numa)    
+    #search_mode.configure(fname, ip)
     #print "\nStart it ...\n"
     #search_mode.start()
     #print "\nStop it ...\n"
@@ -752,12 +811,14 @@ if __name__ == "__main__":
 
     print "\nCreate pipeline ...\n"
     search_mode = SearchModeStreamTwoProcess()
-    search_mode = SearchModeStreamOneProcess()
+    #search_mode = SearchModeStreamOneProcess()
     print "\nConfigure it ...\n"
-    search_mode.configure(utc_start, freq, node, numa)    
+    
+    search_mode.configure(utc_start, freq, ip)
+
     print "\nStart it ...\n"
-    search_mode.start(source_name, ra, dec, start_buf)
+    #search_mode.start(source_name, ra, dec, start_buf)
     print "\nStop it ...\n"
-    search_mode.stop()
+    #search_mode.stop()
     print "\nDeconfigure it ...\n"
     search_mode.deconfigure()
