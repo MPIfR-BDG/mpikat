@@ -13,40 +13,56 @@ import struct
 
 EXECUTE     = 0
 SECDAY      = 86400.0
+system_conf = {"nchan_chk":    	7,      
+               "samp_rate":    	0.84375,  
+               "df_dtsz":      	7168,     
+               "df_pktsz":     	7232,     
+               "df_hdrsz":     	64,       
+               "nbyte_baseband":     2,        
+               "npol_samp_baseband": 2,        
+               "ndim_pol_baseband":  2,        
+               "ncpu_numa":          10,       
+               "ncpu_process":       5,        
+               "port0":              17100,    
+               "prd":                27,       
+               "df_res":             1.08E-4,  
+               "ndf_prd":            250000,               
+}
 
-class Watchdog(Thread):
-    def __init__(self, name, standdown, callback):
-        Thread.__init__(self)
-        self._client = docker.from_env()
-        self._name = name
-        self._disable = standdown
-        self._callback = callback
-        self.daemon = True
+#class Watchdog(Thread):
+#    def __init__(self, name, standdown, callback):
+#        Thread.__init__(self)
+#        self._client = docker.from_env()
+#        self._name = name
+#        self._disable = standdown
+#        self._callback = callback
+#        self.daemon = True
+#
+#    def _is_dead(self, event):
+#        return (event["Type"] == "container" and
+#                event["Actor"]["Attributes"]["name"] == self._name and
+#                event["status"] == "die")
+#
+#    def run(self):
+#        log.debug("Setting watchdog on container '{0}'".format(self._name))
+#        for event in self._client.events(decode=True):
+#            if self._disable.is_set():
+#                log.debug(
+#                    "Watchdog standing down on container '{0}'".format(
+#                        self._name))
+#                break
+#            elif self._is_dead(event):
+#                exit_code = int(event["Actor"]["Attributes"]["exitCode"])
+#                log.debug(
+#                    "Watchdog activated on container '{0}'".format(
+#                        self._name))
+#                log.debug(
+#                    "Container logs: {0}".format(
+#                        self._client.api.logs(
+#                            self._name)))
+#                self._callback(exit_code)
+#
 
-    def _is_dead(self, event):
-        return (event["Type"] == "container" and
-                event["Actor"]["Attributes"]["name"] == self._name and
-                event["status"] == "die")
-
-    def run(self):
-        log.debug("Setting watchdog on container '{0}'".format(self._name))
-        for event in self._client.events(decode=True):
-            if self._disable.is_set():
-                log.debug(
-                    "Watchdog standing down on container '{0}'".format(
-                        self._name))
-                break
-            elif self._is_dead(event):
-                exit_code = int(event["Actor"]["Attributes"]["exitCode"])
-                log.debug(
-                    "Watchdog activated on container '{0}'".format(
-                        self._name))
-                log.debug(
-                    "Container logs: {0}".format(
-                        self._client.api.logs(
-                            self._name)))
-                self._callback(exit_code)
-    
 # Epoch of BMF timing system, it updates every 0.5 year, [UTC datetime, EPOCH]
 EPOCHS = [
     Time("2025-07-01T00:00:00", format='isot', scale='utc'),
@@ -69,20 +85,20 @@ EPOCHS = [
 
 class Pipeline(object):
     def __init__(self):
-        self.nchan_chk    	= 7
-        self.samp_rate    	= 0.84375
-        self.df_dtsz      	= 7168
-        self.df_pktsz     	= 7232
-        self.df_hdrsz     	= 64
-        self.nbyte_baseband     = 2
-        self.npol_samp_baseband = 2
-        self.ndim_pol_baseband  = 2
-        self.ncpu_numa          = 10
-        self.ncpu_process       = 5
-        self.port0              = 17100
-        self.prd                = 27
-        self.df_res             = 1.08E-4
-        self.ndf_prd            = 250000
+        self.nchan_chk    	= system_conf["nchan_chk"]    	
+        self.samp_rate    	= system_conf["samp_rate"]    	
+        self.df_dtsz      	= system_conf["df_dtsz"]      	
+        self.df_pktsz     	= system_conf["df_pktsz"]     	
+        self.df_hdrsz     	= system_conf["df_hdrsz"]     	
+        self.nbyte_baseband     = system_conf["nbyte_baseband"]    
+        self.npol_samp_baseband = system_conf["npol_samp_baseband"] 
+        self.ndim_pol_baseband  = system_conf["ndim_pol_baseband"]  
+        self.ncpu_numa          = system_conf["ncpu_numa"]          
+        self.ncpu_process       = system_conf["ncpu_process"]       
+        self.port0              = system_conf["port0"]              
+        self.prd                = system_conf["prd"]                
+        self.df_res             = system_conf["df_res"]             
+        self.ndf_prd            = system_conf["ndf_prd"]            
         
     def __del__(self):
         class_name = self.__class__.__name__
@@ -101,8 +117,24 @@ class Pipeline(object):
 
     def status(self):
         raise NotImplementedError
-    
-    def connections(self, destination, pktsz, prd, ndf_check_chk):
+
+    def acquire_beam_id(self, ip, port):
+        data = bytearray(self.df_pktsz) 
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        socket.setdefaulttimeout(self.prd)  # Force to timeout after one data frame period
+        server_address = (ip, port)
+        sock.bind(server_address)
+
+        nbyte, address = sock.recvfrom_into(data, self.df_pktsz)
+        data_uint64 = np.fromstring(str(data), 'uint64')
+        hdr_uint64  = np.uint64(struct.unpack("<Q", struct.pack(">Q", data_uint64[2]))[0])
+        beam_id     = hdr_uint64 & np.uint64(0x000000000000ffff)
+
+        sock.close()
+        
+        return beam_id
+        
+    def connections(self, destination, ndf_check_chk):
         """
         To check the connection of one beam with given ip and port numbers
         """
@@ -113,7 +145,7 @@ class Pipeline(object):
         for i in range(nport):
             ip   = destination[i].split(":")[0]
             port = int(destination[i].split(":")[1])
-            alive[i], nchk_alive[i] = self.connection(ip, port, pktsz, ndf_check_chk, prd)
+            alive[i], nchk_alive[i] = self.connection(ip, port, ndf_check_chk)
         destination_alive = []   # The destination where we can receive data
         destination_dead   = []   # The destination where we can not receive data
         for i in range(nport):
@@ -127,32 +159,32 @@ class Pipeline(object):
                 destination_dead.append("{}:{}:{}".format(ip, port, nchk_expect))
         return destination_alive, destination_dead
     
-    def connection(self, ip, port, pktsz, ndf_check_chk, prd):
+    def connection(self, ip, port, ndf_check_chk):
         """
         To check the connection of single port
         """
         alive = 1
         nchk_alive = 0
-        data = bytearray(pktsz) 
+        data = bytearray(self.df_pktsz) 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        socket.setdefaulttimeout(prd)  # Force to timeout after one data frame period
+        socket.setdefaulttimeout(self.prd)  # Force to timeout after one data frame period
         server_address = (ip, port)
         sock.bind(server_address)
 
-        nbyte, address = sock.recvfrom_into(data, pktsz)
+        nbyte, address = sock.recvfrom_into(data, self.df_pktsz)
         data_uint64 = np.fromstring(str(data), 'uint64')
         hdr_uint64  = np.uint64(struct.unpack("<Q", struct.pack(">Q", data_uint64[0]))[0])
         print ((np.uint64(struct.unpack("<Q", struct.pack(">Q", data_uint64[1]))[0]) & np.uint64(0x00000000fc000000)) >> np.uint64(26)), ((hdr_uint64 & np.uint64(0x3fffffff00000000)) >> np.uint64(32)), (hdr_uint64 & np.uint64(0x00000000ffffffff))  
                 
         try:
-            nbyte, address = sock.recvfrom_into(data, pktsz)
-            if (nbyte != pktsz):
+            nbyte, address = sock.recvfrom_into(data, self.df_pktsz)
+            if (nbyte != self.df_pktsz):
                 alive = 0
             else:
                 source = []
                 alive = 1
                 for i in range(ndf_check_chk):
-                    buf, address = sock.recvfrom(pktsz)
+                    buf, address = sock.recvfrom(self.df_pktsz)
                     source.append(address)
                 nchk_alive = len(set(source))
         except:
@@ -271,6 +303,8 @@ class SearchModeFileTwoProcess(Pipeline):
         self.nprocess       = 2
         self.fname          = fname
         self.ip             = ip
+        self.node           = int(ip.split(".")[2])
+        self.numa           = int(ip.split(".")[3])
         
         self.nchan_baseband       = 336
         self.nchk_baseband        = 48
@@ -279,7 +313,7 @@ class SearchModeFileTwoProcess(Pipeline):
         self.rbuf_filterbank_nblk    = 6
         self.rbuf_filterbank_nread   = 1
 
-        self.rbuf_filterbank_blksz    = self.nchk_baseband*self.df_dtsz*self.rbuf_filterbank_ndf_chk
+        self.rbuf_filterbank_blksz   = self.nchk_baseband*self.df_dtsz*self.rbuf_filterbank_ndf_chk
         
         self.rbuf_heimdall_key     = ["dade", "dadg"]
         self.rbuf_heimdall_ndf_chk = 10240
@@ -292,7 +326,6 @@ class SearchModeFileTwoProcess(Pipeline):
         self.npol_samp_filterbank  = 1
         self.ndim_pol_filterbank   = 1
 
-        #self.ndf_stream      	 = 128
         self.ndf_stream      	 = 256
         self.nstream         	 = 2
         self.nrepeat         	 = int(self.rbuf_filterbank_ndf_chk/(self.ndf_stream * self.nstream))
@@ -300,7 +333,7 @@ class SearchModeFileTwoProcess(Pipeline):
         
         runtime_dir = []
         for i in range(self.nprocess):
-            runtime_dir.append("/beegfs/DENG/{}_process{}".format(self.ip, i))
+            runtime_dir.append("/beegfs/DENG/pacifix{}_numa{}_process{}".format(self.node, self.numa, i))
         self.runtime_dir         = runtime_dir
         
         self.detect_thresh   = 10
@@ -376,6 +409,8 @@ class SearchModeFileOneProcess(Pipeline):
     def configure(self, fname, ip):
         self.fname                   = fname
         self.ip                      = ip
+        self.node                    = int(ip.split(".")[2])
+        self.numa                    = int(ip.split(".")[3])
         
         self.nchan_baseband          = 336
         self.nchk_baseband           = 48
@@ -401,7 +436,7 @@ class SearchModeFileOneProcess(Pipeline):
         self.nstream         = 2
         self.nrepeat         = int(self.rbuf_filterbank_ndf_chk/(self.ndf_stream * self.nstream))
         self.seek_byte       = 0
-        self.runtime_dir     = "/beegfs/DENG/{}_process0".format(self.ip)
+        self.runtime_dir     = "/beegfs/DENG/pacifix{}_numa{}_process0".format(self.node, self.numa)
         
         self.detect_thresh   = 10
         self.dm              = [1, 1000]
@@ -471,14 +506,16 @@ class SearchModeStreamTwoProcess(Pipeline):
     def configure(self, utc_start, freq, ip):
         self.utc_start     = utc_start
         self.ip            = ip
+        self.node          = int(ip.split(".")[2])
+        self.numa          = int(ip.split(".")[3])
         self.freq          = freq
-
+        
         self.dada_hdr_fname = "/home/pulsar/xinping/phased-array-feed/config/header_16bit.txt"
-        self.nprocess      = 2
-        self.nchk_port     = 12
-        self.nport_beam    = 3
-        self.pad           = 1
-        self.ndf_check_chk = 1204
+        self.nprocess       = 2
+        self.nchk_port      = 12
+        self.nport_beam     = 3
+        self.pad            = 1
+        self.ndf_check_chk  = 1204
 
         self.nchan_baseband          = 336
         self.nchk_baseband           = 48
@@ -488,7 +525,7 @@ class SearchModeStreamTwoProcess(Pipeline):
         self.rbuf_filterbank_nread   = 1
         self.tbuf_filterbank_ndf_chk = 250
 
-        self.rbuf_filterbank_blksz    = self.nchk_baseband*self.df_dtsz*self.rbuf_filterbank_ndf_chk
+        self.rbuf_filterbank_blksz   = self.nchk_baseband*self.df_dtsz*self.rbuf_filterbank_ndf_chk
         
         self.rbuf_heimdall_key     = ["dade", "dadg"]
         self.rbuf_heimdall_ndf_chk = 10240
@@ -507,19 +544,6 @@ class SearchModeStreamTwoProcess(Pipeline):
         self.seek_byte       	 = 0
         self.bind                = 1 
                 
-        runtime_dir = []
-        socket_addr = []
-        ctrl_socket = []
-        
-        for i in range(self.nprocess):
-            runtime_dir.append("/beegfs/DENG/{}_process{}".format(self.ip, i))
-            socket_addr.append("/beegfs/DENG/{}_process{}/capture.socket".format(self.ip, i))
-            ctrl_socket.append(socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM))
-            
-        self.runtime_dir         = runtime_dir
-        self.socket_addr         = socket_addr
-        self.ctrl_socket         = ctrl_socket
-        
         self.detect_thresh   = 10
         self.dm              = [1, 1000]
         self.zap_chans       = [[512, 1023], [304, 310]]
@@ -542,6 +566,9 @@ class SearchModeStreamTwoProcess(Pipeline):
             thread.join()
 
         # Start capture
+        self.runtime_dir = []
+        self.socket_addr = []
+        self.ctrl_socket = []
         threads = [] 
         source_info = "UNKNOW:00 00 00.00:00 00 00.00"
         refinfo = self.utc2refinfo(self.utc_start)
@@ -551,22 +578,31 @@ class SearchModeStreamTwoProcess(Pipeline):
             for j in range(self.nport_beam):
                 port = self.port0 + i*self.nport_beam + j
                 destination.append("{}:{}:{}".format(self.ip, port, self.nchk_port))
-            destination_alive, destination_dead = self.connections(destination, self.df_pktsz, self.prd, self.ndf_check_chk)
+            destination_alive, destination_dead = self.connections(destination, self.ndf_check_chk)
             cpu = self.numa*self.ncpu_numa + i*self.ncpu_process
             destination_alive_cpu = []
             for info in destination_alive:
                 destination_alive_cpu.append("{}:{}".format(info, cpu))
                 cpu += 1
-            
             print destination_alive_cpu, destination_dead
             buf_ctrl_cpu = self.numa*self.ncpu_numa + i*self.ncpu_process + self.nport_beam
             cpt_ctrl_cpu = self.numa*self.ncpu_numa + i*self.ncpu_process + self.nport_beam
             cpt_ctrl     = "1:{}".format(cpt_ctrl_cpu)
             print cpt_ctrl
+
+            print destination_alive[0].split(":")[0], destination_alive[0].split(":")[1]
+            self.beam_id = self.acquire_beam_id(destination_alive[0].split(":")[0], int(destination_alive[0].split(":")[1]))
+            runtime_dir  = "/beegfs/DENG/beam{:02}".format(self.beam_id)
+            socket_addr  = "/beegfs/DENG/beam{:02}/capture.socket".format(self.beam_id)
+            ctrl_socket  = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+            self.runtime_dir.append(runtime_dir)
+            self.socket_addr.append(socket_addr)
+            self.ctrl_socket.append(ctrl_socket)
+            
             threads.append(threading.Thread(target = self.capture,
                                             args = (self.rbuf_filterbank_key[i], self.df_pktsz, self.df_hdrsz,
                                                     destination_alive_cpu, destination_dead, self.freq, self.nchan_chk, refinfo,
-                                                    self.runtime_dir[i], buf_ctrl_cpu, cpt_ctrl, self.bind, self.prd, self.rbuf_filterbank_ndf_chk,
+                                                    self.runtime_dir, buf_ctrl_cpu, cpt_ctrl, self.bind, self.prd, self.rbuf_filterbank_ndf_chk,
                                                     self.tbuf_filterbank_ndf_chk, self.ndf_prd, self.dada_hdr_fname, "PAF-BMF", source_info, self.pad)))            
         for thread in threads:
             thread.start()            
@@ -627,8 +663,10 @@ class SearchModeStreamOneProcess(Pipeline):
     def configure(self,  utc_start, freq, ip):
         self.utc_start     = utc_start
         self.ip            = ip
+        self.node          = int(ip.split(".")[2])
+        self.numa          = int(ip.split(".")[3])
         self.freq          = freq
-
+        
         self.dada_hdr_fname = "/home/pulsar/xinping/phased-array-feed/config/header_16bit.txt"
         self.nchk_port     = 12
         self.nport_beam    = 3
@@ -661,10 +699,6 @@ class SearchModeStreamOneProcess(Pipeline):
         self.nrepeat             = int(self.rbuf_filterbank_ndf_chk/(self.ndf_stream * self.nstream))
         self.seek_byte       	 = 0
         self.bind                = 1 
-                
-        self.runtime_dir         = "/beegfs/DENG/{}_process0".format(self.ip)
-        self.socket_addr         = "/beegfs/DENG/{}_process0/capture.socket".format(self.ip)
-        self.ctrl_socket         = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         
         self.detect_thresh   = 10
         self.dm              = [1, 1000]
@@ -697,13 +731,17 @@ class SearchModeStreamOneProcess(Pipeline):
         for i in range(self.nport_beam):
             port = self.port0 + i
             destination.append("{}:{}:{}".format(self.ip, port, self.nchk_port))
-        destination_alive, destination_dead = self.connections(destination, self.df_pktsz, self.prd, self.ndf_check_chk)
+        destination_alive, destination_dead = self.connections(destination, self.ndf_check_chk)
         cpu = self.numa*self.ncpu_numa
         destination_alive_cpu = []
         for info in destination_alive:
             destination_alive_cpu.append("{}:{}".format(info, cpu))
             cpu += 1
             
+        self.beam_id = self.acquire_beam_id(destination_alive[0].split(":")[0], int(destination_alive[0].split(":")[1]))
+        self.runtime_dir  = "/beegfs/DENG/beam{:02}".format(self.beam_id)
+        self.socket_addr  = "/beegfs/DENG/beam{:02}/capture.socket".format(self.beam_id)
+        self.ctrl_socket  = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         print destination_alive_cpu, destination_dead
         buf_ctrl_cpu = self.numa*self.ncpu_numa + self.nport_beam
         cpt_ctrl_cpu = self.numa*self.ncpu_numa + self.nport_beam
@@ -795,7 +833,7 @@ if __name__ == "__main__":
     ra            = "00 00 00.00"
     dec           = "00 00 00.00"
     start_buf     = 0
-    ip            = "10.17.8.1"
+    ip            = "10.17.8.2"
 
     #print "\nCreate pipeline ...\n"
     #search_mode = SearchModeFileOneProcess()
@@ -810,12 +848,12 @@ if __name__ == "__main__":
     #search_mode.deconfigure()
 
     print "\nCreate pipeline ...\n"
-    search_mode = SearchModeStreamTwoProcess()
-    #search_mode = SearchModeStreamOneProcess()
+    #search_mode = SearchModeStreamTwoProcess()
+    search_mode = SearchModeStreamOneProcess()
     print "\nConfigure it ...\n"
     
     search_mode.configure(utc_start, freq, ip)
-
+    
     print "\nStart it ...\n"
     #search_mode.start(source_name, ra, dec, start_buf)
     print "\nStop it ...\n"
