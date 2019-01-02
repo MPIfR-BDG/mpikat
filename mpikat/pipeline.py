@@ -18,6 +18,7 @@ from subprocess import check_output
 # 3. To capture the state of each running porcess and determine it is "error" or not, DO NOT NEED TO DO IT;
 # 4. To pass packet loss rate to controller;
 # 5. Capture expection and pass to controller, DONE;
+# 6. UTC_START
 
 # https://stackoverflow.com/questions/16768290/understanding-popen-communicate
 
@@ -82,22 +83,22 @@ PIPELINE_STATES = ["idle", "configuring", "ready",
 
 # Epoch of BMF timing system, it updates every 0.5 year, [UTC datetime, EPOCH]
 EPOCHS = [
-    Time("2025-07-01T00:00:00", format='isot', scale='utc'),
-    Time("2025-01-01T00:00:00", format='isot', scale='utc'),
-    Time("2024-07-01T00:00:00", format='isot', scale='utc'),
-    Time("2024-01-01T00:00:00", format='isot', scale='utc'),
-    Time("2023-07-01T00:00:00", format='isot', scale='utc'),
-    Time("2023-01-01T00:00:00", format='isot', scale='utc'),
-    Time("2022-07-01T00:00:00", format='isot', scale='utc'),
-    Time("2022-01-01T00:00:00", format='isot', scale='utc'),
-    Time("2021-07-01T00:00:00", format='isot', scale='utc'),
-    Time("2021-01-01T00:00:00", format='isot', scale='utc'),
-    Time("2020-07-01T00:00:00", format='isot', scale='utc'),
-    Time("2020-01-01T00:00:00", format='isot', scale='utc'),
-    Time("2019-07-01T00:00:00", format='isot', scale='utc'),
-    Time("2019-01-01T00:00:00", format='isot', scale='utc'),
-    Time("2018-07-01T00:00:00", format='isot', scale='utc'),
-    Time("2018-01-01T00:00:00", format='isot', scale='utc'),
+    [Time("2025-07-01T00:00:00", format='isot', scale='utc'), 51],
+    [Time("2025-01-01T00:00:00", format='isot', scale='utc'), 50],
+    [Time("2024-07-01T00:00:00", format='isot', scale='utc'), 49],
+    [Time("2024-01-01T00:00:00", format='isot', scale='utc'), 48],
+    [Time("2023-07-01T00:00:00", format='isot', scale='utc'), 47],
+    [Time("2023-01-01T00:00:00", format='isot', scale='utc'), 46],
+    [Time("2022-07-01T00:00:00", format='isot', scale='utc'), 45],
+    [Time("2022-01-01T00:00:00", format='isot', scale='utc'), 44],
+    [Time("2021-07-01T00:00:00", format='isot', scale='utc'), 43],
+    [Time("2021-01-01T00:00:00", format='isot', scale='utc'), 42],
+    [Time("2020-07-01T00:00:00", format='isot', scale='utc'), 41],
+    [Time("2020-01-01T00:00:00", format='isot', scale='utc'), 40],
+    [Time("2019-07-01T00:00:00", format='isot', scale='utc'), 39],
+    [Time("2019-01-01T00:00:00", format='isot', scale='utc'), 38],
+    [Time("2018-07-01T00:00:00", format='isot', scale='utc'), 37],
+    [Time("2018-01-01T00:00:00", format='isot', scale='utc'), 36],
 ]
 
 class PipelineError(Exception):
@@ -138,7 +139,7 @@ class Pipeline(object):
     def deconfigure(self):
         raise NotImplementedError
 
-    def acquire_beam_id(self, ip, port):
+    def acquire_beamid(self, ip, port):
         """
         To get the beam ID 
         """
@@ -153,23 +154,61 @@ class Pipeline(object):
 
         try:
             nbyte, address = sock.recvfrom_into(data, df_pktsz)
-            data_uint64 = np.fromstring(str(data), 'uint64')
-            hdr_uint64  = np.uint64(struct.unpack("<Q", struct.pack(">Q", data_uint64[2]))[0])
-            beam_id     = hdr_uint64 & np.uint64(0x000000000000ffff)
-            sock.close()
-            
-            return beam_id
         except:
             sock.close()
             self.state = "error"
+        else:            
+            data_uint64 = np.fromstring(str(data), 'uint64')
+            hdr_uint64  = np.uint64(struct.unpack("<Q", struct.pack(">Q", data_uint64[2]))[0])
+            beamid      = hdr_uint64 & np.uint64(0x000000000000ffff)
+            sock.close()
+            
+            return beamid
+
+    def acquire_refinfo(self, ip, port):
+        """
+        To get reference information for capture
+        """
+        df_pktsz = SYSTEM_CONF["df_pktsz"]
+        prd      = SYSTEM_CONF["prd"]
+        
+        data = bytearray(df_pktsz) 
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        socket.setdefaulttimeout(prd)  # Force to timeout after one data frame period
+        server_address = (ip, port)
+        sock.bind(server_address)
+
+        try:            
+            nbyte, address = sock.recvfrom_into(data, df_pktsz)            
+        except:
+            sock.close()
+            self.state = "error"
+        else:
+            data     = np.fromstring(str(data), 'uint64')
+            hdr_part = np.uint64(struct.unpack("<Q", struct.pack(">Q", data[0]))[0])
+            sec_ref  = (hdr_part & np.uint64(0x3fffffff00000000)) >> np.uint64(32)
+            idf_ref  = hdr_part & np.uint64(0x00000000ffffffff)
+            
+            hdr_part  = np.uint64(struct.unpack("<Q", struct.pack(">Q", data[1]))[0])
+            epoch     = (hdr_part & np.uint64(0x00000000fc000000)) >> np.uint64(26)    
+
+            for i in EPOCHS:
+                if i[1] == epoch:
+                    break
+            epoch_ref = int(i[0].unix/86400.0)
+            
+            sock.close()
+            
+            return epoch_ref, sec_ref, idf_ref
 
     def kill_process(self, process_name):
         try:
-            pids = check_output(["pidof", process_name]).split()
-            for pid in pids:
-                os.system("kill {}".format(pid))            
+            pids = check_output(["pidof", process_name]).split()       
         except:
             pass # We only kill running process
+        else:
+            for pid in pids:
+                os.system("kill {}".format(pid))     
         
     def connections(self, destination, ndf_check_chk):
         """
@@ -222,6 +261,9 @@ class Pipeline(object):
         hdr_uint64  = np.uint64(struct.unpack("<Q", struct.pack(">Q", data_uint64[0]))[0])
         try:
             nbyte, address = sock.recvfrom_into(data, df_pktsz)
+        except:
+            alive = 0
+        else:            
             if (nbyte != df_pktsz):
                 alive = 0
             else:
@@ -231,8 +273,6 @@ class Pipeline(object):
                     buf, address = sock.recvfrom(df_pktsz)
                     source.append(address)
                 nchk_alive = len(set(source))
-        except:
-            alive = 0        
 
         sock.close()
         return alive, nchk_alive
@@ -247,14 +287,14 @@ class Pipeline(object):
         
         utc_start = Time(utc_start, format='isot', scale='utc')
         for epoch in EPOCHS:
-            if epoch < utc_start:
+            if epoch[0] < utc_start:
                 break
 
-        delta_second = utc_start.unix - epoch.unix
+        delta_second = utc_start.unix - epoch[0].unix
         sec = int(delta_second - (delta_second%prd))
         idf = int((delta_second%prd)/df_res)
                 
-        return int(epoch.unix/86400.0), sec, idf
+        return int(epoch[0].unix/86400.0), sec, idf
     
     def create_rbuf(self, key, blksz, 
                     nblk, nreader):
@@ -517,30 +557,26 @@ class SearchWithFileTwoProcess(SearchWithFile):
         ncpu_pipeline = 5
         try:
             super(SearchWithFileTwoProcess, self).configure(fname, ip, pipeline_conf, nprocess, ncpu_pipeline)
-        except:
-            raise PipelineError(
-                "Can only configure pipeline in idle state")
+        except Exception, e:
+            raise e
         
     def start(self):
         try:
             super(SearchWithFileTwoProcess, self).start()
-        except:
-            raise PipelineError(
-                "Pipeline can only be started from ready state")
+        except Exception, e:
+            raise e
         
     def stop(self):
         try:
             super(SearchWithFileTwoProcess, self).stop()
-        except:
-            raise PipelineError("Can only stop a running pipeline")
+        except Exception, e:
+            raise e
             
     def deconfigure(self):
         try:
             super(SearchWithFileTwoProcess, self).deconfigure()
-        except:
-            raise PipelineError(
-                "Pipeline can only be deconfigured from ready state")
-
+        except Exception, e:
+            raise e
             
 class SearchWithFileOneProcess(SearchWithFile):
     def __init__(self):
@@ -552,29 +588,26 @@ class SearchWithFileOneProcess(SearchWithFile):
         ncpu_pipeline = 10
         try:
             super(SearchWithFileOneProcess, self).configure(fname, ip, pipeline_conf, nprocess, ncpu_pipeline)
-        except:
-            raise PipelineError(
-                "Can only configure pipeline in idle state")
+        except Exception, e:
+            raise e
 
     def start(self):
         try:
             super(SearchWithFileOneProcess, self).start()
-        except:
-            raise PipelineError(
-                "Pipeline can only be started from ready state")
+        except Exception, e:
+            raise e
             
     def stop(self):
         try:
             super(SearchWithFileOneProcess, self).stop()
-        except:
-            raise PipelineError("Can only stop a running pipeline")
+        except Exception, e:
+            raise e
             
     def deconfigure(self):
         try:
             super(SearchWithFileOneProcess, self).deconfigure()
-        except:
-            raise PipelineError(
-                "Pipeline can only be deconfigured from ready state")
+        except Exception, e:
+            raise e
         
 class SearchWithStream(Pipeline):
     def __init__(self):
@@ -668,14 +701,18 @@ class SearchWithStream(Pipeline):
             print cpt_ctrl
 
             print destination_alive[0].split(":")[0], destination_alive[0].split(":")[1]
-            self.beam_id = self.acquire_beam_id(destination_alive[0].split(":")[0],
+            self.beamid = self.acquire_beamid(destination_alive[0].split(":")[0],
                                                 int(destination_alive[0].split(":")[1]))
-            runtime_dir  = "/beegfs/DENG/beam{:02}".format(self.beam_id)
-            socket_addr  = "/beegfs/DENG/beam{:02}/capture.socket".format(self.beam_id)
+            runtime_dir  = "/beegfs/DENG/beam{:02}".format(self.beamid)
+            socket_addr  = "/beegfs/DENG/beam{:02}/capture.socket".format(self.beamid)
             ctrl_socket  = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
             self.runtime_dir.append(runtime_dir)
             self.socket_addr.append(socket_addr)
             self.ctrl_socket.append(ctrl_socket)
+            
+            refinfo = self.acquire_refinfo(destination_alive[0].split(":")[0],  # For now, we do not sync among different beams
+                                           int(destination_alive[0].split(":")[1]))
+            refinfo = "{}:{}:{}".format(refinfo[0], refinfo[1], refinfo[2])
             
             threads.append(threading.Thread(target = self.capture,
                                             args = (self.pipeline_conf["rbuf_filterbank_key"][i],
@@ -780,29 +817,26 @@ class SearchWithStreamTwoProcess(SearchWithStream):
         ncpu_pipeline = 5
         try:
             super(SearchWithStreamTwoProcess, self).configure(utc_start, freq, ip, pipeline_conf, nprocess, nchk_port, nport_beam, ncpu_pipeline)
-        except:
-            raise PipelineError(
-                "Can only configure pipeline in idle state")
+        except Exception, e:
+            raise e
         
     def start(self, source_name, ra, dec, start_buf):
         try:
             super(SearchWithStreamTwoProcess, self).start(source_name, ra, dec, start_buf)
-        except:
-            raise PipelineError(
-                "Pipeline can only be started from ready state")
+        except Exception, e:
+            raise e
         
     def stop(self):
         try:
             super(SearchWithStreamTwoProcess, self).stop()
-        except:
-            raise PipelineError("Can only stop a running pipeline")
+        except Exception, e:
+            raise e
         
     def deconfigure(self):
         try:
             super(SearchWithStreamTwoProcess, self).deconfigure()
-        except:
-            raise PipelineError(
-                "Pipeline can only be deconfigured from ready state")
+        except Exception, e:
+            raise e
         
 class SearchWithStreamOneProcess(SearchWithStream):
     def __init__(self):
@@ -816,29 +850,26 @@ class SearchWithStreamOneProcess(SearchWithStream):
         ncpu_pipeline = 10
         try:
             super(SearchWithStreamOneProcess, self).configure(utc_start, freq, ip, pipeline_conf, nprocess, nchk_port, nport_beam, ncpu_pipeline)
-        except:
-            raise PipelineError(
-                "Can only configure pipeline in idle state")
-
+        except Exception, e:
+            raise e
+        
     def start(self, source_name, ra, dec, start_buf):
         try:
             super(SearchWithStreamOneProcess, self).start(source_name, ra, dec, start_buf)
-        except:
-            raise PipelineError(
-                "Pipeline can only be started from ready state")
+        except Exception, e:
+            raise e
         
     def stop(self):
         try:
             super(SearchWithStreamOneProcess, self).stop()
-        except:
-            raise PipelineError("Can only stop a running pipeline")
+        except Exception, e:
+            raise e
         
     def deconfigure(self):
         try:
             super(SearchWithStreamOneProcess, self).deconfigure()
-        except:
-            raise PipelineError(
-                "Pipeline can only be deconfigured from ready state")
+        except Exception, e:
+            raise e
     
 if __name__ == "__main__":
     # Question, why the reference seconds is 21 seconds less than the BMF number
