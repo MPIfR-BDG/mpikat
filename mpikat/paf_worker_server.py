@@ -95,7 +95,7 @@ class PafWorkerServer(AsyncDeviceServer):
         self._pipeline_sensor_status = Sensor.discrete(
             "pipeline-status",
             description="Status of the pipeline",
-            params=self.PIPELINE_STATUSES,
+            params=self.PIPELINE_STATES,
             default="idle",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._pipeline_sensor_status) 
