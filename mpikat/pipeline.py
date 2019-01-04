@@ -25,7 +25,7 @@ import shlex
 
 # https://stackoverflow.com/questions/16768290/understanding-popen-communicate
 
-EXECUTE        = 1
+EXECUTE        = 0
 PAF_ROOT       = "/home/pulsar/xinping/phased-array-feed/"
 DATA_ROOT      = "/beegfs/DENG/"
 DADA_ROOT      = "{}/AUG/baseband/".format(DATA_ROOT)
@@ -113,6 +113,14 @@ EPOCHS = [
 
 class PipelineError(Exception):
     pass
+
+PIPELINES = {}
+
+def register_pipeline(name):
+    def _register(cls):
+        PIPELINES[name] = cls
+        return cls
+    return _register;
 
 class Pipeline(object):
     def __init__(self):
@@ -451,7 +459,7 @@ class Pipeline(object):
             except:
                 self.state = "error"
 
-                
+@register_pipeline("SearchWithFile")   
 class SearchWithFile(Pipeline):
     """
     For now, the process part only support full bandwidth, 
@@ -584,6 +592,7 @@ class SearchWithFile(Pipeline):
             
         self.state = "idle"
 
+@register_pipeline("SearchWithFileTwoProcess")  
 class SearchWithFileTwoProcess(SearchWithFile):
     def __init__(self):
         super(SearchWithFileTwoProcess, self).__init__()
@@ -614,7 +623,8 @@ class SearchWithFileTwoProcess(SearchWithFile):
             super(SearchWithFileTwoProcess, self).deconfigure()
         except Exception, e:
             raise e
-            
+
+@register_pipeline("SearchWithFileOneProcess")              
 class SearchWithFileOneProcess(SearchWithFile):
     def __init__(self):
         super(SearchWithFileOneProcess, self).__init__()
@@ -645,7 +655,8 @@ class SearchWithFileOneProcess(SearchWithFile):
             super(SearchWithFileOneProcess, self).deconfigure()
         except Exception, e:
             raise e
-        
+
+@register_pipeline("SearchWithStream")       
 class SearchWithStream(Pipeline):
     def __init__(self):
         super(SearchWithStream, self).__init__()  
@@ -844,6 +855,7 @@ class SearchWithStream(Pipeline):
             
         self.state = "idle"
 
+@register_pipeline("SearchWithStreamTwoProcess") 
 class SearchWithStreamTwoProcess(SearchWithStream):
     def __init__(self):
         super(SearchWithStreamTwoProcess, self).__init__()
@@ -876,7 +888,8 @@ class SearchWithStreamTwoProcess(SearchWithStream):
             super(SearchWithStreamTwoProcess, self).deconfigure()
         except Exception, e:
             raise e
-        
+
+@register_pipeline("SearchWithStreamOneProcess")      
 class SearchWithStreamOneProcess(SearchWithStream):
     def __init__(self):
         super(SearchWithStreamOneProcess, self).__init__()

@@ -8,11 +8,13 @@ import os
 from optparse import OptionParser
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import (Str, request, return_reply)
+from pipeline import PIPELINES
 #from paf_pipeline_server import PIPELINES #whatever the pipeline class will be
 
 log = logging.getLogger("mpikat.paf_worker_server")
 
-PIPELINES = {"mock":mock.Mock()}
+#PIPELINES = {"mock":mock.Mock()}
+
 
 class PafWorkerServer(AsyncDeviceServer):
     """
@@ -44,10 +46,37 @@ class PafWorkerServer(AsyncDeviceServer):
         """
         super(PafWorkerServer, self).__init__(ip, port)
         self.ip = ip
-        
 
+    def state_change(self, state, callback):
+        """
+        @brief callback function for state changes 
+
+        @parma callback object return from the callback function from the pipeline
+        """
+        log.info('New state of the pipeline is {}'.format(str(state)))
+        #self._pipeline_sensor_status.set_value(str(callback.state))
+
+        #do I do things here?
+        """
+        if callback.state=="error":
+            @tornado.gen.coroutine
+            def stop_pipeline():
+                try:
+                    self._pipeline_instance.stop()
+                except Exception as error:
+                    msg = "Couldn't stop pipeline {}".format(error)
+                    log.info("{}".format(msg))
+                    req.reply("fail", msg)
+                    self._pipeline_sensor_status.set_value("error")
+                    raise error
+                msg = "Stop pipeline {}".format(self._pipeline_sensor_name.value())
+                log.info("{}".format(msg))
+                req.reply("ok", msg)
+            self.ioloop.add_callback(configure_pipeline)
+            raise AsyncReply
+        """
     def start(self):
-       super(PafWorkerServer, self).start()
+        super(PafWorkerServer, self).start()
 
     def setup_sensors(self):
         """
@@ -80,12 +109,11 @@ class PafWorkerServer(AsyncDeviceServer):
 
     @request(Str())
     @return_reply(Str())
-    def request_configure(self, req, pipeline_name):
+    def request_configure(self, req, pipeline_name, utc_start, freq):
         """
         @brief      Configure pipeline
 
         @param      pipeline    name of the pipeline
-        #@param      string      a string per se
         """
         @tornado.gen.coroutine
         def configure_pipeline():
@@ -102,8 +130,9 @@ class PafWorkerServer(AsyncDeviceServer):
                 self._pipeline_sensor_name.set_value("")
                 raise error
             self._pipeline_instance = _pipeline_type()
+            self._pipeline_instance.callbacks.add(self.state_change)
             try:
-                self._pipeline_instance.configure()
+                self._pipeline_instance.configure(utc_start, freq, self._ip_address)
             except Exception as error:
                 msg = "Couldn't start configure pipeline instance {}".format(str(error))
                 log.info("{}".format(msg))
@@ -111,12 +140,10 @@ class PafWorkerServer(AsyncDeviceServer):
                 self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
                 raise error
-
             self._pipeline_sensor_status.set_value("configured")
             msg = "pipeline instance configured"
             log.info("{}".format(msg))
             req.reply("ok",msg)
-
         if self._pipeline_sensor_status.value() == "idle":
             self.ioloop.add_callback(configure_pipeline)
             raise AsyncReply
