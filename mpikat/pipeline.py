@@ -717,7 +717,7 @@ class SearchWithStream(Pipeline):
             thread.start()            
         for thread in threads:
             thread.join()
-        
+        print "have we pass this point?" 
         # Start capture
         port0        = SYSTEM_CONF["port0"]
         ncpu_numa    = SYSTEM_CONF["ncpu_numa"]
