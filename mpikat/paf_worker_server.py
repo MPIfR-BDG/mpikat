@@ -107,7 +107,7 @@ class PafWorkerServer(AsyncDeviceServer):
             default=os.environ['PAF_DATA_INTERFACE'])
         self.add_sensor(self._ip_address)
 
-    @request(Str())
+    @request(Str(),Str(),Str())
     @return_reply(Str())
     def request_configure(self, req, pipeline_name, utc_start, freq):
         """
