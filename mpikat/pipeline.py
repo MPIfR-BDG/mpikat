@@ -759,7 +759,7 @@ class SearchWithStream(Pipeline):
             refinfo = self.acquire_refinfo(destination_alive[0].split(":")[0],  # For now, we do not sync among different beams
                                            int(destination_alive[0].split(":")[1]))
             refinfo = "{}:{}:{}".format(refinfo[0], refinfo[1], refinfo[2])
-            
+            print "have we pass this point2?" 
             threads.append(threading.Thread(target = self.capture,
                                             args = (self.pipeline_conf["rbuf_filterbank_key"][i],
                                                     destination_alive_cpu,
