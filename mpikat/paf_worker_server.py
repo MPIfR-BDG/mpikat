@@ -4,9 +4,9 @@ import coloredlogs
 import signal
 import json
 import os
+from optparse import OptionParser
 from tornado.gen import Return, coroutine
 #import mock
-from optparse import OptionParser
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from pipeline import PIPELINES
@@ -265,7 +265,7 @@ def main():
     parser.add_option('-p', '--port', dest='port', type=long,
         help='Port number to bind to', default=5000)
     parser.add_option('', '--log_level', dest='log_level', type=str,
-        help='Defauly logging level', default="INFO")
+        help='Defauly logging level')
     (opts, args) = parser.parse_args()
     logger = logging.getLogger('mpikat')
     coloredlogs.install(
@@ -281,6 +281,7 @@ def main():
     def start_and_display():
         server.start()
         log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
+
     ioloop.add_callback(start_and_display)
     ioloop.start()
 
