@@ -154,7 +154,7 @@ class PafWorkerServer(AsyncDeviceServer):
         
     @request(Str(),Str(),Str(),Str())
     @return_reply(Str())
-    def request_start_capture(self, req,source_name, ra, dec, start_buf):
+    def request_start(self, req, source_name, ra, dec, start_buf):
         """
         @brief      Start pipeline
 
@@ -186,7 +186,7 @@ class PafWorkerServer(AsyncDeviceServer):
         
     @request()
     @return_reply(Str())
-    def request_stop_capture(self, req): 
+    def request_stop(self, req): 
         """
         @brief      Stop pipeline
 
