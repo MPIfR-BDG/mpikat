@@ -3,8 +3,9 @@ import tornado
 import coloredlogs
 import signal
 import json
-#import mock
 import os
+from tornado.gen import Return, coroutin
+#import mock
 from optparse import OptionParser
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
@@ -22,8 +23,8 @@ class PafWorkerServer(AsyncDeviceServer):
     @brief Interface object which accepts KATCP commands
 
     """
-    VERSION_INFO = ("paf_worker_server-api", 1, 0)
-    BUILD_INFO = ("paf_worker_server-implementation", 0, 1, "")
+    VERSION_INFO = ("mpikat-paf-api", 1, 0)
+    BUILD_INFO = ("mpikat-paf-implementation", 0, 1, "rc1")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
     PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
@@ -57,7 +58,7 @@ class PafWorkerServer(AsyncDeviceServer):
         #do I do things here?
         """
         if callback.state=="error":
-            @tornado.gen.coroutine
+            @coroutine
             def stop_pipeline():
                 try:
                     self._pipeline_instance.stop()
@@ -113,7 +114,7 @@ class PafWorkerServer(AsyncDeviceServer):
 
         @param      pipeline    name of the pipeline
         """
-        @tornado.gen.coroutine
+        @coroutine
         def configure_pipeline():
             self._pipeline_sensor_name.set_value(pipeline_name)  
             log.info("Configuring pipeline {}".format(self._pipeline_sensor_name.value()))
@@ -155,7 +156,7 @@ class PafWorkerServer(AsyncDeviceServer):
         @brief      Start pipeline
 
         """
-        @tornado.gen.coroutine        
+        @coroutine       
         def start_pipeline():
             try:
                 self._pipeline_instance.start(source_name, ra, dec, start_buf)
@@ -184,7 +185,7 @@ class PafWorkerServer(AsyncDeviceServer):
         @brief      Stop pipeline
 
         """
-        @tornado.gen.coroutine
+        @coroutine
         def stop_pipeline():
             self._pipeline_sensor_status.set_value("stopping")
             try:
@@ -214,7 +215,7 @@ class PafWorkerServer(AsyncDeviceServer):
         @brief      Deconfigure pipeline
 
         """
-        @tornado.gen.coroutine
+        @coroutine
         def deconfigure():
             log.info("deconfiguring pipeline {}".format(self._pipeline_sensor_name.value()))
             try:
@@ -250,7 +251,7 @@ class PafWorkerServer(AsyncDeviceServer):
         return ("ok", len(PIPELINES))
 
 
-@tornado.gen.coroutine
+@coroutine
 def on_shutdown(ioloop, server):
     log.info('Shutting down server')
     yield server.stop()
