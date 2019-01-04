@@ -38,7 +38,8 @@ if(numa == 1):
     cpuset_cpus = "10-19"
     
 if root:
-    comline = "docker run --privileged --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -it --rm --runtime=nvidia --device=/dev/infiniband/uverbs0 --device=/dev/infiniband/rdma_cm -e DISPLAY --net=host -v {:s} -v {:s} -v /tmp:/tmp -e NVIDIA_VISIBLE_DEVICES={:d} -e NVIDIA_DRIVER_CAPABILITIES=all --cap-add=IPC_LOCK --ulimit memlock=-1:-1 --cpuset-mems={:d} --cpuset-cpus={:s} --name {:s}.{:d} xinpingdeng/{:s}".format(dvolume, hvolume, numa, numa, cpuset_cpus, image, numa, image)
+    #comline = "docker run --privileged --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -it --rm --runtime=nvidia --device=/dev/infiniband/uverbs0 --device=/dev/infiniband/rdma_cm -e DISPLAY --net=host -v {:s} -v {:s} -v /tmp:/tmp -e NVIDIA_VISIBLE_DEVICES={:d} -e NVIDIA_DRIVER_CAPABILITIES=all --cap-add=IPC_LOCK --ulimit memlock=-1:-1 --cpuset-mems={:d} --cpuset-cpus={:s} --name {:s}.{:d} xinpingdeng/{:s}".format(dvolume, hvolume, numa, numa, cpuset_cpus, image, numa, image)
+    comline = "docker run --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -it --rm --runtime=nvidia --net=host -v {:s} -v {:s} -e NVIDIA_VISIBLE_DEVICES={:d} -e NVIDIA_DRIVER_CAPABILITIES=all --cap-add=IPC_LOCK --ulimit memlock=-1:-1 --cpuset-mems={:d} --cpuset-cpus={:s} --name {:s}.{:d} xinpingdeng/{:s}".format(dvolume, hvolume, numa, numa, cpuset_cpus, image, numa, image)
 else:    
     comline = "docker run --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -it --rm --runtime=nvidia --device=/dev/infiniband/uverbs0 --device=/dev/infiniband/rdma_cm -e DISPLAY --net=host -v {:s} -v {:s} -v /tmp:/tmp -u 50000:50000 -e NVIDIA_VISIBLE_DEVICES={:d} -e NVIDIA_DRIVER_CAPABILITIES=all --cap-add=IPC_LOCK --ulimit memlock=-1:-1 --cpuset-mems={:d} --cpuset-cpus={:s} --name {:s}.{:d} xinpingdeng/{:s}".format(dvolume, hvolume, numa, numa, cpuset_cpus, image, numa, image)
 

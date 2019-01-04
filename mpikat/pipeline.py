@@ -15,6 +15,7 @@ from subprocess import check_output, PIPE, Popen
 import time
 import shlex
 
+# http://on-demand.gputechconf.com/gtc/2015/presentation/S5584-Priyanka-Sah.pdf
 # To do,
 # 1. Dict for more parameters, DONE;
 # 2. To check the state before each operation, DONE; 
@@ -25,7 +26,11 @@ import shlex
 
 # https://stackoverflow.com/questions/16768290/understanding-popen-communicate
 
-EXECUTE        = 1
+EXECUTE        = False
+SOD            = False
+
+HEIMDALL       = False  # To run heimdall on filterbank file or not
+DBDISK         = False   # To run dbdisk on filterbank file or not
 PAF_ROOT       = "/home/pulsar/xinping/phased-array-feed/"
 DATA_ROOT      = "/beegfs/DENG/"
 DADA_ROOT      = "{}/AUG/baseband/".format(DATA_ROOT)
@@ -54,15 +59,15 @@ SYSTEM_CONF = {"instrument_name":    "PAF-BMF",
 SEARCH_CONF = {"nchan_baseband":          336,
                "nchk_baseband":           48,
                
-               "rbuf_filterbank_key":     ["dada", "dadc"],
-               "rbuf_filterbank_ndf_chk": 10240,
-               "rbuf_filterbank_nblk":    2,
-               "rbuf_filterbank_nread":   1,
+               "rbuf_baseband_key":     ["dada", "dadc"],
+               "rbuf_baseband_ndf_chk": 10240,
+               "rbuf_baseband_nblk":    6,
+               "rbuf_baseband_nread":   1,
                
-               "rbuf_heimdall_key":       ["dade", "dadg"],
-               "rbuf_heimdall_ndf_chk":   10240,
-               "rbuf_heimdall_nblk":      2,
-               "rbuf_heimdall_nread":     1,
+               "rbuf_filterbank_key":       ["dade", "dadg"],
+               "rbuf_filterbank_ndf_chk":   10240,
+               "rbuf_filterbank_nblk":      2,
+               "rbuf_filterbank_nread":     (HEIMDALL + DBDISK) if (HEIMDALL + DBDISK) else 1,
                
                "nchan_filterbank":        1024,
                "cufft_nx":                64,
@@ -400,9 +405,20 @@ class Pipeline(object):
  
     def diskdb(self, cpu, key,
                fname, seek_byte):
-        cmd = "taskset -c {} dada_diskdb -k {} -f {} -o {} -s".format(
+        cmd = "taskset -c {} dada_diskdb -k {} -f {} -o {} -s -z".format(
             cpu, key,fname, seek_byte)
                                                                       
+        print cmd
+        if EXECUTE:           
+            try:
+                os.system(cmd)
+            except:
+                self.state = "error"
+
+    def dbdisk(self, cpu, key, runtime_dir):
+        cmd = "dada_dbdisk -b {} -k {} -D {} -o -s -z".format(
+            cpu, key, runtime_dir)
+        
         print cmd
         if EXECUTE:           
             try:
@@ -413,12 +429,19 @@ class Pipeline(object):
     def baseband2filterbank(self, cpu, key_in, key_out,
                             rbufin_ndf_chk, nrepeat, nstream,
                             ndf_stream, runtime_dir):
-        software = "{}/src/baseband2filterbank/baseband2filterbank_main".format(PAF_ROOT)                   
-        cmd = "taskset -c {} nvprof {} -a {} -b {} \
-        -c {} -d {} -e {} -f {} -g {}".format(                 
-            cpu, software, key_in, key_out,
-            rbufin_ndf_chk, nrepeat, nstream,
-            ndf_stream, runtime_dir)
+        software = "{}/src/baseband2filterbank/baseband2filterbank_main".format(PAF_ROOT)
+        if SOD:
+            cmd = "taskset -c {} nvprof {} -a {} -b {} \
+            -c {} -d {} -e {} -f {} -g {} -i 1".format(                 
+                cpu, software, key_in, key_out,
+                rbufin_ndf_chk, nrepeat, nstream,
+                ndf_stream, runtime_dir)
+        else:            
+            cmd = "taskset -c {} nvprof {} -a {} -b {} \
+            -c {} -d {} -e {} -f {} -g {} -i 0".format(                 
+                cpu, software, key_in, key_out,
+                rbufin_ndf_chk, nrepeat, nstream,
+                ndf_stream, runtime_dir)
         print cmd
         if EXECUTE:
             try:
@@ -475,11 +498,11 @@ class SearchWithFile(Pipeline):
         self.node           = int(ip.split(".")[2])
         self.numa           = int(ip.split(".")[3]) - 1        
 
-        self.rbuf_filterbank_blksz   = self.pipeline_conf["nchk_baseband"]*\
+        self.rbuf_baseband_blksz   = self.pipeline_conf["nchk_baseband"]*\
                                        SYSTEM_CONF["df_dtsz"]*\
-                                       self.pipeline_conf["rbuf_filterbank_ndf_chk"]
+                                       self.pipeline_conf["rbuf_baseband_ndf_chk"]
         
-        self.nrepeat         	 = int(self.pipeline_conf["rbuf_filterbank_ndf_chk"]/
+        self.nrepeat         	 = int(self.pipeline_conf["rbuf_baseband_ndf_chk"]/
                                        (self.pipeline_conf["ndf_stream"] * self.pipeline_conf["nstream"]))
 
         # Kill running process if there is any
@@ -492,7 +515,7 @@ class SearchWithFile(Pipeline):
             runtime_dir.append("{}/pacifix{}_numa{}_process{}".format(DATA_ROOT, self.node, self.numa, i))                                                                      
         self.runtime_dir         = runtime_dir
         
-        self.rbuf_heimdall_blksz   = int(self.pipeline_conf["nchan_filterbank"] * self.rbuf_filterbank_blksz*
+        self.rbuf_filterbank_blksz   = int(self.pipeline_conf["nchan_filterbank"] * self.rbuf_baseband_blksz*
                                          self.pipeline_conf["nbyte_filterbank"]*self.pipeline_conf["npol_samp_filterbank"]*self.pipeline_conf["ndim_pol_filterbank"]/
                                          float(SYSTEM_CONF["nbyte_baseband"]*SYSTEM_CONF["npol_samp_baseband"]*
                                                SYSTEM_CONF["ndim_pol_baseband"]*self.pipeline_conf["nchan_baseband"]*self.pipeline_conf["cufft_nx"]))
@@ -501,15 +524,15 @@ class SearchWithFile(Pipeline):
         threads = []
         for i in range(self.nprocess):
             threads.append(threading.Thread(target = self.create_rbuf,
+                                            args = (self.pipeline_conf["rbuf_baseband_key"][i],
+                                                    self.rbuf_baseband_blksz,
+                                                    self.pipeline_conf["rbuf_baseband_nblk"],
+                                                    self.pipeline_conf["rbuf_baseband_nread"], )))
+            threads.append(threading.Thread(target = self.create_rbuf,
                                             args = (self.pipeline_conf["rbuf_filterbank_key"][i],
                                                     self.rbuf_filterbank_blksz,
                                                     self.pipeline_conf["rbuf_filterbank_nblk"],
                                                     self.pipeline_conf["rbuf_filterbank_nread"], )))
-            threads.append(threading.Thread(target = self.create_rbuf,
-                                            args = (self.pipeline_conf["rbuf_heimdall_key"][i],
-                                                    self.rbuf_heimdall_blksz,
-                                                    self.pipeline_conf["rbuf_heimdall_nblk"],
-                                                    self.pipeline_conf["rbuf_heimdall_nread"], )))
         for thread in threads:
             thread.start()            
         for thread in threads:
@@ -531,20 +554,26 @@ class SearchWithFile(Pipeline):
             self.heimdall_cpu            = self.numa*ncpu_numa + i*self.ncpu_pipeline + 2
             threads.append(threading.Thread(target = self.diskdb,
                                             args = (self.diskdb_cpu,
-                                                    self.pipeline_conf["rbuf_filterbank_key"][i],
+                                                    self.pipeline_conf["rbuf_baseband_key"][i],
                                                     self.fname, self.pipeline_conf["seek_byte"], )))
             threads.append(threading.Thread(target = self.baseband2filterbank,
                                             args = (self.baseband2filterbank_cpu,
+                                                    self.pipeline_conf["rbuf_baseband_key"][i],
                                                     self.pipeline_conf["rbuf_filterbank_key"][i],
-                                                    self.pipeline_conf["rbuf_heimdall_key"][i],
-                                                    self.pipeline_conf["rbuf_filterbank_ndf_chk"],
+                                                    self.pipeline_conf["rbuf_baseband_ndf_chk"],
                                                     self.nrepeat, self.pipeline_conf["nstream"],
-                                                    self.pipeline_conf["ndf_stream"], self.runtime_dir[i], )))                                                    
-            threads.append(threading.Thread(target = self.heimdall,
-                                            args = (self.heimdall_cpu,
-                                                    self.pipeline_conf["rbuf_heimdall_key"][i], self.pipeline_conf["dm"], 
-                                                    self.pipeline_conf["zap_chans"], self.pipeline_conf["detect_thresh"],
-                                                    self.runtime_dir[i], )))            
+                                                    self.pipeline_conf["ndf_stream"], self.runtime_dir[i], )))
+            if HEIMDALL:
+                threads.append(threading.Thread(target = self.heimdall,
+                                                args = (self.heimdall_cpu,
+                                                        self.pipeline_conf["rbuf_filterbank_key"][i], self.pipeline_conf["dm"], 
+                                                        self.pipeline_conf["zap_chans"], self.pipeline_conf["detect_thresh"],
+                                                        self.runtime_dir[i], )))   
+            if DBDISK:                
+                threads.append(threading.Thread(target = self.dbdisk,
+                                                args = (self.dbdisk_cpu,
+                                                        self.pipeline_conf["rbuf_filterbank_key"][i],
+                                                        self.runtime_dir[i], )))         
         for thread in threads:
             thread.start()
         self.state = "running"
@@ -569,9 +598,9 @@ class SearchWithFile(Pipeline):
             threads = []
             for i in range(self.nprocess):
                 threads.append(threading.Thread(target = self.remove_rbuf,
-                                                args = (self.pipeline_conf["rbuf_filterbank_key"][i], )))
+                                                args = (self.pipeline_conf["rbuf_baseband_key"][i], )))
                 threads.append(threading.Thread(target = self.remove_rbuf,
-                                                args = (self.pipeline_conf["rbuf_heimdall_key"][i], )))
+                                                args = (self.pipeline_conf["rbuf_filterbank_key"][i], )))
             
             for thread in threads:
                 thread.start()
@@ -670,18 +699,19 @@ class SearchWithStream(Pipeline):
         self.nchk_port      = nchk_port
         self.nport_beam     = nport_beam
 
-        self.rbuf_filterbank_blksz   = self.pipeline_conf["nchk_baseband"]*SYSTEM_CONF["df_dtsz"]*\
-                                       self.pipeline_conf["rbuf_filterbank_ndf_chk"]                                       
+        self.rbuf_baseband_blksz   = self.pipeline_conf["nchk_baseband"]*SYSTEM_CONF["df_dtsz"]*\
+                                       self.pipeline_conf["rbuf_baseband_ndf_chk"]                                       
 
-        self.nrepeat             = int(self.pipeline_conf["rbuf_filterbank_ndf_chk"]/
+        self.nrepeat             = int(self.pipeline_conf["rbuf_baseband_ndf_chk"]/
                                        (self.pipeline_conf["ndf_stream"] * self.pipeline_conf["nstream"]))
         
         # Kill running process if there is any
         self.kill_process("capture_main")
         self.kill_process("baseband2filterbank_main")
         self.kill_process("heimdall")
+        self.kill_process("dada_dbdisk")
         
-        self.rbuf_heimdall_blksz   = int(self.pipeline_conf["nchan_filterbank"] * self.rbuf_filterbank_blksz*
+        self.rbuf_filterbank_blksz   = int(self.pipeline_conf["nchan_filterbank"] * self.rbuf_baseband_blksz*
                                          self.pipeline_conf["nbyte_filterbank"]*self.pipeline_conf["npol_samp_filterbank"]*
                                          self.pipeline_conf["ndim_pol_filterbank"]/
                                          float(SYSTEM_CONF["nbyte_baseband"]*
@@ -693,15 +723,15 @@ class SearchWithStream(Pipeline):
         threads = []
         for i in range(self.nprocess):
             threads.append(threading.Thread(target = self.create_rbuf,
+                                            args = (self.pipeline_conf["rbuf_baseband_key"][i],
+                                                    self.rbuf_baseband_blksz,
+                                                    self.pipeline_conf["rbuf_baseband_nblk"],
+                                                    self.pipeline_conf["rbuf_baseband_nread"], )))
+            threads.append(threading.Thread(target = self.create_rbuf,
                                             args = (self.pipeline_conf["rbuf_filterbank_key"][i],
                                                     self.rbuf_filterbank_blksz,
                                                     self.pipeline_conf["rbuf_filterbank_nblk"],
                                                     self.pipeline_conf["rbuf_filterbank_nread"], )))
-            threads.append(threading.Thread(target = self.create_rbuf,
-                                            args = (self.pipeline_conf["rbuf_heimdall_key"][i],
-                                                    self.rbuf_heimdall_blksz,
-                                                    self.pipeline_conf["rbuf_heimdall_nblk"],
-                                                    self.pipeline_conf["rbuf_heimdall_nread"], )))
         for thread in threads:
             thread.start()            
         for thread in threads:
@@ -750,12 +780,12 @@ class SearchWithStream(Pipeline):
             refinfo = "{}:{}:{}".format(refinfo[0], refinfo[1], refinfo[2])
             
             threads.append(threading.Thread(target = self.capture,
-                                            args = (self.pipeline_conf["rbuf_filterbank_key"][i],
+                                            args = (self.pipeline_conf["rbuf_baseband_key"][i],
                                                     destination_alive_cpu,
                                                     destination_dead, self.freq,
                                                     refinfo, runtime_dir, 
                                                     buf_ctrl_cpu, cpt_ctrl, self.pipeline_conf["bind"],
-                                                    self.pipeline_conf["rbuf_filterbank_ndf_chk"],
+                                                    self.pipeline_conf["rbuf_baseband_ndf_chk"],
                                                     self.pipeline_conf["tbuf_filterbank_ndf_chk"], self.pipeline_conf["pad"])))                                                                
         for thread in threads:
             thread.start()
@@ -764,6 +794,9 @@ class SearchWithStream(Pipeline):
             thread.join()
         
     def start(self, source_name, ra, dec, start_buf):
+        ra  = ra.replace(":", " ")
+        dec = dec.replace(":", " ")
+        
         if self.state != "ready":
             raise PipelineError(
                 "Pipeline can only be started from ready state")
@@ -777,20 +810,31 @@ class SearchWithStream(Pipeline):
                                            (i + 1)*self.ncpu_pipeline - 1
             self.heimdall_cpu            = self.numa*ncpu_numa +\
                                             (i + 1)*self.ncpu_pipeline - 1
+            self.dbdisk_cpu              = self.numa*ncpu_numa +\
+                                           (i + 1)*self.ncpu_pipeline - 1
             threads.append(threading.Thread(target = self.baseband2filterbank,
                                             args = (self.baseband2filterbank_cpu,
+                                                    self.pipeline_conf["rbuf_baseband_key"][i],
                                                     self.pipeline_conf["rbuf_filterbank_key"][i],
-                                                    self.pipeline_conf["rbuf_heimdall_key"][i],
-                                                    self.pipeline_conf["rbuf_filterbank_ndf_chk"],
+                                                    self.pipeline_conf["rbuf_baseband_ndf_chk"],
                                                     self.nrepeat, self.pipeline_conf["nstream"],
                                                     self.pipeline_conf["ndf_stream"], self.runtime_dir[i], )))
-            threads.append(threading.Thread(target = self.heimdall,
-                                            args = (self.heimdall_cpu,
-                                                    self.pipeline_conf["rbuf_heimdall_key"][i],
-                                                    self.pipeline_conf["dm"], 
-                                                    self.pipeline_conf["zap_chans"], 
-                                                    self.pipeline_conf["detect_thresh"],
-                                                    self.runtime_dir[i], )))
+            
+            if HEIMDALL:
+                threads.append(threading.Thread(target = self.heimdall,
+                                                args = (self.heimdall_cpu,
+                                                        self.pipeline_conf["rbuf_filterbank_key"][i],
+                                                        self.pipeline_conf["dm"], 
+                                                        self.pipeline_conf["zap_chans"], 
+                                                        self.pipeline_conf["detect_thresh"],
+                                                        self.runtime_dir[i], )))
+                
+            if DBDISK:                
+                threads.append(threading.Thread(target = self.dbdisk,
+                                                args = (self.dbdisk_cpu,
+                                                        self.pipeline_conf["rbuf_filterbank_key"][i],
+                                                        self.runtime_dir[i], )))
+                
             threads.append(threading.Thread(target = self.capture_control,
                                             args = (self.ctrl_socket[i],
                                                     "START-OF-DATA:{}:{}:{}:{}".format(
@@ -827,9 +871,9 @@ class SearchWithStream(Pipeline):
             threads = []
             for i in range(self.nprocess):
                 threads.append(threading.Thread(target = self.remove_rbuf,
-                                                args = (self.pipeline_conf["rbuf_filterbank_key"][i], )))
+                                                args = (self.pipeline_conf["rbuf_baseband_key"][i], )))
                 threads.append(threading.Thread(target = self.remove_rbuf,
-                                                args = (self.pipeline_conf["rbuf_heimdall_key"][i], )))
+                                                args = (self.pipeline_conf["rbuf_filterbank_key"][i], )))
                 self.ctrl_socket[i].close()
             
             for thread in threads:
@@ -855,7 +899,8 @@ class SearchWithStreamTwoProcess(SearchWithStream):
         nport_beam    = 3
         ncpu_pipeline = 5
         try:
-            super(SearchWithStreamTwoProcess, self).configure(utc_start, freq, ip, pipeline_conf, nprocess, nchk_port, nport_beam, ncpu_pipeline)
+            super(SearchWithStreamTwoProcess, self).configure(utc_start, freq, ip, pipeline_conf,
+                                                              nprocess, nchk_port, nport_beam, ncpu_pipeline)
         except Exception, e:
             raise e
         
@@ -920,8 +965,8 @@ if __name__ == "__main__":
     utc_start     = Time.now() + 0*units.s # Has to be "YYYY-MM-DDThh:mm:ss"
     
     source_name   = "UNKNOWN"
-    ra            = "00 00 00.00"
-    dec           = "00 00 00.00"
+    ra            = "00:00:00.00"
+    dec           = "00:00:00.00"
     start_buf     = 0
     ip            = "10.17.8.2"
 
@@ -944,31 +989,31 @@ if __name__ == "__main__":
     def configure(utc_start, freq, ip):
         print "\nConfigure it ...\n"
         search_mode.configure(utc_start, freq, ip)
-
+    
     def status():
-        time.sleep(10)
+        time.sleep(30)
         while True:
             print search_mode.stream_status()
             #search_mode.stream_status()
             time.sleep(1)
             
     def start(source_name, ra, dec, start_buf):
-        time.sleep(10)
+        time.sleep(40)
         print "\nStart it ...\n"
         search_mode.start(source_name, ra, dec, start_buf)
-
-    threads = []
-    threads.append(threading.Thread(target = configure, args = (utc_start, freq, ip, )))
-    threads.append(threading.Thread(target = start, args = (source_name, ra, dec, start_buf, )))
-    threads.append(threading.Thread(target = status))
-    for thread in threads:
-        thread.start()            
-    for thread in threads:
-        thread.join()
+    
+    #threads = []
+    #threads.append(threading.Thread(target = configure, args = (utc_start, freq, ip, )))
+    #threads.append(threading.Thread(target = start, args = (source_name, ra, dec, start_buf, )))
+    #threads.append(threading.Thread(target = status))
+    #for thread in threads:
+    #    thread.start()            
+    #for thread in threads:
+    #    thread.join()
         
-    #configure(utc_start, freq, ip)
-    #start(source_name, ra, dec, start_buf)
-    #status()
+    search_mode.configure(utc_start, freq, ip)
+    search_mode.start(source_name, ra, dec, start_buf)
+    search_mode.stream_status()
     
     print "\nStop it ...\n"
     search_mode.stop()
