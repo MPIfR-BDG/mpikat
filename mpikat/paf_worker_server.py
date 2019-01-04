@@ -132,7 +132,7 @@ class PafWorkerServer(AsyncDeviceServer):
             self._pipeline_instance = _pipeline_type()
             self._pipeline_instance.callbacks.add(self.state_change)
             try:
-                self._pipeline_instance.configure(utc_start, freq, "127.0.0.1")
+                self._pipeline_instance.configure(utc_start, freq, "10.17.8.2")
             except Exception as error:
                 msg = "Couldn't start configure pipeline instance {}".format(str(error))
                 log.info("{}".format(msg))
