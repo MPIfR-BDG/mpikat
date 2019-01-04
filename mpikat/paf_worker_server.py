@@ -11,6 +11,11 @@ from tornado.gen import Return, coroutine
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from pipeline import PIPELINES
+from tornado.iostream import IOStream
+from mpikat.master_controller import MasterController
+from mpikat.paf_product_controller import PafProductController
+from mpikat.paf_worker_wrapper import PafWorkerPool
+from mpikat.exceptions import ProductLookupError
 
 
 log = logging.getLogger("mpikat.paf_worker_server")
