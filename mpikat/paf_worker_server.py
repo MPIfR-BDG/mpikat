@@ -4,7 +4,7 @@ import coloredlogs
 import signal
 import json
 import os
-import time
+#import time
 from optparse import OptionParser
 from tornado.gen import Return, coroutine
 #import mock
@@ -35,11 +35,6 @@ class PafWorkerServer(AsyncDeviceServer):
     PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
                    "deconfiguring", "error"]
-    PROTOCOL_INFO = ProtocolFlags(5, 0, set([
-        ProtocolFlags.MULTI_CLIENT,
-        ProtocolFlags.MESSAGE_IDS,
-    ]))
-
 
     def __init__(self, ip, port):
         """
