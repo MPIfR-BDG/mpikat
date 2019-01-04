@@ -4,7 +4,7 @@ import coloredlogs
 import signal
 import json
 import os
-from tornado.gen import Return, coroutin
+from tornado.gen import Return, coroutine
 #import mock
 from optparse import OptionParser
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
