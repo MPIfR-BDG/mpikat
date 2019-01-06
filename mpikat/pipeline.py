@@ -20,17 +20,18 @@ import shlex
 # 1. Dict for more parameters, DONE;
 # 2. To check the state before each operation, DONE; 
 # 3. To capture the state of each running porcess and determine it is "error" or not, DO NOT NEED TO DO IT;
-# 4. To pass packet loss rate to controller;
+# 4. To pass packet loss rate to controller, DONE;
 # 5. Capture expection and pass to controller, DONE;
-# 6. UTC_START
+# 6. UTC_START, for now use most recnet timestamp
 
 # https://stackoverflow.com/questions/16768290/understanding-popen-communicate
 
 EXECUTE        = False
-SOD            = False
+SOD            = False   # To start filterbank data or not
 
-HEIMDALL       = False  # To run heimdall on filterbank file or not
+HEIMDALL       = False   # To run heimdall on filterbank file or not
 DBDISK         = False   # To run dbdisk on filterbank file or not
+
 PAF_ROOT       = "/home/pulsar/xinping/phased-array-feed/"
 DATA_ROOT      = "/beegfs/DENG/"
 DADA_ROOT      = "{}/AUG/baseband/".format(DATA_ROOT)
@@ -119,6 +120,14 @@ EPOCHS = [
 class PipelineError(Exception):
     pass
 
+PIPELINES = {}
+
+def register_pipeline(name):
+    def _register(cls):
+        PIPELINES[name] = cls
+        return cls
+    return _register;
+
 class Pipeline(object):
     def __init__(self):
         os.system("ipcrm -a") # Remove shared memory at the very beginning (if there is any)
@@ -166,7 +175,7 @@ class Pipeline(object):
             status = {"nprocess":   self.nprocess}
             for capture_runtime_info in self.capture_runtime_info:
                 loss_rate = map(float, capture_runtime_info.stdout.readline().split())
-                #print self.beamid[i], loss_rate
+
                 try:
                     status.update({"process{}".format(i):
                                    {"beamid":    self.beamid[i],
@@ -175,6 +184,7 @@ class Pipeline(object):
                     i += 1
                 except:
                     self.state = "error"
+                    PipelineError("Stream status update fail")
                     
             return status
         else:
@@ -256,6 +266,37 @@ class Pipeline(object):
         except:
             pass # We only kill running process
         
+    #def connections(self, destination, ndf_check_chk):
+    #    """
+    #    To check the connection of one beam with given ip and port numbers
+    #    """
+    #    nport = len(destination)
+    #    alive = np.zeros(nport, dtype = int)
+    #    nchk_alive = np.zeros(nport, dtype = int)
+    #    
+    #    for i in range(nport):
+    #        ip   = destination[i].split(":")[0]
+    #        port = int(destination[i].split(":")[1])
+    #        alive[i], nchk_alive[i] = self.connection(
+    #            ip, port, ndf_check_chk)
+    #    destination_alive = []   # The destination where we can receive data
+    #    destination_dead   = []   # The destination where we can not receive data
+    #    for i in range(nport):
+    #        ip = destination[i].split(":")[0]
+    #        port = destination[i].split(":")[1]
+    #        nchk_expect = destination[i].split(":")[2]
+    #        nchk_actual = nchk_alive[i]
+    #        if alive[i] == 1:
+    #            destination_alive.append("{}:{}:{}:{}".format(
+    #                ip, port, nchk_expect, nchk_actual))                                                                       
+    #        else:
+    #            destination_dead.append("{}:{}:{}".format(
+    #                ip, port, nchk_expect))
+    #    if (len(destination_alive) == 0): # No alive ports, error
+    #        self.state = "error"
+    #        
+    #    return destination_alive, destination_dead
+    #
     def connections(self, destination, ndf_check_chk):
         """
         To check the connection of one beam with given ip and port numbers
@@ -263,27 +304,22 @@ class Pipeline(object):
         nport = len(destination)
         alive = np.zeros(nport, dtype = int)
         nchk_alive = np.zeros(nport, dtype = int)
-        
+
+        destination_dead  = []   # The destination where we can not receive data
+        destination_alive = []   # The destination where we can receive data        
         for i in range(nport):
             ip   = destination[i].split(":")[0]
             port = int(destination[i].split(":")[1])
-            alive[i], nchk_alive[i] = self.connection(
-                ip, port, ndf_check_chk)
-        destination_alive = []   # The destination where we can receive data
-        destination_dead   = []   # The destination where we can not receive data
-        for i in range(nport):
-            ip = destination[i].split(":")[0]
-            port = destination[i].split(":")[1]
-            nchk_expect = destination[i].split(":")[2]
-            nchk_actual = nchk_alive[i]
-            if alive[i] == 1:
-                destination_alive.append("{}:{}:{}:{}".format(
-                    ip, port, nchk_expect, nchk_actual))                                                                       
+            alive, nchk_alive = self.connection(ip, port, ndf_check_chk)                
+
+            if alive == 1:
+                destination_alive.append(destination[i]+":{}".format(nchk_alive))                                                                       
             else:
-                destination_dead.append("{}:{}:{}".format(
-                    ip, port, nchk_expect))
+                destination_dead.append(destination[i])
+
         if (len(destination_alive) == 0): # No alive ports, error
             self.state = "error"
+            PipelineError("The stream is not alive")
             
         return destination_alive, destination_dead
     
@@ -351,6 +387,7 @@ class Pipeline(object):
                 os.system(cmd)
             except:
                 self.state = "error"
+                PipelineError("Can not create ring buffer")
 
     def remove_rbuf(self, key):
         cmd = "dada_db -d -k {:}".format(key)
@@ -360,6 +397,7 @@ class Pipeline(object):
                 os.system(cmd)
             except:
                 self.state = "error"
+                PipelineError("Can not remove ring buffer")
 
     def capture(self, key,
                 alive_info, dead_info,
@@ -402,6 +440,7 @@ class Pipeline(object):
                 self.capture_runtime_info.append(Popen(cmd, stdin=PIPE, stdout=PIPE, bufsize=1))
             except:
                 self.state = "error"
+                PipelineError("Capture fail")
  
     def diskdb(self, cpu, key,
                fname, seek_byte):
@@ -414,6 +453,7 @@ class Pipeline(object):
                 os.system(cmd)
             except:
                 self.state = "error"
+                PipelineError("DISKDB fail")
 
     def dbdisk(self, cpu, key, runtime_dir):
         cmd = "dada_dbdisk -b {} -k {} -D {} -o -s -z".format(
@@ -425,6 +465,7 @@ class Pipeline(object):
                 os.system(cmd)
             except:
                 self.state = "error"
+                PipelineError("DBDISK fail")
 
     def baseband2filterbank(self, cpu, key_in, key_out,
                             rbufin_ndf_chk, nrepeat, nstream,
@@ -448,6 +489,7 @@ class Pipeline(object):
                 os.system(cmd)
             except:
                 self.state = "error"
+                PipelineError("baseband2filterbank fail")
         
     def heimdall(self, cpu, key,
                  dm, zap_chans,
@@ -466,15 +508,17 @@ class Pipeline(object):
                 os.system(cmd)
             except:
                 self.state = "error"
-
+                PipelineError("Heimdall fail")
+                
     def capture_control(self, ctrl_socket, command, socket_addr):
         if EXECUTE:            
             try:
                 ctrl_socket.sendto(command, socket_addr)
             except:
                 self.state = "error"
+                PipelineError("Capture control fail")
 
-                
+@register_pipeline("SearchWithFile")   
 class SearchWithFile(Pipeline):
     """
     For now, the process part only support full bandwidth, 
@@ -613,6 +657,7 @@ class SearchWithFile(Pipeline):
             
         self.state = "idle"
 
+@register_pipeline("SearchWithFileTwoProcess")  
 class SearchWithFileTwoProcess(SearchWithFile):
     def __init__(self):
         super(SearchWithFileTwoProcess, self).__init__()
@@ -643,7 +688,8 @@ class SearchWithFileTwoProcess(SearchWithFile):
             super(SearchWithFileTwoProcess, self).deconfigure()
         except Exception, e:
             raise e
-            
+
+@register_pipeline("SearchWithFileOneProcess")              
 class SearchWithFileOneProcess(SearchWithFile):
     def __init__(self):
         super(SearchWithFileOneProcess, self).__init__()
@@ -674,7 +720,8 @@ class SearchWithFileOneProcess(SearchWithFile):
             super(SearchWithFileOneProcess, self).deconfigure()
         except Exception, e:
             raise e
-        
+
+@register_pipeline("SearchWithStream")       
 class SearchWithStream(Pipeline):
     def __init__(self):
         super(SearchWithStream, self).__init__()  
@@ -736,7 +783,7 @@ class SearchWithStream(Pipeline):
             thread.start()            
         for thread in threads:
             thread.join()
-        
+        print "have we pass this point?" 
         # Start capture
         port0        = SYSTEM_CONF["port0"]
         ncpu_numa    = SYSTEM_CONF["ncpu_numa"]
@@ -751,8 +798,18 @@ class SearchWithStream(Pipeline):
             for j in range(self.nport_beam):
                 port = port0 + i*self.nport_beam + j
                 destination.append("{}:{}:{}".format(self.ip, port, self.nchk_port))
-            destination_alive, destination_dead = self.connections(destination,
-                                                                   self.pipeline_conf["ndf_check_chk"])
+            if EXECUTE:
+                destination_alive, destination_dead = self.connections(destination,
+                                                                       self.pipeline_conf["ndf_check_chk"])
+            else:
+                destination_alive = []
+                for item in destination:
+                    nchk_actual = item.split(":")[2]
+                    destination_alive.append(item + ":{}".format(nchk_actual))
+                destination_dead = []
+            first_alive_ip   = destination_alive[0].split(":")[0]
+            first_alive_port = int(destination_alive[0].split(":")[1])
+            
             cpu = self.numa*ncpu_numa + i*self.ncpu_pipeline
             destination_alive_cpu = []
             for info in destination_alive:
@@ -765,8 +822,11 @@ class SearchWithStream(Pipeline):
             #print cpt_ctrl
 
             #print destination_alive[0].split(":")[0], destination_alive[0].split(":")[1]
-            beamid = self.acquire_beamid(destination_alive[0].split(":")[0],
-                                         int(destination_alive[0].split(":")[1]))
+            if EXECUTE:
+                beamid = self.acquire_beamid(first_alive_ip, first_alive_port)
+            else:
+                beamid = i
+                
             self.beamid.append(beamid)
             runtime_dir  = "{}/beam{:02}".format(DATA_ROOT, beamid)
             socket_addr  = "{}/beam{:02}/capture.socket".format(DATA_ROOT, beamid)
@@ -774,11 +834,14 @@ class SearchWithStream(Pipeline):
             self.runtime_dir.append(runtime_dir)
             self.socket_addr.append(socket_addr)
             self.ctrl_socket.append(ctrl_socket)
-            
-            refinfo = self.acquire_refinfo(destination_alive[0].split(":")[0],  # For now, we do not sync among different beams
-                                           int(destination_alive[0].split(":")[1]))
+
+            if EXECUTE:
+                refinfo = self.acquire_refinfo(first_alive_ip, first_alive_port)
+            else:
+                refinfo = [0, 0, 0]
+                
             refinfo = "{}:{}:{}".format(refinfo[0], refinfo[1], refinfo[2])
-            
+            print "have we pass this point2?" 
             threads.append(threading.Thread(target = self.capture,
                                             args = (self.pipeline_conf["rbuf_baseband_key"][i],
                                                     destination_alive_cpu,
@@ -888,6 +951,7 @@ class SearchWithStream(Pipeline):
             
         self.state = "idle"
 
+@register_pipeline("SearchWithStreamTwoProcess") 
 class SearchWithStreamTwoProcess(SearchWithStream):
     def __init__(self):
         super(SearchWithStreamTwoProcess, self).__init__()
@@ -921,7 +985,8 @@ class SearchWithStreamTwoProcess(SearchWithStream):
             super(SearchWithStreamTwoProcess, self).deconfigure()
         except Exception, e:
             raise e
-        
+
+@register_pipeline("SearchWithStreamOneProcess")      
 class SearchWithStreamOneProcess(SearchWithStream):
     def __init__(self):
         super(SearchWithStreamOneProcess, self).__init__()
