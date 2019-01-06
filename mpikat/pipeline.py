@@ -1027,11 +1027,11 @@ if __name__ == "__main__":
     # understand why the capture does not works sometimes, or try VMA;
     freq          = 1340.5
     fname         = "{}/J1819-1458/J1819-1458.dada".format(DADA_ROOT)
-    utc_start     = Time.now() + 0*units.s # Has to be "YYYY-MM-DDThh:mm:ss"
+    utc_start     = Time.now() + 0*units.s # "YYYY-MM-DDThh:mm:ss"
     
     source_name   = "UNKNOWN"
-    ra            = "00:00:00.00"
-    dec           = "00:00:00.00"
+    ra            = "00:00:00.00"   # "HH:MM:SS.SS"
+    dec           = "00:00:00.00"   # "DD:MM:SS.SS"
     start_buf     = 0
     ip            = "10.17.8.2"
 
