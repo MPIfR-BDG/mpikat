@@ -26,6 +26,7 @@ import tornado
 import signal
 import time
 import numpy as np
+from datetime import datetime
 from optparse import OptionParser
 from tornado.gen import Return, coroutine
 from tornado.iostream import IOStream
@@ -35,19 +36,51 @@ from mpikat.master_controller import MasterController
 from mpikat.paf_product_controller import PafProductController
 from mpikat.paf_worker_wrapper import PafWorkerPool
 from mpikat.exceptions import ProductLookupError
+from mpikat.scpi import ScpiInterface
 
 # ?halt message means shutdown everything and power off all machines
 
 log = logging.getLogger("mpikat.paf_master_controller")
 
-PAF_PRODUCT_ID = "pafbackend"
+PAF_PRODUCT_ID = "paf0"
 
-class ScpiInterface(object):
-    def __init__(self, port):
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._socket.setsocketopts(socket.SO_REUSEADDR)
-        self._address = ("", port)
-        self._iostream = IOStream(self._socket)
+SCPI_BASE_ID = "scpi:pafbackend"
+
+class PafScpiConfigurationHandler(object):
+    def __init__(self, scpi_interface, exit_callback):
+        self._scpi_interface = scpi_interface
+        self._exit_callback = exit_callback
+        self._config = {}
+        self._enabled = False
+        self.reset()
+
+    def update_config(self, key, value):
+        if not self._enabled:
+            log.error("Received configuration request for key '{}', but configuration not currently enabled".format(key))
+        else:
+            log.info("Updating configuration: {} = {}".format(key, value))
+            self._config[key] = value
+
+    def set_config_handler(self, name, callback):
+        command = "{}:configure:{}".format(SCPI_BASE_ID, name)
+        self._scpi_interface.add_handler(command, callback)
+
+    def reset(self):
+        def start(*args):
+            self._enabled = True
+
+        def finish(*args):
+            if not self._enabled:
+                log.error("Received configuration finish request when configuration not enabled")
+            else:
+                self._enabled = False
+                self._exit_callback(self._config)
+        self._config = {}
+        self.set_config_handler("start",        start)
+        self.set_config_handler("setFrequency", lambda _, *args: self.update_config("frequency", float(args[0])))
+        self.set_config_handler("setNchans",    lambda _, *args: self.update_config("nchans", int(args[0])))
+        self.set_config_handler("setNbeams",    lambda _, *args: self.update_config("nbeams", int(args[0])))
+        self.set_config_handler("finish",       finish)
 
 
 class PafMasterController(MasterController):
@@ -66,15 +99,29 @@ class PafMasterController(MasterController):
     CONTROL_MODES = ["KATCP", "SCPI"]
     KATCP, SCPI = CONTROL_MODES
 
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, scpi_ip, scpi_port):
         """
         @brief       Construct new PafMasterController instance
 
         @params  ip       The IP address on which the server should listen
         @params  port     The port that the server should bind to
         """
-        self._control_mode = self.KATCP
         super(PafMasterController, self).__init__(ip, port, PafWorkerPool())
+        self._control_mode = self.KATCP
+        self._scpi_ip = scpi_ip
+        self._scpi_port = scpi_port
+
+    def start(self):
+        super(PafMasterController, self).start()
+        self._scpi_interface = ScpiInterface(self._scpi_ip, self._scpi_port, self.ioloop)
+        self._scpi_config_handler = PafScpiConfigurationHandler(self._scpi_interface, 
+            lambda config: self.ioloop.add_callback(self.configure, config))
+        self._scpi_interface.add_handler("{}:start".format(SCPI_BASE_ID), 
+            lambda *args: self.ioloop.add_callback(self.start_capture))
+        self._scpi_interface.add_handler("{}:stop".format(SCPI_BASE_ID), 
+            lambda *args: self.ioloop.add_callback(self.stop_capture))
+        self._scpi_interface.add_handler("{}:deconfigure".format(SCPI_BASE_ID), 
+            lambda *args: self.ioloop.add_callback(self.deconfigure))
 
     @property
     def katcp_control_mode(self):
@@ -83,7 +130,7 @@ class PafMasterController(MasterController):
     @property
     def scpi_control_mode(self):
         return self._control_mode == self.SCPI
-
+        
     @request(Str())
     @return_reply()
     def request_set_control_mode(self, req, mode):
@@ -94,6 +141,10 @@ class PafMasterController(MasterController):
                 mode, ", ".join(self.CONTROL_MODES)))
         else:
             self._control_mode = mode
+        if self._control_mode == self.SCPI:
+            self._scpi_interface.start()
+        else:
+            self._scpi_interface.stop()
         return ("ok",)
 
     @request(Str())
@@ -118,7 +169,9 @@ class PafMasterController(MasterController):
     @coroutine
     def configure(self, dummy_config_string):
         log.info("Configuring PAF processing")
+        log.debug("Configuration string: '{}'".format(dummy_config_string))
         if self._products:
+            log.error("PAF already has a configured data product")
             raise Return(("fail", "PAF already has a configured data product"))
         self._products[PAF_PRODUCT_ID] = PafProductController(self, PAF_PRODUCT_ID)
         self._update_products_sensor()
@@ -238,7 +291,12 @@ def main():
         help='Host interface to bind to')
     parser.add_option('-p', '--port', dest='port', type=long,
         help='Port number to bind to')
-    parser.add_option('', '--log_level',dest='log_level',type=str,
+    parser.add_option('', '--scpi-interface', dest='scpi_interface', type=str,
+        help='The interface to listen on for SCPI requests',
+        default="")
+    parser.add_option('', '--scpi-port', dest='scpi_port', type=long,
+        help='The port number to listen on for SCPI requests')
+    parser.add_option('', '--log-level',dest='log_level',type=str,
         help='Port number of status server instance',default="INFO")
     (opts, args) = parser.parse_args()
     logger = logging.getLogger('mpikat')
@@ -249,13 +307,12 @@ def main():
     logging.getLogger('katcp').setLevel('INFO')
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting PafMasterController instance")
-    server = PafMasterController(opts.host, opts.port)
+    server = PafMasterController(opts.host, opts.port, opts.scpi_interface, opts.scpi_port)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
     def start_and_display():
         server.start()
         log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
-
     ioloop.add_callback(start_and_display)
     ioloop.start()
 

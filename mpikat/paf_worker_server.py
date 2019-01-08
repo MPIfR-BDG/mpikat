@@ -12,17 +12,13 @@ from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from pipeline import PIPELINES
 from tornado.iostream import IOStream
-from mpikat.master_controller import MasterController
-from mpikat.paf_product_controller import PafProductController
-from mpikat.paf_worker_wrapper import PafWorkerPool
-from mpikat.exceptions import ProductLookupError
 
 
 log = logging.getLogger("mpikat.paf_worker_server")
 
 #PIPELINES = {"mock":mock.Mock()}
 
-P8_IP="10.17.8.2"
+#P8_IP="10.17.8.2"
 
 class PafWorkerServer(AsyncDeviceServer):
     """
@@ -104,8 +100,14 @@ class PafWorkerServer(AsyncDeviceServer):
 
         self._ip_address = Sensor.string("ip",
             description="the ip address of the node controller", 
-            default=os.environ['PAF_DATA_INTERFACE'])
+            default=os.environ['PAF_NODE_IP'])
         self.add_sensor(self._ip_address)
+
+        self._mac_address = Sensor.string("mac",
+            description="the mac address of the node controller", 
+            default=os.environ['PAF_NODE_MAC'])
+        self.add_sensor(self._mac_address)
+
 
     @request(Str(),Str(),Str(),Str())
     @return_reply(Str())
@@ -131,7 +133,7 @@ class PafWorkerServer(AsyncDeviceServer):
             self._pipeline_instance = _pipeline_type()
             self._pipeline_instance.callbacks.add(self.state_change)
             try:
-                self._pipeline_instance.configure(utc_start, freq, P8_IP)
+                self._pipeline_instance.configure(utc_start, freq, str(self._ip_address.value()))
             except Exception as error:
                 msg = "Couldn't start configure pipeline instance {}".format(str(error))
                 log.info("{}".format(msg))
@@ -268,6 +270,7 @@ def main():
     parser.add_option('', '--log_level',dest='log_level',type=str,
         help='logging level',default="INFO")
     (opts, args) = parser.parse_args()
+    logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
