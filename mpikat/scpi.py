@@ -60,11 +60,14 @@ class ScpiInterface(object):
         """
         log.debug("Creating SCPI interface on port {}".format(port))
         self._address = (interface, port)
-        self.reset_socket()
         self._buffer_size = 4096
         self._ioloop = ioloop
         self._handlers = {}
         self._stop_event = Event()
+        self._socket = None
+
+    def __del__(self):
+        self.stop()
 
     def reset_socket(self):
         """
@@ -77,7 +80,7 @@ class ScpiInterface(object):
 
     def add_handler(self, command, callback):
         """
-        @brief      Adds an SCPI command handler
+        @brief      Add an SCPI command handler
         
         @param      command   The specific SCPI command on which this handler should be called
         @param      callback  The callback to execute on receipt of the specified command
@@ -89,14 +92,17 @@ class ScpiInterface(object):
                     Where args is a list of strings that were received as arguments to the
                     SCPI command. It is the responsibility of the handler to parse these
                     arguments appropriately.
+        """
+        self._handlers[command] = callback
 
-        @note       Multiple handlers can be assigned for a given SCPI command. All handlers
-                    for each command will be executed on receipt of that command.
+    def remove_handler(self, command):
+        """
+        @brief      Remove an SCPI command handler
+
+        @param      command   The specific SCPI command for which the handler should be removed
         """
         if command in self._handlers:
-            self._handlers[command].append(callback)
-        else:
-            self._handlers[command] = [callback,]
+            del self._handlers[command]
 
     def flush(self):
         log.debug("Flushing socket")
@@ -112,6 +118,7 @@ class ScpiInterface(object):
         @brief      Start the SCPI interface listening for new commands
         """
         log.info("Starting SCPI interface")
+        self.reset_socket()
         self._stop_event.clear()
         self.flush()
         @coroutine
@@ -144,16 +151,17 @@ class ScpiInterface(object):
         """
         log.debug("Stopping SCPI interface")
         self._stop_event.set()
+        if self._socket:
+            self._socket.close()
 
     @coroutine
     def _dispatch(self, request):
-        callbacks = self._handlers.get(request.command, [self.default_handler,])
+        callback = self._handlers.get(request.command, self.default_handler)
         try:
-            for callback in callbacks:
-                callback(request.command, *request.args)
+            callback(request.command, *request.args)
         except Exception as error:
-            log.exception("Error while executing SCPI request callback")
-        finally:
+            log.error("Error while executing SCPI request callback: {}".format(str(error)))
+        else:
             request.acknowledge()
 
     def default_handler(self, command, *args):
