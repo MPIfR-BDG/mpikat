@@ -43,51 +43,48 @@ from mpikat.scpi import ScpiInterface
 log = logging.getLogger("mpikat.paf_master_controller")
 
 PAF_PRODUCT_ID = "paf0"
-SCPI_BASE_ID = "scpi:pafbackend"
+SCPI_BASE_ID = "PAFBE"
 PAF_REQUIRED_KEYS = ["nbeams", "nbands", "band_offset", "mode", "frequency", "write_filterbank"]
 
 class PafConfigurationError(Exception):
     pass
 
 class PafScpiConfigurationHandler(object):
-    def __init__(self, scpi_interface, exit_callback):
+    def __init__(self, scpi_interface):
         self._scpi_interface = scpi_interface
-        self._exit_callback = exit_callback
-        self._config = {}
-        self._enabled = False
-        self._set_config_handler("start", lambda *args: self.enable_configuration())
-        self._set_config_handler("finish", lambda *args: self.finish_configuration())
-        self._set_config_handler("setFrequency",  lambda _, *args: self.update_config("frequency", float(args[0])))
-        self._set_config_handler("setNbands",     lambda _, *args: self.update_config("nbands", int(args[0])))
-        self._set_config_handler("setBandOffset", lambda _, *args: self.update_config("band_offset", int(args[0])))
-        self._set_config_handler("setNbeams",     lambda _, *args: self.update_config("nbeams", int(args[0])))
-        self._set_config_handler("setMode",       lambda _, *args: self.update_config("mode", args[0]))
-        self._set_config_handler("setWriteFil",   lambda _, *args: self.update_config("write_filterbank", bool(int(args[0]))))
+        self.reset()
+        self._set_config_handler("setfrequency",  self.update_config("frequency",        lambda *args: float(args[0])))
+        self._set_config_handler("setnbands",     self.update_config("nbands",           lambda *args: int(args[0])))
+        self._set_config_handler("setbandoffset", self.update_config("band_offset",      lambda *args: int(args[0])))
+        self._set_config_handler("setnbeams",     self.update_config("nbeams",           lambda *args: int(args[0])))
+        self._set_config_handler("setmode",       self.update_config("mode",             lambda *args: args[0]))
+        self._set_config_handler("setwritefil",   self.update_config("write_filterbank", lambda *args: bool(int(args[0]))))
 
-    def update_config(self, key, value):
-        if not self._enabled:
-            message = "Received configuration request for key '{}', but configuration not currently enabled".format(key)
-            log.error(message)
-            raise PafConfigurationError(message)
-        else:
+    def reset(self):
+        self._config = {}
+
+    @property
+    def config(self):
+        return self._config
+
+    @property
+    def config_json(self):
+        return json.dumps(self._config)
+
+    def update_config(self, key, converter=None):
+        @coroutine
+        def wrapper(command, *args):
+            if not converter:
+                value = args
+            else:
+                value = converter(*args)
             log.info("Updating configuration: {} = {}".format(key, value))
             self._config[key] = value
+        return wrapper
 
     def _set_config_handler(self, name, callback):
-        command = "{}:configure:{}".format(SCPI_BASE_ID, name)
+        command = "{}:{}".format(SCPI_BASE_ID, name)
         self._scpi_interface.add_handler(command, callback)
-
-    def enable_configuration(self):
-        self._config = {}
-        self._enabled = True
-
-    def finish_configuration(self):
-        if not self._enabled:
-            message = "Received configuration finish request when configuration not enabled"
-            log.error(message)
-            raise PafConfigurationError(message)
-        self._enabled = False
-        self._exit_callback(json.dumps(self._config))
 
 
 class PafMasterController(MasterController):
@@ -121,14 +118,19 @@ class PafMasterController(MasterController):
     def start(self):
         super(PafMasterController, self).start()
         self._scpi_interface = ScpiInterface(self._scpi_ip, self._scpi_port, self.ioloop)
-        self._scpi_config_handler = PafScpiConfigurationHandler(self._scpi_interface, 
-            lambda config: self.ioloop.add_callback(self.configure, config))
-        self._scpi_interface.add_handler("{}:start".format(SCPI_BASE_ID), 
-            lambda *args: self.ioloop.add_callback(self.capture_start))
-        self._scpi_interface.add_handler("{}:stop".format(SCPI_BASE_ID), 
-            lambda *args: self.ioloop.add_callback(self.capture_stop))
-        self._scpi_interface.add_handler("{}:deconfigure".format(SCPI_BASE_ID), 
-            lambda *args: self.ioloop.add_callback(self.deconfigure))
+        self._scpi_config_handler = PafScpiConfigurationHandler(self._scpi_interface)     
+        @coroutine
+        def configure_scpi_wrapper(command, *args):
+            yield self.configure(self._scpi_config_handler.config_json)
+        self._scpi_interface.add_handler("{}:configure".format(SCPI_BASE_ID), configure_scpi_wrapper)
+        @coroutine
+        def capture_start_scpi_wrapper(command, *args):
+            yield self.capture_start()
+        self._scpi_interface.add_handler("{}:start".format(SCPI_BASE_ID), capture_start_scpi_wrapper)
+        @coroutine
+        def capture_stop_scpi_wrapper(command, *args):
+            yield self.capture_stop()
+        self._scpi_interface.add_handler("{}:stop".format(SCPI_BASE_ID), capture_stop_scpi_wrapper)
 
     def stop(self):
         self._scpi_interface.stop()

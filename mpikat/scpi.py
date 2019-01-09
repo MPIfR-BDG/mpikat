@@ -11,6 +11,9 @@ from datetime import datetime
 
 log = logging.getLogger("mpikat.scpi")
 
+class UnhandledScpiRequest(Exception):
+    pass
+
 class ScpiRequest(object):
     def __init__(self, data, addr, socket):
         """
@@ -30,23 +33,34 @@ class ScpiRequest(object):
 
     @property
     def command(self):
-        return self._data.split()[0]
+        return self._data.split()[0].lower()
 
     @property
     def args(self):
         return self._data.split()[1:]
 
-    def acknowledge(self):
+    def _send_response(self, msg):
+        isotime = "{}UTC".format(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3])
+        response = "{} {}".format(msg, isotime)
+        log.info("Acknowledging request '{}' from {}".format(self.data, self._addr))
+        log.debug("Acknowledgement: {}".format(response))
+        self._socket.sendto(response, self._addr)
+
+    def fail(self, error_msg):
+        """
+        @brief Return an SCPI error to the original sender
+
+        @detail The response consists of the original message followed by and ISO timestamp.
+        """
+        self._send_response("{} ERROR {}".format(self.data, error_msg))
+
+    def ok(self):
         """
         @brief Return an SCPI acknowledgement to the original sender
 
         @detail The response consists of the original message followed by and ISO timestamp.
         """
-        isotime = "{}UTC".format(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3])
-        response = "{} {}".format(self.data, isotime)
-        log.info("Acknowledging request '{}' from {}".format(self.data, self._addr))
-        log.debug("Acknowledgement: {}".format(response))
-        self._socket.sendto(response, self._addr)
+        self._send_response(self.data)
 
 
 class ScpiInterface(object):
@@ -93,7 +107,7 @@ class ScpiInterface(object):
                     SCPI command. It is the responsibility of the handler to parse these
                     arguments appropriately.
         """
-        self._handlers[command] = callback
+        self._handlers[command.lower()] = callback
 
     def remove_handler(self, command):
         """
@@ -101,6 +115,7 @@ class ScpiInterface(object):
 
         @param      command   The specific SCPI command for which the handler should be removed
         """
+        command = command.lower()
         if command in self._handlers:
             del self._handlers[command]
 
@@ -142,7 +157,7 @@ class ScpiInterface(object):
                 if not self._stop_event.is_set():
                     self._ioloop.add_callback(receiver)
                 if request:
-                    self._ioloop.add_callback(self._dispatch, request)
+                    yield self._dispatch(request)
         self._ioloop.add_callback(receiver)
 
     def stop(self):
@@ -156,19 +171,22 @@ class ScpiInterface(object):
 
     @coroutine
     def _dispatch(self, request):
-        callback = self._handlers.get(request.command, self.default_handler)
+        callback = self._handlers.get(request.command.lower(), self.default_handler)
         try:
-            callback(request.command, *request.args)
+            yield callback(request.command, *request.args)
         except Exception as error:
             log.error("Error while executing SCPI request callback: {}".format(str(error)))
+            request.fail(str(error))
         else:
-            request.acknowledge()
+            request.ok()
 
+    @coroutine
     def default_handler(self, command, *args):
         """
         @brief      The default handler used by the interface. 
         """
         log.warning("Unhandled command '{}' with arguments '{}'".format(command, args))
+        raise UnhandledScpiRequest(command)
 
 
 @coroutine

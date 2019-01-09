@@ -40,8 +40,8 @@ from katpoint import Antenna, Target
 from katcp import AsyncReply
 from katcp.testutils import mock_req, handle_mock_req
 import mpikat
-from mpikat.scpi_client import AsyncScpiClient
-from mpikat.paf_master_controller import PafMasterController, PAF_PRODUCT_ID
+from mpikat.scpi_client import AsyncScpiClient, ScpiFailedRequest
+from mpikat.paf_master_controller import PafMasterController, PAF_PRODUCT_ID, SCPI_BASE_ID
 from mpikat.paf_product_controller import PafProductController
 from mpikat.paf_worker_wrapper import PafWorkerWrapper
 from mpikat.test.utils import AsyncServerTester
@@ -75,7 +75,7 @@ class TestPafMasterController(AsyncServerTester):
         yield self._send_request_expect_ok('set-control-mode', 'KATCP')
         client = AsyncScpiClient('', SCPI_TEST_PORT, self.ioloop)
         try:
-            yield client.send('scpi:pafbackend:configure:start')
+            yield client.send('{}:configure'.format(SCPI_BASE_ID))
         except socket.timeout:
             pass
         except Exception as error:
@@ -86,14 +86,13 @@ class TestPafMasterController(AsyncServerTester):
         yield self._send_request_expect_ok('set-control-mode', 'SCPI')
         client = AsyncScpiClient('127.0.0.1', SCPI_TEST_PORT, self.ioloop)
         try:
-            yield client.send('scpi:pafbackend:configure:start')
-            yield client.send('scpi:pafbackend:configure:setFrequency 1400000000')
-            yield client.send('scpi:pafbackend:configure:setNbands 33')
-            yield client.send('scpi:pafbackend:configure:setBandOffset 7')
-            yield client.send('scpi:pafbackend:configure:setNbeams 36')
-            yield client.send('scpi:pafbackend:configure:setMode SpSearch')
-            yield client.send('scpi:pafbackend:configure:setWriteFil 0')
-            yield client.send('scpi:pafbackend:configure:finish')
+            yield client.send('{}:setfrequency 1400000000'.format(SCPI_BASE_ID))
+            yield client.send('{}:setnbands 33'.format(SCPI_BASE_ID))
+            yield client.send('{}:setbandoffset 7'.format(SCPI_BASE_ID))
+            yield client.send('{}:setnbeams 36'.format(SCPI_BASE_ID))
+            yield client.send('{}:setmode SpSearch'.format(SCPI_BASE_ID))
+            yield client.send('{}:setwritefil 0'.format(SCPI_BASE_ID))
+            yield client.send('{}:configure'.format(SCPI_BASE_ID))
         except Exception as error:
             self.fail("Exception on SCPI requests: {}".format(str(error)))
         yield self._check_sensor_value('{}.state'.format(PAF_PRODUCT_ID), 'ready')
@@ -103,14 +102,11 @@ class TestPafMasterController(AsyncServerTester):
         yield self._send_request_expect_ok('set-control-mode', 'SCPI')
         client = AsyncScpiClient('127.0.0.1', SCPI_TEST_PORT, self.ioloop)
         try:
-            yield client.send('scpi:pafbackend:configure:start')
-        except Exception as error:
-            print error
-            self.fail("Exception on SCPI configure start request: {}".format(str(error)))
-        try:
-            yield client.send('scpi:pafbackend:configure:finish')
-        except Exception as error:
-            self.assertEqual(error, socket.timeout)
+            yield client.send('{}:configure'.format(SCPI_BASE_ID))
+        except ScpiFailedRequest:
+            pass
+        else:
+            self.fail("Expected failure from configure call")
 
     @gen_test
     def test_good_katcp_configure(self):

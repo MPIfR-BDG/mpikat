@@ -9,6 +9,9 @@ from optparse import OptionParser
 
 logger = logging.getLogger('mpikat.scpi_client')
 
+class ScpiFailedRequest(Exception):
+    pass
+
 class ScpiClient(object):
     def __init__(self, ip, port, timeout=2):
         self._ip = ip
@@ -26,6 +29,8 @@ class ScpiClient(object):
             raise error
         else:
             logger.info("Received response '{}' from {}:{}".format(message, addr[0], addr[1]))
+            if "ERROR" in message:
+                raise ScpiFailedRequest(message)
         finally:
             sock.close()
 
@@ -62,6 +67,9 @@ class AsyncScpiClient(object):
                 raise socket.timeout
         except Exception as error:
             raise error
+        else:
+            if "ERROR" in message:
+                raise ScpiFailedRequest(message)
         finally:
             sock.close()
 
