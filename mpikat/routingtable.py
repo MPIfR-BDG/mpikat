@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 
+import logging
 import numpy as np
 import csv
 import math
 import paramiko
 from os.path import join
 import time
+
+log = logging.getLogger("mpikat.paf_routingtable")
 
 Stream2Beams, Stream1Beam = (0,1)
 
@@ -26,15 +29,12 @@ CONFIG1BEAM  = {"nbeam":           18,  # Expected number from configuration, th
                 "nchunk_per_port": 8,
 }
 
-PARAMIKO_BUFSZ     = 10240
+PARAMIKO_BUFSZ     = 102400
 TOSSIX_USERNAME    = "pulsar"
 TOSSIX_IP          = "134.104.74.36"
 TOSSIX_SCRIPT_ROOT = "/home/pulsar/aaron/askap-trunk/"
 
 class RemoteAccess(object):
-    def __init__(self):
-        pass
-    
     def connect(self, ip, username, bufsz, password=None):
         self.ip         = ip
         self.username   = username
@@ -44,41 +44,45 @@ class RemoteAccess(object):
         self.ssh_client = paramiko.SSHClient()
         self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.ssh_client.connect(hostname=ip, username=username, password=password)
-        print "Successful connection {} ...".format(self.ip)
-
-        print "Invoke shell from {}... ".format(self.ip)
+        log.info("Successful connection {} ...".format(self.ip))
+        
+        log.info("Invoke shell from {}... ".format(self.ip))
         self.remote_shell = self.ssh_client.invoke_shell()
 
-        print "Create SCP connection with {}... ".format(self.ip)
+        log.info("Create SCP connection with {}... ".format(self.ip))
         self.sftp_client = self.ssh_client.open_sftp()        
-        
+
     def control(self, command, sleep):
-        print "Run \"{}\" on {}\n".format(command, self.ip)
+        log.info("Run \"{}\" on {}\n".format(command, self.ip))
         self.remote_shell.send("{}\n".format(command))
         time.sleep(sleep)
+
+        while True:
+            if self.remote_shell.recv_ready():
+                break
+        #print self.remote_shell.recv(self.bufsz)
+        #print self.remote_shell.recv(self.bufsz)
         print self.remote_shell.recv(self.bufsz)
 
+        #while not (self.remote_shell.exit_status_ready()):
+        #    print self.remote_shell.exit_status_ready()
+            
+        #log.info(self.remote_shell.recv(self.bufsz))
+        #self.remote_shell.exit_status_ready()
+        #self.remote_shell.recv_exit_status()
+
     def scp(self, src, dst, sleep):
-        print src, dst
-        print "\n\n\n\n\n"
+        log.info("Copy {} to {}\n".format(src, dst))
         self.sftp_client.put(src, dst)
         time.sleep(sleep)
-    
+            
     def disconnect(self):
-        print "Disconnect from {} ...".format(self.ip)
+        log.info("Disconnect from {} ...".format(self.ip))
         self.ssh_client.close()
 
-    def __del__(self):
-        class_name = self.__class__.__name__
         
 class RoutingTable(object):
-    def __init__(self):
-        pass
-    
-    def __del__(self):
-        class_name = self.__class__.__name__
-
-    def configure(self, destinations, nbeam, nchunk, nchunk_offset, center_freq_band, directory, fname):
+    def __init__(self, destinations, nbeam, nchunk, nchunk_offset, center_freq_band, fname):
         """ To configure the class and check the input
         destinations: The MAC and IP of alive NiCs;
         [['0x7cfe90c0c930',	'10.17.0.1'],
@@ -105,16 +109,16 @@ class RoutingTable(object):
         nchunk_offset:    the number of frequency chunks we want to shift, int
                           + means we shift the center frequency towards the band top
         center_freq_band: the center_freq from telescope control system, which is the center frequency of the full band, float
-        directory:        Where we put the table on local machine
         fname:            The name of routing table
         """
 
+        log.info("destination information: \n{}".format(destinations))
+        log.info("configurations:\nnbeam {} nchunk {} nchunk_offset {} center_Freq_band {} fname {}".format(nbeam, nchunk, nchunk_offset, center_freq_band, fname))
         self.destinations     = destinations
         self.nbeam            = nbeam
         self.nchunk           = nchunk
         self.nchunk_offset    = nchunk_offset
         self.center_freq_band = center_freq_band
-        self.directory        = directory
         self.fname            = fname
         
         # To check the input
@@ -139,10 +143,14 @@ class RoutingTable(object):
         start_chunk      = int(math.floor((NCHUNK_PER_BEAM - self.nchunk)/2.0)) # The start chunk before adding offset
         self.first_chunk = start_chunk + self.nchunk_offset
         self.last_chunk  = start_chunk + self.nchunk + self.nchunk_offset
-        print self.first_chunk, self.last_chunk
+        log.info("first chunk {}, last chunk {}".format(self.first_chunk, self.last_chunk))
+
         if ((self.first_chunk<0) or (self.last_chunk)>(NCHUNK_PER_BEAM - 1)):
             raise RoutingTableError("Required frequency chunks are out of range")
-            
+        
+        self.generate_table()
+        log.info("Table generated with the name {}".format(self.fname))
+        
     def generate_table(self):
         """" To generate routing table """
         # Fill in default value, with which the BMF will not send any data into GPU nodes
@@ -176,10 +184,9 @@ class RoutingTable(object):
             
                 port = BASE_PORT + int(math.floor(math.floor(beam * self.nchunk + sb - self.first_chunk)%nchunk_nic/self.config["nchunk_per_port"])) #PORT
                 table[sb][beam_idx+2]=port
-                print sb, beam_idx, nic_idx, port
 
         # Write out table
-        table_fp=open(join(self.directory, self.fname), "w")
+        table_fp=open(self.fname, "w")
         table_fp.write(csvheader)
         table_fp.write('\n')
         for row in range(NCHUNK_PER_BEAM):
@@ -189,22 +196,30 @@ class RoutingTable(object):
 
     def upload_table(self):
         """ To upload routing table to beamformer and configure stream"""
+        sleep_time = 0
         tossix = RemoteAccess()
         tossix.connect(TOSSIX_IP, TOSSIX_USERNAME, PARAMIKO_BUFSZ)
 
         # Copy table to tossix
-        tossix.scp(join(self.directory, self.fname), join("{}/Code/Components/OSL/scripts/ade/files/stream_setup".format(TOSSIX_SCRIPT_ROOT), self.fname), 1)
+        tossix.scp(self.fname, join("{}/Code/Components/OSL/scripts/ade/files/stream_setup".format(TOSSIX_SCRIPT_ROOT), self.fname), sleep_time)
 
+        print "copy\n"
+        
         # Initial the tossix
-        tossix.control("bash\n", 1)
-        tossix.control(". {}/initaskap.sh".format(TOSSIX_SCRIPT_ROOT), 1)
-        tossix.control(". {}/Code/Components/OSL/scripts/osl_init_env.sh".format(TOSSIX_SCRIPT_ROOT), 1)
-        tossix.control("cd {}/Code/Components/OSL/scripts/ade".format(TOSSIX_SCRIPT_ROOT), 1)
-
+        tossix.control("bash\n", sleep_time)
+        tossix.control(". {}/initaskap.sh".format(TOSSIX_SCRIPT_ROOT), sleep_time)
+        tossix.control(". {}/Code/Components/OSL/scripts/osl_init_env.sh".format(TOSSIX_SCRIPT_ROOT), sleep_time)
+        tossix.control("cd {}/Code/Components/OSL/scripts/ade".format(TOSSIX_SCRIPT_ROOT), sleep_time)
+        print "initial\n"
+        
         # Configure metadata and streaming
-        tossix.control("python osl_a_metadata_streaming.py", 10)
-        tossix.control("python osl_a_abf_config_stream.py --param 'ade_bmf.stream10G.streamSetup={}'".format(self.fname), 10)
-
+        tossix.control("python osl_a_metadata_streaming.py", sleep_time)
+        try:
+            tossix.control("python osl_a_abf_config_stream.py --param 'ade_bmf.stream10G.streamSetup={}'".format(self.fname), sleep_time)
+        except:
+            print "HERE\n"
+        print "config\n"
+        
         # Disconnect
         tossix.disconnect()
         
@@ -240,10 +255,7 @@ if __name__=="__main__":
     nbeam         = 36      
     nchunk_offset = 0
     fname         = "36beams.csv"
-    directory     = ""
 
-    routing_table = RoutingTable()
-    routing_table.configure(destinations, nbeam, nchunk, nchunk_offset, center_freq, directory, fname)
-    routing_table.generate_table()
+    routing_table = RoutingTable(destinations, nbeam, nchunk, nchunk_offset, center_freq, fname)
     print routing_table.center_freq_stream()
     routing_table.upload_table()
