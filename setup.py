@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(name='mpikat',
       version='0.1',
@@ -7,7 +7,7 @@ setup(name='mpikat',
       author='Ewan Barr',
       author_email='ebarr@mpifr-bonn.mpg.de',
       license='MIT',
-      packages=['mpikat'],
+      packages=find_packages(),
       install_requires=[
           'katpoint',
           'katcp',

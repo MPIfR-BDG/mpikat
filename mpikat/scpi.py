@@ -11,6 +11,9 @@ from datetime import datetime
 
 log = logging.getLogger("mpikat.scpi")
 
+class UnhandledScpiRequest(Exception):
+    pass
+
 class ScpiRequest(object):
     def __init__(self, data, addr, socket):
         """
@@ -30,23 +33,34 @@ class ScpiRequest(object):
 
     @property
     def command(self):
-        return self._data.split()[0]
+        return self._data.split()[0].lower()
 
     @property
     def args(self):
         return self._data.split()[1:]
 
-    def acknowledge(self):
+    def _send_response(self, msg):
+        isotime = "{}UTC".format(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3])
+        response = "{} {}".format(msg, isotime)
+        log.info("Acknowledging request '{}' from {}".format(self.data, self._addr))
+        log.debug("Acknowledgement: {}".format(response))
+        self._socket.sendto(response, self._addr)
+
+    def fail(self, error_msg):
+        """
+        @brief Return an SCPI error to the original sender
+
+        @detail The response consists of the original message followed by and ISO timestamp.
+        """
+        self._send_response("{} ERROR {}".format(self.data, error_msg))
+
+    def ok(self):
         """
         @brief Return an SCPI acknowledgement to the original sender
 
         @detail The response consists of the original message followed by and ISO timestamp.
         """
-        isotime = "{}UTC".format(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3])
-        response = "{} {}".format(self.data, isotime)
-        log.info("Acknowledging request '{}' from {}".format(self.data, self._addr))
-        log.debug("Acknowledgement: {}".format(response))
-        self._socket.sendto(response, self._addr)
+        self._send_response(self.data)
 
 
 class ScpiInterface(object):
@@ -60,11 +74,14 @@ class ScpiInterface(object):
         """
         log.debug("Creating SCPI interface on port {}".format(port))
         self._address = (interface, port)
-        self.reset_socket()
         self._buffer_size = 4096
         self._ioloop = ioloop
         self._handlers = {}
         self._stop_event = Event()
+        self._socket = None
+
+    def __del__(self):
+        self.stop()
 
     def reset_socket(self):
         """
@@ -77,7 +94,7 @@ class ScpiInterface(object):
 
     def add_handler(self, command, callback):
         """
-        @brief      Adds an SCPI command handler
+        @brief      Add an SCPI command handler
         
         @param      command   The specific SCPI command on which this handler should be called
         @param      callback  The callback to execute on receipt of the specified command
@@ -89,14 +106,18 @@ class ScpiInterface(object):
                     Where args is a list of strings that were received as arguments to the
                     SCPI command. It is the responsibility of the handler to parse these
                     arguments appropriately.
-
-        @note       Multiple handlers can be assigned for a given SCPI command. All handlers
-                    for each command will be executed on receipt of that command.
         """
+        self._handlers[command.lower()] = callback
+
+    def remove_handler(self, command):
+        """
+        @brief      Remove an SCPI command handler
+
+        @param      command   The specific SCPI command for which the handler should be removed
+        """
+        command = command.lower()
         if command in self._handlers:
-            self._handlers[command].append(callback)
-        else:
-            self._handlers[command] = [callback,]
+            del self._handlers[command]
 
     def flush(self):
         log.debug("Flushing socket")
@@ -112,6 +133,7 @@ class ScpiInterface(object):
         @brief      Start the SCPI interface listening for new commands
         """
         log.info("Starting SCPI interface")
+        self.reset_socket()
         self._stop_event.clear()
         self.flush()
         @coroutine
@@ -135,7 +157,7 @@ class ScpiInterface(object):
                 if not self._stop_event.is_set():
                     self._ioloop.add_callback(receiver)
                 if request:
-                    self._ioloop.add_callback(self._dispatch, request)
+                    yield self._dispatch(request)
         self._ioloop.add_callback(receiver)
 
     def stop(self):
@@ -144,23 +166,27 @@ class ScpiInterface(object):
         """
         log.debug("Stopping SCPI interface")
         self._stop_event.set()
+        if self._socket:
+            self._socket.close()
 
     @coroutine
     def _dispatch(self, request):
-        callbacks = self._handlers.get(request.command, [self.default_handler,])
+        callback = self._handlers.get(request.command.lower(), self.default_handler)
         try:
-            for callback in callbacks:
-                callback(request.command, *request.args)
+            yield callback(request.command, *request.args)
         except Exception as error:
-            log.exception("Error while executing SCPI request callback")
-        finally:
-            request.acknowledge()
+            log.error("Error while executing SCPI request callback: {}".format(str(error)))
+            request.fail(str(error))
+        else:
+            request.ok()
 
+    @coroutine
     def default_handler(self, command, *args):
         """
         @brief      The default handler used by the interface. 
         """
         log.warning("Unhandled command '{}' with arguments '{}'".format(command, args))
+        raise UnhandledScpiRequest(command)
 
 
 @coroutine

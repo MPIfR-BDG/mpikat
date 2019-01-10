@@ -43,44 +43,48 @@ from mpikat.scpi import ScpiInterface
 log = logging.getLogger("mpikat.paf_master_controller")
 
 PAF_PRODUCT_ID = "paf0"
+SCPI_BASE_ID = "PAFBE"
+PAF_REQUIRED_KEYS = ["nbeams", "nbands", "band_offset", "mode", "frequency", "write_filterbank"]
 
-SCPI_BASE_ID = "scpi:pafbackend"
+class PafConfigurationError(Exception):
+    pass
 
 class PafScpiConfigurationHandler(object):
-    def __init__(self, scpi_interface, exit_callback):
+    def __init__(self, scpi_interface):
         self._scpi_interface = scpi_interface
-        self._exit_callback = exit_callback
-        self._config = {}
-        self._enabled = False
         self.reset()
-
-    def update_config(self, key, value):
-        if not self._enabled:
-            log.error("Received configuration request for key '{}', but configuration not currently enabled".format(key))
-        else:
-            log.info("Updating configuration: {} = {}".format(key, value))
-            self._config[key] = value
-
-    def set_config_handler(self, name, callback):
-        command = "{}:configure:{}".format(SCPI_BASE_ID, name)
-        self._scpi_interface.add_handler(command, callback)
+        self._set_config_handler("setfrequency",  self.update_config("frequency",        lambda *args: float(args[0])))
+        self._set_config_handler("setnbands",     self.update_config("nbands",           lambda *args: int(args[0])))
+        self._set_config_handler("setbandoffset", self.update_config("band_offset",      lambda *args: int(args[0])))
+        self._set_config_handler("setnbeams",     self.update_config("nbeams",           lambda *args: int(args[0])))
+        self._set_config_handler("setmode",       self.update_config("mode",             lambda *args: args[0]))
+        self._set_config_handler("setwritefil",   self.update_config("write_filterbank", lambda *args: bool(int(args[0]))))
 
     def reset(self):
-        def start(*args):
-            self._enabled = True
-
-        def finish(*args):
-            if not self._enabled:
-                log.error("Received configuration finish request when configuration not enabled")
-            else:
-                self._enabled = False
-                self._exit_callback(self._config)
         self._config = {}
-        self.set_config_handler("start",        start)
-        self.set_config_handler("setFrequency", lambda _, *args: self.update_config("frequency", float(args[0])))
-        self.set_config_handler("setNchans",    lambda _, *args: self.update_config("nchans", int(args[0])))
-        self.set_config_handler("setNbeams",    lambda _, *args: self.update_config("nbeams", int(args[0])))
-        self.set_config_handler("finish",       finish)
+
+    @property
+    def config(self):
+        return self._config
+
+    @property
+    def config_json(self):
+        return json.dumps(self._config)
+
+    def update_config(self, key, converter=None):
+        @coroutine
+        def wrapper(command, *args):
+            if not converter:
+                value = args
+            else:
+                value = converter(*args)
+            log.info("Updating configuration: {} = {}".format(key, value))
+            self._config[key] = value
+        return wrapper
+
+    def _set_config_handler(self, name, callback):
+        command = "{}:{}".format(SCPI_BASE_ID, name)
+        self._scpi_interface.add_handler(command, callback)
 
 
 class PafMasterController(MasterController):
@@ -114,14 +118,33 @@ class PafMasterController(MasterController):
     def start(self):
         super(PafMasterController, self).start()
         self._scpi_interface = ScpiInterface(self._scpi_ip, self._scpi_port, self.ioloop)
-        self._scpi_config_handler = PafScpiConfigurationHandler(self._scpi_interface, 
-            lambda config: self.ioloop.add_callback(self.configure, config))
-        self._scpi_interface.add_handler("{}:start".format(SCPI_BASE_ID), 
-            lambda *args: self.ioloop.add_callback(self.start_capture))
-        self._scpi_interface.add_handler("{}:stop".format(SCPI_BASE_ID), 
-            lambda *args: self.ioloop.add_callback(self.stop_capture))
-        self._scpi_interface.add_handler("{}:deconfigure".format(SCPI_BASE_ID), 
-            lambda *args: self.ioloop.add_callback(self.deconfigure))
+        self._scpi_config_handler = PafScpiConfigurationHandler(self._scpi_interface)     
+        @coroutine
+        def configure_scpi_wrapper(command, *args):
+            yield self.configure(self._scpi_config_handler.config_json)
+        self._scpi_interface.add_handler("{}:configure".format(SCPI_BASE_ID), configure_scpi_wrapper)
+        @coroutine
+        def capture_start_scpi_wrapper(command, *args):
+            yield self.capture_start()
+        self._scpi_interface.add_handler("{}:start".format(SCPI_BASE_ID), capture_start_scpi_wrapper)
+        @coroutine
+        def capture_stop_scpi_wrapper(command, *args):
+            yield self.capture_stop()
+        self._scpi_interface.add_handler("{}:stop".format(SCPI_BASE_ID), capture_stop_scpi_wrapper)
+
+    def stop(self):
+        self._scpi_interface.stop()
+        self._scpi_interface = None
+        super(PafMasterController, self).stop()
+
+    def setup_sensors(self):
+        super(PafMasterController, self).setup_sensors()
+        self._paf_config_sensor = Sensor.string(
+            "current-config",
+            description="The currently set configuration for the PAF backend",
+            default="",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._paf_config_sensor)
 
     @property
     def katcp_control_mode(self):
@@ -149,7 +172,7 @@ class PafMasterController(MasterController):
 
     @request(Str())
     @return_reply()
-    def request_configure(self, req, dummy_config_string):
+    def request_configure(self, req, config_json):
         """
         @brief      Configure PAF to receive and process data
 
@@ -161,28 +184,38 @@ class PafMasterController(MasterController):
             return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
         @coroutine
         def configure_wrapper():
-            response = yield self.configure(dummy_config_string)
-            req.reply(*response)
+            try:
+                yield self.configure(config_json)
+            except Exception as error:
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
         self.ioloop.add_callback(configure_wrapper)
         raise AsyncReply
 
     @coroutine
-    def configure(self, dummy_config_string):
+    def configure(self, config_json):
         log.info("Configuring PAF processing")
-        log.debug("Configuration string: '{}'".format(dummy_config_string))
+        log.debug("Configuration string: '{}'".format(config_json))
         if self._products:
             log.error("PAF already has a configured data product")
-            raise Return(("fail", "PAF already has a configured data product"))
+            raise PafConfigurationError("PAF already has a configured data product")
+        config_dict = json.loads(config_json)
+        for key in PAF_REQUIRED_KEYS:
+            if key not in config_dict:
+                message = "No value set for required configuration parameter '{}'".format(key)
+                log.error(message)
+                raise PafConfigurationError(message)
         self._products[PAF_PRODUCT_ID] = PafProductController(self, PAF_PRODUCT_ID)
+        self._paf_config_sensor.set_value(config_json)
         self._update_products_sensor()
         try:
-            yield self._products[PAF_PRODUCT_ID].configure(dummy_config_string)
+            yield self._products[PAF_PRODUCT_ID].configure(config_json)
         except Exception as error:
             log.error("Failed to configure product with error: {}".format(str(error)))
-            raise Return(("ok", str(error)))
+            raise PafConfigurationError(str(error))
         else:
             log.debug("Configured PAF instance with ID: {}".format(PAF_PRODUCT_ID))
-            raise Return(("ok",))
 
     @request()
     @return_reply()
@@ -204,55 +237,48 @@ class PafMasterController(MasterController):
             return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
         @coroutine
         def deconfigure_wrapper():
-            response = yield self.deconfigure()
-            req.reply(*response)
+            try:
+                yield self.deconfigure()
+            except Exception as error:
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
         self.ioloop.add_callback(deconfigure_wrapper)
         raise AsyncReply
 
     @coroutine
     def deconfigure(self):
         log.info("Deconfiguring PAF processing")
-        try:
-            product = self._get_product(PAF_PRODUCT_ID)
-        except ProductLookupError as error:
-            raise Return(("fail", str(error)))
-        try:
-            yield product.deconfigure()
-        except Exception as error:
-            raise Return(("fail", str(error)))
+        product = self._get_product(PAF_PRODUCT_ID)
+        yield product.deconfigure()
         del self._products[PAF_PRODUCT_ID]
         self._update_products_sensor()
-        raise Return(("ok",))
 
     @request()
     @return_reply()
-    def request_start_capture(self, req):
+    def request_capture_start(self, req):
         """ arse """
         if not self.katcp_control_mode:
             return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
         @coroutine
         def start_wrapper():
-            response = yield self.start_capture()
-            req.reply(*response)
+            try:
+                yield self.capture_start()
+            except Exception as error:
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
         self.ioloop.add_callback(start_wrapper)
         raise AsyncReply
 
     @coroutine
-    def start_capture(self):
-        try:
-            product = self._get_product(PAF_PRODUCT_ID)
-        except ProductLookupError as error:
-            raise Return(("fail", str(error)))
-        try:
-            yield product.start_capture()
-        except Exception as error:
-            raise Return(("fail", str(error)))
-        else:
-            raise Return(("ok",))
+    def capture_start(self):
+        product = self._get_product(PAF_PRODUCT_ID)
+        yield product.capture_start()
 
     @request()
     @return_reply()
-    def request_stop_capture(self, req):
+    def request_capture_stop(self, req):
         """
         @brief      Stop PAF streaming
 
@@ -263,20 +289,20 @@ class PafMasterController(MasterController):
             return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
         @coroutine
         def stop_wrapper():
-            response = yield self.stop_capture()
+            try:
+                yield self.capture_stop()
+            except Exception as error:
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
             req.reply(*response)
         self.ioloop.add_callback(stop_wrapper)
         raise AsyncReply
 
     @coroutine
-    def stop_capture(self):
-        try:
-            product = self._get_product(PAF_PRODUCT_ID)
-        except ProductLookupError as error:
-            raise Return(("fail", str(error)))
-        yield product.stop_capture()
-        raise Return(("ok",))
-
+    def capture_stop(self):
+        product = self._get_product(PAF_PRODUCT_ID)
+        yield product.capture_stop()
 
 @coroutine
 def on_shutdown(ioloop, server):

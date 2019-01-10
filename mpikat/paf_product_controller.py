@@ -50,8 +50,6 @@ class PafProductController(object):
         @param      parent            The parent PafMasterController instance
         """
         self.log = logging.getLogger("mpikat.apsuse_product_controller.{}".format(product_id))
-        self.log.debug("Creating new PafProductController with args: {}".format(
-            ", ".join([str(i) for i in (parent,)])))
         self._parent = parent
         self._product_id = product_id
         self._managed_sensors = []
