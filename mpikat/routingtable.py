@@ -174,7 +174,7 @@ class RoutingTable(object):
                 table[sb][beam_idx]     = destinations[nic_idx][0] #MAC
                 table[sb][beam_idx + 1] = destinations[nic_idx][1] #IP
             
-                port = BASE_PORT + int(math.floor(math.floor(beam * self.nchunk + sb)%nchunk_nic/self.config["nchunk_per_port"])) #PORT
+                port = BASE_PORT + int(math.floor(math.floor(beam * self.nchunk + sb - self.first_chunk)%nchunk_nic/self.config["nchunk_per_port"])) #PORT
                 table[sb][beam_idx+2]=port
                 print sb, beam_idx, nic_idx, port
 
@@ -238,7 +238,7 @@ if __name__=="__main__":
     
     nchunk        = 33      
     nbeam         = 36      
-    nchunk_offset = -5
+    nchunk_offset = 0
     fname         = "36beams.csv"
     directory     = ""
 
