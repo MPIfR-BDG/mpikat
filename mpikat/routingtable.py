@@ -5,8 +5,9 @@ import numpy as np
 import csv
 import math
 import paramiko
-from os.path import join
+from os.path import join, isfile 
 import time
+import tempfile
 
 log = logging.getLogger("mpikat.paf_routingtable")
 
@@ -34,8 +35,11 @@ TOSSIX_USERNAME    = "pulsar"
 TOSSIX_IP          = "134.104.74.36"
 TOSSIX_SCRIPT_ROOT = "/home/pulsar/aaron/askap-trunk/"
 
+class RoutingTableError(Exception):
+    pass
+
 class RemoteAccess(object):
-    def connect(self, ip, username, bufsz, password=None):
+    def connect(self, ip, username, bufsz=PARAMIKO_BUFSZ, password=None):
         self.ip         = ip
         self.username   = username
         self.bufsz      = bufsz
@@ -49,40 +53,36 @@ class RemoteAccess(object):
         log.info("Invoke shell from {}... ".format(self.ip))
         self.remote_shell = self.ssh_client.invoke_shell()
 
+    def control(self, cmd):
+        self.remote_shell.sendall(cmd+"\r\n")
+        self.remote_shell.sendall("echo 'PARAMIKO_COMMAND_DONE'"+"\r\n")
+        output = ""
+        while True:
+            try:
+                data = self.remote_shell.recv(1<<15)
+            except socket.timeout:
+                continue
+            output += data
+            if output.find("\r\nPARAMIKO_COMMAND_DONE\r\n") != -1:
+                log.info(output)
+                return
+            if output.find("\r\nFAIL\r\n") != -1:
+                raise RoutingTableError("Command {} fail".format(cmd))
+            
+    def scp(self, src, dst):        
         log.info("Create SCP connection with {}... ".format(self.ip))
         self.sftp_client = self.ssh_client.open_sftp()        
-
-    def control(self, command, sleep):
-        log.info("Run \"{}\" on {}\n".format(command, self.ip))
-        self.remote_shell.send("{}\n".format(command))
-        time.sleep(sleep)
-
-        while True:
-            if self.remote_shell.recv_ready():
-                break
-        #print self.remote_shell.recv(self.bufsz)
-        #print self.remote_shell.recv(self.bufsz)
-        print self.remote_shell.recv(self.bufsz)
-
-        #while not (self.remote_shell.exit_status_ready()):
-        #    print self.remote_shell.exit_status_ready()
-            
-        #log.info(self.remote_shell.recv(self.bufsz))
-        #self.remote_shell.exit_status_ready()
-        #self.remote_shell.recv_exit_status()
-
-    def scp(self, src, dst, sleep):
-        log.info("Copy {} to {}\n".format(src, dst))
+        log.info("Copy {} to {}".format(src, dst))
         self.sftp_client.put(src, dst)
-        time.sleep(sleep)
-            
+        log.info("Close scp channel")
+        self.sftp_client.close()
+        
     def disconnect(self):
         log.info("Disconnect from {} ...".format(self.ip))
         self.ssh_client.close()
-
         
 class RoutingTable(object):
-    def __init__(self, destinations, nbeam, nchunk, nchunk_offset, center_freq_band, fname):
+    def __init__(self, destinations, nbeam, nchunk, nchunk_offset, center_freq_band):
         """ To configure the class and check the input
         destinations: The MAC and IP of alive NiCs;
         [['0x7cfe90c0c930',	'10.17.0.1'],
@@ -109,17 +109,21 @@ class RoutingTable(object):
         nchunk_offset:    the number of frequency chunks we want to shift, int
                           + means we shift the center frequency towards the band top
         center_freq_band: the center_freq from telescope control system, which is the center frequency of the full band, float
-        fname:            The name of routing table
         """
-
-        log.info("destination information: \n{}".format(destinations))
-        log.info("configurations:\nnbeam {} nchunk {} nchunk_offset {} center_Freq_band {} fname {}".format(nbeam, nchunk, nchunk_offset, center_freq_band, fname))
+        
+        log.info("destination information:")
+        log.info(destinations)
+        
+        self.table_file       = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=True)
+        self.fname            = self.table_file.name
         self.destinations     = destinations
         self.nbeam            = nbeam
         self.nchunk           = nchunk
         self.nchunk_offset    = nchunk_offset
         self.center_freq_band = center_freq_band
-        self.fname            = fname
+        log.info("Created a temp file {} for routing table".format(self.fname))
+        log.info("configurations:")
+        log.info("nbeam {} nchunk {} nchunk_offset {} center_Freq_band {} fname {}".format(self.nbeam, self.nchunk, self.nchunk_offset, self.center_freq_band, self.fname))
         
         # To check the input
         if self.nbeam == 36:
@@ -154,7 +158,13 @@ class RoutingTable(object):
     def generate_table(self):
         """" To generate routing table """
         # Fill in default value, with which the BMF will not send any data into GPU nodes
-        csvheader = 'BANDID,MAC1,IP1,PORT1,MAC2,IP2,PORT2,MAC3,IP3,PORT3,MAC4,IP4,PORT4,MAC5,IP5,PORT5,MAC6,IP6,PORT6,MAC7,IP7,PORT7,MAC8,IP8,PORT8,MAC9,IP9,PORT9,MAC10,IP10,PORT10,MAC11,IP11,PORT11,MAC12,IP12,PORT12,MAC13,IP13,PORT13,MAC14,IP14,PORT14,MAC15,IP15,PORT15,MAC16,IP16,PORT16,MAC17,IP17,PORT17,MAC18,IP18,PORT18,MAC19,IP19,PORT19,MAC20,IP20,PORT20,MAC21,IP21,PORT21,MAC22,IP22,PORT22,MAC23,IP23,PORT23,MAC24,IP24,PORT24,MAC25,IP25,PORT25,MAC26,IP26,PORT26,MAC27,IP27,PORT27,MAC28,IP28,PORT28,MAC29,IP29,PORT29,MAC30,IP30,PORT30,MAC31,IP31,PORT31,MAC32,IP32,PORT32,MAC33,IP33,PORT33,MAC34,IP34,PORT34,MAC35,IP35,PORT35,MAC36,IP36,PORT36'      
+        csvheader = ('BANDID,MAC1,IP1,PORT1,MAC2,IP2,PORT2,MAC3,IP3,PORT3,MAC4,IP4,PORT4,MAC5,IP5,PORT5,MAC6,IP6,PORT6,'
+                     'MAC7,IP7,PORT7,MAC8,IP8,PORT8,MAC9,IP9,PORT9,MAC10,IP10,PORT10,MAC11,IP11,PORT11,MAC12,IP12,PORT12,'
+                     'MAC13,IP13,PORT13,MAC14,IP14,PORT14,MAC15,IP15,PORT15,MAC16,IP16,PORT16,MAC17,IP17,PORT17,MAC18,IP18,PORT18,'
+                     'MAC19,IP19,PORT19,MAC20,IP20,PORT20,MAC21,IP21,PORT21,MAC22,IP22,PORT22,MAC23,IP23,PORT23,MAC24,IP24,PORT24,'
+                     'MAC25,IP25,PORT25,MAC26,IP26,PORT26,MAC27,IP27,PORT27,MAC28,IP28,PORT28,MAC29,IP29,PORT29,MAC30,IP30,PORT30,'
+                     'MAC31,IP31,PORT31,MAC32,IP32,PORT32,MAC33,IP33,PORT33,MAC34,IP34,PORT34,MAC35,IP35,PORT35,MAC36,IP36,PORT36')
+        
         cols   = 109
         table  = []
         for row in range(NCHUNK_PER_BEAM):
@@ -184,41 +194,34 @@ class RoutingTable(object):
             
                 port = BASE_PORT + int(math.floor(math.floor(beam * self.nchunk + sb - self.first_chunk)%nchunk_nic/self.config["nchunk_per_port"])) #PORT
                 table[sb][beam_idx+2]=port
-
+        log.info("The table is:")
+        log.info(table)
+        
         # Write out table
-        table_fp=open(self.fname, "w")
-        table_fp.write(csvheader)
-        table_fp.write('\n')
+        self.table_file.write(csvheader)
+        self.table_file.write('\n')
         for row in range(NCHUNK_PER_BEAM):
             line=",".join(map(str,table[row]))+"\n"
-            table_fp.write(line)
-        table_fp.close()
-
+            self.table_file.write(line)
+        self.table_file.flush() # flush to make sure that all lines are in the file
+    
     def upload_table(self):
         """ To upload routing table to beamformer and configure stream"""
-        sleep_time = 0
         tossix = RemoteAccess()
         tossix.connect(TOSSIX_IP, TOSSIX_USERNAME, PARAMIKO_BUFSZ)
 
         # Copy table to tossix
-        tossix.scp(self.fname, join("{}/Code/Components/OSL/scripts/ade/files/stream_setup".format(TOSSIX_SCRIPT_ROOT), self.fname), sleep_time)
-
-        print "copy\n"
+        tossix.scp(self.fname, join("{}/Code/Components/OSL/scripts/ade/files/stream_setup".format(TOSSIX_SCRIPT_ROOT), self.fname.split("/")[-1]))
         
         # Initial the tossix
-        tossix.control("bash\n", sleep_time)
-        tossix.control(". {}/initaskap.sh".format(TOSSIX_SCRIPT_ROOT), sleep_time)
-        tossix.control(". {}/Code/Components/OSL/scripts/osl_init_env.sh".format(TOSSIX_SCRIPT_ROOT), sleep_time)
-        tossix.control("cd {}/Code/Components/OSL/scripts/ade".format(TOSSIX_SCRIPT_ROOT), sleep_time)
-        print "initial\n"
+        tossix.control("bash")
+        tossix.control(". {}/initaskap.sh".format(TOSSIX_SCRIPT_ROOT))
+        tossix.control(". {}/Code/Components/OSL/scripts/osl_init_env.sh".format(TOSSIX_SCRIPT_ROOT))
+        tossix.control("cd {}/Code/Components/OSL/scripts/ade".format(TOSSIX_SCRIPT_ROOT))
         
         # Configure metadata and streaming
-        tossix.control("python osl_a_metadata_streaming.py", sleep_time)
-        try:
-            tossix.control("python osl_a_abf_config_stream.py --param 'ade_bmf.stream10G.streamSetup={}'".format(self.fname), sleep_time)
-        except:
-            print "HERE\n"
-        print "config\n"
+        tossix.control("python osl_a_metadata_streaming.py")
+        tossix.control("python osl_a_abf_config_stream.py --param 'ade_bmf.stream10G.streamSetup={}'".format(self.fname.split("/")[-1]))
         
         # Disconnect
         tossix.disconnect()
@@ -254,8 +257,8 @@ if __name__=="__main__":
     nchunk        = 33      
     nbeam         = 36      
     nchunk_offset = 0
-    fname         = "36beams.csv"
 
-    routing_table = RoutingTable(destinations, nbeam, nchunk, nchunk_offset, center_freq, fname)
+    routing_table = RoutingTable(destinations, nbeam, nchunk, nchunk_offset, center_freq)
+    time.sleep(10)
     print routing_table.center_freq_stream()
     routing_table.upload_table()
