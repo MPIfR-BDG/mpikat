@@ -3,6 +3,7 @@ import errno
 import logging
 import coloredlogs
 import signal
+import shlex
 from tornado.ioloop import IOLoop
 from tornado.gen import Return, coroutine, sleep
 from threading import Thread, Event
@@ -12,6 +13,9 @@ from datetime import datetime
 log = logging.getLogger("mpikat.scpi")
 
 class UnhandledScpiRequest(Exception):
+    pass
+
+class MalformedScpiRequest(Exception):
     pass
 
 class ScpiRequest(object):
@@ -37,7 +41,7 @@ class ScpiRequest(object):
 
     @property
     def args(self):
-        return self._data.split()[1:]
+        return shlex.split(self._data)[1:]
 
     def _send_response(self, msg):
         isotime = "{}UTC".format(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3])
@@ -46,12 +50,13 @@ class ScpiRequest(object):
         log.debug("Acknowledgement: {}".format(response))
         self._socket.sendto(response, self._addr)
 
-    def fail(self, error_msg):
+    def error(self, error_msg):
         """
         @brief Return an SCPI error to the original sender
 
         @detail The response consists of the original message followed by and ISO timestamp.
         """
+        print "sending error"
         self._send_response("{} ERROR {}".format(self.data, error_msg))
 
     def ok(self):
@@ -63,8 +68,8 @@ class ScpiRequest(object):
         self._send_response(self.data)
 
 
-class ScpiInterface(object):
-    def __init__(self, interface, port, ioloop):
+class ScpiAsyncDeviceServer(object):
+    def __init__(self, interface, port, ioloop=None):
         """
         @brief      Class for scpi interface.
 
@@ -75,15 +80,14 @@ class ScpiInterface(object):
         log.debug("Creating SCPI interface on port {}".format(port))
         self._address = (interface, port)
         self._buffer_size = 4096
-        self._ioloop = ioloop
-        self._handlers = {}
+        self._ioloop = IOLoop.current() if not ioloop else ioloop
         self._stop_event = Event()
         self._socket = None
 
     def __del__(self):
         self.stop()
 
-    def reset_socket(self):
+    def _create_socket(self):
         """
         @brief      Reset the socket used by this interface
         """
@@ -92,34 +96,7 @@ class ScpiInterface(object):
         self._socket.bind(self._address)
         self._socket.setblocking(False)
 
-    def add_handler(self, command, callback):
-        """
-        @brief      Add an SCPI command handler
-        
-        @param      command   The specific SCPI command on which this handler should be called
-        @param      callback  The callback to execute on receipt of the specified command
-        
-        @detail     The call signature of the call back should be of the form:
-                    @code
-                        def handler(command, *args)
-                    @endcode
-                    Where args is a list of strings that were received as arguments to the
-                    SCPI command. It is the responsibility of the handler to parse these
-                    arguments appropriately.
-        """
-        self._handlers[command.lower()] = callback
-
-    def remove_handler(self, command):
-        """
-        @brief      Remove an SCPI command handler
-
-        @param      command   The specific SCPI command for which the handler should be removed
-        """
-        command = command.lower()
-        if command in self._handlers:
-            del self._handlers[command]
-
-    def flush(self):
+    def _flush(self):
         log.debug("Flushing socket")
         while True:
             try:
@@ -133,9 +110,10 @@ class ScpiInterface(object):
         @brief      Start the SCPI interface listening for new commands
         """
         log.info("Starting SCPI interface")
-        self.reset_socket()
+        self._create_socket()
         self._stop_event.clear()
-        self.flush()
+        self._flush()
+
         @coroutine
         def receiver():
             request = None
@@ -170,33 +148,76 @@ class ScpiInterface(object):
             self._socket.close()
 
     @coroutine
-    def _dispatch(self, request):
-        callback = self._handlers.get(request.command.lower(), self.default_handler)
+    def _dispatch(self, req):
+        handler_name = "request_{}".format(req.command.replace(":","_"))
+        log.info("Searching for handler '{}'".format(handler_name))
         try:
-            yield callback(request.command, *request.args)
+            handler = self.__getattribute__(handler_name)
+        except AttributeError:
+            log.error("No handler named '{}'".format(handler_name))
+            req.error("UNKNOWN COMMAND")
+            raise UnhandledScpiRequest(req.command)
         except Exception as error:
-            log.error("Error while executing SCPI request callback: {}".format(str(error)))
-            request.fail(str(error))
+            log.error("Exception during handler lookup: {}".format(str(error)))
+            req.error(str(error))
+            raise error
         else:
-            request.ok()
+            log.info('exec handler')
+            handler(req)
 
+
+def scpi_request(*types):
+    def wrapper(func):
+        def request_handler(obj, req):
+            if len(types) != len(req.args):
+                message = "Expected {} arguments but received {}".format(
+                    len(types), len(req.args))
+                log.error(message)
+                req.error("INCORRECT NUMBER OF ARGUMENTS")
+                raise MalformedScpiRequest(message)
+
+            new_args = []
+            for ii, (arg, type_) in enumerate(zip(req.args, types)):
+                try:
+                    new_args.append(type_(arg))
+                except Exception as error:
+                    log.error(str(error))
+                    req.error("UNABLE TO PARSE ARGUMENTS")
+                    raise MalformedScpiRequest(str(error))
+            func(obj, req, *new_args)
+        return request_handler
+    return wrapper
+
+def raise_or_ok(func):
+    def wrapper(obj, req, *args, **kwargs):
+        try:
+            func(obj, req, *args, **kwargs)
+        except Exception as error:
+            req.error(str(error))
+        else:
+            req.ok()
+    return wrapper
+
+
+class Dummy(ScpiAsyncDeviceServer):
+    def __init__(self, interface, port, ioloop=None):
+        super(Dummy, self).__init__(interface, port, ioloop)
+        self._config = {}
+
+    @scpi_request(str)
+    @raise_or_ok
     @coroutine
-    def default_handler(self, command, *args):
-        """
-        @brief      The default handler used by the interface. 
-        """
-        log.warning("Unhandled command '{}' with arguments '{}'".format(command, args))
-        raise UnhandledScpiRequest(command)
-
+    def request_dummy_test(self, req, message):
+        print message
 
 @coroutine
 def on_shutdown(ioloop, server):
     log.info("Shutting down interface")
     yield server.stop()
-    ioloop.stop()   
+    ioloop.stop()
 
 if __name__ == "__main__":
-    # This line is required to bypass tornado error when no handler is 
+    # This line is required to bypass tornado error when no handler is
     # is set on the root logger
     logging.getLogger().addHandler(logging.NullHandler())
     coloredlogs.install(
@@ -204,11 +225,7 @@ if __name__ == "__main__":
         level=logging.DEBUG,
         logger=log)
     ioloop = IOLoop.current()
-    server = ScpiInterface("", 5000, ioloop)
-    def handle(command, frequency):
-        print "Setting frequency to {}".format(frequency)
-    server.add_handler("scpi:eddbackend:configure:frequency", 
-        lambda command, frequency: ioloop.add_callback(handle, command, frequency))
+    server = Dummy("", 5000, ioloop)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
     ioloop.add_callback(server.start)

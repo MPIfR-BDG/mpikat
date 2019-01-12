@@ -36,7 +36,7 @@ from mpikat.master_controller import MasterController
 from mpikat.paf_product_controller import PafProductController
 from mpikat.paf_worker_wrapper import PafWorkerPool
 from mpikat.exceptions import ProductLookupError
-from mpikat.scpi import ScpiInterface
+from mpikat.paf_scpi_interface import PafScpiInterface
 
 # ?halt message means shutdown everything and power off all machines
 
@@ -48,44 +48,6 @@ PAF_REQUIRED_KEYS = ["nbeams", "nbands", "band_offset", "mode", "frequency", "wr
 
 class PafConfigurationError(Exception):
     pass
-
-class PafScpiConfigurationHandler(object):
-    def __init__(self, scpi_interface):
-        self._scpi_interface = scpi_interface
-        self.reset()
-        self._set_config_handler("setfrequency",  self.update_config("frequency",        lambda *args: float(args[0])))
-        self._set_config_handler("setnbands",     self.update_config("nbands",           lambda *args: int(args[0])))
-        self._set_config_handler("setbandoffset", self.update_config("band_offset",      lambda *args: int(args[0])))
-        self._set_config_handler("setnbeams",     self.update_config("nbeams",           lambda *args: int(args[0])))
-        self._set_config_handler("setmode",       self.update_config("mode",             lambda *args: args[0]))
-        self._set_config_handler("setwritefil",   self.update_config("write_filterbank", lambda *args: bool(int(args[0]))))
-
-    def reset(self):
-        self._config = {}
-
-    @property
-    def config(self):
-        return self._config
-
-    @property
-    def config_json(self):
-        return json.dumps(self._config)
-
-    def update_config(self, key, converter=None):
-        @coroutine
-        def wrapper(command, *args):
-            if not converter:
-                value = args
-            else:
-                value = converter(*args)
-            log.info("Updating configuration: {} = {}".format(key, value))
-            self._config[key] = value
-        return wrapper
-
-    def _set_config_handler(self, name, callback):
-        command = "{}:{}".format(SCPI_BASE_ID, name)
-        self._scpi_interface.add_handler(command, callback)
-
 
 class PafMasterController(MasterController):
     """This is the main KATCP interface for the PAF
@@ -117,20 +79,7 @@ class PafMasterController(MasterController):
 
     def start(self):
         super(PafMasterController, self).start()
-        self._scpi_interface = ScpiInterface(self._scpi_ip, self._scpi_port, self.ioloop)
-        self._scpi_config_handler = PafScpiConfigurationHandler(self._scpi_interface)     
-        @coroutine
-        def configure_scpi_wrapper(command, *args):
-            yield self.configure(self._scpi_config_handler.config_json)
-        self._scpi_interface.add_handler("{}:configure".format(SCPI_BASE_ID), configure_scpi_wrapper)
-        @coroutine
-        def capture_start_scpi_wrapper(command, *args):
-            yield self.capture_start()
-        self._scpi_interface.add_handler("{}:start".format(SCPI_BASE_ID), capture_start_scpi_wrapper)
-        @coroutine
-        def capture_stop_scpi_wrapper(command, *args):
-            yield self.capture_stop()
-        self._scpi_interface.add_handler("{}:stop".format(SCPI_BASE_ID), capture_stop_scpi_wrapper)
+        self._scpi_interface = PafScpiInterface(self, self._scpi_ip, self._scpi_port, self.ioloop)
 
     def stop(self):
         self._scpi_interface.stop()
@@ -149,11 +98,11 @@ class PafMasterController(MasterController):
     @property
     def katcp_control_mode(self):
         return self._control_mode == self.KATCP
-    
+
     @property
     def scpi_control_mode(self):
         return self._control_mode == self.SCPI
-        
+
     @request(Str())
     @return_reply()
     def request_set_control_mode(self, req, mode):
