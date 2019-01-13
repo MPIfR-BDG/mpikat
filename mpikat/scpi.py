@@ -88,9 +88,6 @@ class ScpiAsyncDeviceServer(object):
         self.stop()
 
     def _create_socket(self):
-        """
-        @brief      Reset the socket used by this interface
-        """
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._socket.bind(self._address)
@@ -146,6 +143,7 @@ class ScpiAsyncDeviceServer(object):
         self._stop_event.set()
         if self._socket:
             self._socket.close()
+            self._socket = None
 
     @coroutine
     def _dispatch(self, req):
@@ -199,9 +197,9 @@ def raise_or_ok(func):
     return wrapper
 
 
-class Dummy(ScpiAsyncDeviceServer):
+class Example(ScpiAsyncDeviceServer):
     def __init__(self, interface, port, ioloop=None):
-        super(Dummy, self).__init__(interface, port, ioloop)
+        super(Example, self).__init__(interface, port, ioloop)
         self._config = {}
 
     @scpi_request(str)
@@ -225,7 +223,7 @@ if __name__ == "__main__":
         level=logging.DEBUG,
         logger=log)
     ioloop = IOLoop.current()
-    server = Dummy("", 5000, ioloop)
+    server = Example("", 5000, ioloop)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
     ioloop.add_callback(server.start)
