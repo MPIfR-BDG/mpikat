@@ -86,7 +86,7 @@ class TestPafMasterController(AsyncServerTester):
         yield self._send_request_expect_ok('set-control-mode', 'SCPI')
         client = AsyncScpiClient('127.0.0.1', SCPI_TEST_PORT, self.ioloop)
         try:
-            yield client.send('{}:setfrequency 1400000000'.format(SCPI_BASE_ID))
+            yield client.send('{}:setfrequency 1340.5'.format(SCPI_BASE_ID))
             yield client.send('{}:setnbands 33'.format(SCPI_BASE_ID))
             yield client.send('{}:setbandoffset 7'.format(SCPI_BASE_ID))
             yield client.send('{}:setnbeams 36'.format(SCPI_BASE_ID))
@@ -111,7 +111,7 @@ class TestPafMasterController(AsyncServerTester):
     @gen_test
     def test_good_katcp_configure(self):
         config = {
-            "frequency": 1400000000.0,
+            "frequency": 1340.5,
             "nbands": 33,
             "mode": "SpSearch",
             "nbeams": 36,

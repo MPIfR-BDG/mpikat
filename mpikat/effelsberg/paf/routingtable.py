@@ -5,7 +5,7 @@ import numpy as np
 import csv
 import math
 import paramiko
-from os.path import join, isfile 
+from os.path import join, isfile
 import time
 import tempfile
 
@@ -16,8 +16,8 @@ Stream2Beams, Stream1Beam = (0,1)
 BASE_PORT       = 17100
 CENTER_FREQ     = [950.5, 1340.5, 1550.5]
 NCHUNK_PER_BEAM = 48 # Number of frequency chunks of a beam with full bandwidth
-NCHAN_PER_CHUNK = 7
-        
+BW_PER_CHUNK    = 7 # MHz
+
 CONFIG2BEAMS = {"nbeam":           36,  # Expected number from configuration, the real number depends on the number of alive NiCs
                 "nbeam_per_nic":   2,
                 "nport_per_beam":  3,
@@ -49,7 +49,7 @@ class RemoteAccess(object):
         self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.ssh_client.connect(hostname=ip, username=username, password=password)
         log.info("Successful connection {} ...".format(self.ip))
-        
+
         log.info("Invoke shell from {}... ".format(self.ip))
         self.remote_shell = self.ssh_client.invoke_shell()
 
@@ -68,19 +68,19 @@ class RemoteAccess(object):
                 return
             if output.find("\r\nFAIL\r\n") != -1:
                 raise RoutingTableError("Command {} fail".format(cmd))
-            
-    def scp(self, src, dst):        
+
+    def scp(self, src, dst):
         log.info("Create SCP connection with {}... ".format(self.ip))
-        self.sftp_client = self.ssh_client.open_sftp()        
+        self.sftp_client = self.ssh_client.open_sftp()
         log.info("Copy {} to {}".format(src, dst))
         self.sftp_client.put(src, dst)
         log.info("Close scp channel")
         self.sftp_client.close()
-        
+
     def disconnect(self):
         log.info("Disconnect from {} ...".format(self.ip))
         self.ssh_client.close()
-        
+
 class RoutingTable(object):
     def __init__(self, destinations, nbeam, nchunk, nchunk_offset, center_freq_band):
         """ To configure the class and check the input
@@ -108,12 +108,12 @@ class RoutingTable(object):
         nchunk:           the number of frequency chunks of each beam, int
         nchunk_offset:    the number of frequency chunks we want to shift, int
                           + means we shift the center frequency towards the band top
-        center_freq_band: the center_freq from telescope control system, which is the center frequency of the full band, float
+        center_freq_band: the center_freq from telescope control system, which is the center frequency of the full band, float, MHz
         """
-        
+
         log.info("destination information:")
         log.info(destinations)
-        
+
         self.table_file       = tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=True)
         self.fname            = self.table_file.name
         self.destinations     = destinations
@@ -124,7 +124,7 @@ class RoutingTable(object):
         log.info("Created a temp file {} for routing table".format(self.fname))
         log.info("configurations:")
         log.info("nbeam {} nchunk {} nchunk_offset {} center_Freq_band {} fname {}".format(self.nbeam, self.nchunk, self.nchunk_offset, self.center_freq_band, self.fname))
-        
+
         # To check the input
         if self.nbeam == 36:
             self.config = CONFIG2BEAMS
@@ -137,12 +137,12 @@ class RoutingTable(object):
         if self.nchunk_expect != self.nchunk:
             raise RoutingTableError("We expect {} chunks of each beam for {} beams configuration, but {} is given".format(
                 self.nchunk_expect, self.nbeam, self.nchunk))
-            
+
         if(center_freq_band not in CENTER_FREQ):
             raise RoutingTableError("Center frequency has to be in {}".format(CENTER_FREQ))
         else:
             self.center_freq_band = center_freq_band
-            
+
         # Check the required frequency chunks
         start_chunk      = int(math.floor((NCHUNK_PER_BEAM - self.nchunk)/2.0)) # The start chunk before adding offset
         self.first_chunk = start_chunk + self.nchunk_offset
@@ -151,10 +151,10 @@ class RoutingTable(object):
 
         if ((self.first_chunk<0) or (self.last_chunk)>(NCHUNK_PER_BEAM - 1)):
             raise RoutingTableError("Required frequency chunks are out of range")
-        
+
         self.generate_table()
         log.info("Table generated with the name {}".format(self.fname))
-        
+
     def generate_table(self):
         """" To generate routing table """
         # Fill in default value, with which the BMF will not send any data into GPU nodes
@@ -164,7 +164,7 @@ class RoutingTable(object):
                      'MAC19,IP19,PORT19,MAC20,IP20,PORT20,MAC21,IP21,PORT21,MAC22,IP22,PORT22,MAC23,IP23,PORT23,MAC24,IP24,PORT24,'
                      'MAC25,IP25,PORT25,MAC26,IP26,PORT26,MAC27,IP27,PORT27,MAC28,IP28,PORT28,MAC29,IP29,PORT29,MAC30,IP30,PORT30,'
                      'MAC31,IP31,PORT31,MAC32,IP32,PORT32,MAC33,IP33,PORT33,MAC34,IP34,PORT34,MAC35,IP35,PORT35,MAC36,IP36,PORT36')
-        
+
         cols   = 109
         table  = []
         for row in range(NCHUNK_PER_BEAM):
@@ -185,26 +185,27 @@ class RoutingTable(object):
         nchunk_nic   = self.nchunk_expect*self.config["nbeam_per_nic"]
         for beam in range(nbeam_actual):
             beam_idx = 1 + beam * 3    # Position of beam info in output file
-        
+
             for sb in range(self.first_chunk, self.nchunk + self.first_chunk):
                 nic_idx = int(math.floor((beam * self.nchunk + sb - self.first_chunk)/nchunk_nic))
-                
+
                 table[sb][beam_idx]     = destinations[nic_idx][0] #MAC
                 table[sb][beam_idx + 1] = destinations[nic_idx][1] #IP
-            
+
                 port = BASE_PORT + int(math.floor(math.floor(beam * self.nchunk + sb - self.first_chunk)%nchunk_nic/self.config["nchunk_per_port"])) #PORT
                 table[sb][beam_idx+2]=port
         log.info("The table is:")
         log.info(table)
-        
+
         # Write out table
+        self.table_file.seek(0)
         self.table_file.write(csvheader)
         self.table_file.write('\n')
         for row in range(NCHUNK_PER_BEAM):
             line=",".join(map(str,table[row]))+"\n"
             self.table_file.write(line)
         self.table_file.flush() # flush to make sure that all lines are in the file
-    
+
     def upload_table(self):
         """ To upload routing table to beamformer and configure stream"""
         tossix = RemoteAccess()
@@ -212,24 +213,24 @@ class RoutingTable(object):
 
         # Copy table to tossix
         tossix.scp(self.fname, join("{}/Code/Components/OSL/scripts/ade/files/stream_setup".format(TOSSIX_SCRIPT_ROOT), self.fname.split("/")[-1]))
-        
+
         # Initial the tossix
         tossix.control("bash")
         tossix.control(". {}/initaskap.sh".format(TOSSIX_SCRIPT_ROOT))
         tossix.control(". {}/Code/Components/OSL/scripts/osl_init_env.sh".format(TOSSIX_SCRIPT_ROOT))
         tossix.control("cd {}/Code/Components/OSL/scripts/ade".format(TOSSIX_SCRIPT_ROOT))
-        
+
         # Configure metadata and streaming
         tossix.control("python osl_a_metadata_streaming.py")
         tossix.control("python osl_a_abf_config_stream.py --param 'ade_bmf.stream10G.streamSetup={}'".format(self.fname.split("/")[-1]))
-        
+
         # Disconnect
         tossix.disconnect()
-        
+
     def center_freq_stream(self):
         """" To calculate the real center frequency of streaming data"""
-        return self.center_freq_band + 0.5*(self.last_chunk + self.first_chunk - NCHUNK_PER_BEAM) * NCHAN_PER_CHUNK
-    
+        return self.center_freq_band + 0.5*(self.last_chunk + self.first_chunk - NCHUNK_PER_BEAM) * BW_PER_CHUNK
+
 if __name__=="__main__":
     destinations = [['0x7cfe90c0c930',	'10.17.0.1'],
                     ['0x7cfe90c0cc10',	'10.17.0.2'],
@@ -238,7 +239,7 @@ if __name__=="__main__":
                     ['0x7cfe90c0cce1',	'10.17.2.1'],
                     ['0x7cfe90c0cc20',	'10.17.2.2'],
                     ['0x7cfe90c0cd40',	'10.17.3.1'],
-                    ['0x7cfe90c0cd60',	'10.17.3.2'],    
+                    ['0x7cfe90c0cd60',	'10.17.3.2'],
                     ['0x7cfe90c0cc00',	'10.17.4.1'],
                     ['0x7cfe90c0cbf0',	'10.17.4.2'],
                     ['0x248a07e26090',	'10.17.5.1'],
@@ -246,16 +247,16 @@ if __name__=="__main__":
                     ['0x248a07e25e30',	'10.17.6.1'],
                     ['0x248a07e25f40',	'10.17.6.2'],
                     ['0x248a07e1b580',	'10.17.7.1'],
-                    ['0x248a07e260b0',	'10.17.7.2'],    
+                    ['0x248a07e260b0',	'10.17.7.2'],
                     ['0x248a07e25a50',	'10.17.8.1'],
-                    ['0x248a07e1ac50',	'10.17.8.2']]  
+                    ['0x248a07e1ac50',	'10.17.8.2']]
 
-    center_freq   = 1340.5   
-    nchunk        = 48      
+    center_freq   = 1340.5
+    nchunk        = 48
     nbeam         = 18
-    
-    nchunk        = 33      
-    nbeam         = 36      
+
+    nchunk        = 33
+    nbeam         = 36
     nchunk_offset = 0
 
     routing_table = RoutingTable(destinations, nbeam, nchunk, nchunk_offset, center_freq)

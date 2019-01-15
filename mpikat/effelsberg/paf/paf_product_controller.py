@@ -26,6 +26,7 @@ import time
 from tornado.gen import coroutine, Return
 from katcp import Sensor, Message, KATCPClientResource
 from mpikat.core.worker_pool import WorkerAllocationError
+from mpikat.effelsberg.paf.routingtable import RoutingTable
 from mpikat.core.utils import LoggingSensor
 
 log = logging.getLogger("mpikat.paf_product_controller")
@@ -179,18 +180,39 @@ class PafProductController(object):
         self._servers = []
 
     @coroutine
-    def configure(self, dummy_string):
+    def configure(self, config_json):
         if not self.idle:
             raise PafProductStateError([self.IDLE], self.state)
         self._state_sensor.set_value(self.PREPARING)
         self.log.debug("Product moved to 'preparing' state")
+
+        config_dict = json.loads(config_json)
         # Here we always allocate all servers to the backend
         nservers = self._parent._server_pool.navailable()
         servers = self._parent._server_pool.allocate(nservers)
+
+        # Here we get the IP and MAC addresses for each worker and
+        # generate a routing table for the PAF
+        destinations = []
+        for server in servers:
+            ip = yield server._client.req.sensor_value("ip")
+            mac = yield server._client.req.sensor_value("mac")
+            destinations.append([mac, ip])
+        routing_table = RoutingTable(destinations, config_dict['nbeams'],
+            config_dict['nbands'], config_dict['band_offset'],
+            config_dict['frequency'])
+        center_freq = routing_table.center_freq_stream()
+        log.info("Uploading routing table for band centred at {} MHz".format(center_freq))
+
+        # Problem here, need to work out how to test this.
+        routing_table.upload_table()
+
+        # Configuring
         configure_futures = []
         for server in servers:
             self._servers.append(server)
-            configure_futures.append(server._client.req.configure(dummy_string))
+            configure_futures.append(server._client.req.configure(config_json))
+            mac_port_futures.append(server._client.req.sensor_value('ip'))
         for future in configure_futures:
             result = yield future
         server_str = ",".join(["{s.hostname}:{s.port}".format(s=server) for server in self._servers])
