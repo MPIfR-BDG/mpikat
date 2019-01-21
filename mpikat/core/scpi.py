@@ -101,6 +101,18 @@ class ScpiAsyncDeviceServer(object):
             except:
                 break
 
+    def _make_coroutine_wrapper(self, req, cr, *args, **kwargs):
+        @coroutine
+        def wrapper():
+            try:
+                yield cr(*args, **kwargs)
+            except Exception as error:
+                log.error(str(error))
+                req.error(str(error))
+            else:
+                req.ok()
+        return wrapper
+
     def start(self):
         """
         @brief      Start the SCPI interface listening for new commands

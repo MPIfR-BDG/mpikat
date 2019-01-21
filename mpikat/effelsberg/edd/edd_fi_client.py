@@ -29,20 +29,20 @@ from mpikat.core.utils import LoggingSensor
 
 log = logging.getLogger("mpikat.edd_fi")
 
-class FitsInterfaceClientError(Exception):
+class EddFitsInterfaceClientError(Exception):
     pass
 
-class FitsInterfaceClient(object):
+class EddFitsInterfaceClient(object):
     """
-    Wrapper class for a KATCP client to a FitsInterfaceServer
+    Wrapper class for a KATCP client to a EddFitsInterfaceServer
     """
-    def __init__(self, address):
+    def __init__(self, name, address):
         """
         @brief      Construct new instance
 
-        @param      parent            The parent FitsInterfaceMasterController instance
+        @param      parent            The parent EddFitsInterfaceMasterController instance
         """
-        self.log = logging.getLogger("mpikat.edd_fi.{}".format(product_id))
+        self.log = logging.getLogger("mpikat.edd_fi.{}".format(name))
         self._fits_interface_client = KATCPClientResource(dict(
             name="fits-interface-client",
             address=address,
@@ -56,7 +56,7 @@ class FitsInterfaceClient(object):
         response = yield self._fits_interface_client.req[name](*args)
         if not response.reply.reply_ok():
             self.log.error("Error on {} request: {}".format(name, response.reply.arguments[1]))
-            raise FitsInterfaceClientError(response.reply.arguments[1])
+            raise EddFitsInterfaceClientError(response.reply.arguments[1])
 
     @coroutine
     def configure(self, config):

@@ -128,25 +128,31 @@ class EddRoach2ProductController(ProductController):
                  must correspond to valid managed roach2 boards and firmwares as understood by
                  the R2RM server.
         """
+        log.debug("Syncing with R2RM server")
         yield self._r2rm_client.until_synced(2)
         self._icom_id = config["icom_id"]
         self._firmware = config["firmware"]
-        response = yield self._r2rm_client.req.configure_board(self._icom_id, EDD_R2RM_USER, self._firmware)
+        log.debug("Sending configure request to R2RM server")
+        response = yield self._r2rm_client.req.configure_board(self._icom_id, EDD_R2RM_USER, self._firmware, timeout=20)
         if not response.reply.reply_ok():
             self.log.error("Error on configure request: {}".format(response.reply.arguments[1]))
             raise EddRoach2ProductError(response.reply.arguments[1])
         _, firmware_ip, firmware_port = response.reply.arguments
+        log.debug("Connecting client to activated firmware server @ {}:{}".format(firmware_ip, firmware_port))
         firmware_client = KATCPClientResource(dict(
             name="firmware-client",
             address=(firmware_ip, firmware_port),
             controlled=True))
         firmware_client.start()
+        log.debug("Syncing with firmware client")
         yield firmware_client.until_synced(2)
         for command, args in config["commands"]:
-            response = yield firmware_client.req[command](*args)
+            log.debug("Sending firmware server request '{}' with args '{}'".format(command, args))
+            response = yield firmware_client.req[command](*args, timeout=20)
             if not response.reply.reply_ok():
                 self.log.error("Error on {}->{} request: {}".format(command, args, response.reply.arguments[1]))
                 raise EddRoach2ProductError(response.reply.arguments[1])
+        log.debug("Stopping client connection to firmware server")
         firmware_client.stop()
 
     @coroutine

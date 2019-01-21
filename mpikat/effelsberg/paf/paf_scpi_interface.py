@@ -109,18 +109,6 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
         """
         self._config['write_filterbank'] = bool(on)
 
-    def _make_coroutine_wrapper(self, req, cr, *args, **kwargs):
-        @coroutine
-        def wrapper():
-            try:
-                yield cr(*args, **kwargs)
-            except Exception as error:
-                log.error(str(error))
-                req.error(str(error))
-            else:
-                req.ok()
-        return wrapper
-
     @scpi_request()
     def request_pafbe_configure(self, req):
         """

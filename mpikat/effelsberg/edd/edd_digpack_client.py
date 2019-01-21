@@ -152,9 +152,46 @@ class DigitiserPacketiserClient(object):
             log.warning("Requested sync time {} not equal to actual sync time {}".format(unix_time, sync_epoch))
 
 
-
-
-
+if __name__ == "__main__":
+    import coloredlogs
+    from optparse import OptionParser
+    usage = "usage: %prog [options]"
+    parser = OptionParser(usage=usage)
+    parser.add_option('-H', '--host', dest='host', type=str,
+        help='Host interface to bind to', default="134.104.73.132")
+    parser.add_option('-p', '--port', dest='port', type=long,
+        help='Port number to bind to', default=7147)
+    parser.add_option('', '--nbits', dest='nbits', type=long,
+        help='The number of bits per output sample', default=12)
+    parser.add_option('', '--sampling_rate', dest='sampling_rate', type=float,
+        help='The digitiser sampling rate (Hz)', default=2600000000.0)
+    parser.add_option('', '--v-destinations', dest='v_destinations', type=str,
+        help='V polarisation destinations', default="225.0.0.156+3:7148")
+    parser.add_option('', '--h-destinations', dest='h_destinations', type=str,
+        help='H polarisation destinations', default="225.0.0.156+3:7148")
+    parser.add_option('', '--log-level',dest='log_level',type=str,
+        help='Port number of status server instance',default="INFO")
+    (opts, args) = parser.parse_args()
+    logging.getLogger().addHandler(logging.NullHandler())
+    logger = logging.getLogger('mpikat')
+    coloredlogs.install(
+        fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
+        level=opts.log_level.upper(),
+        logger=logger)
+    ioloop = tornado.ioloop.IOLoop.current()
+    client = DigitiserPacketiserClient(opts.host, port=opts.port)
+    @coroutine
+    def configure():
+        try:
+            yield client.set_sampling_rate(opts.sampling_rate)
+            yield client.set_bit_width(opts.nbits)
+            yield client.set_destinations(opts.v_destinations, opts.h_destinations)
+            yield client.synchronize()
+            yield client.capture_start()
+        except Exception as error:
+            log.error("Error during packetiser configuration: {}".format(str(error)))
+            raise error
+    ioloop.run_sync(configure)
 
 
 

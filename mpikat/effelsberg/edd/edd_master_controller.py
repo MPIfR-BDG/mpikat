@@ -37,7 +37,7 @@ from mpikat.effelsberg.edd.edd_roach2_product_controller import EddRoach2Product
 from mpikat.effelsberg.edd.edd_worker_wrapper import EddWorkerPool
 from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
-from mpikat.effelsberg.edd.edd_fi_client import FitsInterfaceClient
+from mpikat.effelsberg.edd.edd_fi_client import EddFitsInterfaceClient
 
 # ?halt message means shutdown everything and power off all machines
 
@@ -289,7 +289,7 @@ class EddMasterController(MasterController):
 
         log.info("Configuring FITS interfaces")
         for fi_config in config_dict["fits_interfaces"]:
-            fi = EddFitsInterfaceClient(self, fi_config["address"])
+            fi = EddFitsInterfaceClient(fi_config["id"], fi_config["address"])
             yield fi.configure(fi_config)
             self._fits_interfaces.append(fi)
         self._edd_config_sensor.set_value(config_json)
