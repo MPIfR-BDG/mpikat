@@ -170,7 +170,7 @@ if __name__ == "__main__":
     parser.add_option('', '--h-destinations', dest='h_destinations', type=str,
         help='H polarisation destinations', default="225.0.0.156+3:7148")
     parser.add_option('', '--log-level',dest='log_level',type=str,
-        help='Port number of status server instance',default="INFO")
+        help='Logging level',default="INFO")
     (opts, args) = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
