@@ -23,7 +23,7 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
 
     @scpi_request(float)
     @raise_or_ok
-    def request_pafbe_setfrequency(self, req, frequency):
+    def request_pafbe_cmdfrequency(self, req, frequency):
         """
         @brief      Set the centre frequency of the PAF band
 
@@ -34,7 +34,7 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
 
     @scpi_request(int)
     @raise_or_ok
-    def request_pafbe_setnbands(self, req, nbands):
+    def request_pafbe_cmdnbands(self, req, nbands):
         """
         @brief      Set the number of BMF bands to be processed
 
@@ -48,7 +48,7 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
 
     @scpi_request(int)
     @raise_or_ok
-    def request_pafbe_setbandoffset(self, req, band_offset):
+    def request_pafbe_cmdbandoffset(self, req, band_offset):
         """
         @brief      Set the index of the first BMF band to be processed
 
@@ -64,7 +64,7 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
 
     @scpi_request(int)
     @raise_or_ok
-    def request_pafbe_setnbeams(self, req, nbeams):
+    def request_pafbe_cmdnbeams(self, req, nbeams):
         """
         @brief      Set the number of BMF beams to be processed
 
@@ -78,7 +78,7 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
 
     @scpi_request(str)
     @raise_or_ok
-    def request_pafbe_setmode(self, req, mode):
+    def request_pafbe_cmdmode(self, req, mode):
         """
         @brief      Set the processing mode to be used on the PAF beams
 
@@ -87,9 +87,20 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
         """
         self._config['mode'] = mode
 
+    @scpi_request(str)
+    @raise_or_ok
+    def request_pafbe_cmdbeamposfile(self, req, filename):
+        """
+        @brief      Set
+
+        @param      req      An ScpiRequest object
+        @param      mode     A
+        """
+        self._config['beam_pos_fname'] = filename
+
     @scpi_request(int)
     @raise_or_ok
-    def request_pafbe_setwritefil(self, req, on):
+    def request_pafbe_cmdwritefil(self, req, on):
         """
         @brief      Enable filterbank writing from the PAF processing
 

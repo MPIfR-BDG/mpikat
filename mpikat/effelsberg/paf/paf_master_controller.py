@@ -39,6 +39,8 @@ from mpikat.effelsberg.paf.paf_worker_wrapper import PafWorkerPool
 from mpikat.effelsberg.paf.paf_scpi_interface import PafScpiInterface
 
 # ?halt message means shutdown everything and power off all machines
+# beamfile observer8:/home/obseff/paf_test/Scripts
+
 
 log = logging.getLogger("mpikat.paf_master_controller")
 
@@ -274,6 +276,7 @@ def main():
     parser.add_option('', '--log-level',dest='log_level',type=str,
         help='Port number of status server instance',default="INFO")
     (opts, args) = parser.parse_args()
+    logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",

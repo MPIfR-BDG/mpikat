@@ -50,7 +50,7 @@ class PafProductController(object):
 
         @param      parent            The parent PafMasterController instance
         """
-        self.log = logging.getLogger("mpikat.apsuse_product_controller.{}".format(product_id))
+        self.log = logging.getLogger("mpikat.paf_product_controller.{}".format(product_id))
         self._parent = parent
         self._product_id = product_id
         self._managed_sensors = []
@@ -169,7 +169,7 @@ class PafProductController(object):
     @coroutine
     def deconfigure(self):
         if self.capturing:
-            yield self.stop()
+            yield self.capture_stop()
         deconfigure_futures = []
         for server in self._servers:
             deconfigure_futures.append(server._client.req.deconfigure())
@@ -202,10 +202,10 @@ class PafProductController(object):
             config_dict['nbands'], config_dict['band_offset'],
             config_dict['frequency'])
         center_freq = routing_table.center_freq_stream()
-        log.info("Uploading routing table for band centred at {} MHz".format(center_freq))
+        self.log.info("Uploading routing table for band centred at {} MHz".format(center_freq))
 
         # Problem here, need to work out how to test this.
-        routing_table.upload_table()
+        #routing_table.upload_table()
 
         # Configuring
         configure_futures = []
@@ -221,21 +221,21 @@ class PafProductController(object):
         self.log.debug("Product moved to 'ready' state")
 
     @coroutine
-    def start_capture(self):
+    def capture_start(self):
         if not self.ready:
             raise PafProductStateError([self.READY], self.state)
         self._state_sensor.set_value(self.STARTING)
         self.log.debug("Product moved to 'starting' state")
         start_futures = []
         for server in self._servers:
-            start_futures.append(server._client.req.start_capture())
+            start_futures.append(server._client.req.capture_start())
         for future in start_futures:
             result = yield future
         self._state_sensor.set_value(self.CAPTURING)
         self.log.debug("Product moved to 'capturing' state")
 
     @coroutine
-    def stop_capture(self):
+    def capture_stop(self):
         """
         @brief      Stops the beamformer servers streaming.
 
@@ -250,7 +250,7 @@ class PafProductController(object):
         self.log.debug("Product moved to 'stopping' state")
         stop_futures = []
         for server in self._servers:
-            stop_futures.append(server._client.req.stop_capture())
+            stop_futures.append(server._client.req.capture_stop())
         for future in stop_futures:
             result = yield future
         self._state_sensor.set_value(self.READY)
