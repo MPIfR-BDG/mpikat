@@ -6,6 +6,7 @@ import logging
 import signal
 import socket
 import Queue
+import time
 import errno
 import threading
 from threading import Thread
@@ -49,7 +50,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._no_active_beams = 0
         self._no_channels = 0
         self._integ_time = 0
-        self._time_stamp = ""
+    #    self._time_stamp = ""
         self._blank_phase = 4
         self._capture_thread = CaptureData("10.10.1.12", 60001, 2048)
         self._capture_thread.start()
@@ -108,7 +109,8 @@ class FitsInterfaceServer(AsyncDeviceServer):
         """
         @brief configures metadata for tcp packets sent to Fits Writer
         """
-        self._capture_thread.start_capture()
+        #self._capture_thread.start_capture()
+        self._capture_thread.start_capture(self._no_channels)
         return ("ok",)
 
     @request()
@@ -136,21 +138,23 @@ class CaptureData(Thread):
     def __init__(self, ip, port, channels, name="CaptureData"):
         Thread.__init__(self, name=name)
         self._address = (ip, port)
-        self._buffer_size = 4*(channels+2)
+        self._no_channels = channels
+        self._buffer_size = 4*(self._no_channels+2)
         self._data = "" 
         self._udpSoc = self._capture_socket() 
         self._stop_event = Event()
         #Data capture not activated when the thread is initialized
         self._stop_event.set()
-        self._aggregate_thread = AggregateData(self._data, 2)
-
+        self._aggregate_thread = AggregateData(2, self._no_channels)
 
     def _capture_socket(self):
         self._udpSoc = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._udpSoc.bind((self._address))
         return self._udpSoc
 
-    def start_capture(self):
+    def start_capture(self, channels):
+        self._no_channels = channels
+        self._buffer_size = 4*(self._no_channels+2)
         self._stop_event.clear()
 
     def stop_capture(self):
@@ -164,25 +168,30 @@ class CaptureData(Thread):
                     while len(data) < self._buffer_size:
                         data += self._udpSoc.recv(self._buffer_size-len(data))
                     self._data = data
-                    self._aggregate_thread.start_aggregating(self._data)
+                    self._aggregate_thread.start_data_aggregation(self._data)
                except socket.error as error:
                    error_id = error.args[0]
                    if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
                        raise 
                    return
+            else:
+                #clear buffer
+                self._aggregate_thread.stop_data_aggregation()
+                #return
 
 class AggregateData():
     """
     @brief Aggregates spectrometer data from polarization channel 1 and 2 for the given time 
            before sending to the fits writer
     """
-    def __init__(self, data, no_streams, name="AggregateDate"):
+    #def __init__(self, data, no_streams, name="AggregateDate"):
+    def __init__(self, no_streams, no_channels, name="AggregateDate"):
         self._no_streams = no_streams
-        self._data_to_process = data
+        self._no_channels = no_channels
         self._data_stream = []
-        self._final_data = self._no_streams*[[]]
         self._count = 0
         self._ref_seq_no = 0
+        self._time_info = ""
 
     def phase_extract(self, num):
         mask = 0xf0000000
@@ -203,7 +212,14 @@ class AggregateData():
         seq_no = unpack_num[0]&mask
         return seq_no
 
-    def start_aggregating(self, data_to_process):
+    #ISO time definition
+    def isotime(self, s):
+        ms = int(10000*(s - int(s)))
+        t = time.gmtime(s)
+        dateTime = str("%4.4i-%2.2i-%2.2iT%2.2i:%2.2i:%2.2i.%4.4iUTC " % (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, ms))
+        return dateTime
+
+    def start_data_aggregation(self, data_to_process):
         self._count += 1
         data = np.zeros(2050,dtype=np.uint32)
         data = struct.unpack('>2050I', data_to_process)
@@ -215,15 +231,26 @@ class AggregateData():
         print "Extracted seq. no.:: ", sequence_num
         #Capturing logic based on sequence no.
         if (self._count ==1):
+            self._time_info = self.isotime(time.time())
             self._data_stream = [data[2:]]
             self._ref_seq_no = sequence_num
+        #TODO include time stamp in the queue
         elif ((sequence_num == (self._ref_seq_no+1)) or (sequence_num == (self._ref_seq_no-1))):
             self._data_stream.append(data[2:])
-            data_Queue.put((self._no_streams, self._data_stream))
+            data_Queue.put((self._time_info, self._no_streams, self._data_stream))
+            self._count = 0
+            self._data_stream = []
+        else:
+            print "packet missing for the given stamp.."
             self._count = 0
             self._data_stream = []
       #  strm, data_from_queue = data_Queue.get()
       #  print "from queue:                  ", len(data_from_queue)
+
+    def stop_data_aggregation(self):
+        self._count = 0
+        self._data_stream = []
+
 
 class SendToFW(Thread):
     """
@@ -326,7 +353,8 @@ class SendToFW(Thread):
         return packed_data
 
     def pack_data(self):
-        self._no_streams, data_from_queue = data_Queue.get()
+        self._time_stamp, self._no_streams, data_from_queue = data_Queue.get()
+        #self._time_stamp, self._no_streams, data_from_queue = data_Queue.get()
         header_format, header_data = _pack_FI_metadata()
         data_format, pol_data = self.pack_FI_data(data_from_queue)
         tcp_data_format = header_format + data_format
