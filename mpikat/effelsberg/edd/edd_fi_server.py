@@ -9,7 +9,7 @@ import Queue
 import errno
 import threading
 from threading import Thread
-from threading import Event 
+from threading import Event
 from optparse import OptionParser
 import numpy as np
 import struct
@@ -23,35 +23,32 @@ data_Queue = Queue.Queue()
 
 class FitsInterfaceServer(AsyncDeviceServer):
     """
-    @brief Interface object which accepts KATCP commands
-
+    Class providing an interface between EDD processes and the
+    Effelsberg FITS writer
     """
-    VERSION_INFO = ("example-api", 1, 0)
-    BUILD_INFO = ("example-implementation", 0, 1, "")
+    VERSION_INFO = ("edd-fi-server-api", 1, 0)
+    BUILD_INFO = ("edd-fi-server-implementation", 0, 1, "")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
-    # Optionally set the KATCP protocol version and features. Defaults to
-    # the latest implemented version of KATCP, with all supported optional
-    # featuresthat's all of the receivers
     PROTOCOL_INFO = ProtocolFlags(5, 0, set([
         ProtocolFlags.MULTI_CLIENT,
         ProtocolFlags.MESSAGE_IDS,
     ]))
 
-    def __init__(self, ip, port):
+    def __init__(self, interface, port, capture_interface, capture_port):
         """
-        @brief Initialization of the Roach2ResourceManager object
+        @brief Initialization of the FitsInterfaceServer object
 
-        @param ip       IP address of the board
-        @param port     port of the board
-        @param db       igui database object
-
+        @param ip       Interface address to serve on
+        @param port     Port number to serve on
         """
         self._no_active_beams = 0
         self._no_channels = 0
         self._integ_time = 0
         self._time_stamp = ""
         self._blank_phase = 4
-        self._capture_thread = CaptureData("10.10.1.12", 60001, 2048)
+        self._capture_interface = capture_interface
+        self._capture_port = capture_port
+        self._capture_thread = CaptureData(self._capture_interface, self._capture_port, 2048)
         self._capture_thread.start()
         super(FitsInterfaceServer, self).__init__(ip, port)
 
@@ -137,8 +134,8 @@ class CaptureData(Thread):
         Thread.__init__(self, name=name)
         self._address = (ip, port)
         self._buffer_size = 4*(channels+2)
-        self._data = "" 
-        self._udpSoc = self._capture_socket() 
+        self._data = ""
+        self._udpSoc = self._capture_socket()
         self._stop_event = Event()
         #Data capture not activated when the thread is initialized
         self._stop_event.set()
@@ -157,7 +154,7 @@ class CaptureData(Thread):
         self._stop_event.set()
 
     def run(self):
-	while True:
+        while True:
             if not self._stop_event.is_set():
                try:
                     data = ""
@@ -168,12 +165,12 @@ class CaptureData(Thread):
                except socket.error as error:
                    error_id = error.args[0]
                    if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
-                       raise 
+                       raise
                    return
 
-class AggregateData():
+class AggregateData(object):
     """
-    @brief Aggregates spectrometer data from polarization channel 1 and 2 for the given time 
+    @brief Aggregates spectrometer data from polarization channel 1 and 2 for the given time
            before sending to the fits writer
     """
     def __init__(self, data, no_streams, name="AggregateDate"):
@@ -227,7 +224,7 @@ class AggregateData():
 
 class SendToFW(Thread):
     """
-    @brief The data is formated with fits header and sent to the fits writer     
+    @brief The data is formated with fits header and sent to the fits writer
     """
     def __init__(self, server_ip, tcp_port, name="SendToFW"):
         Thread.__init__(self, name=name)
@@ -245,7 +242,7 @@ class SendToFW(Thread):
         self._serverSoc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._serverSoc.bind((server_ip, tcp_port))
         self._serverSoc.listen(1)
-        self._serverSoc.settimeout(5) 
+        self._serverSoc.settimeout(5)
         return self._serverSoc
 
     def _tcp_data_socket(self):
@@ -297,7 +294,7 @@ class SendToFW(Thread):
         headerData.append(self._blank_phase)
         data_type += 'l'
 
-        #Number of Back End Sections 
+        #Number of Back End Sections
         headerData.append(self._no_streams)
         data_type += 'l'
 
