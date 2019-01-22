@@ -40,6 +40,27 @@ class PafWorkerServer(AsyncDeviceServer):
         """
         super(PafWorkerServer, self).__init__(ip, port)
         self.ip = ip
+        self._managed_sensors =[]
+
+    def add_pipeline_sensors(self):
+        """
+        @brief Add pipeline sensors to the managed sensors list
+
+        """
+        for sensor in self._pipeline_instance.sensors:
+            self.add_sensor(sensor)
+            self._managed_sensors.append(sensor)
+        self.mass_inform(Message.inform('interface-changed'))
+
+    def remove_pipeline_sensors(self):
+        """
+        @brief Remove pipeline sensors from the managed sensors list
+
+        """
+        for sensor in self._managed_sensors:
+            self.remove_sensor(sensor)
+            self._managed_sensors.remove(sensor)
+        self.mass_inform(Message.inform('interface-changed'))
 
     def state_change(self, state, callback):
         """
@@ -50,27 +71,15 @@ class PafWorkerServer(AsyncDeviceServer):
         log.info('New state of the pipeline is {}'.format(str(state)))
         self._pipeline_sensor_status.set_value(str(state))
 
-        #do I do things here?
-        """
-        if callback.state=="error":
-            @coroutine
-            def stop_pipeline():
-                try:
-                    self._pipeline_instance.stop()
-                except Exception as error:
-                    msg = "Couldn't stop pipeline {}".format(error)
-                    log.info("{}".format(msg))
-                    req.reply("fail", msg)
-                    self._pipeline_sensor_status.set_value("error")
-                    raise error
-                msg = "Stop pipeline {}".format(self._pipeline_sensor_name.value())
-                log.info("{}".format(msg))
-                req.reply("ok", msg)
-            self.ioloop.add_callback(configure_pipeline)
-            raise AsyncReply
-        """
+    @coroutine
     def start(self):
+        """Start PafWorkerServer server"""
         super(PafWorkerServer, self).start()
+
+    @coroutine
+    def stop(self):
+        """Stop PafWorkerServer server"""
+        yield super(PafWorkerServer, self).stop()    
 
     def setup_sensors(self):
         """
@@ -81,7 +90,7 @@ class PafWorkerServer(AsyncDeviceServer):
             "Health status of PafWorkerServer",
             params=self.DEVICE_STATUSES,
             default="ok",
-            initial_status=Sensor.UNKNOWN)
+            initial_status=Sensor.NOMINAL)
         self.add_sensor(self._device_status)
 
         self._pipeline_sensor_name = Sensor.string("pipeline-name",
@@ -93,17 +102,19 @@ class PafWorkerServer(AsyncDeviceServer):
             description="Status of the pipeline",
             params=self.PIPELINE_STATES,
             default="idle",
-            initial_status=Sensor.UNKNOWN)
+            initial_status=Sensor.NOMINAL)
         self.add_sensor(self._pipeline_sensor_status)
 
         self._ip_address = Sensor.string("ip",
             description="the ip address of the node controller",
-            default=os.environ['PAF_NODE_IP'])
+            default=os.environ['PAF_NODE_IP'],
+            initial_status=Sensor.NOMINAL)
         self.add_sensor(self._ip_address)
 
         self._mac_address = Sensor.string("mac",
             description="the mac address of the node controller",
-            default=os.environ['PAF_NODE_MAC'])
+            default=os.environ['PAF_NODE_MAC'],
+            initial_status=Sensor.NOMINAL)
         self.add_sensor(self._mac_address)
 
 
@@ -122,37 +133,38 @@ class PafWorkerServer(AsyncDeviceServer):
             try:
                 _pipeline_type = PIPELINES[self._pipeline_sensor_name.value()]
             except KeyError as error:
-                msg = "No pipeline called '{}', available pipeline are: \n{}".format(self._pipeline_sensor_name.value(), "\n".join(PIPELINES.keys()))
+                msg = "No pipeline called '{}', available pipeline are: {}".format(self._pipeline_sensor_name.value(), " ".join(PIPELINES.keys()))
                 log.info("{}".format(msg))
-                req.reply("fail", msg)
                 self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
-                raise error
-            self._pipeline_instance = _pipeline_type()
-            self._pipeline_instance.callbacks.add(self.state_change)
+                req.reply("fail", msg)
+            else:    
+                self._pipeline_instance = _pipeline_type()
+                self.add_pipeline_sensors()
+                self._pipeline_instance.callbacks.add(self.state_change)
             try:
                 self._pipeline_instance.configure(utc_start, freq, str(self._ip_address.value()))
             except Exception as error:
-                msg = "Couldn't start configure pipeline instance {}".format(str(error))
-                log.info("{}".format(msg))
-                req.reply("fail", msg)
                 self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
-                raise error
-            msg = "pipeline instance configured"
-            log.info("{}".format(msg))
-            req.reply("ok",msg)
+                msg = "Couldn't start configure pipeline instance {}".format(str(error))
+                log.info("{}".format(msg))
+                req.reply("fail", msg)                
+            else:    
+                msg = "pipeline instance {} configured".format(self._pipeline_sensor_name.value())
+                log.info("{}".format(msg))
+                req.reply("ok", msg)
         if self._pipeline_sensor_status.value() == "idle":
             self.ioloop.add_callback(configure_pipeline)
             raise AsyncReply
         else:
-            msg = "Can't Configure, status = {}".format(self._pipeline_sensor_status.value())
+            msg = "Can't configure pipeline, status = {}".format(self._pipeline_sensor_status.value())
             log.info("{}".format(msg))
             return ("fail", msg)
 
     @request(Str(),Str(),Str(),Str())
     @return_reply(Str())
-    def request_start(self, req, source_name, ra, dec, start_buf):
+    def request_start(self, req, source_name, ra, dec):
         """
         @brief      Start pipeline
 
@@ -160,22 +172,21 @@ class PafWorkerServer(AsyncDeviceServer):
         @coroutine
         def start_pipeline():
             try:
-                self._pipeline_instance.start(source_name, ra, dec, start_buf)
+                self._pipeline_instance.start(source_name, ra, dec)
             except Exception as error:
                 msg = "Couldn't start pipeline server {}".format(error)
                 log.info("{}".format(msg))
                 req.reply("fail", msg)
                 self._pipeline_sensor_status.set_value("error")
                 raise error
-            msg = "Start pipeline {}".format(self._pipeline_sensor_name.value())
+            msg = "Starting pipeline {}".format(self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
             req.reply("ok", msg)
-
         if self._pipeline_sensor_status.value() == "ready":
             self.ioloop.add_callback(start_pipeline)
             raise AsyncReply
         else:
-            msg = "pipeline is not in the state of configured, status = {} ".format(self._pipeline_sensor_status.value())
+            msg = "Pipeline is not in the state of configured, status = {} ".format(self._pipeline_sensor_status.value())
             log.info("{}".format(msg))
             return ("fail", msg)
 
@@ -197,7 +208,7 @@ class PafWorkerServer(AsyncDeviceServer):
                 req.reply("fail", msg)
                 self._pipeline_sensor_status.set_value("error")
                 raise error
-            msg = "Stop pipeline {}".format(self._pipeline_sensor_name.value())
+            msg = "Stopping pipeline {}".format(self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
             req.reply("ok", msg)
 
@@ -205,7 +216,7 @@ class PafWorkerServer(AsyncDeviceServer):
             self.ioloop.add_callback(stop_pipeline)
             raise AsyncReply
         else :
-            msg = "nothing to stop, status = {}".format(self._pipeline_sensor_status.value())
+            msg = "Nothing to stop, status = {}".format(self._pipeline_sensor_status.value())
             log.info("{}".format(msg))
             return ("fail", msg)
 
@@ -218,16 +229,18 @@ class PafWorkerServer(AsyncDeviceServer):
         """
         @coroutine
         def deconfigure():
-            log.info("deconfiguring pipeline {}".format(self._pipeline_sensor_name.value()))
+            log.info("Deconfiguring pipeline {}".format(self._pipeline_sensor_name.value()))
             try:
                 self._pipeline_instance.deconfigure()
+                self.remove_pipeline_sensors()
+                del self._pipeline_instance
             except Exception as error:
                 msg = "Couldn't deconfigure pipeline {}".format(error)
-                log.info("{}".format(msg))
+                log.error("{}".format(msg))
                 req.reply("fail", msg)
                 self._pipeline_sensor_status.set_value("error")
                 raise error
-            msg = "deconfigured pipeline {}".format(self._pipeline_sensor_name.value())
+            msg = "Deconfigured pipeline {}".format(self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
             req.reply("ok", msg)
             self._pipeline_sensor_name.set_value("")
@@ -235,10 +248,9 @@ class PafWorkerServer(AsyncDeviceServer):
             self.ioloop.add_callback(deconfigure)
             raise AsyncReply
         else:
-            msg = "nothing to deconfigure, status = {}".format(self._pipeline_sensor_status.value())
+            msg = "Nothing to deconfigure, status = {}".format(self._pipeline_sensor_status.value())
             log.info("{}".format(msg))
             return ("fail", msg)
-
 
     @request()
     @return_reply(Str())
@@ -250,7 +262,6 @@ class PafWorkerServer(AsyncDeviceServer):
         for key in PIPELINES.keys():
             req.inform("{}".format(key))
         return ("ok", len(PIPELINES))
-
 
 @coroutine
 def on_shutdown(ioloop, server):
