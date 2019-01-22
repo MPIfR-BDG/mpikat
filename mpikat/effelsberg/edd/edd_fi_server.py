@@ -54,6 +54,8 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._blank_phase = 4
         self._capture_thread = CaptureData("10.10.1.12", 60001, 2048)
         self._capture_thread.start()
+        self._send2FW_thread = SendToFW("10.100.100.63", 50000)
+        self._send2FW_thread.start()
         super(FitsInterfaceServer, self).__init__(ip, port)
 
     def start(self):
@@ -237,7 +239,8 @@ class AggregateData():
         #TODO include time stamp in the queue
         elif ((sequence_num == (self._ref_seq_no+1)) or (sequence_num == (self._ref_seq_no-1))):
             self._data_stream.append(data[2:])
-            data_Queue.put((self._time_info, self._no_streams, self._data_stream))
+            print "data_aggregation: length of data_stream: ", len(self._data_stream)
+            data_Queue.put((self._time_info, self._no_streams, self._no_channels, self._data_stream))
             self._count = 0
             self._data_stream = []
         else:
@@ -260,20 +263,21 @@ class SendToFW(Thread):
         Thread.__init__(self, name=name)
         self._serverAddr = (server_ip, tcp_port)
         self._serverSoc = self._server_socket()
-        self._tcpSoc = self._tcp_data_socket()
+     #   self._tcpSoc = self._tcp_data_socket()
         self._time_stamp = ""
         self._integ_time = 16
         self._blank_phase = 1
         self._no_streams = 0
+        self._no_channels = 0
         self._sending_stop_event = Event()
-        self._sending_stop_event.set()
+        #self._sending_stop_event.set()
 
     def _server_socket(self):
         self._serverSoc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._serverSoc.bind((server_ip, tcp_port))
+        self._serverSoc.bind((self._serverAddr))
         self._serverSoc.listen(1)
-        self._serverSoc.settimeout(5) 
         return self._serverSoc
+        #self._serverSoc.settimeout(.start()
 
     def _tcp_data_socket(self):
         self._tcpSoc, addr = self._serverSoc.accept()
@@ -281,13 +285,14 @@ class SendToFW(Thread):
 
     def start_sending_toFW(self):
         self._sending_stop_event.clear()
-        self._tcpSoc, addr = self._FW_IP()
+        #self._tcpSoc, addr = self._FW_IP()
+    #    self._tcpSoc = self._tcp_data_socket()
 
     def stop_sending_FW(self):
         self._sending_stop_event.set()
-        self._tcpSoc.shutdown(socket.SHUT_RDWR)
-        self._tcpSoc.close()
-        del self._tcpSoc
+        #self._tcpSoc.shutdown(socket.SHUT_RDWR)
+        #self._tcpSoc.close()
+        #del self._tcpSoc
 
     def pack_FI_metadata(self):
         #IEEE - big endian, EEEI - little endian
@@ -301,8 +306,8 @@ class SendToFW(Thread):
 
         #Length of the data package
         lengthHeader = struct.calcsize('4s4si8s28siiii')
-        lengthSecHeaders = struct.calcsize('ii')*self._no_active_beams
-        lengthChannelData = struct.calcsize('f')*self._no_channels*self._no_active_beams
+        lengthSecHeaders = struct.calcsize('ii')*self._no_streams
+        lengthChannelData = struct.calcsize('f')*self._no_channels*self._no_streams
         dataPackageLength = lengthHeader+lengthSecHeaders+lengthChannelData
         headerData.append(dataPackageLength)
         data_type += 'l'
@@ -328,12 +333,14 @@ class SendToFW(Thread):
         headerData.append(self._no_streams)
         data_type += 'l'
 
+        return(data_type, headerData)
+
     def pack_FI_data(self, data):
         data_type = ''
         eddData = []
         dataPointer = 0
 
-        for BESecIndex in range(self._no_active_beams):
+        for BESecIndex in range(self._no_streams):
             BESecNum = BESecIndex+1
             data_type += 'l'
             eddData.append(BESecNum)
@@ -342,7 +349,7 @@ class SendToFW(Thread):
             #data_type += '1024f'
             data_type += str('%sf' % self._no_channels)
 
-            eddData.extend(channelData[dataPointer:dataPointer+channels])
+            eddData.extend(data[dataPointer:dataPointer+self._no_channels])
             dataPointer += self._no_channels
 
         return(data_type, eddData)
@@ -353,24 +360,37 @@ class SendToFW(Thread):
         return packed_data
 
     def pack_data(self):
-        self._time_stamp, self._no_streams, data_from_queue = data_Queue.get()
+        header_format = ""
+        header_data = ""
+        self._time_stamp, self._no_streams, self._no_channels, data_from_queue = data_Queue.get()
+        print "from sendto fw: ", 
+        print "time_info: ", self._time_stamp,
+        print "streams: ", self._no_streams,
+        print "channels: ", self._no_channels,
+        print "data size: ", len(data_from_queue)
+        print "\n"
         #self._time_stamp, self._no_streams, data_from_queue = data_Queue.get()
-        header_format, header_data = _pack_FI_metadata()
-        data_format, pol_data = self.pack_FI_data(data_from_queue)
+        header_format, header_data = self.pack_FI_metadata()
+        data_to_format = np.reshape(data_from_queue, (self._no_streams*self._no_channels))
+        data_format, pol_data = self.pack_FI_data(data_to_format)
         tcp_data_format = header_format + data_format
         header_data.extend(pol_data)
         tcp_data = header_data
-        data_to_send = self.pack_tcpData(tcp_data_format, tcp_data)
-        return data_to_send
+        #data_to_send = self.pack_tcpData(tcp_data_format, tcp_data)
+        #return data_to_send
+        return tcp_data
 
     def run(self):
         while True:
+            #print "self._sending_stop_event.is_set: ", self._sending_stop_event.is_set()
             if not self._sending_stop_event.is_set():
                try:
                 #pack data
+                print "self._serverSoc:", type(self._serverSoc)
                 data_to_fw = self.pack_data()
+                print "to FW: ", data_to_fw[0:9]
                 #send data
-                self._tcpSoc.send(data_to_fw)
+               # self._tcpSoc.send(data_to_fw)
                except socket.error as error:
                    error_id = error.args[0]
                    if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
