@@ -7,19 +7,18 @@ import socket
 import struct
 import time
 import shlex
-from subprocess import PIPE, Popen, check_call
+from subprocess import PIPE, Popen, check_call, check_output
 from inspect import currentframe, getframeinfo
 from astropy.time import Time
 import astropy.units as units
 import logging
-import katcp
+from katcp import Sensor
+import argparse
 
-# http://on-demand.gputechconf.com/gtc/2015/presentation/S5584-Priyanka-Sah.pdf
 # To do,
-# 3. To capture the state of each running porcess and determine it is "error" or not, DO NOT NEED TO DO IT
-# 6. UTC_START, for now use most recnet timestamp
-
-# https://stackoverflow.com/questions/16768290/understanding-popen-communicate
+# 2. sensor to report status, DONE;
+# 3. Why full bandwidth is worse;
+# 4. why thread quit, not thread quit, it only stucks there because of the full stdout buffer;
 
 log = logging.getLogger("mpikat.paf_pipeline")
 
@@ -34,7 +33,7 @@ DBDISK         = True   # To run dbdisk on filterbank file or not
 PAF_ROOT       = "/home/pulsar/xinping/phased-array-feed/"
 DATA_ROOT      = "/beegfs/DENG/"
 DADA_ROOT      = "{}/AUG/baseband/".format(DATA_ROOT)
-SOURCE_DEFAULT = "UNKNOW:00 00 00.00:00 00 00.00"
+SOURCE_DEFAULT = "UNKNOW;00:00:00.00;00:00:00.00"
 DADA_HDR_FNAME = "{}/config/header_16bit.txt".format(PAF_ROOT)
 
 PAF_CONFIG = {"instrument_name":    "PAF-BMF",
@@ -89,8 +88,8 @@ SEARCH_CONFIG_1BEAM = {"rbuf_baseband_key":      ["dada"],
                        "rbuf_filterbank_key":    ["dade"],
                        "nchan_keep_band":        16384,
                        "nbeam":                  1,
-                       "nport_beam":             6,
-                       "nchk_port":              8,
+                       "nport_beam":             3,
+                       "nchk_port":              16,
 }
 
 SEARCH_CONFIG_2BEAMS = {"rbuf_baseband_key":       ["dada", "dadc"],
@@ -148,7 +147,9 @@ class Pipeline(object):
         self.createrbuf_process   = []
         self.deleterbuf_process   = []
         self.beam                 = []
-
+        self._sensors             = []
+        self.setup_sensors()
+        
     def __del__(self):
         class_name = self.__class__.__name__
 
@@ -176,7 +177,43 @@ class Pipeline(object):
 
     def deconfigure(self):
         raise NotImplementedError
-
+    
+    def setup_sensors(self):
+        """
+        @brief Setup monitoring sensors
+        """
+        self._beam_sensor = Sensor.float(
+            "beam",
+            description = "The ID of current beam",
+            default = 0,
+            initial_status = Sensor.NOMINAL)
+        self.sensors.append(self._beam_sensor)
+        
+        self._instant_sensor = Sensor.float(
+            "instant",
+            description = "The instant packet loss rate",
+            default = 0,
+            initial_status = Sensor.NOMINAL)
+        self.sensors.append(self._instant_sensor)
+        
+        self._time_sensor = Sensor.float(
+            "time",
+            description = "The time so far in seconds",
+            default = 0,
+            initial_status = Sensor.NOMINAL)
+        self.sensors.append(self._time_sensor)
+        
+        self._average_sensor = Sensor.float(
+            "average",
+            description = "The average packet loss rate",
+            default = 0,
+            initial_status = Sensor.NOMINAL)
+        self.sensors.append(self._average_sensor)
+        
+    @property
+    def sensors(self):
+        return self._sensors
+    
     def stream_status(self):
         if self.state in ["ready", "starting", "running"]:
             i = 0
@@ -230,6 +267,32 @@ class Pipeline(object):
             self.state = "error"
             raise PipelineError("Can not get beam ID")
 
+    def synced_refinfo(self, utc_start_capture, ip, port):
+        utc_start_capture = Time(utc_start_capture, format='isot', scale='utc')
+        
+        # Capture one packet to see what is current epoch, seconds and idf
+        # We need to do that because the seconds is not always matched with estimated value
+        epoch_ref, sec_ref, idf_ref = self.refinfo(ip, port)
+        print epoch_ref, sec_ref, idf_ref
+        
+        if(utc_start_capture.unix - epoch_ref * 86400.0 - sec_ref) > PAF_CONFIG["prd"]:
+            sec_ref = sec_ref + PAF_CONFIG["prd"]
+        idf_ref = int((utc_start_capture.unix - epoch_ref * 86400.0 - sec_ref)/self.df_res)
+        
+        return epoch_ref, int(sec_ref), idf_ref
+
+    def start_buf(self, utc_start_process, utc_start_capture):
+        """
+        To get the start buffer with given start time in UTC
+        """
+        utc_start_capture = Time(utc_start_capture, format='isot', scale='utc')
+        utc_start_process = Time(utc_start_process, format='isot', scale='utc')
+        
+        blk_res = self.df_res * self.rbuf_baseband_ndf_chk
+
+        start_buffer_idx = int((utc_start_process.unix - utc_start_capture.unix)/blk_res)
+        return start_buffer_idx
+        
     def refinfo(self, ip, port):
         """
         To get reference information for capture
@@ -250,10 +313,10 @@ class Pipeline(object):
             idf_ref  = hdr_part & np.uint64(0x00000000ffffffff)
 
             hdr_part  = np.uint64(struct.unpack("<Q", struct.pack(">Q", data[1]))[0])
-            epoch     = (hdr_part & np.uint64(0x00000000fc000000)) >> np.uint64(26)
-
+            epoch_idx = (hdr_part & np.uint64(0x00000000fc000000)) >> np.uint64(26)
+            
             for epoch in EPOCHS:
-                if epoch[1] == epoch:
+                if epoch[1] == epoch_idx:
                     break
             epoch_ref = int(epoch[0].unix/86400.0)
 
@@ -283,12 +346,12 @@ class Pipeline(object):
         destination_dead  = []   # The destination where we can not receive data
         destination_alive = []   # The destination where we can receive data
         for i in range(nport):
-            ip   = destination[i].split(":")[0]
-            port = int(destination[i].split(":")[1])
+            ip   = destination[i].split(";")[0]
+            port = int(destination[i].split(";")[1])
             alive, nchk_alive = self.connection(ip, port)                                                
 
             if alive == 1:
-                destination_alive.append(destination[i]+":{}".format(nchk_alive))
+                destination_alive.append(destination[i]+";{}".format(nchk_alive))
             else:
                 destination_dead.append(destination[i])
 
@@ -320,6 +383,10 @@ class Pipeline(object):
                 alive = 1
                 for i in range(self.ndf_check_chk):
                     buf, address = sock.recvfrom(self.df_pktsz)
+                    
+                    data_uint64 = np.fromstring(str(buf), 'uint64')
+                    hdr_uint64  = np.uint64(struct.unpack("<Q", struct.pack(">Q", data_uint64[2]))[0])
+                    
                     source.append(address)
                 nchk_alive = len(set(source))
             sock.close()
@@ -412,7 +479,7 @@ class Search(Pipeline):
         #if DBDISK:
         #    self.dbdisk_returncode          = []
         
-    def configure(self, utc_start, freq, ip, general_config, pipeline_config):
+    def configure(self, utc_start_capture, freq, ip, general_config, pipeline_config):
         # Kill running process if there is any and free memory
         check_call(["ipcrm", "-a"])
         self.kill_process("capture_main")
@@ -424,17 +491,16 @@ class Search(Pipeline):
             raise PipelineError(
                 "Can only configure pipeline in idle state")
 
-        self.state          = "configuring"
-        self.general_config = general_config
-        self.pipeline_config  = pipeline_config
-        
-        self.utc_start      = utc_start
-        self.ip             = ip
-        self.numa           = int(ip.split(".")[3]) - 1
-        self.freq           = freq
+        self.state             = "configuring"
+        self.general_config    = general_config
+        self.pipeline_config   = pipeline_config
+        self.ip                = ip
+        self.numa              = int(ip.split(".")[3]) - 1
+        self.freq              = freq
 
         self.prd                = PAF_CONFIG["prd"]
         self.port0              = PAF_CONFIG["port0"]
+        self.df_res             = PAF_CONFIG["df_res"]
         self.df_dtsz            = PAF_CONFIG["df_dtsz"]
         self.df_pktsz           = PAF_CONFIG["df_pktsz"]
         self.df_hdrsz           = PAF_CONFIG["df_hdrsz"]
@@ -516,26 +582,26 @@ class Search(Pipeline):
             destination = []
             for j in range(self.nport_beam):
                 port = self.port0 + i*self.nport_beam + j
-                destination.append("{}:{}:{}".format(self.ip, port, self.nchk_port))
+                destination.append("{};{};{}".format(self.ip, port, self.nchk_port))
             if EXECUTE:
                 destination_alive, self.dead_info = self.connections(destination)
             else:
                 destination_alive = []
                 for item in destination:
-                    nchk_actual = item.split(":")[2]
-                    destination_alive.append(item + ":{}".format(nchk_actual))
+                    nchk_actual = item.split(";")[2]
+                    destination_alive.append(item + ";{}".format(nchk_actual))
                 self.dead_info = []
-            first_alive_ip   = destination_alive[0].split(":")[0]
-            first_alive_port = int(destination_alive[0].split(":")[1])
-
+            first_alive_ip   = destination_alive[0].split(";")[0]
+            first_alive_port = int(destination_alive[0].split(";")[1])
+                        
             cpu = self.numa*self.ncpu_numa + i*self.ncpu_pipeline
             self.alive_info = []
             for info in destination_alive:
-                self.alive_info.append("{}:{}".format(info, cpu))
+                self.alive_info.append("{};{}".format(info, cpu))
                 cpu += 1
             self.buf_ctrl_cpu = self.numa*self.ncpu_numa + i*self.ncpu_pipeline + self.nport_beam
             cpt_ctrl_cpu = self.numa*self.ncpu_numa + i*self.ncpu_pipeline + self.nport_beam
-            self.cpt_ctrl     = "1:{}".format(cpt_ctrl_cpu)
+            self.cpt_ctrl     = "1;{}".format(cpt_ctrl_cpu)
 
             if EXECUTE:
                 beam = self.beam_id(first_alive_ip, first_alive_port)
@@ -549,13 +615,13 @@ class Search(Pipeline):
             self.runtime_dir.append(runtime_dir)
             self.socket_addr.append(socket_addr)
             self.ctrl_socket.append(ctrl_socket)
-
+            
             if EXECUTE:
-                ref_info = self.refinfo(first_alive_ip, first_alive_port)
+                ref_info = self.synced_refinfo(utc_start_capture, first_alive_ip, first_alive_port)
             else:
                 ref_info = [0, 0, 0]
-
-            self.ref_info = "{}:{}:{}".format(ref_info[0], ref_info[1], ref_info[2])
+            
+            self.ref_info = "{};{};{}".format(ref_info[0], ref_info[1], ref_info[2])
             self.capture(self.rbuf_baseband_key[i], runtime_dir)                         
 
         # To see if we are ready to start or error to quit
@@ -575,20 +641,35 @@ class Search(Pipeline):
                     self.state = "ready"
                     break
 
-        # Monitor the capture process to see if it quits unexpectedly and also stop it with deconfigure
+        # Update sensor values and to check if the capture process quits unexpectedly
         if EXECUTE:
-            for i in range(self.nbeam):
-                self.capture_process[i].communicate()
-                returncode = self.capture_process[i].returncode
-                #self.capture_returncode.append(returncode)
-                if returncode:
-                    self.state = "error"
-                    raise PipelineError("Capture fail")
+            while True:
+                for i in range(self.nbeam):
+                    if(self.capture_process[i].returncode):
+                        self.state = "error"
+                        raise PipelineError("Capture fail")
+                    
+                    stdout_line = self.capture_process[i].stdout.readline()
+                    if "CAPTURE_STATUS" in stdout_line:
+                        status = stdout_line.split()
+                        self._beam_sensor.set_value(float(self.beam[i]))
+                        self._time_sensor.set_value(float(status[1]))
+                        self._average_sensor.set_value(float(status[2]))
+                        self._instant_sensor.set_value(float(status[3]))
+        self.state = "ready"
+        
+        ## Monitor the capture process to see if it quits unexpectedly and also stop it with deconfigure
+        #if EXECUTE:
+        #    for i in range(self.nbeam):
+        #        self.capture_process[i].communicate()
+        #        returncode = self.capture_process[i].returncode
+        #        #self.capture_returncode.append(returncode)
+        #        if returncode:
+        #            self.state = "error"
+        #            raise PipelineError("Capture fail")
+        #self.state = "ready"
                                 
-    def start(self, source_name, ra, dec):
-        ra  = ra.replace(":", " ")
-        dec = dec.replace(":", " ")
-
+    def start(self, utc_start_process, source_name, ra, dec):
         if self.state != "ready":
             raise PipelineError(
                 "Pipeline can only be started from ready state")
@@ -627,12 +708,13 @@ class Search(Pipeline):
                 if ready == self.nbeam: # Ready to start
                     break
 
-        # Enable the SOD of baseband ring buffer and then "running"
-        if EXECUTE:  
+        # Enable the SOD of baseband ring buffer with given time and then "running"
+        if EXECUTE:
+            start_buffer_idx = self.start_buf(utc_start_process, utc_start_capture)
             for i in range(self.nbeam):
                 self.capture_control(self.ctrl_socket[i],
-                                     "START-OF-DATA:{}:{}:{}".format(
-                                         source_name, ra, dec),
+                                     "START-OF-DATA;{};{};{};{}".format(
+                                         source_name, ra, dec, start_buffer_idx),
                                      self.socket_addr[i])
         self.state = "running"       
 
@@ -658,8 +740,7 @@ class Search(Pipeline):
                     #self.dbdisk_returncode.append(returncode)
                     if returncode:
                         self.state = "error"
-                        raise PipelineError("Capture fail")
-                
+                        raise PipelineError("Capture fail")                
             
     def stop(self):
         if self.state != "running":
@@ -687,7 +768,7 @@ class Search(Pipeline):
                 if DBDISK:                    
                     returncode == None
                     while returncode == None:
-                    returncode = self.dbdisk_process[i].returncode
+                        returncode = self.dbdisk_process[i].returncode
                     if returncode:
                         self.state = "error"
                         raise PipelineError("Failed to finish DBDISK")
@@ -705,16 +786,15 @@ class Search(Pipeline):
                 for i in range(self.nbeam): # Stop capture
                     self.capture_control(self.ctrl_socket[i],
                                          "END-OF-CAPTURE", self.socket_addr[i])
-                    self.delete_rbuf(self.rbuf_baseband_key[i])
-                    self.delete_rbuf(self.rbuf_filterbank_key[i])
-
-                    returncode = None
-                    while returncode == None:
-                        returncode = self.capture_process[i].returncode
+                    self.capture_process[i].communicate()
+                    returncode = self.capture_process[i].returncode
                     if returncode:
                         self.state = "error"
                         raise PipelineError("Failed to finish CAPTURE")
-                
+
+                    self.delete_rbuf(self.rbuf_baseband_key[i])
+                    self.delete_rbuf(self.rbuf_filterbank_key[i])
+
                 # Delete ring buffers            
                 for i in range(self.nbeam * 2):
                     self.deleterbuf_process[i].communicate()                                    
@@ -755,7 +835,8 @@ class Search(Pipeline):
                " -k {} -l {} ").format(
                    self.baseband2filterbank_cpu, software, key_in, key_out,
                    self.rbuf_filterbank_ndf_chk, self.nstream,
-                   self.ndf_stream, runtime_dir, self.nchk_beam, self.cufft_nx, self.nchan_filterbank, self.nchan_keep_band)
+                   self.ndf_stream, runtime_dir, self.nchk_beam,
+                   self.cufft_nx, self.nchan_filterbank, self.nchan_keep_band)
         if SOD:
             cmd = cmd + "-g 1"
         else:
@@ -799,11 +880,11 @@ class Search2Beams(Search):
     def __init__(self):
         super(Search2Beams, self).__init__()
 
-    def configure(self, utc_start, freq, ip):
-        super(Search2Beams, self).configure(utc_start, freq, ip, SEARCH_CONFIG_GENERAL, SEARCH_CONFIG_2BEAMS) 
+    def configure(self, utc_start_capture, freq, ip):
+        super(Search2Beams, self).configure(utc_start_capture, freq, ip, SEARCH_CONFIG_GENERAL, SEARCH_CONFIG_2BEAMS) 
                                             
-    def start(self, source_name, ra, dec):
-        super(Search2Beams, self).start(source_name, ra, dec)
+    def start(self, utc_start_process, source_name, ra, dec):
+        super(Search2Beams, self).start(utc_start_process, source_name, ra, dec)
         
     def stop(self):
         super(Search2Beams, self).stop()
@@ -816,11 +897,11 @@ class Search1Beam(Search):
     def __init__(self):
         super(Search1Beam, self).__init__()
 
-    def configure(self, utc_start, freq, ip):
-        super(Search1Beam, self).configure(utc_start, freq, ip, SEARCH_CONFIG_GENERAL, SEARCH_CONFIG_1BEAM) 
+    def configure(self, utc_start_capture, freq, ip):
+        super(Search1Beam, self).configure(utc_start_capture, freq, ip, SEARCH_CONFIG_GENERAL, SEARCH_CONFIG_1BEAM) 
         
-    def start(self, source_name, ra, dec):
-        super(Search1Beam, self).start(source_name, ra, dec)
+    def start(self, utc_start_process, source_name, ra, dec):
+        super(Search1Beam, self).start(utc_start_process, source_name, ra, dec)
         
     def stop(self):
         super(Search1Beam, self).stop()
@@ -833,22 +914,31 @@ if __name__ == "__main__":
     # The number is random. Everytime reconfigure stream, it will change the reference seconds, sometimes it is multiple times of 27 seconds, but in most case, it is not
     # To do, find a way to sync capture of beams
     # understand why the capture does not works sometimes, or try VMA
-    freq          = 1340.5
-    utc_start     = Time.now() + 0*units.s # "YYYY-MM-DDThh:mm:ss"
-
+    #freq              = 1340.5
+    freq              = 1337.0
+    utc_start_capture = Time.now() + PAF_CONFIG["prd"]*units.s # "YYYY-MM-DDThh:mm:ss", now + stream period (27 seconds)
+    utc_start_process = utc_start_capture + PAF_CONFIG["prd"]*units.s
+    
     source_name   = "UNKNOWN"
     ra            = "00:00:00.00"   # "HH:MM:SS.SS"
     dec           = "00:00:00.00"   # "DD:MM:SS.SS"
-    ip            = "10.17.8.1"
-
+    host_id       = check_output("hostname").strip()[-1]
+    
+    parser = argparse.ArgumentParser(description='To run the pipeline for my test')
+    parser.add_argument('-a', '--numa', type=int, nargs='+',
+                        help='The ID of numa node')
+    args     = parser.parse_args()
+    numa     = args.numa[0]    
+    ip       = "10.17.{}.{}".format(host_id, numa + 1)
+    
     print "\nCreate pipeline ...\n"
-    #search_mode = Search2Beams()
-    search_mode = Search1Beam()
+    search_mode = Search2Beams()
+    #search_mode = Search1Beam()
     print "\nConfigure it ...\n"
-    search_mode.configure(utc_start, freq, ip)
+    search_mode.configure(utc_start_capture, freq, ip)
 
     print "\nStart it ...\n"
-    search_mode.start(source_name, ra, dec)
+    search_mode.start(utc_start_process, source_name, ra, dec)
     ##search_mode.stream_status()
     #print "\nStop it ...\n"
     #search_mode.stop()
