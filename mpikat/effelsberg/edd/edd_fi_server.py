@@ -17,9 +17,7 @@ from time import sleep
 import numpy as np
 import struct
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
-from katcp.kattypes import (Str, Int, request, return_reply)
-
-
+from katcp.kattypes import (Str, Float, Int, request, return_reply)
 
 log = logging.getLogger("mpikat.edd_fi_server")
 
@@ -137,7 +135,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             self._capture_thread = None
         log.debug("Capture thread cleaned")
 
-    @request(Int(), Int(), Int(), Int())
+    @request(Int(), Int(), Float(), Int())
     @return_reply()
     def request_configure(self, req, beams, channels, int_time, blank_phases):
         """
