@@ -6,6 +6,7 @@ import logging
 import signal
 import socket
 import Queue
+import time
 import errno
 import threading
 import coloredlogs
@@ -250,9 +251,9 @@ class AggregateData(object):
     def __init__(self, no_streams, name="AggregateDate"):
         self._no_streams = no_streams
         self._data_stream = []
-        self._final_data = self._no_streams*[[]]
         self._count = 0
         self._ref_seq_no = 0
+        self._time_info = ""
 
     def phase_extract(self, num):
         mask = 0xf0000000
@@ -273,7 +274,14 @@ class AggregateData(object):
         seq_no = unpack_num[0]&mask
         return seq_no
 
-    def start_aggregating(self, data_to_process):
+    #ISO time definition
+    def isotime(self, s):
+        ms = int(10000*(s - int(s)))
+        t = time.gmtime(s)
+        dateTime = str("%4.4i-%2.2i-%2.2iT%2.2i:%2.2i:%2.2i.%4.4iUTC " % (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, ms))
+        return dateTime
+
+    def start_data_aggregation(self, data_to_process):
         self._count += 1
         data = np.zeros(2050,dtype=np.uint32)
         data = struct.unpack('>2050I', data_to_process)
@@ -285,15 +293,26 @@ class AggregateData(object):
         print "Extracted seq. no.:: ", sequence_num
         #Capturing logic based on sequence no.
         if (self._count ==1):
+            self._time_info = self.isotime(time.time())
             self._data_stream = [data[2:]]
             self._ref_seq_no = sequence_num
+        #TODO include time stamp in the queue
         elif ((sequence_num == (self._ref_seq_no+1)) or (sequence_num == (self._ref_seq_no-1))):
             self._data_stream.append(data[2:])
-            data_Queue.put((self._no_streams, self._data_stream))
+            data_Queue.put((self._time_info, self._no_streams, self._data_stream))
+            self._count = 0
+            self._data_stream = []
+        else:
+            print "packet missing for the given stamp.."
             self._count = 0
             self._data_stream = []
       #  strm, data_from_queue = data_Queue.get()
       #  print "from queue:                  ", len(data_from_queue)
+
+    def stop_data_aggregation(self):
+        self._count = 0
+        self._data_stream = []
+
 
 class SendToFW(Thread):
     """
@@ -396,7 +415,8 @@ class SendToFW(Thread):
         return packed_data
 
     def pack_data(self):
-        self._no_streams, data_from_queue = data_Queue.get()
+        self._time_stamp, self._no_streams, data_from_queue = data_Queue.get()
+        #self._time_stamp, self._no_streams, data_from_queue = data_Queue.get()
         header_format, header_data = _pack_FI_metadata()
         data_format, pol_data = self.pack_FI_data(data_from_queue)
         tcp_data_format = header_format + data_format
