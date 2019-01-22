@@ -8,16 +8,19 @@ import socket
 import Queue
 import errno
 import threading
+import coloredlogs
 from threading import Thread
 from threading import Event
 from optparse import OptionParser
+from time import sleep
 import numpy as np
 import struct
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import (Str, Int, request, return_reply)
 
 
-log = logging.getLogger("FitsInterfaceServer")
+
+log = logging.getLogger("mpikat.edd_fi_server")
 
 data_Queue = Queue.Queue()
 
@@ -41,141 +44,211 @@ class FitsInterfaceServer(AsyncDeviceServer):
         @param ip       Interface address to serve on
         @param port     Port number to serve on
         """
-        self._no_active_beams = 0
-        self._no_channels = 0
-        self._integ_time = 0
-        self._time_stamp = ""
-        self._blank_phase = 4
+        self._configured = False
+        self._no_active_beams = None
+        self._no_channels = None
+        self._integ_time = None
+        self._blank_phase = None
         self._capture_interface = capture_interface
         self._capture_port = capture_port
-        self._capture_thread = CaptureData(self._capture_interface, self._capture_port, 2048)
-        self._capture_thread.start()
-        super(FitsInterfaceServer, self).__init__(ip, port)
+        self._capture_thread = None
+        super(FitsInterfaceServer, self).__init__(interface, port)
 
     def start(self):
+        """
+        @brief   Start the server
+        """
         super(FitsInterfaceServer, self).start()
+
+    @property
+    def nbeams(self):
+        return self._active_beams_sensor.value()
+
+    @nbeams.setter
+    def nbeams(self, value):
+        self._active_beams_sensor.set_value(value)
+
+    @property
+    def nchannels(self):
+        return self._nchannels_sensor.value()
+
+    @nchannels.setter
+    def nchannels(self, value):
+        self._nchannels_sensor.set_value(value)
+
+    @property
+    def integration_time(self):
+        return self._integration_time_sensor.value()
+
+    @integration_time.setter
+    def integration_time(self, value):
+        self._integration_time_sensor.set_value(value)
+
+    @property
+    def nblank_phases(self):
+        return self._nblank_phases_sensor.value()
+
+    @nblank_phases.setter
+    def nblank_phases(self, value):
+        self._nblank_phases_sensor.set_value(value)
 
     def setup_sensors(self):
         """
-        @brief Setup monitoring sensors
+        @brief   Setup monitoring sensors
         """
-        self._device_status = Sensor.discrete(
+        self._device_status_sensor = Sensor.discrete(
             "device-status",
             description="Health status of FIServer",
             params=self.DEVICE_STATUSES,
             default="ok",
             initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._device_status)
-        self._active_beams = Sensor.float(
-            "Number of active beams",
+        self.add_sensor(self._device_status_sensor)
+        self._active_beams_sensor = Sensor.float(
+            "nbeams",
             description="Number of beams that are currently active",
             default=1,
             initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._active_beams)
-        self._channels = Sensor.float(
-            "channels_per_beam",
-            description="number of channels in each beam",
+        self.add_sensor(self._active_beams_sensor)
+        self._nchannels_sensor = Sensor.float(
+            "nchannels",
+            description="Number of channels in each beam",
             default=1,
             initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._channels)
-        self._integration_period = Sensor.float(
-            "integration_period",
-            description="integration_period",
+        self.add_sensor(self._nchannels_sensor)
+        self._integration_time_sensor = Sensor.float(
+            "integration-time",
+            description="The integration time for each beam",
             default=1,
             initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._integration_period)
+        self.add_sensor(self._integration_time_sensor)
+        self._nblank_phases_sensor = Sensor.integer(
+            "nblank-phases",
+            description="The number of blank phases",
+            default=1,
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._nblank_phases_sensor)
+
+    def _stop_capture(self):
+        log.debug("Cleaning up capture thread")
+        if self._capture_thread:
+            self._capture_thread.stop()
+            self._capture_thread.join()
+            self._capture_thread = None
+        log.debug("Capture thread cleaned")
 
     @request(Int(), Int(), Int(), Int())
     @return_reply()
-    def request_configure(self, req, beams, channels, integTime, blankPhases):
+    def request_configure(self, req, beams, channels, int_time, blank_phases):
         """
-        @brief configures metadata for tcp packets sent to Fits Writer
+        @brief    Configure the FITS interface server
 
-        @param no. of beams - 1 to 36
-        @param no. of blank phases - 1 to 4
-        @param number of channels per beam
-        @param integration period in seconds
+        @param   beams          The number of beams expected
+        @param   channels       The number of channels expected
+        @param   int_time       The integration time (seconds)
+        @param   blank_phases   The number of blank phases (1-4)
         """
-        self.configure_fits_metadata(beams, channels, integTime, blankPhases)
+        self.nbeams = beams
+        self.nchannels = channels
+        self.integration_time = int_time
+        self.nblank_phases = blank_phases
+        self._stop_capture()
+        self._configured = True
         return ("ok",)
 
     @request()
     @return_reply()
     def request_start(self, req):
         """
-        @brief configures metadata for tcp packets sent to Fits Writer
+        @brief    Start the FITS interface server capturing data
         """
-        self._capture_thread.start_capture()
+        if not self._configured:
+            msg = "FITS interface server is not configured"
+            log.error(msg)
+            return ("fail", msg)
+        self._stop_capture()
+        self._capture_thread = CaptureData(self._capture_interface,
+            self._capture_port, 4 * (self.nchannels + 2))
+        self._capture_thread.start()
         return ("ok",)
 
     @request()
     @return_reply()
     def request_stop(self, req):
         """
-        @brief configures metadata for tcp packets sent to Fits Writer
+        @brief    Stop the FITS interface server capturing data
         """
-        self._capture_thread.stop_capture()
+        if not self._configured:
+            msg = "FITS interface server is not configured"
+            log.error(msg)
+            return ("fail", msg)
+        self._stop_capture()
         return ("ok",)
 
-    def configure_fits_metadata(self, beams, channels, integTime, blankPhases):
-        self._no_active_beams = beams
-        self._no_blank_phases = blankPhases
-        self._no_channels = channels
-        self._integ_time = integTime
-        self._channels.set_value(self._no_channels)
-        self._active_beams.set_value(self._no_active_beams)
-        self._integration_period.set_value(self._integ_time)
 
 class CaptureData(Thread):
     """
-    @brief Captures data sent by the roach2 board
+    @brief     Captures formatted data from a UDP socket
     """
-    def __init__(self, ip, port, channels, name="CaptureData"):
+    def __init__(self, ip, port, buffer_size, name="CaptureData"):
         Thread.__init__(self, name=name)
         self._address = (ip, port)
-        self._buffer_size = 4*(channels+2)
-        self._data = ""
-        self._udpSoc = self._capture_socket()
+        self._buffer_size = buffer_size
         self._stop_event = Event()
-        #Data capture not activated when the thread is initialized
+        self._aggregator = AggregateData(2)
+
+    def _reset_socket(self):
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._socket.setblocking(False)
+        self._socket.bind(self._address)
+
+    def stop(self):
         self._stop_event.set()
-        self._aggregate_thread = AggregateData(self._data, 2)
 
+    def _flush(self):
+        log.debug("Flushing capture socket")
+        flush_count = 0
+        while True:
+            try:
+                message, addr = self._socket.recvfrom(self._buffer_size)
+                flush_count += 1
+            except:
+                break
+        log.debug("Flushed {} messages".format(flush_count))
 
-    def _capture_socket(self):
-        self._udpSoc = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._udpSoc.bind((self._address))
-        return self._udpSoc
-
-    def start_capture(self):
-        self._stop_event.clear()
-
-    def stop_capture(self):
-        self._stop_event.set()
+    def _capture(self):
+        log.debug("Starting data capture")
+        while not self._stop_event.is_set():
+            try:
+                data, addr = self._socket.recvfrom(self._buffer_size)
+                log.debug("Received {} byte message from {}".format(len(data), addr))
+                self._aggregator.start_aggregating(data)
+            except socket.error as error:
+                error_id = error.args[0]
+                if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
+                    sleep(0.01)
+                    continue
+                else:
+                    raise error
+        log.debug("Stopping data capture")
 
     def run(self):
-        while True:
-            if not self._stop_event.is_set():
-               try:
-                    data = ""
-                    while len(data) < self._buffer_size:
-                        data += self._udpSoc.recv(self._buffer_size-len(data))
-                    self._data = data
-                    self._aggregate_thread.start_aggregating(self._data)
-               except socket.error as error:
-                   error_id = error.args[0]
-                   if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
-                       raise
-                   return
+        self._reset_socket()
+        try:
+            self._flush()
+            self._capture()
+        except Exception as error:
+            log.exception("Error during capture: {}".format(str(error)))
+        finally:
+            self._socket.close()
+
 
 class AggregateData(object):
     """
     @brief Aggregates spectrometer data from polarization channel 1 and 2 for the given time
            before sending to the fits writer
     """
-    def __init__(self, data, no_streams, name="AggregateDate"):
+    def __init__(self, no_streams, name="AggregateDate"):
         self._no_streams = no_streams
-        self._data_to_process = data
         self._data_stream = []
         self._final_data = self._no_streams*[[]]
         self._count = 0
@@ -192,7 +265,7 @@ class AggregateData(object):
         pol = (num&mask) >> 24
         return pol
 
-    def extract_sequence_num(self, num1,num2):
+    def extract_sequence_num(self, num1, num2):
         counter_num = struct.pack(">II", num1,num2)
         unpack_num= np.zeros(1,dtype=np.int64)
         unpack_num = struct.unpack(">q", counter_num)
@@ -360,16 +433,21 @@ def main():
         help='Host interface to bind to', default='127.0.0.1')
     parser.add_option('-p', '--port', dest='port', type=long,
         help='Port number to bind to', default=5000)
-    parser.add_option('', '--log_level', dest='log_level', type=str,
+    parser.add_option('', '--cap-ip', dest='cap_ip', type=str,
+        help='Host interface to bind to for data capture', default='127.0.0.1')
+    parser.add_option('', '--cap-port', dest='cap_port', type=long,
+        help='Port number to bind to for data capture', default=5001)
+    parser.add_option('', '--log-level', dest='log_level', type=str,
         help='Defauly logging level', default="INFO")
     (opts, args) = parser.parse_args()
-    FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
-    logger = logging.getLogger('FitsInterfaceServer')
-    logging.basicConfig(format=FORMAT)
-    logger.setLevel(opts.log_level.upper())
+    logging.getLogger().addHandler(logging.NullHandler())
+    coloredlogs.install(
+        fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
+        level=opts.log_level.upper(),
+        logger=log)
+    log.setLevel(opts.log_level.upper())
     ioloop = tornado.ioloop.IOLoop.current()
-    #CaptureData("10.10.1.12", 60001).start()
-    server = FitsInterfaceServer(opts.host, opts.port)
+    server = FitsInterfaceServer(opts.host, opts.port, opts.cap_ip, opts.cap_port)
     # Hook up to SIGINT so that ctrl-C results in a clean shutdown
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
