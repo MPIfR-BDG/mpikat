@@ -36,15 +36,17 @@ class FitsInterfaceServer(AsyncDeviceServer):
         ProtocolFlags.MESSAGE_IDS,
     ]))
 
-    def __init__(self, interface, port, capture_interface, capture_port):
+    def __init__(self, interface, port, capture_interface, capture_port, fw_ip, fw_port):
         """
         @brief Initialization of the FitsInterfaceServer object
 
-        @param ip       Interface address to serve on
-        @param port     Port number to serve on
+        @param  interface          Interface address to serve on
+        @param  port               Port number to serve on
+        @param  capture_interface  Interface to capture data on from instruments
+        @param  capture_port       Port to capture data on from instruments
+        @param  fw_ip              IP address of the FITS writer
+        @param  fw_port            Port number to connected to on FITS writer
         """
-        self._send2FW_thread = SendToFW("10.100.100.63", 50000)
-        self._send2FW_thread.start()
         self._configured = False
         self._no_active_beams = None
         self._no_channels = None
@@ -52,7 +54,10 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._blank_phase = None
         self._capture_interface = capture_interface
         self._capture_port = capture_port
+        self._fw_ip = fw_ip
+        self._fw_port = fw_port
         self._capture_thread = None
+        self._transmit_thread = None
         super(FitsInterfaceServer, self).__init__(interface, port)
 
     def start(self):
@@ -60,6 +65,13 @@ class FitsInterfaceServer(AsyncDeviceServer):
         @brief   Start the server
         """
         super(FitsInterfaceServer, self).start()
+
+    def stop(self):
+        """
+        @brief   Stop the server
+        """
+        self._stop_threads()
+        super(FitsInterfaceServer, self).stop()
 
     @property
     def nbeams(self):
@@ -129,13 +141,26 @@ class FitsInterfaceServer(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._nblank_phases_sensor)
 
+    def _stop_threads(self):
+        log.debug("Stopping any active threads")
+        self._stop_transmit()
+        self._stop_capture()
+
     def _stop_capture(self):
-        log.debug("Cleaning up capture thread")
         if self._capture_thread:
+            log.debug("Cleaning up capture thread")
             self._capture_thread.stop()
             self._capture_thread.join()
             self._capture_thread = None
-        log.debug("Capture thread cleaned")
+            log.debug("Capture thread cleaned")
+
+    def _stop_transmit(self):
+        if self._transmit_thread:
+            log.debug("Cleaning up transmit thread")
+            self._transmit_thread.stop()
+            self._transmit_thread.join()
+            self._transmit_thread = None
+            log.debug("Transmit thread cleaned")
 
     @request(Int(), Int(), Int(), Int())
     @return_reply()
@@ -152,7 +177,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self.nchannels = channels
         self.integration_time = int_time
         self.nblank_phases = blank_phases
-        self._stop_capture()
+        self._stop_threads()
         self._configured = True
         return ("ok",)
 
@@ -166,10 +191,13 @@ class FitsInterfaceServer(AsyncDeviceServer):
             msg = "FITS interface server is not configured"
             log.error(msg)
             return ("fail", msg)
-        self._stop_capture()
+        self._stop_threads()
+        buffer_size = 4 * (self.nchannels + 2)
         self._capture_thread = CaptureData(self._capture_interface,
-            self._capture_port, 4 * (self.nchannels + 2), AggregateData(2, self.nchannels))
+            self._capture_port, buffer_size, AggregateData(2, self.nchannels))
         self._capture_thread.start()
+        self._transmit_thread = SendToFW(self._fw_ip, self._fw_port)
+        self._transmit_thread.start()
         return ("ok",)
 
     @request()
@@ -182,7 +210,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             msg = "FITS interface server is not configured"
             log.error(msg)
             return ("fail", msg)
-        self._stop_capture()
+        self._stop_threads()
         return ("ok",)
 
 
@@ -284,7 +312,7 @@ class AggregateData(object):
         dateTime = str("%4.4i-%2.2i-%2.2iT%2.2i:%2.2i:%2.2i.%4.4iUTC " % (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, ms))
         return dateTime
 
-    def start_data_aggregation(self, data_to_process):
+    def start_aggregation(self, data_to_process):
         self._count += 1
         data = np.zeros(2050,dtype=np.uint32)
         data = struct.unpack('>2050I', data_to_process)
@@ -364,6 +392,10 @@ class SendToFW(Thread):
         #self._tcpSoc.shutdown(socket.SHUT_RDWR)
         #self._tcpSoc.close()
         #del self._tcpSoc
+
+    def stop(self):
+        self._sending_stop_event.set()
+
 
     def pack_FI_metadata(self):
         #IEEE - big endian, EEEI - little endian
@@ -451,29 +483,28 @@ class SendToFW(Thread):
         #return data_to_send
         return tcp_data
 
+    def transmit(self):
+        while not self._sending_stop_event.is_set():
+            print "self._serverSoc:", type(self._serverSoc)
+            data_to_fw = self.pack_data()
+            print "to FW: ", data_to_fw[0:9]
+            self._tcpSoc.send(data_to_fw)
+
     def run(self):
-        while True:
-            #print "self._sending_stop_event.is_set: ", self._sending_stop_event.is_set()
-            if not self._sending_stop_event.is_set():
-               try:
-                #pack data
-                print "self._serverSoc:", type(self._serverSoc)
-                data_to_fw = self.pack_data()
-                print "to FW: ", data_to_fw[0:9]
-                #send data
-               # self._tcpSoc.send(data_to_fw)
-               except socket.error as error:
-                   error_id = error.args[0]
-                   if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
-                       raise
-                   return
+        try:
+            self.transmit()
+        except Exception as error:
+            log.exception("Error on transmit to FW: {}".format(str(error)))
+        finally:
+            self._tcpSoc.shutdown(socket.SHUT_RDWR)
+            self._tcpSoc.close()
+            self._serverSoc.close()
 
 @tornado.gen.coroutine
 def on_shutdown(ioloop, server):
     print('Shutting down')
     yield server.stop()
     ioloop.stop()
-
 
 def main():
     usage = "usage: %prog [options]"
@@ -486,6 +517,10 @@ def main():
         help='Host interface to bind to for data capture', default='127.0.0.1')
     parser.add_option('', '--cap-port', dest='cap_port', type=long,
         help='Port number to bind to for data capture', default=5001)
+    parser.add_option('', '--fw-ip', dest='fw_ip', type=str,
+        help='FITS writer interface to bind to for data trasmission', default='127.0.0.1')
+    parser.add_option('', '--fw-port', dest='fw_port', type=long,
+        help='FITS writer port number to bind to for data transmission', default=5002)
     parser.add_option('', '--log-level', dest='log_level', type=str,
         help='Defauly logging level', default="INFO")
     (opts, args) = parser.parse_args()
@@ -496,7 +531,7 @@ def main():
         logger=log)
     log.setLevel(opts.log_level.upper())
     ioloop = tornado.ioloop.IOLoop.current()
-    server = FitsInterfaceServer(opts.host, opts.port, opts.cap_ip, opts.cap_port)
+    server = FitsInterfaceServer(opts.host, opts.port, opts.cap_ip, opts.cap_port, opts.fw_ip, opts.fw_port)
     # Hook up to SIGINT so that ctrl-C results in a clean shutdown
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
