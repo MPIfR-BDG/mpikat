@@ -214,30 +214,30 @@ class Pipeline(object):
     def sensors(self):
         return self._sensors
     
-    def stream_status(self):
-        if self.state in ["ready", "starting", "running"]:
-            i = 0
-            status = {"nbeam":   self.nbeam}
-            for capture_process in self.capture_process:
-                stdout_line = capture_process.stdout.readline()
-                if "CAPTURE_STATUS" in stdout_line:
-                    status = stdout_line.split()
-
-                try:
-                    status.update({"process{}".format(i):
-                                   {"beam":    self.beam[i],
-                                    "average":   [float(status[1]), float(status[2])],
-                                    "instant":   float(status[3]),},})
-                    i += 1
-                except:
-                    self.state = "error"
-                    raise PipelineError("Stream status update fail")
-                    
-            return status
-        else:
-            self.state = "error"
-            raise PipelineError("Can only run stream_status with ready, starting and running state")
-
+    #def stream_status(self):
+    #    if self.state in ["ready", "starting", "running"]:
+    #        i = 0
+    #        status = {"nbeam":   self.nbeam}
+    #        for capture_process in self.capture_process:
+    #            stdout_line = capture_process.stdout.readline()
+    #            if "CAPTURE_STATUS" in stdout_line:
+    #                status = stdout_line.split()
+    #
+    #            try:
+    #                status.update({"process{}".format(i):
+    #                               {"beam":    self.beam[i],
+    #                                "average":   [float(status[1]), float(status[2])],
+    #                                "instant":   float(status[3]),},})
+    #                i += 1
+    #            except:
+    #                self.state = "error"
+    #                raise PipelineError("Stream status update fail")
+    #                
+    #        return status
+    #    else:
+    #        self.state = "error"
+    #        raise PipelineError("Can only run stream_status with ready, starting and running state")
+    
     def beam_id(self, ip, port):
         """
         To get the beam ID
@@ -287,10 +287,8 @@ class Pipeline(object):
         """
         utc_start_capture = Time(utc_start_capture, format='isot', scale='utc')
         utc_start_process = Time(utc_start_process, format='isot', scale='utc')
-        
-        blk_res = self.df_res * self.rbuf_baseband_ndf_chk
 
-        start_buffer_idx = int((utc_start_process.unix - utc_start_capture.unix)/blk_res)
+        start_buffer_idx = int((utc_start_process.unix - utc_start_capture.unix)/self.blk_res)
         return start_buffer_idx
         
     def refinfo(self, ip, port):
@@ -429,7 +427,7 @@ class Pipeline(object):
                 raise PipelineError("Can not delete ring buffer")
 
     def capture(self, key, runtime_dir):                
-        software = "{}/src/capture/capture_main".format(PAF_ROOT)        
+        software = "{}/src/capture_main".format(PAF_ROOT)        
         cmd = ("{} -a {} -b {} -c {} -e {} -f {}"
                " -g {} -i {} -j {} -k {} -l {}"
                " -m {} -n {} -o {} -p {} -q {}").format(
@@ -538,6 +536,7 @@ class Search(Pipeline):
         self.tbuf_baseband_ndf_chk   = self.general_config["tbuf_baseband_ndf_chk"]        
         self.rbuf_filterbank_ndf_chk = self.general_config["rbuf_filterbank_ndf_chk"]
 
+        self.blk_res                 = self.df_res * self.rbuf_baseband_ndf_chk
         self.nchk_beam               = self.nchk_port*self.nport_beam
         self.nchan_baseband          = self.nchan_chk*self.nchk_beam
         self.ncpu_pipeline           = self.ncpu_numa/self.nbeam
@@ -648,7 +647,9 @@ class Search(Pipeline):
                     if(self.capture_process[i].returncode):
                         self.state = "error"
                         raise PipelineError("Capture fail")
-                    
+                                        
+                    time.sleep(0.25 * self.blk_res)
+                        
                     stdout_line = self.capture_process[i].stdout.readline()
                     if "CAPTURE_STATUS" in stdout_line:
                         status = stdout_line.split()
@@ -829,7 +830,7 @@ class Search(Pipeline):
 
     def baseband2filterbank(self, key_in, key_out,
                             runtime_dir):
-        software = "{}/src/baseband2filterbank/baseband2filterbank_main".format(PAF_ROOT)
+        software = "{}/src/baseband2filterbank_main".format(PAF_ROOT)
         cmd = ("taskset -c {} nvprof {} -a {} -b {}" 
                " -c {} -d {} -e {} -f {} -i {} -j {}"
                " -k {} -l {} ").format(
