@@ -177,6 +177,10 @@ class FitsInterfaceServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
+
+        message = "Num beams: {}\nNum channels: {}\nIntegration time: {}\nNum blank phases: {}".format(
+            beams, channels, int_time, blank_phases)
+        log.info("Configuring FITS interface server with params:\n{}".format(message))
         self.nbeams = beams
         self.nchannels = channels
         self.integration_time = int_time
@@ -197,6 +201,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             msg = "FITS interface server is not configured"
             log.error(msg)
             return ("fail", msg)
+        log.info("Starting FITS interface capture")
         self._stop_threads()
         buffer_size = 4 * (self.nchannels + 2)
         queue = Queue.Queue()
@@ -220,6 +225,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             msg = "FITS interface server is not configured"
             log.error(msg)
             return ("fail", msg)
+        log.info("Stopping FITS interface capture")
         self._stop_threads()
         return ("ok",)
 
