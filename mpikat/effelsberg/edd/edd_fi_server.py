@@ -497,7 +497,7 @@ class FitsWriterTransmitter(Thread):
                 continue
 
     def pack_data(self):
-        self._time_stamp, self._no_streams, self._no_channels, data_from_queue = self.read_from_queue()
+        self._time_stamp, self._no_streams, self._no_channels, self._blank_phase, data_from_queue = self.read_from_queue()
         message = (
             "Timestamp: {}".format(self._time_stamp),
             "Nstreams: {}".format(self._no_streams),
