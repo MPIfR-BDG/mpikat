@@ -341,7 +341,7 @@ class AggregateData(object):
             self._data_stream = []
         else:
             print "packet missing for the given stamp.."
-            self._count = 1 
+            self._count = 1
             self._stream = data[2:]
             self._blank_phase = phase
             self._data_stream = []
@@ -470,13 +470,8 @@ class SendToFW(Thread):
                 continue
 
     def pack_data(self):
-<<<<<<< HEAD
-        header_format = ""
-        header_data = ""
-        self._time_stamp, self._no_streams, self._no_channels, self._blank_phase, data_from_queue = data_Queue.get()
-=======
         self._time_stamp, self._no_streams, self._no_channels, data_from_queue = self.read_from_queue()
->>>>>>> b4e5c97ef89c6ddb1647cf3bd358d9f5652fb13d
+
         print "from sendto fw: ",
         print "time_info: ", self._time_stamp,
         print "streams: ", self._no_streams,
