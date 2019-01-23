@@ -145,7 +145,7 @@ class PafWorkerServer(AsyncDeviceServer):
             except Exception as error:
                 log.error(error)
                 raise error 
-            self.add_pipeline_sensors()
+            #self.add_pipeline_sensors()
             self._pipeline_instance.callbacks.add(self.state_change)
             try:
                 log.info("Trying to configure pipeline {}".format(pipeline_name))
