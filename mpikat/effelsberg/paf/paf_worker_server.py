@@ -7,7 +7,7 @@ import os
 from optparse import OptionParser
 from tornado.gen import Return, coroutine
 from tornado.iostream import IOStream
-from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
+from katcp import AsyncDeviceServer, Message, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from mpikat.effelsberg.paf.pipeline import PIPELINES
 
@@ -145,7 +145,7 @@ class PafWorkerServer(AsyncDeviceServer):
             except Exception as error:
                 log.error(error)
                 raise error 
-            #self.add_pipeline_sensors()
+            self.add_pipeline_sensors()
             self._pipeline_instance.callbacks.add(self.state_change)
             try:
                 log.info("Trying to configure pipeline {}".format(pipeline_name))
