@@ -22,6 +22,9 @@ log = logging.getLogger("mpikat.edd_fi_server")
 
 data_Queue = Queue.Queue()
 
+class StopEventException(Exception):
+    pass
+
 class FitsInterfaceServer(AsyncDeviceServer):
     """
     Class providing an interface between EDD processes and the
@@ -506,6 +509,7 @@ class FitsWriterTransmitter(Thread):
             except Queue.Empty:
                 log.warning("No messages in queue")
                 continue
+        raise StopEventException
 
     def pack_data(self):
         self._time_stamp, self._no_streams, self._no_channels, self._blank_phase, data_from_queue = self.read_from_queue()
@@ -539,6 +543,8 @@ class FitsWriterTransmitter(Thread):
         self.accept_connection()
         try:
             self.transmit()
+        except StopEventException:
+            pass
         except Exception as error:
             log.exception("Error on transmit to FW: {}".format(str(error)))
         finally:
