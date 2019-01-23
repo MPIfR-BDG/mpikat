@@ -250,7 +250,7 @@ class CaptureData(Thread):
             try:
                 data, addr = self._socket.recvfrom(self._buffer_size)
                 log.debug("Received {} byte message from {}".format(len(data), addr))
-                self._aggregator.start_aggregating(data)
+                self._aggregator.start_data_aggregation(data)
             except socket.error as error:
                 error_id = error.args[0]
                 if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
@@ -312,42 +312,39 @@ class AggregateData(object):
         dateTime = str("%4.4i-%2.2i-%2.2iT%2.2i:%2.2i:%2.2i.%4.4iUTC " % (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, ms))
         return dateTime
 
-    def start_aggregation(self, data_to_process):
+    def start_data_aggregation(self, data_to_process):
         self._count += 1
         data = np.zeros(2050,dtype=np.uint32)
         data = struct.unpack('>2050I', data_to_process)
         phase = self.phase_extract(data[0])
         polID = self.pol_extract(data[0])
         sequence_num = self.extract_sequence_num(data[0],data[1])
-        print "Extracted phase: ", phase,
-        print "Extracted polID: ", polID,
-        print "Extracted seq. no.:: ", sequence_num
+        log.debug("Extracted phase: {}, Extracted polID: {}, Extracted seq. no.: {}".format(phase, polID, sequence_num))
         #Capturing logic based on sequence no.
         if (self._count ==1):
             self._time_info = self.isotime(time.time())
-            self._stream = data[2:]
+            self._stream1 = data[2:]
             self._ref_seq_no = sequence_num
             self._blank_phase = phase
         elif ((sequence_num == (self._ref_seq_no+1)) & (phase == self._blank_phase)):
             #swap
-            stream2 = data[2:]
-            
             self._data_stream.append(data[2:])
+            self._data_stream.append(self._stream1)
             data_Queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
             self._count = 0
             self._data_stream = []
         elif ((sequence_num == (self._ref_seq_no-1)) & (phase == self._blank_phase)):
+            self._data_stream.append(self._stream1)
             self._data_stream.append(data[2:])
             data_Queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
             self._count = 0
             self._data_stream = []
-
         else:
             print "packet missing for the given stamp.."
-            self._count = 0
+            self._count = 1 
+            self._stream = data[2:]
+            self._blank_phase = phase
             self._data_stream = []
-      #  strm, data_from_queue = data_Queue.get()
-      #  print "from queue:                  ", len(data_from_queue)
 
     def stop_data_aggregation(self):
         self._count = 0
@@ -436,6 +433,11 @@ class SendToFW(Thread):
         headerData.append(self._no_streams)
         data_type += 'l'
 
+        #Blocking factor
+        blockingFactor =  1
+        headerData.append(blockingFactor)
+        data_type += 'l'
+
         return(data_type, headerData)
 
     def pack_FI_data(self, data):
@@ -449,7 +451,6 @@ class SendToFW(Thread):
             eddData.append(BESecNum)
             data_type += 'l'
             eddData.append(self._no_channels)
-            #data_type += '1024f'
             data_type += str('%sf' % self._no_channels)
 
             eddData.extend(data[dataPointer:dataPointer+self._no_channels])
@@ -465,12 +466,13 @@ class SendToFW(Thread):
     def pack_data(self):
         header_format = ""
         header_data = ""
-        self._time_stamp, self._no_streams, self._no_channels, data_from_queue = data_Queue.get()
+        self._time_stamp, self._no_streams, self._no_channels, self._blank_phase, data_from_queue = data_Queue.get()
         print "from sendto fw: ",
         print "time_info: ", self._time_stamp,
         print "streams: ", self._no_streams,
         print "channels: ", self._no_channels,
-        print "data size: ", len(data_from_queue)
+        print "data1 size: ", len(data_from_queue[0]),
+        print "data2 size: ", len(data_from_queue[1])
         print "\n"
         #self._time_stamp, self._no_streams, data_from_queue = data_Queue.get()
         header_format, header_data = self.pack_FI_metadata()
@@ -479,15 +481,13 @@ class SendToFW(Thread):
         tcp_data_format = header_format + data_format
         header_data.extend(pol_data)
         tcp_data = header_data
-        #data_to_send = self.pack_tcpData(tcp_data_format, tcp_data)
-        #return data_to_send
-        return tcp_data
+        log.debug("metadata: {}".format(tcp_data[0:11]))
+        data_to_send = self.pack_tcpData(tcp_data_format, tcp_data)
+        return data_to_send
 
     def transmit(self):
         while not self._sending_stop_event.is_set():
-            print "self._serverSoc:", type(self._serverSoc)
             data_to_fw = self.pack_data()
-            print "to FW: ", data_to_fw[0:9]
             self._tcpSoc.send(data_to_fw)
 
     def run(self):
