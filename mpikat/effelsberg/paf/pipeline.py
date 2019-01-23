@@ -450,6 +450,7 @@ class Pipeline(object):
                              stdout=PIPE)
                 self.capture_process.append(proc)
             except:
+                print "we have reach this point"
                 self.state = "error"
                 raise PipelineError("Capture fail")
 
