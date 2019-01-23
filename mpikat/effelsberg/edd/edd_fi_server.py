@@ -323,7 +323,7 @@ class AggregateData(object):
 
     def _queue_put(self, data):
         if self._fw_active_event.is_set():
-            self._output_queue(data)
+            self._output_queue.put(data)
         else:
             log.warning("Dropping data as transmitter instance is not active")
 
