@@ -350,42 +350,41 @@ class SendToFW(Thread):
     """
     def __init__(self, server_ip, tcp_port, name="SendToFW"):
         Thread.__init__(self, name=name)
-        self._serverAddr = (server_ip, tcp_port)
-        self._serverSoc = self._server_socket()
-     #   self._tcpSoc = self._tcp_data_socket()
+        self._server_addr = (server_ip, tcp_port)
+        self._server_socket = self._reset_server_socket()
         self._time_stamp = ""
         self._integ_time = 16
         self._blank_phase = 1
         self._no_streams = 0
         self._no_channels = 0
         self._sending_stop_event = Event()
-        #self._sending_stop_event.set()
 
-    def _server_socket(self):
-        self._serverSoc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._serverSoc.bind((self._serverAddr))
-        self._serverSoc.listen(1)
-        return self._serverSoc
-        #self._serverSoc.settimeout(.start()
+    def _reset_server_socket(self):
+        self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._server_socket.setblocking(False)
+        self._server_socket.bind((self._server_addr))
+        self._server_socket.listen(1)
+        return self._server_socket
+        #self._server_socket.settimeout(.start()
 
-    def _tcp_data_socket(self):
-        self._tcpSoc, addr = self._serverSoc.accept()
-        return self._tcpSoc
-
-    def start_sending_toFW(self):
-        self._sending_stop_event.clear()
-        #self._tcpSoc, addr = self._FW_IP()
-    #    self._tcpSoc = self._tcp_data_socket()
-
-    def stop_sending_FW(self):
-        self._sending_stop_event.set()
-        #self._tcpSoc.shutdown(socket.SHUT_RDWR)
-        #self._tcpSoc.close()
-        #del self._tcpSoc
+    def accept_connection(self):
+        log.info("Waiting on client connection from control system")
+        while not self._sending_stop_event.is_set():
+            try:
+                self._transmit_socket, addr = self._server_socket.accept()
+                log.info("Received connection from {}".format(addr))
+            except socket.error as error:
+                error_id = error.args[0]
+                if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
+                    sleep(0.1)
+                    continue
+                else:
+                    raise error
+            except Exception as error:
+                raise error
 
     def stop(self):
         self._sending_stop_event.set()
-
 
     def pack_FI_metadata(self):
         #IEEE - big endian, EEEI - little endian
@@ -452,10 +451,15 @@ class SendToFW(Thread):
         packed_data = packer.pack(*data)
         return packed_data
 
+    def read_from_queue(self, timeout=1):
+        while not self._sending_stop_event.is_set():
+            try:
+                return data_Queue.get(True, timeout)
+            except Queue.Empty:
+                continue
+
     def pack_data(self):
-        header_format = ""
-        header_data = ""
-        self._time_stamp, self._no_streams, self._no_channels, data_from_queue = data_Queue.get()
+        self._time_stamp, self._no_streams, self._no_channels, data_from_queue = self.read_from_queue()
         print "from sendto fw: ",
         print "time_info: ", self._time_stamp,
         print "streams: ", self._no_streams,
@@ -475,20 +479,22 @@ class SendToFW(Thread):
 
     def transmit(self):
         while not self._sending_stop_event.is_set():
-            print "self._serverSoc:", type(self._serverSoc)
+            print "self._server_socket:", type(self._server_socket)
             data_to_fw = self.pack_data()
             print "to FW: ", data_to_fw[0:9]
-            self._tcpSoc.send(data_to_fw)
+            self._transmit_socket.send(data_to_fw)
 
     def run(self):
+        self.accept_connection()
         try:
             self.transmit()
         except Exception as error:
             log.exception("Error on transmit to FW: {}".format(str(error)))
         finally:
-            self._tcpSoc.shutdown(socket.SHUT_RDWR)
-            self._tcpSoc.close()
-            self._serverSoc.close()
+            if self._transmit_socket:
+                self._transmit_socket.shutdown(socket.SHUT_RDWR)
+                self._transmit_socket.close()
+            self._server_socket.close()
 
 @tornado.gen.coroutine
 def on_shutdown(ioloop, server):
