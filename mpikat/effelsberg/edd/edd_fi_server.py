@@ -402,6 +402,7 @@ class FitsWriterTransmitter(Thread):
         """
         log.debug("Creating the TCP server socket")
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._server_socket.setblocking(False)
         log.debug("Binding to {}".format(self._server_addr))
         self._server_socket.bind((self._server_addr))
@@ -549,8 +550,10 @@ class FitsWriterTransmitter(Thread):
             log.exception("Error on transmit to FW: {}".format(str(error)))
         finally:
             if self._transmit_socket:
+                log.debug("Closing transmit socket")
                 self._transmit_socket.shutdown(socket.SHUT_RDWR)
                 self._transmit_socket.close()
+            log.debug("Closing server socket")
             self._server_socket.close()
 
 @tornado.gen.coroutine
