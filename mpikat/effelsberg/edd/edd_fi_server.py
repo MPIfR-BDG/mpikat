@@ -418,7 +418,7 @@ class FitsWriterTransmitter(Thread):
         """
         @brief      Wait for an incoming connection
         """
-        log.info("Waiting on client connection from control system")
+        log.info("Waiting on client connection from FITS writer")
         while not self._sending_stop_event.is_set():
             try:
                 self._transmit_socket, addr = self._server_socket.accept()
