@@ -346,14 +346,14 @@ class AggregateData(object):
             self._data_stream.append(data[2:])
             self._data_stream.append(self._previous_payload)
             log.debug("Forwarding packets with sequence numbers: {} and {}".format(sequence_num, self._ref_seq_no))
-            self._output_queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
+            self._queue_put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
             self._count = 0
             self._data_stream = []
         elif ((sequence_num == (self._ref_seq_no + 1)) & (phase == self._blank_phase)):
             self._data_stream.append(self._previous_payload)
             self._data_stream.append(data[2:])
             log.debug("Forwarding packets with sequence numbers: {} and {}".format(self._ref_seq_no, sequence_num))
-            self._output_queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
+            self._queue_put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
             self._count = 0
             self._data_stream = []
         else:
@@ -382,6 +382,7 @@ class FitsWriterTransmitter(Thread):
         self._input_queue = input_queue
         self._fw_active_event = fw_active_event
         self._server_socket = None
+        self._transmit_socket = None
         self._time_stamp = ""
         self._integ_time = 16
         self._blank_phase = 1
