@@ -380,6 +380,7 @@ class SendToFW(Thread):
             try:
                 self._transmit_socket, addr = self._server_socket.accept()
                 log.info("Received connection from {}".format(addr))
+                return
             except socket.error as error:
                 error_id = error.args[0]
                 if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
