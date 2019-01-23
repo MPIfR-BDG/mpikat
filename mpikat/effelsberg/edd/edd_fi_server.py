@@ -172,6 +172,8 @@ class FitsInterfaceServer(AsyncDeviceServer):
         @param   channels       The number of channels expected
         @param   int_time       The integration time (seconds)
         @param   blank_phases   The number of blank phases (1-4)
+
+        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
         self.nbeams = beams
         self.nchannels = channels
@@ -186,6 +188,8 @@ class FitsInterfaceServer(AsyncDeviceServer):
     def request_start(self, req):
         """
         @brief    Start the FITS interface server capturing data
+
+        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
         if not self._configured:
             msg = "FITS interface server is not configured"
@@ -193,10 +197,11 @@ class FitsInterfaceServer(AsyncDeviceServer):
             return ("fail", msg)
         self._stop_threads()
         buffer_size = 4 * (self.nchannels + 2)
+        queue = Queue.Queue()
         self._capture_thread = CaptureData(self._capture_interface,
-            self._capture_port, buffer_size, AggregateData(2, self.nchannels))
+            self._capture_port, buffer_size, AggregateData(2, self.nchannels, queue))
         self._capture_thread.start()
-        self._transmit_thread = SendToFW(self._fw_ip, self._fw_port)
+        self._transmit_thread = FitsWriterTransmitter(self._fw_ip, self._fw_port, queue)
         self._transmit_thread.start()
         return ("ok",)
 
@@ -205,6 +210,8 @@ class FitsInterfaceServer(AsyncDeviceServer):
     def request_stop(self, req):
         """
         @brief    Stop the FITS interface server capturing data
+
+        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
         if not self._configured:
             msg = "FITS interface server is not configured"
@@ -250,7 +257,7 @@ class CaptureData(Thread):
             try:
                 data, addr = self._socket.recvfrom(self._buffer_size)
                 log.debug("Received {} byte message from {}".format(len(data), addr))
-                self._aggregator.start_data_aggregation(data)
+                self._aggregator.aggregate(data)
             except socket.error as error:
                 error_id = error.args[0]
                 if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
@@ -276,12 +283,13 @@ class AggregateData(object):
     @brief Aggregates spectrometer data from polarization channel 1 and 2 for the given time
            before sending to the fits writer
     """
-    def __init__(self, no_streams, no_channels, name="AggregateDate"):
+    def __init__(self, no_streams, no_channels, output_queue, name="AggregateData"):
         self._no_streams = no_streams
         self._no_channels = no_channels
+        self._output_queue = output_queue
         self._data_stream = []
         self._count = 0
-        self._stream1 = 0
+        self._previous_payload = 0
         self._ref_seq_no = 0
         self._time_info = ""
         self._blank_phase = 0
@@ -305,60 +313,68 @@ class AggregateData(object):
         seq_no = unpack_num[0]&mask
         return seq_no
 
-    #ISO time definition
     def isotime(self, s):
-        ms = int(10000*(s - int(s)))
+        ms = int(10000 * (s - int(s)))
         t = time.gmtime(s)
-        dateTime = str("%4.4i-%2.2i-%2.2iT%2.2i:%2.2i:%2.2i.%4.4iUTC " % (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, ms))
-        return dateTime
+        time_string = str("%4.4i-%2.2i-%2.2iT%2.2i:%2.2i:%2.2i.%4.4iUTC "%(
+            t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, ms))
+        return time_string
 
-    def start_data_aggregation(self, data_to_process):
+    def aggregate(self, data_to_process):
         self._count += 1
         data = np.zeros(2050,dtype=np.uint32)
         data = struct.unpack('>2050I', data_to_process)
         phase = self.phase_extract(data[0])
-        polID = self.pol_extract(data[0])
+        pol_id = self.pol_extract(data[0])
         sequence_num = self.extract_sequence_num(data[0],data[1])
-        log.debug("Extracted phase: {}, Extracted polID: {}, Extracted seq. no.: {}".format(phase, polID, sequence_num))
+        log.debug("Phase: {}, pol_id: {}, seq. no.: {}".format(
+            phase, pol_id, sequence_num))
         #Capturing logic based on sequence no.
-        if (self._count ==1):
+        if (self._count == 1):
             self._time_info = self.isotime(time.time())
-            self._stream1 = data[2:]
+            self._previous_payload = data[2:]
             self._ref_seq_no = sequence_num
             self._blank_phase = phase
-        elif ((sequence_num == (self._ref_seq_no+1)) & (phase == self._blank_phase)):
+        elif ((sequence_num == (self._ref_seq_no - 1)) & (phase == self._blank_phase)):
             #swap
             self._data_stream.append(data[2:])
-            self._data_stream.append(self._stream1)
-            data_Queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
+            self._data_stream.append(self._previous_payload)
+            self._output_queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
+            log.debug("Forwarding packets with sequence numbers: {} and {}".format(sequence_num, self._ref_seq_no))
             self._count = 0
             self._data_stream = []
-        elif ((sequence_num == (self._ref_seq_no-1)) & (phase == self._blank_phase)):
-            self._data_stream.append(self._stream1)
+        elif ((sequence_num == (self._ref_seq_no + 1)) & (phase == self._blank_phase)):
+            self._data_stream.append(self._previous_payload)
             self._data_stream.append(data[2:])
-            data_Queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
+            self._output_queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
+            log.debug("Forwarding packets with sequence numbers: {} and {}".format(self._ref_seq_no, sequence_num))
             self._count = 0
             self._data_stream = []
         else:
-            print "packet missing for the given stamp.."
+            log.warning("Packet (seq. num. {}) too far out of order an will be dropped".format(self._ref_seq_no))
             self._count = 1
             self._stream = data[2:]
+            self._time_info = self.isotime(time.time())
+            self._ref_seq_no = sequence_num
             self._blank_phase = phase
             self._data_stream = []
 
-    def stop_data_aggregation(self):
-        self._count = 0
-        self._data_stream = []
 
+class FitsWriterTransmitter(Thread):
+    """
+    @brief  Class for wrapping transmission of packets to the APEX FITS writer
+    """
+    def __init__(self, server_ip, tcp_port, input_queue, name="FitsWriterTransmitter"):
+        """
+        @brief  Construct the instance
 
-class SendToFW(Thread):
-    """
-    @brief The data is formated with fits header and sent to the fits writer
-    """
-    def __init__(self, server_ip, tcp_port, name="SendToFW"):
+        @param  server_ip   The local interface to bind to
+        @param  tcp_port    The local port to bind to
+        """
         Thread.__init__(self, name=name)
         self._server_addr = (server_ip, tcp_port)
-        self._server_socket = self._reset_server_socket()
+        self._input_queue = input_queue
+        self._server_socket = None
         self._time_stamp = ""
         self._integ_time = 16
         self._blank_phase = 1
@@ -366,15 +382,23 @@ class SendToFW(Thread):
         self._no_channels = 0
         self._sending_stop_event = Event()
 
-    def _reset_server_socket(self):
+    def create_server_socket(self):
+        """
+        @brief      Create the TCP listening socket
+
+        @detail     We use a non-blocking socket for all communications
+        """
+        log.debug("Creating the TCP server socket")
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.setblocking(False)
+        log.debug("Binding to {}".format(self._server_addr))
         self._server_socket.bind((self._server_addr))
         self._server_socket.listen(1)
-        return self._server_socket
-        #self._server_socket.settimeout(.start()
 
     def accept_connection(self):
+        """
+        @brief      Wait for an incoming connection
+        """
         log.info("Waiting on client connection from control system")
         while not self._sending_stop_event.is_set():
             try:
@@ -392,103 +416,104 @@ class SendToFW(Thread):
                 raise error
 
     def stop(self):
+        """
+        @brief      Stop the server
+        """
         self._sending_stop_event.set()
 
-    def pack_FI_metadata(self):
+    def pack_metadata(self):
         #IEEE - big endian, EEEI - little endian
-        headerData = ['EEEI']
+        header_data = ['EEEI']
         data_type = '<4s'
 
         #Data format of channel data: 'F' - Float
-        channelDataType = 'F   '
-        headerData.append(channelDataType)
+        channel_data_type = 'F   '
+        header_data.append(channel_data_type)
         data_type += '4s'
 
         #Length of the data package
-        lengthHeader = struct.calcsize('4s4si8s28siiii')
-        lengthSecHeaders = struct.calcsize('ii')*self._no_streams
-        lengthChannelData = struct.calcsize('f')*self._no_channels*self._no_streams
-        dataPackageLength = lengthHeader+lengthSecHeaders+lengthChannelData
-        headerData.append(dataPackageLength)
+        length_header = struct.calcsize('4s4si8s28siiii')
+        length_sec_headers = struct.calcsize('ii')*self._no_streams
+        length_channel_data = struct.calcsize('f')*self._no_channels*self._no_streams
+        data_package_length = length_header + length_sec_headers + length_channel_data
+        header_data.append(data_package_length)
         data_type += 'l'
 
         #Backend name
-        BEName = 'EDD     '
-        headerData.append(BEName)
+        backend_name = 'EDD     '
+        header_data.append(backend_name)
         data_type += '8s'
 
-       #Time info
-        headerData.append(self._time_stamp)
+        #Time info
+        header_data.append(self._time_stamp)
         data_type += '28s'
 
-       #Integration time
-        headerData.append(self._integ_time)
+        #Integration time
+        header_data.append(self._integ_time)
         data_type += 'l'
 
         #Phase number
-        headerData.append(self._blank_phase)
+        header_data.append(self._blank_phase)
         data_type += 'l'
 
         #Number of Back End Sections
-        headerData.append(self._no_streams)
+        header_data.append(self._no_streams)
         data_type += 'l'
 
         #Blocking factor
         blockingFactor =  1
-        headerData.append(blockingFactor)
+        header_data.append(blockingFactor)
         data_type += 'l'
 
-        return(data_type, headerData)
+        return(data_type, header_data)
 
     def pack_FI_data(self, data):
         data_type = ''
-        eddData = []
-        dataPointer = 0
-
-        for BESecIndex in range(self._no_streams):
-            BESecNum = BESecIndex+1
+        edd_data = []
+        data_pointer = 0
+        for backend_section_index in range(self._no_streams):
+            backend_section_num = backend_section_index+1
             data_type += 'l'
-            eddData.append(BESecNum)
+            edd_data.append(backend_section_num)
             data_type += 'l'
-            eddData.append(self._no_channels)
+            edd_data.append(self._no_channels)
             data_type += str('%sf' % self._no_channels)
+            edd_data.extend(data[data_pointer:data_pointer+self._no_channels])
+            data_pointer += self._no_channels
+        return(data_type, edd_data)
 
-            eddData.extend(data[dataPointer:dataPointer+self._no_channels])
-            dataPointer += self._no_channels
-
-        return(data_type, eddData)
-
-    def pack_tcpData(self, dataType, data):
+    def pack_tcp_data(self, dataType, data):
         packer = struct.Struct(dataType)
         packed_data = packer.pack(*data)
         return packed_data
 
     def read_from_queue(self, timeout=1):
+        log.debug("Fetching message from queue")
         while not self._sending_stop_event.is_set():
             try:
-                return data_Queue.get(True, timeout)
+                return self._input_queue.get(True, timeout)
             except Queue.Empty:
+                log.warning("No messages in queue")
                 continue
 
     def pack_data(self):
         self._time_stamp, self._no_streams, self._no_channels, data_from_queue = self.read_from_queue()
-
-        print "from sendto fw: ",
-        print "time_info: ", self._time_stamp,
-        print "streams: ", self._no_streams,
-        print "channels: ", self._no_channels,
-        print "data1 size: ", len(data_from_queue[0]),
-        print "data2 size: ", len(data_from_queue[1])
-        print "\n"
-        #self._time_stamp, self._no_streams, data_from_queue = data_Queue.get()
-        header_format, header_data = self.pack_FI_metadata()
-        data_to_format = np.reshape(data_from_queue, (self._no_streams*self._no_channels))
+        message = (
+            "Timestamp: {}".format(self._time_stamp),
+            "Nstreams: {}".format(self._no_streams),
+            "Nchannels: {}".format(self._no_channels),
+            "Data1 size: {}".format(len(data_from_queue[0])),
+            "Data2 size: {}".format(len(data_from_queue[1]))
+            )
+        log.debug("Packing data with parameters:\n{}".format("\n".join(messge)))
+        header_format, header_data = self.pack_metadata()
+        data_to_format = np.reshape(data_from_queue, (self._no_streams * self._no_channels))
         data_format, pol_data = self.pack_FI_data(data_to_format)
         tcp_data_format = header_format + data_format
         header_data.extend(pol_data)
         tcp_data = header_data
         log.debug("metadata: {}".format(tcp_data[0:11]))
-        data_to_send = self.pack_tcpData(tcp_data_format, tcp_data)
+        data_to_send = self.pack_tcp_data(tcp_data_format, tcp_data)
         return data_to_send
 
     def transmit(self):
@@ -497,6 +522,7 @@ class SendToFW(Thread):
             self._transmit_socket.send(data_to_fw)
 
     def run(self):
+        self.create_server_socket()
         self.accept_connection()
         try:
             self.transmit()
@@ -510,7 +536,7 @@ class SendToFW(Thread):
 
 @tornado.gen.coroutine
 def on_shutdown(ioloop, server):
-    print('Shutting down')
+    log.info("Shutting down FITS writer interface server")
     yield server.stop()
     ioloop.stop()
 
