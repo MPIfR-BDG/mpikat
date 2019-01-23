@@ -9,7 +9,7 @@ from tornado.gen import Return, coroutine
 from tornado.iostream import IOStream
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
-from mpikat.effelsberg.paf.pipeline_old import PIPELINES
+from mpikat.effelsberg.paf.pipeline import PIPELINES
 
 
 log = logging.getLogger("mpikat.paf_worker_server")
