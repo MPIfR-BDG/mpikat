@@ -22,8 +22,8 @@ import argparse
 
 log = logging.getLogger("mpikat.paf_pipeline")
 
-EXECUTE        = True
-#EXECUTE        = False
+#EXECUTE        = True
+EXECUTE        = False
 TRACK_STDERR   = False
 SOD            = True   # To start filterbank data or not
 
@@ -484,7 +484,7 @@ class Search(Pipeline):
         self.kill_process("baseband2filterbank_main")
         self.kill_process("heimdall")
         self.kill_process("dada_dbdisk")
-        
+        print "finished line 486" 
         if (self.state != "idle"):
             raise PipelineError(
                 "Can only configure pipeline in idle state")
