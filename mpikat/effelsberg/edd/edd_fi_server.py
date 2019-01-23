@@ -473,26 +473,28 @@ class SendToFW(Thread):
         #return data_to_send
         return tcp_data
 
+    def transmit(self):
+        while not self._sending_stop_event.is_set():
+            print "self._serverSoc:", type(self._serverSoc)
+            data_to_fw = self.pack_data()
+            print "to FW: ", data_to_fw[0:9]
+            self._tcpSoc.send(data_to_fw)
+
     def run(self):
-        while True:
-            #print "self._sending_stop_event.is_set: ", self._sending_stop_event.is_set()
-            if not self._sending_stop_event.is_set():
-                try:
-                    #pack data
-                    print "self._serverSoc:", type(self._serverSoc)
-                    data_to_fw = self.pack_data()
-                    print "to FW: ", data_to_fw[0:9]
-                    #send data
-                    # self._tcpSoc.send(data_to_fw)
-                except Exception as error:
-                    log.exception("Error on transmit to FW: {}".format(str(error)))
+        try:
+            self.transmit()
+        except Exception as error:
+            log.exception("Error on transmit to FW: {}".format(str(error)))
+        finally:
+            self._tcpSoc.shutdown(socket.SHUT_RDWR)
+            self._tcpSoc.close()
+            self._serverSoc.close()
 
 @tornado.gen.coroutine
 def on_shutdown(ioloop, server):
     print('Shutting down')
     yield server.stop()
     ioloop.stop()
-
 
 def main():
     usage = "usage: %prog [options]"
