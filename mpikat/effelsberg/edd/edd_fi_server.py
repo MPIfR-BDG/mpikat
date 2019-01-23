@@ -287,6 +287,7 @@ class AggregateData(object):
         self._no_streams = no_streams
         self._no_channels = no_channels
         self._output_queue = output_queue
+        self._fw_active_event = fw_active_event
         self._data_stream = []
         self._count = 0
         self._previous_payload = 0
