@@ -137,12 +137,14 @@ class PafWorkerServer(AsyncDeviceServer):
                 log.info("{}".format(msg))
                 self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
+                raise error
                 req.reply("fail", msg)
             log.info("Trying to create pipeline instance {}".format(pipeline_name))    
             try:
                 self._pipeline_instance = _pipeline_type()
             except Exception as error:
-                log.error(error) 
+                log.error(error)
+                raise error 
             self.add_pipeline_sensors()
             self._pipeline_instance.callbacks.add(self.state_change)
             try:
