@@ -10,8 +10,7 @@ import time
 import errno
 import threading
 import coloredlogs
-from threading import Thread
-from threading import Event
+from threading import Thread, Event
 from optparse import OptionParser
 from time import sleep
 import numpy as np
@@ -198,10 +197,11 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._stop_threads()
         buffer_size = 4 * (self.nchannels + 2)
         queue = Queue.Queue()
+        event = Event()
         self._capture_thread = CaptureData(self._capture_interface,
-            self._capture_port, buffer_size, AggregateData(2, self.nchannels, queue))
+            self._capture_port, buffer_size, AggregateData(2, self.nchannels, queue, event))
         self._capture_thread.start()
-        self._transmit_thread = FitsWriterTransmitter(self._fw_ip, self._fw_port, queue)
+        self._transmit_thread = FitsWriterTransmitter(self._fw_ip, self._fw_port, queue, event)
         self._transmit_thread.start()
         return ("ok",)
 
@@ -283,7 +283,7 @@ class AggregateData(object):
     @brief Aggregates spectrometer data from polarization channel 1 and 2 for the given time
            before sending to the fits writer
     """
-    def __init__(self, no_streams, no_channels, output_queue, name="AggregateData"):
+    def __init__(self, no_streams, no_channels, output_queue, fw_active_event, name="AggregateData"):
         self._no_streams = no_streams
         self._no_channels = no_channels
         self._output_queue = output_queue
@@ -320,6 +320,12 @@ class AggregateData(object):
             t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, ms))
         return time_string
 
+    def _queue_put(self, data):
+        if self._fw_active_event.is_set():
+            self._output_queue(data)
+        else:
+            log.warning("Dropping data as transmitter instance is not active")
+
     def aggregate(self, data_to_process):
         self._count += 1
         data = np.zeros(2050,dtype=np.uint32)
@@ -339,15 +345,15 @@ class AggregateData(object):
             #swap
             self._data_stream.append(data[2:])
             self._data_stream.append(self._previous_payload)
-            self._output_queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
             log.debug("Forwarding packets with sequence numbers: {} and {}".format(sequence_num, self._ref_seq_no))
+            self._output_queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
             self._count = 0
             self._data_stream = []
         elif ((sequence_num == (self._ref_seq_no + 1)) & (phase == self._blank_phase)):
             self._data_stream.append(self._previous_payload)
             self._data_stream.append(data[2:])
-            self._output_queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
             log.debug("Forwarding packets with sequence numbers: {} and {}".format(self._ref_seq_no, sequence_num))
+            self._output_queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
             self._count = 0
             self._data_stream = []
         else:
@@ -364,7 +370,7 @@ class FitsWriterTransmitter(Thread):
     """
     @brief  Class for wrapping transmission of packets to the APEX FITS writer
     """
-    def __init__(self, server_ip, tcp_port, input_queue, name="FitsWriterTransmitter"):
+    def __init__(self, server_ip, tcp_port, input_queue, fw_active_event, name="FitsWriterTransmitter"):
         """
         @brief  Construct the instance
 
@@ -374,6 +380,7 @@ class FitsWriterTransmitter(Thread):
         Thread.__init__(self, name=name)
         self._server_addr = (server_ip, tcp_port)
         self._input_queue = input_queue
+        self._fw_active_event = fw_active_event
         self._server_socket = None
         self._time_stamp = ""
         self._integ_time = 16
@@ -404,6 +411,7 @@ class FitsWriterTransmitter(Thread):
             try:
                 self._transmit_socket, addr = self._server_socket.accept()
                 log.info("Received connection from {}".format(addr))
+                self._fw_active_event.set()
                 return
             except socket.error as error:
                 error_id = error.args[0]
@@ -419,6 +427,7 @@ class FitsWriterTransmitter(Thread):
         """
         @brief      Stop the server
         """
+        self._fw_active_event.clear()
         self._sending_stop_event.set()
 
     def pack_metadata(self):
