@@ -505,7 +505,7 @@ class FitsWriterTransmitter(Thread):
             "Data1 size: {}".format(len(data_from_queue[0])),
             "Data2 size: {}".format(len(data_from_queue[1]))
             )
-        log.debug("Packing data with parameters:\n{}".format("\n".join(messge)))
+        log.debug("Packing data with parameters:\n{}".format("\n".join(message)))
         header_format, header_data = self.pack_metadata()
         data_to_format = np.reshape(data_from_queue, (self._no_streams * self._no_channels))
         data_format, pol_data = self.pack_FI_data(data_to_format)
