@@ -22,8 +22,8 @@ import argparse
 
 log = logging.getLogger("mpikat.paf_pipeline")
 
-EXECUTE        = True
-#EXECUTE        = False
+#EXECUTE        = True
+EXECUTE        = False
 TRACK_STDERR   = False
 SOD            = True   # To start filterbank data or not
 
