@@ -4,6 +4,8 @@ import coloredlogs
 import signal
 import json
 import os
+from astropy.time import Time
+import astropy.units as units
 from optparse import OptionParser
 from tornado.gen import Return, coroutine
 from tornado.iostream import IOStream
@@ -118,9 +120,9 @@ class PafWorkerServer(AsyncDeviceServer):
         self.add_sensor(self._mac_address)
 
 
-    @request(Str(),Str(),Str(),Str())
+    @request(Str(),Str(),Str())
     @return_reply(Str())
-    def request_configure(self, req, pipeline_name, utc_start, freq, ip):
+    def request_configure(self, req, pipeline_name, freq, ip):
         """
         @brief      Configure pipeline
 
@@ -149,12 +151,12 @@ class PafWorkerServer(AsyncDeviceServer):
             self._pipeline_instance.callbacks.add(self.state_change)
             try:
                 log.info("Trying to configure pipeline {}".format(pipeline_name))
-                self._pipeline_instance.configure(utc_start, freq, "10.17.8.1")
+                self._pipeline_instance.configure(Time.now() + 27.0*units.s, freq, "10.17.8.1")
             except Exception as error:
                 self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
                 msg = "Couldn't start configure pipeline instance {}".format(str(error))
-                log.info("{}".format(msg))
+                log.error("{}".format(msg))
                 req.reply("fail", msg)                
             #else:    
             msg = "pipeline instance {} configured".format(self._pipeline_sensor_name.value())
