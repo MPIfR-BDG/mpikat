@@ -142,7 +142,7 @@ class PafWorkerServer(AsyncDeviceServer):
             log.info("Trying to create pipeline instance {}".format(pipeline_name))    
             self._pipeline_instance = _pipeline_type()
             self.add_pipeline_sensors()
-            self._pipeline_instance.callbacks.add(self.state_change)
+            #self._pipeline_instance.callbacks.add(self.state_change)
             try:
                 log.info("Trying to configure pipeline {}".format(pipeline_name))
                 self._pipeline_instance.configure(utc_start, freq, str(self._ip_address.value()))
