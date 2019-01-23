@@ -916,8 +916,8 @@ if __name__ == "__main__":
     # The number is random. Everytime reconfigure stream, it will change the reference seconds, sometimes it is multiple times of 27 seconds, but in most case, it is not
     # To do, find a way to sync capture of beams
     # understand why the capture does not works sometimes, or try VMA
-    #freq              = 1340.5
-    freq              = 1337.0
+    freq              = 1340.5
+    #freq              = 1337.0
     utc_start_capture = Time.now() + PAF_CONFIG["prd"]*units.s # "YYYY-MM-DDThh:mm:ss", now + stream period (27 seconds)
     utc_start_process = utc_start_capture + PAF_CONFIG["prd"]*units.s
     
@@ -934,13 +934,13 @@ if __name__ == "__main__":
     ip       = "10.17.{}.{}".format(host_id, numa + 1)
     
     print "\nCreate pipeline ...\n"
-    search_mode = Search2Beams()
-    #search_mode = Search1Beam()
+    #search_mode = Search2Beams()
+    search_mode = Search1Beam()
     print "\nConfigure it ...\n"
     search_mode.configure(utc_start_capture, freq, ip)
 
-    print "\nStart it ...\n"
-    search_mode.start(utc_start_process, source_name, ra, dec)
+    #print "\nStart it ...\n"
+    #search_mode.start(utc_start_process, source_name, ra, dec)
     ##search_mode.stream_status()
     #print "\nStop it ...\n"
     #search_mode.stop()
