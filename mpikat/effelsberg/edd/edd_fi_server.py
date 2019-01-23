@@ -19,8 +19,6 @@ import struct
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import (Str, Int, request, return_reply)
 
-
-
 log = logging.getLogger("mpikat.edd_fi_server")
 
 data_Queue = Queue.Queue()
@@ -170,7 +168,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             return ("fail", msg)
         self._stop_capture()
         self._capture_thread = CaptureData(self._capture_interface,
-            self._capture_port, 4 * (self.nchannels + 2))
+            self._capture_port, 4 * (self.nchannels + 2), AggregateData(2, self.nchannels))
         self._capture_thread.start()
         return ("ok",)
 
@@ -192,12 +190,12 @@ class CaptureData(Thread):
     """
     @brief     Captures formatted data from a UDP socket
     """
-    def __init__(self, ip, port, buffer_size, name="CaptureData"):
+    def __init__(self, ip, port, buffer_size, aggregator, name="CaptureData"):
         Thread.__init__(self, name=name)
         self._address = (ip, port)
         self._buffer_size = buffer_size
         self._stop_event = Event()
-        self._aggregator = AggregateData(2)
+        self._aggregator = aggregator
 
     def _reset_socket(self):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -250,8 +248,9 @@ class AggregateData(object):
     @brief Aggregates spectrometer data from polarization channel 1 and 2 for the given time
            before sending to the fits writer
     """
-    def __init__(self, no_streams, name="AggregateDate"):
+    def __init__(self, no_streams, no_channels, name="AggregateDate"):
         self._no_streams = no_streams
+        self._no_channels = no_channels
         self._data_stream = []
         self._count = 0
         self._ref_seq_no = 0
@@ -425,7 +424,7 @@ class SendToFW(Thread):
         header_format = ""
         header_data = ""
         self._time_stamp, self._no_streams, self._no_channels, data_from_queue = data_Queue.get()
-        print "from sendto fw: ", 
+        print "from sendto fw: ",
         print "time_info: ", self._time_stamp,
         print "streams: ", self._no_streams,
         print "channels: ", self._no_channels,
