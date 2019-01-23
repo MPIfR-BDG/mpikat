@@ -253,8 +253,10 @@ class AggregateData(object):
         self._no_channels = no_channels
         self._data_stream = []
         self._count = 0
+        self._stream1 = 0
         self._ref_seq_no = 0
         self._time_info = ""
+        self._blank_phase = 0
 
     def phase_extract(self, num):
         mask = 0xf0000000
@@ -295,15 +297,23 @@ class AggregateData(object):
         #Capturing logic based on sequence no.
         if (self._count ==1):
             self._time_info = self.isotime(time.time())
-            self._data_stream = [data[2:]]
+            self._stream = data[2:]
             self._ref_seq_no = sequence_num
-        #TODO include time stamp in the queue
-        elif ((sequence_num == (self._ref_seq_no+1)) or (sequence_num == (self._ref_seq_no-1))):
+            self._blank_phase = phase
+        elif ((sequence_num == (self._ref_seq_no+1)) & (phase == self._blank_phase)):
+            #swap
+            stream2 = data[2:]
+            
             self._data_stream.append(data[2:])
-            print "data_aggregation: length of data_stream: ", len(self._data_stream)
-            data_Queue.put((self._time_info, self._no_streams, self._no_channels, self._data_stream))
+            data_Queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
             self._count = 0
             self._data_stream = []
+        elif ((sequence_num == (self._ref_seq_no-1)) & (phase == self._blank_phase)):
+            self._data_stream.append(data[2:])
+            data_Queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
+            self._count = 0
+            self._data_stream = []
+
         else:
             print "packet missing for the given stamp.."
             self._count = 0
