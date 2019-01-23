@@ -178,9 +178,9 @@ class FitsInterfaceServer(AsyncDeviceServer):
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
 
-        message = "Num beams: {}\nNum channels: {}\nIntegration time: {}\nNum blank phases: {}".format(
+        message = "nbeams={}, nchannels={}, integration_time={}, nblank_phases={}".format(
             beams, channels, int_time, blank_phases)
-        log.info("Configuring FITS interface server with params:\n{}".format(message))
+        log.info("Configuring FITS interface server with params: {}".format(message))
         self.nbeams = beams
         self.nchannels = channels
         self.integration_time = int_time
@@ -515,7 +515,7 @@ class FitsWriterTransmitter(Thread):
             try:
                 return self._input_queue.get(True, timeout)
             except Queue.Empty:
-                log.warning("No messages in queue")
+                log.debug("No messages in queue")
                 continue
         raise StopEventException
 
