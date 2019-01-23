@@ -325,7 +325,7 @@ class AggregateData(object):
         if self._fw_active_event.is_set():
             self._output_queue.put(data)
         else:
-            log.warning("Dropping data as transmitter instance is not active")
+            log.debug("Dropping data as transmitter instance is not active")
 
     def aggregate(self, data_to_process):
         self._count += 1
@@ -528,9 +528,11 @@ class FitsWriterTransmitter(Thread):
         return data_to_send
 
     def transmit(self):
+        log.info("Beginning data transmission to FITS writer")
         while not self._sending_stop_event.is_set():
             data_to_fw = self.pack_data()
             self._transmit_socket.send(data_to_fw)
+        log.info("Finishing data transmission to FITS writer")
 
     def run(self):
         self.create_server_socket()
