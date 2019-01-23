@@ -143,6 +143,7 @@ class PafWorkerServer(AsyncDeviceServer):
                 self.add_pipeline_sensors()
                 self._pipeline_instance.callbacks.add(self.state_change)
             try:
+                log.info("Trying to configure pipeline {}".format(pipeline_name))
                 self._pipeline_instance.configure(utc_start, freq, str(self._ip_address.value()))
             except Exception as error:
                 self._pipeline_sensor_status.set_value("error")
