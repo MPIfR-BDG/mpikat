@@ -428,6 +428,7 @@ class FitsWriterTransmitter(Thread):
                     raise error
             except Exception as error:
                 raise error
+        raise StopEventException
 
     def stop(self):
         """
@@ -541,8 +542,8 @@ class FitsWriterTransmitter(Thread):
 
     def run(self):
         self.create_server_socket()
-        self.accept_connection()
         try:
+            self.accept_connection()
             self.transmit()
         except StopEventException:
             pass
