@@ -1,3 +1,4 @@
+import threading
 import logging
 import tornado
 import coloredlogs
@@ -136,12 +137,12 @@ class PafWorkerServer(AsyncDeviceServer):
                 _pipeline_type = PIPELINES[self._pipeline_sensor_name.value()]
             except KeyError as error:
                 msg = "No pipeline called '{}', available pipeline are: {}".format(self._pipeline_sensor_name.value(), " ".join(PIPELINES.keys()))
-                log.info("{}".format(msg))
+                log.error("{}".format(msg))
                 req.reply("fail", msg)
                 self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
                 raise error 
-            log.info("Trying to create pipeline instance {}".format(pipeline_name))    
+            log.debug("Trying to create pipeline instance {}".format(pipeline_name))    
             try:
                 self._pipeline_instance = _pipeline_type()
             except Exception as error:
@@ -150,7 +151,7 @@ class PafWorkerServer(AsyncDeviceServer):
             self.add_pipeline_sensors()
             self._pipeline_instance.callbacks.add(self.state_change)
             try:
-                log.info("Trying to configure pipeline {}".format(pipeline_name))
+                log.debug("Trying to configure pipeline {}".format(pipeline_name))
                 self._pipeline_instance.configure(Time.now() + 27.0*units.s, freq, "10.17.8.1")
             except Exception as error:
                 self._pipeline_sensor_status.set_value("error")
@@ -170,7 +171,7 @@ class PafWorkerServer(AsyncDeviceServer):
             log.info("{}".format(msg))
             return ("fail", msg)
 
-    @request(Str(),Str(),Str(),Str())
+    @request(Str(),Str(),Str())
     @return_reply(Str())
     def request_start(self, req, source_name, ra, dec):
         """
