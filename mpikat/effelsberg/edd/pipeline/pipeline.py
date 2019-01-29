@@ -68,7 +68,8 @@ class Udp2Db2Dspsr(object):
         self._dada_key = None
         self._config = None
 
-    def configure(self, config, sensors):
+    #def configure(self, config, sensors):
+    def configure(self):    
         self.state = "ready"
         pass
         self._config = config
@@ -86,7 +87,8 @@ class Udp2Db2Dspsr(object):
             ipc_mode="host",
             ulimits=self.ulimits)
 
-    def start(self, sensors):
+    #def start(self, sensors):
+    def start(self):        
         self.state = "start"
         pass
         header = self._config["dada_header_params"]
