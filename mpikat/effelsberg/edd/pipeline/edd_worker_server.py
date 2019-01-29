@@ -9,7 +9,7 @@ from tornado.gen import Return, coroutine
 from tornado.iostream import IOStream
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
-from mpikat.effelsberg.edd.pipeline.pipeline import PIPELINE
+from mpikat.effelsberg.edd.pipeline.pipeline import PIPELINES
 
 
 log = logging.getLogger("mpikat.edd.pipeline.edd_worker_server")
@@ -95,17 +95,6 @@ class PafWorkerServer(AsyncDeviceServer):
             default="idle",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._pipeline_sensor_status)
-
-        self._ip_address = Sensor.string("ip",
-            description="the ip address of the node controller",
-            default=os.environ['PAF_NODE_IP'])
-        self.add_sensor(self._ip_address)
-
-        self._mac_address = Sensor.string("mac",
-            description="the mac address of the node controller",
-            default=os.environ['PAF_NODE_MAC'])
-        self.add_sensor(self._mac_address)
-
 
     @request(Str(),Str(),Str(),Str())
     @return_reply(Str())
@@ -262,9 +251,9 @@ def main():
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('-H', '--host', dest='host', type=str,
-        help='Host interface to bind to')
+        help='Host interface to bind to', default="127.0.0.1")
     parser.add_option('-p', '--port', dest='port', type=long,
-        help='Port number to bind to')
+        help='Port number to bind to',default=5000)
     parser.add_option('', '--log_level',dest='log_level',type=str,
         help='logging level',default="INFO")
     (opts, args) = parser.parse_args()
