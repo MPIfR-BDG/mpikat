@@ -41,6 +41,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         """
         page = urlopen(gitpath)
         self._config = page.read()
+        log.info("Received configuration through SCPI interface:\n{}".format(self._config))
         page.close()
 
     @scpi_request()
