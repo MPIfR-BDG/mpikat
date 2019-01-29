@@ -22,6 +22,9 @@ log = logging.getLogger("mpikat.edd_fi_server")
 
 data_Queue = Queue.Queue()
 
+class StopEventException(Exception):
+    pass
+
 class FitsInterfaceServer(AsyncDeviceServer):
     """
     Class providing an interface between EDD processes and the
@@ -174,6 +177,10 @@ class FitsInterfaceServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
+
+        message = "nbeams={}, nchannels={}, integration_time={}, nblank_phases={}".format(
+            beams, channels, int_time, blank_phases)
+        log.info("Configuring FITS interface server with params: {}".format(message))
         self.nbeams = beams
         self.nchannels = channels
         self.integration_time = int_time
@@ -194,6 +201,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             msg = "FITS interface server is not configured"
             log.error(msg)
             return ("fail", msg)
+        log.info("Starting FITS interface capture")
         self._stop_threads()
         buffer_size = 4 * (self.nchannels + 2)
         queue = Queue.Queue()
@@ -217,6 +225,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             msg = "FITS interface server is not configured"
             log.error(msg)
             return ("fail", msg)
+        log.info("Stopping FITS interface capture")
         self._stop_threads()
         return ("ok",)
 
@@ -399,6 +408,7 @@ class FitsWriterTransmitter(Thread):
         """
         log.debug("Creating the TCP server socket")
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._server_socket.setblocking(False)
         log.debug("Binding to {}".format(self._server_addr))
         self._server_socket.bind((self._server_addr))
@@ -408,7 +418,7 @@ class FitsWriterTransmitter(Thread):
         """
         @brief      Wait for an incoming connection
         """
-        log.info("Waiting on client connection from control system")
+        log.info("Waiting on client connection from FITS writer")
         while not self._sending_stop_event.is_set():
             try:
                 self._transmit_socket, addr = self._server_socket.accept()
@@ -424,6 +434,7 @@ class FitsWriterTransmitter(Thread):
                     raise error
             except Exception as error:
                 raise error
+        raise StopEventException
 
     def stop(self):
         """
@@ -504,8 +515,9 @@ class FitsWriterTransmitter(Thread):
             try:
                 return self._input_queue.get(True, timeout)
             except Queue.Empty:
-                log.warning("No messages in queue")
+                log.debug("No messages in queue")
                 continue
+        raise StopEventException
 
     def pack_data(self):
         self._time_stamp, self._no_streams, self._no_channels, self._blank_phase, data_from_queue = self.read_from_queue()
@@ -536,15 +548,19 @@ class FitsWriterTransmitter(Thread):
 
     def run(self):
         self.create_server_socket()
-        self.accept_connection()
         try:
+            self.accept_connection()
             self.transmit()
+        except StopEventException:
+            pass
         except Exception as error:
             log.exception("Error on transmit to FW: {}".format(str(error)))
         finally:
             if self._transmit_socket:
+                log.debug("Closing transmit socket")
                 self._transmit_socket.shutdown(socket.SHUT_RDWR)
                 self._transmit_socket.close()
+            log.debug("Closing server socket")
             self._server_socket.close()
 
 @tornado.gen.coroutine
