@@ -3,10 +3,12 @@ import time
 import socket
 import select
 import json
+import coloredlogs
+import signal
 from lxml import etree
 from threading import Thread, Event, Lock
 from tornado.gen import coroutine
-from tornado.ioloop import PeriodicCallback
+from tornado.ioloop import PeriodicCallback, IOLoop
 from katcp import Sensor, AsyncDeviceServer, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str
 from mpikat.effelsberg.status_config import EFF_JSON_CONFIG
@@ -21,7 +23,7 @@ TYPE_CONVERTER = {
 JSON_STATUS_MCAST_GROUP = '224.168.2.132'
 JSON_STATUS_PORT = 1602
 
-log = logging.getLogger('reynard.effelsberg.status_server')
+log = logging.getLogger('mpikat.effelsberg.status_server')
 
 STATUS_MAP = {
     "error": 3,  # Sensor.STATUSES 'error'
@@ -306,3 +308,42 @@ class JsonStatusServer(AsyncDeviceServer):
                     "Unknown sensor type '{0}' requested".format(
                         params["type"]))
             self.add_sensor(sensor)
+
+
+@coroutine
+def on_shutdown(ioloop, server):
+    log.info("Shutting down server")
+    yield server.stop()
+    ioloop.stop()
+
+def main():
+    usage = "usage: %prog [options]"
+    parser = OptionParser(usage=usage)
+    parser.add_option('-H', '--host', dest='host', type=str,
+        help='Host interface to bind to')
+    parser.add_option('-p', '--port', dest='port', type=long,
+        help='Port number to bind to')
+    parser.add_option('', '--log-level',dest='log_level',type=str,
+        help='Port number of status server instance',default="INFO")
+    (opts, args) = parser.parse_args()
+    logging.getLogger().addHandler(logging.NullHandler())
+    logger = logging.getLogger('mpikat')
+    logging.getLogger('katcp').setLevel(logging.DEBUG)
+    coloredlogs.install(
+        fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
+        level=opts.log_level.upper(),
+        logger=logger)
+    ioloop = IOLoop.current()
+    log.info("Starting JsonStatusServer instance")
+    server = JsonStatusServer(opts.host, opts.port)
+    signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
+        on_shutdown, ioloop, server))
+    def start_and_display():
+        server.start()
+        log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
+    ioloop.add_callback(start_and_display)
+    ioloop.start()
+
+if __name__ == "__main__":
+    from optparse import OptionParser
+    main()
