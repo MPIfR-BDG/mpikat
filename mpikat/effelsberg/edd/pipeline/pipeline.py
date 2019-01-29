@@ -71,7 +71,7 @@ class Udp2Db2Dspsr(object):
     #def configure(self, config, sensors):
     def configure(self):    
         self.state = "ready"
-        pass
+        return
         """
         self._config = config
         self._dada_key = config["dada_db_params"]["key"]
@@ -91,7 +91,7 @@ class Udp2Db2Dspsr(object):
     #def start(self, sensors):
     def start(self):        
         self.state = "start"
-        pass
+        return
         header = self._config["dada_header_params"]
         header["ra"] = sensors["ra"]
         header["dec"] = sensors["dec"]
@@ -230,7 +230,7 @@ class Udp2Db2Dspsr(object):
 
     def stop(self):
         self.state = "ready"
-        pass
+        return
         for name in ["dspsr", "udp2db", "psrchive"]:
             container = self._docker.get(name)
             try:
@@ -250,7 +250,7 @@ class Udp2Db2Dspsr(object):
 
     def deconfigure(self):
         self.state = "idle"
-        pass
+        return
         log.debug("Destroying dada buffer")
         cmd = "dada_db -d -k {0}".format(self._dada_key)
         log.debug("Running command: {0}".format(cmd))
