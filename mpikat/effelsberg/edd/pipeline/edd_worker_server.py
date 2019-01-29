@@ -50,25 +50,7 @@ class PafWorkerServer(AsyncDeviceServer):
         log.info('New state of the pipeline is {}'.format(str(state)))
         self._pipeline_sensor_status.set_value(str(state))
 
-        #do I do things here?
-        """
-        if callback.state=="error":
-            @coroutine
-            def stop_pipeline():
-                try:
-                    self._pipeline_instance.stop()
-                except Exception as error:
-                    msg = "Couldn't stop pipeline {}".format(error)
-                    log.info("{}".format(msg))
-                    req.reply("fail", msg)
-                    self._pipeline_sensor_status.set_value("error")
-                    raise error
-                msg = "Stop pipeline {}".format(self._pipeline_sensor_name.value())
-                log.info("{}".format(msg))
-                req.reply("ok", msg)
-            self.ioloop.add_callback(configure_pipeline)
-            raise AsyncReply
-        """
+
     def start(self):
         super(PafWorkerServer, self).start()
 

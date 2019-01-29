@@ -8,7 +8,7 @@ from datetime import datetime
 #from reynard.pipelines import Pipeline, reynard_pipeline
 #from reynard.dada import render_dada_header, make_dada_key_string
 
-log = logging.getLogger("reynard.DspsrPipeline")
+log = logging.getLogger("mpikat.edd.pipeline.pipeline")
 
 #
 # NOTE: For this to run properly the host /tmp/
@@ -18,6 +18,10 @@ log = logging.getLogger("reynard.DspsrPipeline")
 #
 
 PIPELINES = {}
+
+PIPELINE_STATES = ["idle", "configuring", "ready",
+                   "starting", "running", "stopping",
+                   "deconfiguring", "error"]
 
 DESCRIPTION = """
 This pipeline captures data from the network and passes it to a dada
@@ -65,6 +69,7 @@ class Udp2Db2Dspsr(object):
         self._config = None
 
     def configure(self, config, sensors):
+        self.state = "ready"
         pass
         self._config = config
         self._dada_key = config["dada_db_params"]["key"]
@@ -82,6 +87,8 @@ class Udp2Db2Dspsr(object):
             ulimits=self.ulimits)
 
     def start(self, sensors):
+        self.state = "start"
+        pass
         header = self._config["dada_header_params"]
         header["ra"] = sensors["ra"]
         header["dec"] = sensors["dec"]
@@ -219,6 +226,8 @@ class Udp2Db2Dspsr(object):
             ulimits=self.ulimits)
 
     def stop(self):
+        self.state = "ready"
+        pass
         for name in ["dspsr", "udp2db", "psrchive"]:
             container = self._docker.get(name)
             try:
@@ -237,6 +246,8 @@ class Udp2Db2Dspsr(object):
                 pass
 
     def deconfigure(self):
+        self.state = "idle"
+        pass
         log.debug("Destroying dada buffer")
         cmd = "dada_db -d -k {0}".format(self._dada_key)
         log.debug("Running command: {0}".format(cmd))
