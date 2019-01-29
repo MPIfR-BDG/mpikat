@@ -223,7 +223,7 @@ class EddMasterController(MasterController):
                              {
                                  "id": "roach2_spectrometer",
                                  "type": "roach2",
-                                 "icom_id": "R2-EDD",
+                                 "icom_id": "R2-E01",
                                  "firmware": "EDDFirmware",
                                  "commands":
                                  [

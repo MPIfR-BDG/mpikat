@@ -57,7 +57,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
             raise EddScpiInterfaceError("No configuration set for EDD")
         else:
             self._ioloop.add_callback(self._make_coroutine_wrapper(req,
-                self._mc.configure, json.dumps(self._config)))
+                self._mc.configure, self._config))
 
     @scpi_request()
     @raise_or_ok
