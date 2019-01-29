@@ -189,6 +189,8 @@ class EddMasterController(MasterController):
             yield client.set_sampling_rate(config["sampling_rate"])
             yield client.set_bit_width(config["bit_width"])
             yield client.set_destinations(config["v_destinations"], config["h_destinations"])
+            for interface, ip_address in config["interface_addresses"].items():
+                yield client.set_interface_address(interface, ip_address)
             yield client.synchronize()
             yield client.capture_start()
         except Exception as error:

@@ -96,6 +96,11 @@ class DigitiserPacketiserClient(object):
         yield self._safe_request("capture_destination", "h", h_dest)
 
     @coroutine
+    def set_interface_address(self, intf, ip):
+        """blah"""
+        yield self._safe_request("rxs_packetizer_40g_source_ip_set", intf, ip)
+
+    @coroutine
     def capture_start(self):
         """
         @brief      Start data transmission for both polarisation channels

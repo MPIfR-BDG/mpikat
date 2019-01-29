@@ -7,7 +7,11 @@
             "sampling_rate": 2600000000.0,
             "bit_width": 12,
             "v_destinations": "225.0.0.152+3:7148",
-            "h_destinations": "225.0.0.156+3:7148"
+            "h_destinations": "225.0.0.156+3:7148",
+            "interface_addresses": {
+                "0":"10.10.1.30",
+                "1":"10.10.1.31"
+            }
         }
     ],
     "products":
@@ -16,12 +20,12 @@
             "id": "roach2_spectrometer",
             "type": "roach2",
             "icom_id": "R2-E01",
-            "firmware": "EDDFirmwareWithBlankSync",
+            "firmware": "EDDFirmware",
             "commands":
             [
                 ["program", []],
                 ["start", []],
-                ["set_integration_period", [1000.0]],
+                ["set_integration_period", [256.0]],
                 ["set_destination_address", ["10.10.1.12", 60001]]
             ]
         }
@@ -34,7 +38,7 @@
             "address": ["134.104.70.63", 5000],
             "nbeams": 1,
             "nchans": 2048,
-            "integration_time": 1.0,
+            "integration_time": 0.256,
             "blank_phases": 1
         }
     ]
