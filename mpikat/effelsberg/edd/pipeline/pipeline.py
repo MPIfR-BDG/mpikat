@@ -4,7 +4,7 @@ import os
 import time
 import shutil
 from datetime import datetime
-#from docker.errors import APIError
+from subprocess import check_output, PIPE, Popen
 #from reynard.pipelines import Pipeline, reynard_pipeline
 #from reynard.dada import render_dada_header, make_dada_key_string
 
@@ -118,6 +118,7 @@ class Udp2Db2Dspsr(object):
         self._volumes = ["/tmp/:/scratch/"]
         self._dada_key = None
         self._config = None
+        self._udp2dp_process = None
 
     # def configure(self, config, sensors):
     def configure(self):
@@ -132,7 +133,9 @@ class Udp2Db2Dspsr(object):
         cmd = "dada_db -k {key} {args}".format(**
                                                dada_header_params["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
-        # replace with subprocess
+        process = Popen(cmd, stdout=PIPE, shell=True)
+        process.wait()
+
         #self._docker.run(
         #    self._config["dada_db_params"]["image"],
         #    cmd, remove=True,
@@ -180,10 +183,6 @@ class Udp2Db2Dspsr(object):
         dada_header_file.close()
         dada_key_file.close()
 
-        self._set_watchdog("dspsr", callback=self.stop)
-        self._set_watchdog("udp2db")
-        self._set_watchdog("psrchive")
-
         ###################
         # Start up DSPSR
         ###################
@@ -199,7 +198,9 @@ class Udp2Db2Dspsr(object):
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(out_path)
         log.debug(cmd)
-        # replace with subprocess
+        process = Popen(cmd, stdout=PIPE, shell=True)
+        process.wait()
+
         self._docker.run(
             self._config["dspsr_params"]["image"],
             cmd,
@@ -211,7 +212,9 @@ class Udp2Db2Dspsr(object):
             source_name=source_name,
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
-        # replace with subprocess
+        process = Popen(cmd, stdout=PIPE, shell=True)
+        process.wait()
+        """
         self._docker.run(
             self._config["dspsr_params"]["image"],
             cmd,
@@ -222,27 +225,32 @@ class Udp2Db2Dspsr(object):
             working_dir=out_path,
             ulimits=self.ulimits,
             requires_nvidia=True)
-
+        """
         ############################
         # Start up PSRCHIVE monitor
         ############################
 
+        #Do we need this monitor?
         host_out_dir = os.path.join(
             self._config["base_monitor_dir"], "timing", source_name, tstr)
         out_dir = os.path.join("/output/timing/", source_name, tstr)
         log.debug("Creating directory: {}".format(out_dir))
-        # replace with subprocess
+        process = Popen(cmd, stdout=PIPE, shell=True)
+        process.wait()
+        """
         self._docker.run(
             self._config["psrchive_params"]["image"],
             "mkdir -p {}".format(out_dir),
             volumes=["{}:/output/".format(self._config["base_monitor_dir"])],
             remove=True)
-
+        """
         volumes = [
             "{}:/output/".format(host_out_dir),
             "{}:/input/".format(host_out_path)
         ]
-        # replace with subprocess
+        process = Popen(cmd, stdout=PIPE, shell=True)
+        process.wait()
+        """
         self._docker.run(
             self._config["psrchive_params"]["image"],
             self._config["psrchive_params"]["cmd"],
@@ -251,7 +259,7 @@ class Udp2Db2Dspsr(object):
             cpuset_cpus="2",
             working_dir="/dev/shm",
             volumes=volumes)
-
+        """
         ####################
         # Start up UDP2DB
         ####################
@@ -263,8 +271,8 @@ class Udp2Db2Dspsr(object):
             headerfile=dada_header_file.name)
         cmd = 'bash -c "{cmd}"'.format(cmd=cmd)
         log.debug("Running command: {0}".format(cmd))
-        # replace with subprocess
-
+        self._udp2dp_process = Popen(cmd, shell=True)
+        """
         self._docker.run(
             self._config["udp2db_params"]["image"],
             cmd,
@@ -279,26 +287,14 @@ class Udp2Db2Dspsr(object):
             network_mode="host",
             requires_vma=True,
             ulimits=self.ulimits)
-
+        """
     def stop(self):
-        self.state = "ready"
         return
-        for name in ["dspsr", "udp2db", "psrchive"]:
-            container = self._docker.get(name)
-            try:
-                log.debug(
-                    "Stopping {name} container".format(
-                        name=container.name))
-                container.kill()
-            except APIError:
-                pass
-            try:
-                log.debug(
-                    "Removing {name} container".format(
-                        name=container.name))
-                container.remove()
-            except BaseException:
-                pass
+        try:
+            self._udp2dp_process.terminate()
+        except Exception:
+            pass
+        self.state = "ready"
 
     def deconfigure(self):
         self.state = "idle"
@@ -306,5 +302,8 @@ class Udp2Db2Dspsr(object):
         log.debug("Destroying dada buffer")
         cmd = "dada_db -d -k {0}".format(self._dada_key)
         log.debug("Running command: {0}".format(cmd))
-        # replace with subprocess
+        process = Popen(cmd, stdout=PIPE, shell=True)
+        process.wait()
+        """
         self._docker.run("psr-capture", cmd, remove=True, ipc_mode="host")
+        """
