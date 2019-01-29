@@ -72,6 +72,7 @@ class Udp2Db2Dspsr(object):
     def configure(self):    
         self.state = "ready"
         pass
+        """
         self._config = config
         self._dada_key = config["dada_db_params"]["key"]
         try:
@@ -86,7 +87,7 @@ class Udp2Db2Dspsr(object):
             cmd, remove=True,
             ipc_mode="host",
             ulimits=self.ulimits)
-
+"""
     #def start(self, sensors):
     def start(self):        
         self.state = "start"
