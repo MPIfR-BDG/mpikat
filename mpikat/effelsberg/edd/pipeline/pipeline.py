@@ -70,7 +70,7 @@ class Udp2Db2Dspsr(object):
 
     #def configure(self, config, sensors):
     def configure(self):    
-        self.state = "ready"
+        #self.state = "ready"
         pass
         """
         self._config = config
