@@ -90,7 +90,7 @@ class Udp2Db2Dspsr(object):
 """
     #def start(self, sensors):
     def start(self):        
-        self.state = "start"
+        self.state = "running"
         return
         header = self._config["dada_header_params"]
         header["ra"] = sensors["ra"]
