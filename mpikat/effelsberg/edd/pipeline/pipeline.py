@@ -23,6 +23,57 @@ PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
                    "deconfiguring", "error"]
 
+dada_header_params = {"dada_header_params":
+                      {
+                          "filesize": 25600000000,
+                          "telescope": "Effelsberg",
+                          "instrument": "asterix",
+                          "frequency_mhz": 1370,
+                          "receiver_name": "P200-3",
+                          "bandwidth": 320,
+                          "tsamp": 0.00156250,
+                          "nbit": 8,
+                          "ndim": 1,
+                          "npol": 2,
+                          "nchan": 1,
+                          "resolution": 1,
+                          "dsb": 1
+                      }}
+
+udp2db_params = {"udp2db_params":
+                 {
+                     "image": "docker.mpifr-bonn.mpg.de:5000/psr-capture:asterix",
+                     "args": "-v -p 48500"
+                 }}
+
+psrchive_params = {"psrchive_params":
+                   {
+                       "image": "docker.mpifr-bonn.mpg.de:5000/psrchive:latest",
+                       "cmd": "archive_directory_monitor.py -i /input/ -o /output/"
+                   }}
+
+dspsr_params = {"dspsr_params":
+                {
+                    "image": "docker.mpifr-bonn.mpg.de:5000/dspsr:cuda8.0",
+                    "args": "-cpu 2,3 -L 10 -r -F 256:D -fft-bench -cuda 0,0 -minram 1024"
+                }}
+
+dada_db_params = {"dada_db_params":
+                  {
+                      "image": "docker.mpifr-bonn.mpg.de:5000/psr-capture:asterix",
+                      "args": "-n 8 -b 1280000000 -p -l",
+                      "key": "dada"
+                  }}
+
+dada_dbmonitor_params = {"dada_dbmonitor_params":
+                         {
+                             "image": "docker.mpifr-bonn.mpg.de:5000/psr-capture:asterix",
+                             "args": ""
+                         }}
+
+sensors = {"ra": 123, "dec": -10, "source-name": "Crab",
+           "scannum": 0, "subscannum": 1, "timestamp": 0}
+
 DESCRIPTION = """
 This pipeline captures data from the network and passes it to a dada
 ring buffer for processing by DSPSR
@@ -68,28 +119,28 @@ class Udp2Db2Dspsr(object):
         self._dada_key = None
         self._config = None
 
-    #def configure(self, config, sensors):
-    def configure(self):    
+    # def configure(self, config, sensors):
+    def configure(self):
         self.state = "ready"
         return
-        """
-        self._config = config
-        self._dada_key = config["dada_db_params"]["key"]
+        self._config = dada_header_params
+        self._dada_key = dada_header_params["dada_db_params"]["key"]
         try:
-            self._deconfigure()
+            self.sdeconfigure()
         except Exception:
             pass
-        cmd = "dada_db -k {key} {args}".format(**config["dada_db_params"])
+        cmd = "dada_db -k {key} {args}".format(**
+                                               dada_header_params["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
         # replace with subprocess
-        self._docker.run(
-            self._config["dada_db_params"]["image"],
-            cmd, remove=True,
-            ipc_mode="host",
-            ulimits=self.ulimits)
-"""
-    #def start(self, sensors):
-    def start(self):        
+        #self._docker.run(
+        #    self._config["dada_db_params"]["image"],
+        #    cmd, remove=True,
+        #    ipc_mode="host",
+        #    ulimits=self.ulimits)
+
+    # def start(self, sensors):
+    def start(self):
         self.state = "running"
         return
         header = self._config["dada_header_params"]
@@ -213,6 +264,7 @@ class Udp2Db2Dspsr(object):
         cmd = 'bash -c "{cmd}"'.format(cmd=cmd)
         log.debug("Running command: {0}".format(cmd))
         # replace with subprocess
+
         self._docker.run(
             self._config["udp2db_params"]["image"],
             cmd,
