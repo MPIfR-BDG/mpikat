@@ -91,7 +91,7 @@ class EddRoach2ProductController(ProductController):
                     parent master controller.
         """
         yield self._r2rm_client.until_synced(2)
-        response = yield self._r2rm_client.req.deconfigure_board(self._icom_id, EDD_R2RM_USER, self._firmware)
+        response = yield self._r2rm_client.req.force_deconfigure_board(self._icom_id)
         if not response.reply.reply_ok():
             self.log.error("Error on deconfigure request: {}".format(response.reply.arguments[1]))
             raise EddRoach2ProductError(response.reply.arguments[1])
