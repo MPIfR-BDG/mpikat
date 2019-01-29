@@ -2,14 +2,6 @@
     "packetisers":
     [
         {
-            "id": "faraday_room_digitiser",
-            "address": ["134.104.73.132", 7147],
-            "sampling_rate": 2600000000.0,
-            "bit_width": 12,
-            "v_destinations": "225.0.0.172+3:7148",
-            "h_destinations": "225.0.0.176+3:7148"
-        },
-        {
             "id": "ubb_digitiser",
             "address": ["134.104.70.65", 7147],
             "sampling_rate": 2600000000.0,
