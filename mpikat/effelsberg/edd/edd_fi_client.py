@@ -71,15 +71,13 @@ class EddFitsInterfaceClient(object):
         integration_time = config["integration_time"]
         blank_phases = config["blank_phases"]
         yield self._request_helper("configure", nbeams, nchans, integration_time, blank_phases)
-        yield self._request_helper("start")
 
     @coroutine
     def capture_start(self):
         """
         @brief      Start the FITS interface capturing data
         """
-        #yield self._request_helper("start")
-        pass
+        yield self._request_helper("start")
 
     @coroutine
     def capture_stop(self):
