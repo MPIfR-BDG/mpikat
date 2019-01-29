@@ -159,7 +159,7 @@ class ScpiAsyncDeviceServer(object):
     @coroutine
     def _dispatch(self, req):
         handler_name = "request_{}".format(req.command.replace(":","_"))
-        log.info("Searching for handler '{}'".format(handler_name))
+        log.debug("Searching for handler '{}'".format(handler_name))
         try:
             handler = self.__getattribute__(handler_name)
         except AttributeError:
@@ -171,7 +171,7 @@ class ScpiAsyncDeviceServer(object):
             req.error(str(error))
             raise error
         else:
-            log.info('exec handler')
+            log.debug('Executing handler')
             handler(req)
 
 
