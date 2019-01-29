@@ -38,7 +38,7 @@
             "address": ["134.104.70.63", 5000],
             "nbeams": 1,
             "nchans": 2048,
-            "integration_time": 1.0,
+            "integration_time": 0.256,
             "blank_phases": 1
         }
     ]
