@@ -14,7 +14,6 @@ from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_ke
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
-
 #
 # NOTE: For this to run properly the host /tmp/
 # directory should be mounted onto the launching container.
@@ -29,55 +28,35 @@ PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
                    "deconfiguring", "error"]
 
-dada_header_params = {"dada_header_params":
-                      {
-                          "filesize": 25600000000,
-                          "telescope": "Effelsberg",
-                          "instrument": "asterix",
-                          "frequency_mhz": 1370,
-                          "receiver_name": "P200-3",
-                          "bandwidth": 320,
-                          "tsamp": 0.00156250,
-                          "nbit": 8,
-                          "ndim": 1,
-                          "npol": 2,
-                          "nchan": 1,
-                          "resolution": 1,
-                          "dsb": 1
-                      },
-                      "base_output_dir":os.getcwd()
-                      }
-
-udp2db_params = {"udp2db_params":
-                 {
-                     "image": "docker.mpifr-bonn.mpg.de:5000/psr-capture:asterix",
-                     "args": "-v -p 48500"
-                 }}
-
-psrchive_params = {"psrchive_params":
-                   {
-                       "image": "docker.mpifr-bonn.mpg.de:5000/psrchive:latest",
-                       "cmd": "archive_directory_monitor.py -i /input/ -o /output/"
-                   }}
-
-dspsr_params = {"dspsr_params":
-                {
-                    "image": "docker.mpifr-bonn.mpg.de:5000/dspsr:cuda8.0",
-                    "args": "-cpu 2,3 -L 10 -r -F 256:D -fft-bench -cuda 0,0 -minram 1024"
-                }}
-
-dada_db_params = {"dada_db_params":
-                  {
-                      "image": "docker.mpifr-bonn.mpg.de:5000/psr-capture:asterix",
-                      "args": "-n 8 -b 1280000000 -p -l",
-                      "key": "dada"
-                  }}
-
-dada_dbmonitor_params = {"dada_dbmonitor_params":
-                         {
-                             "image": "docker.mpifr-bonn.mpg.de:5000/psr-capture:asterix",
-                             "args": ""
-                         }}
+CONFIG={
+                    "base_output_dir":os.getcwd(),
+                    "dspsr_params":
+                    {
+                        "args":"-cpu 2,3 -L 10 -r -F 256:D -fft-bench -cuda 0,0 -minram 1024"
+                    },
+                    "dada_db_params":
+                    {
+                        "args":"-n 8 -b 1280000000 -p -l",
+                        "key":"dada"
+                    },
+                    "dada_header_params":
+                    {
+                        "filesize":25600000000,
+                        "telescope":"Effelsberg",
+                        "instrument":"asterix",
+                        "frequency_mhz":1370,
+                        "receiver_name":"P200-3",
+                        "bandwidth":320,
+                        "tsamp":0.00156250,
+                        "nbit":8,
+                        "ndim":1,
+                        "npol":2,
+                        "nchan":1,
+                        "resolution":1,
+                        "dsb":1
+                    }
+               
+            }
 
 sensors = {"ra": 123, "dec": -10, "source-name": "Crab",
            "scannum": 0, "subscannum": 1, "timestamp": str(datetime.now().time())}
@@ -128,32 +107,25 @@ class Udp2Db2Dspsr(object):
         self._config = None
         self._udp2dp_process = None
 
-    # def configure(self, config, sensors):
     def configure(self):
-        print "testing"
-        log.info("testing")
         self.state = "ready"
         # return
-        self._config = dada_header_params
-        self._dada_key = dada_db_params["dada_db_params"]["key"]
+        self._config = CONFIG
+        self._dada_key = CONFIG["dada_db_params"]["key"]
         try:
             self.deconfigure()
         except Exception:
             pass
+	###################################
+	#####Starting up ring buffer#######
+	###################################
         cmd = "dada_db -k {key} {args}".format(**
-                                               dada_db_params["dada_db_params"])
-        log.info("Running command: {0}".format(cmd))
+                                               self._config["dada_db_params"])
+        log.debug("Running command: {0}".format(cmd))
         if RUN is True:
             process = Popen(cmd, stdout=PIPE, shell=True)
             process.wait()
 
-        # self._docker.run(
-        #    self._config["dada_db_params"]["image"],
-        #    cmd, remove=True,
-        #    ipc_mode="host",
-        #    ulimits=self.ulimits)
-
-    # def start(self, sensors):
     def start(self):
         self.state = "running"
         header = self._config["dada_header_params"]
@@ -170,7 +142,7 @@ class Udp2Db2Dspsr(object):
 
         dada_header_file = tempfile.NamedTemporaryFile(
             mode="w",
-            prefix="reynard_dada_header_",
+            prefix="edd_dada_header_",
             suffix=".txt",
             dir=os.getcwd(),
             delete=False)
@@ -182,7 +154,7 @@ class Udp2Db2Dspsr(object):
         log.debug("Header file contains:\n{0}".format(header_string))
         dada_key_file = tempfile.NamedTemporaryFile(
             mode="w",
-            prefix="reynard_dada_keyfile_",
+            prefix="dada_keyfile_",
             suffix=".key",
             dir=os.getcwd(),
             delete=False)
@@ -204,7 +176,6 @@ class Udp2Db2Dspsr(object):
                    "{}:/output/".format(
                        self._config["base_output_dir"])]
 
-        # Make output directories via container call
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(out_path)
         log.debug(cmd)
@@ -212,14 +183,8 @@ class Udp2Db2Dspsr(object):
         if RUN is True:
             process = Popen(cmd, stdout=PIPE, shell=True)
             process.wait()
-        """    
-        self._docker.run(
-            self._config["dspsr_params"]["image"],
-            cmd,
-            volumes=volumes,
-            remove=True)
-        """
-        cmd = "dspsr {args} -N {source_name} {keyfile}".format(
+       
+	cmd = "dspsr {args} -N {source_name} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             source_name=source_name,
             keyfile=dada_key_file.name)
@@ -239,97 +204,25 @@ class Udp2Db2Dspsr(object):
             ulimits=self.ulimits,
             requires_nvidia=True)
         """
-        ############################
-        # Start up PSRCHIVE monitor
-        ############################
-
-        # Do we need this monitor?
-        """
-        host_out_dir = os.path.join(
-            self._config["base_monitor_dir"], "timing", source_name, tstr)
-        out_dir = os.path.join("/output/timing/", source_name, tstr)
-        log.debug("Creating directory: {}".format(out_dir))
-        if RUN is True:
-            process = Popen(cmd, stdout=PIPE, shell=True)
-            process.wait()
-        """
-        """
-        self._docker.run(
-            self._config["psrchive_params"]["image"],
-            "mkdir -p {}".format(out_dir),
-            volumes=["{}:/output/".format(self._config["base_monitor_dir"])],
-            remove=True)
-        """
-        """
-        volumes = [
-            "{}:/output/".format(host_out_dir),
-            "{}:/input/".format(host_out_path)
-        ]
-        if RUN is True:
-            process = Popen(cmd, stdout=PIPE, shell=True)
-            process.wait()
-        """
-        """
-        self._docker.run(
-            self._config["psrchive_params"]["image"],
-            self._config["psrchive_params"]["cmd"],
-            detach=True,
-            name="psrchive",
-            cpuset_cpus="2",
-            working_dir="/dev/shm",
-            volumes=volumes)
-        """
-        ####################
-        # Start up UDP2DB
-        ####################
-        cmd = ("LD_PRELOAD=libvma.so taskset -c 1 udp2db "
-               "-k {key} {args} -s {tobs} -H {headerfile}").format(
-            key=self._dada_key,
-            args=self._config["udp2db_params"]["args"],
-            tobs=sensors["time-remaining"],
-            headerfile=dada_header_file.name)
-        cmd = 'bash -c "{cmd}"'.format(cmd=cmd)
-        log.debug("Running command: {0}".format(cmd))
-        if RUN is True:
-            self._udp2dp_process = Popen(cmd, shell=True)
-        """
-        self._docker.run(
-            self._config["udp2db_params"]["image"],
-            cmd,
-            cap_add=["ALL"],
-            cpu_shares=262144,
-            cpuset_cpus="1",
-            detach=True,
-            volumes=self._volumes,
-            environment={"VMA_MTU": 9000},
-            name="udp2db",
-            ipc_mode="host",
-            network_mode="host",
-            requires_vma=True,
-            ulimits=self.ulimits)
-        """
 
     def stop(self):
-        return
+    	log.debug("Stopping")
+        self.state = "ready"
+	return
         try:
             self._udp2dp_process.terminate()
         except Exception:
             pass
-        self.state = "ready"
 
     def deconfigure(self):
         self.state = "idle"
-        return
         log.debug("Destroying dada buffer")
         cmd = "dada_db -d -k {0}".format(self._dada_key)
         log.debug("Running command: {0}".format(cmd))
         if RUN is True:
             process = Popen(cmd, stdout=PIPE, shell=True)
             process.wait()
-        """
-        self._docker.run("psr-capture", cmd, remove=True, ipc_mode="host")
-        """
-
+	return 
 
 def main():
     print "\nCreate pipeline ...\n"
@@ -337,7 +230,7 @@ def main():
     server = Udp2Db2Dspsr()
     server.configure()
     server.start()
-    # server.stop()
+    server.stop()
     server.deconfigure()
 
 if __name__ == "__main__":
