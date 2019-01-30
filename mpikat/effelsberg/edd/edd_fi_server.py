@@ -73,11 +73,14 @@ class FitsWriterConnectionManager(Thread):
             self._transmit_socket = None
             self._has_connection.clear()
 
-    def get_transmit_socket(self):
-        if self._has_connection.is_set():
-            return self._transmit_socket
-        else:
-            raise FitsWriterNotConnected
+    def get_transmit_socket(self, timeout=2):
+        start_time = time.time()
+        while (time.time() - start_time) < timeout:
+            if self._has_connection.is_set():
+                return self._transmit_socket
+            else:
+                time.sleep(0.1)
+        raise FitsWriterNotConnected
 
     def stop(self):
         self._shutdown.set()
@@ -272,6 +275,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
+        log.info("Received start request")
         if not self._configured:
             msg = "FITS interface server is not configured"
             log.error(msg)
@@ -302,6 +306,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
+        log.info("Received stop request")
         if not self._configured:
             msg = "FITS interface server is not configured"
             log.error(msg)
