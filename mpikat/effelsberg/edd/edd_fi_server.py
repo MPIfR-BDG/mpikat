@@ -48,9 +48,9 @@ class FitsWriterConnectionManager(Thread):
         self._server_socket.listen(1)
 
     def accept_connection(self):
+        log.debug("Accepting connections on FW server socket")
         while not self._shutdown.is_set():
             try:
-                log.debug("Accepting connections on FW server socket")
                 transmit_socket, addr = self._server_socket.accept()
                 self._has_connection.set()
                 log.info("Received connection from {}".format(addr))
