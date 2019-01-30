@@ -15,6 +15,7 @@ import logging
 from katcp import Sensor
 import argparse
 import threading
+import inspect
 
 # To do,
 # 2. sensor to report status, DONE;
@@ -25,11 +26,13 @@ log = logging.getLogger("mpikat.paf_pipeline")
 
 EXECUTE        = True
 #EXECUTE        = False
+
 #SOD            = True   # To start filterbank data or not
 SOD            = False   # To start filterbank data or not
 
 HEIMDALL       = False   # To run heimdall on filterbank file or not
 #HEIMDALL       = True   # To run heimdall on filterbank file or not
+
 #DBDISK         = True   # To run dbdisk on filterbank file or not
 DBDISK         = False   # To run dbdisk on filterbank file or not
 
@@ -55,7 +58,7 @@ PAF_CONFIG = {"instrument_name":    "PAF-BMF",
               "ndim_pol_baseband":   2,
               
               "ncpu_numa":           10,
-              "port0":               17100,
+              "first_port":          17100,
 }
 
 SEARCH_CONFIG_GENERAL = {"rbuf_baseband_ndf_chk":   16384,                 
@@ -146,80 +149,85 @@ class ExecuteCommandError(Exception):
     pass
 
 class ExecuteCommand(object):
-    def __init__(self):
-        self.monitor_threads = []
-        self.process         = None
-        self.execution_state = "ready"
-        self.event           = threading.Event()
-        pass
-
+    def __init__(self, command):
+        self._event              = threading.Event()
+        self._monitor_threads    = []
+        self.callbacks           = []
+        self._command            = command
+        self._returncode         = None
+        self._process            = None
+        self._stderr             = None
+        self._stdout             = None
+        self._executable_command = None
+        log.info(self._command)
+        
     def __del__(self):
         class_name = self.__class__.__name__
 
-    def execution_monitor(self):
-        if EXECUTE:
-            self.process.communicate()
-            self.returncode = self.process.returncode
-            if self.returncode:
-                raise ExecuteCommandError("{} fail".format(command))
-        
-    def stdout_monitor(self):
-        if EXECUTE:
-            while not self.event.isSet():
-                if self.process.stdout:
-                    self.stdout = self.process.stdout.readline()
-                    print self.stdout
-                    return self.stdout
+    def notify(self):
+        for callback in self.callbacks:
+            callback(self._stdout, self)
 
-    def stderr_monitor(self):
-        if EXECUTE:
-            while not self.event.isSet():
-                if self.process.stderr:
-                    self.stderr = self.process.stderr.readline()
-                    print self.stderr
-                    raise ExecuteCommandError("{} fail".format(command))
-
-    def execute(self, command):
-        if self.execution_state != "ready":
-            raise ExecuteCommandError("can only 'execute' ExecuteCommand with 'ready' state")
-        self.command = command
-        log.info(self.command)
-        
-        self.executable_command = shlex.split(self.command)
-        log.info(self.executable_command)
+    def execute(self):
+        self._executable_command = shlex.split(self._command)
+        log.info(self._executable_command)
         
         if EXECUTE:
             try:
-                self.process = Popen(self.executable_command, stderr=PIPE, stdout=PIPE)                                     
+                self._process = Popen(self._executable_command, stderr=PIPE, stdout=PIPE)                                     
             except:
-                raise ExecuteCommandError("can not execute {}".format(self.command))
+                raise ExecuteCommandError("can not execute {}".format(self._command))
 
-            self.monitor_threads.append(threading.Thread(target=self.execution_monitor)) # Monitor the execution of command
-            self.monitor_threads.append(threading.Thread(target=self.stdout_monitor))    # Monitor the stdout of command
-            self.monitor_threads.append(threading.Thread(target=self.stderr_monitor))    # Monitor the stderr of command
+            self._monitor_threads.append(threading.Thread(target=self._execution_monitor)) # Monitor the execution of command
+            self._monitor_threads.append(threading.Thread(target=self._stdout_monitor))    # Monitor the stdout of command
+            self._monitor_threads.append(threading.Thread(target=self._stderr_monitor))    # Monitor the stderr of command
 
-            for thread in self.monitor_threads:
-                thread.start()            
-        self.execution_state = "running"
-                                    
-    def join(self):
-        if self.execution_state != "configured":
-            raise "can only join ExecuteCommand with 'running' state"
+            for thread in self._monitor_threads:
+                thread.start()
+                
+    def finish(self):
         if EXECUTE:
-            self.event.set()
-            for thread in self.monitor_threads:
+            self._event.set()
+            for thread in self._monitor_threads:
                 thread.join()
-        self.execution_state = "ready"
+
+    @property
+    def stdout(self):
+        return self._stdout
+
+    @stdout.setter
+    def stdout(self, value):
+        self._stdout = value
+        self.notify()
+
+    def _execution_monitor(self):
+        if EXECUTE:
+            self._process.communicate()
+            self._returncode = self._process.returncode
+            if self._returncode:
+                raise ExecuteCommandError("{} fail".format(command))
         
+    def _stdout_monitor(self):
+        if EXECUTE:
+            while not self._event.isSet():
+                if self._process.stdout:
+                    self.stdout = self._process.stdout.readline()
+                    print self.stdout
+
+    def _stderr_monitor(self):
+        if EXECUTE:
+            while not self._event.isSet():
+                if self._process.stderr:
+                    self._stderr = self._process.stderr.readline()
+                    print self._stderr
+                    raise ExecuteCommandError("{} fail".format(command))
+
 class Pipeline(object):
     def __init__(self):
-        self.callbacks            = set()
-        self._state               = "idle"   # Idle at the very beginning
-        self.capture_process      = []
-        self.createrbuf_process   = []
-        self.deleterbuf_process   = []
-        self.beam                 = []
+        self.state               = "idle"   # Idle at the very beginning
         self._sensors             = []
+        self.callbacks            = set()
+        self.beam                 = []
         self.setup_sensors()
         
     def __del__(self):
@@ -254,7 +262,7 @@ class Pipeline(object):
         """
         @brief Setup monitoring sensors
         """
-        self._beam_sensor = Sensor.float(
+        self._beam_sensor = Sensor.int(
             "beam",
             description = "The ID of current beam",
             default = 0,
@@ -277,7 +285,7 @@ class Pipeline(object):
         
         self._average_sensor = Sensor.float(
             "average",
-            description = "The average packet loss rate",
+            description = "The packet loss rate so far in average",
             default = 0,
             initial_status = Sensor.NOMINAL)
         self.sensors.append(self._average_sensor)
@@ -286,56 +294,7 @@ class Pipeline(object):
     def sensors(self):
         return self._sensors
 
-    #def process_monitor(self, event):
-    #    while not event.isSet():
-    def process_monitor(self):
-        for i in range(self.nbeam):
-            self.baseband2filterbank_process[i].communicate()
-            returncode = self.baseband2filterbank_process[i].returncode
-            #self.baseband2filterbank_returncode.append(returncode)
-            if returncode:
-                self.state = "error"
-                raise PipelineError("baseband2filterbank fail")
-            if HEIMDALL:                    
-                self.heimdall_process[i].communicate()
-                returncode = self.heimdall_process[i].returncode
-                #self.heimdall_returncode.append(returncode)
-                if returncode:
-                    self.state = "error"
-                    raise PipelineError("heimdall fail")
-            if DBDISK:                    
-                self.dbdisk_process[i].communicate()
-                returncode = self.dbdisk_process[i].returncode
-                #self.dbdisk_returncode.append(returncode)
-                if returncode:
-                    self.state = "error"
-                    raise PipelineError("dbdisk fail")
-
-    def capture_process_monitor(self):        
-        for i in range(self.nbeam):
-            print i
-            self.capture_process[i].communicate()
-            returncode = self.capture_process[i].returncode
-            if returncode:
-                self.state = "error"
-                raise PipelineError("capture fail")
-    
-    def capture_traffic_monitor(self, event):        
-        while not event.isSet():
-            for i in range(self.nbeam):
-                if self.capture_process[i].stdout:
-                    stdout_line = self.capture_process[i].stdout.readline()
-                    print stdout_line
-                    #print event.isSet()
-                    
-                    #if "CAPTURE_STATUS" in stdout_line:
-                    #    status = stdout_line.split()
-                    #    self._beam_sensor.set_value(float(self.beam[i]))
-                    #    self._time_sensor.set_value(float(status[1]))
-                    #    self._average_sensor.set_value(float(status[2]))
-                    #    self._instant_sensor.set_value(float(status[3]))
-                               
-    def beam_id(self, ip, port):
+    def _acquire_beam_index(self, ip, port):
         """
         To get the beam ID
         """
@@ -346,25 +305,24 @@ class Pipeline(object):
         sock.bind(server_address)
 
         try:
-            beam = []
+            beam_index = []
             for i in range(self.ndf_check_chk):
                 nbyte, address = sock.recvfrom_into(data, self.df_pktsz)
                 data_uint64 = np.fromstring(str(data), 'uint64')
                 hdr_uint64  = np.uint64(struct.unpack("<Q", struct.pack(">Q", data_uint64[2]))[0])
-                beam.append(hdr_uint64 & np.uint64(0x000000000000ffff))
+                beam_index.append(hdr_uint64 & np.uint64(0x000000000000ffff))
 
-            if (len(list(set(beam)))>1):
+            if (len(list(set(beam_index)))>1):
                 self.state = "error"
                 raise PipelineError("Beams are mixed up, please check the routing table")
-
             sock.close()
-            return beam[0]
+            return beam_index[0]
         except:
             sock.close()
             self.state = "error"
-            raise PipelineError("Can not get beam ID")
+            raise PipelineError("{} fail".format(inspect.stack()[0][3]))
 
-    def synced_refinfo(self, utc_start_capture, ip, port):
+    def _synced_refinfo(self, utc_start_capture, ip, port):
         utc_start_capture = Time(utc_start_capture, format='isot', scale='utc')
         
         # Capture one packet to see what is current epoch, seconds and idf
@@ -379,7 +337,7 @@ class Pipeline(object):
         
         return epoch_ref, int(sec_ref), idf_ref
 
-    def start_buf(self, utc_start_process, utc_start_capture):
+    def _start_buf(self, utc_start_process, utc_start_capture):
         """
         To get the start buffer with given start time in UTC
         """
@@ -390,7 +348,7 @@ class Pipeline(object):
         
         return start_buffer_idx
         
-    def refinfo(self, ip, port):
+    def _refinfo(self, ip, port):
         """
         To get reference information for capture
         """
@@ -402,9 +360,9 @@ class Pipeline(object):
         sock.bind(server_address)
 
         try:
-            nbyte, address = sock.recvfrom_into(data,
-                                                self.df_pktsz)
+            nbyte, address = sock.recvfrom_into(data, self.df_pktsz)                                                
             data     = np.fromstring(str(data), 'uint64')
+            
             hdr_part = np.uint64(struct.unpack("<Q", struct.pack(">Q", data[0]))[0])
             sec_ref  = (hdr_part & np.uint64(0x3fffffff00000000)) >> np.uint64(32)
             idf_ref  = hdr_part & np.uint64(0x00000000ffffffff)
@@ -423,31 +381,9 @@ class Pipeline(object):
         except:
             sock.close()
             self.state = "error"
-            raise PipelineError("Can not get reference information for capture")
+            raise PipelineError("{} fail".format(inspect.stack()[0][3]))
 
-    def delete_shared_memory(self):
-        cmd = "ipcrm -a"
-        log.info(cmd)
-        
-        if EXECUTE:
-            try:
-                proc = Popen(shlex.split(cmd),
-                             stderr=PIPE,
-                             stdout=PIPE)
-                self.delete_shared_memory_process.append(proc)
-            except:
-                self.state = "error"
-                raise PipelineError("Can not delete shared memory with ipcrm -a")
-
-            
-    def kill_process(self, process_name):
-        try:
-            cmd = "pkill -f {}".format(process_name)
-            check_call(shlex.split(cmd))
-        except:
-            pass # We only kill running process
-
-    def connections(self, destination):
+    def _check_connection_beam(self, destination):
         """
         To check the connection of one beam with given ip and port numbers
         """
@@ -460,7 +396,7 @@ class Pipeline(object):
         for i in range(nport):
             ip   = destination[i].split(";")[0]
             port = int(destination[i].split(";")[1])
-            alive, nchk_alive = self.connection(ip, port)                                                
+            alive, nchk_alive = self._check_connection_port(ip, port)                                                
 
             if alive == 1:
                 destination_alive.append(destination[i]+";{}".format(nchk_alive))
@@ -473,7 +409,7 @@ class Pipeline(object):
 
         return destination_alive, destination_dead
 
-    def connection(self, ip, port):
+    def _check_connection_port(self, ip, port):
         """
         To check the connection of single port
         """
@@ -504,272 +440,233 @@ class Pipeline(object):
             sock.close()
         except:
             self.state = "error"
-            raise PipelineError("Failed to check the connection")
+            raise PipelineError("{} fail".format(inspect.stack()[0][3]))
         return alive, nchk_alive
 
-    def create_rbuf(self, key, blksz, nblk, nreader):                    
-        cmd = ("dada_db -l -p"
-               " -k {:} -b {:}" 
-               " -n {:} -r {:}").format(key,
-                                       blksz,
-                                       nblk,
-                                       nreader)
-        log.info(cmd)
-        print cmd
+    def _capture_control(self, ctrl_socket, command, socket_address):
         if EXECUTE:
             try:
-                proc = Popen(shlex.split(cmd),
-                             stderr=PIPE,
-                             stdout=PIPE)
-                self.createrbuf_process.append(proc)
+                ctrl_socket.sendto(command, socket_address)
             except:
                 self.state = "error"
-                raise PipelineError("Can not create ring buffer")
-
-    def delete_rbuf(self, key):
-        cmd = "dada_db -d -k {:}".format(key)
-        log.info(cmd)
-        print cmd
-        if EXECUTE:
-            try: 
-                proc = Popen(shlex.split(cmd),
-                             stderr=PIPE,
-                             stdout=PIPE)
-                self.deleterbuf_process.append(proc)
-            except:
-                self.state = "error"
-                raise PipelineError("Can not delete ring buffer")
-
-    def capture(self, key, runtime_dir):                
-        software = "{}/src/capture_main".format(PAF_ROOT)        
-        cmd = ("{} -a {} -b {} -c {} -e {} -f {}"
-               " -g {} -i {} -j {} -k {} -l {}"
-               " -m {} -n {} -o {} -p {} -q {}").format(
-                   software, key, self.df_hdrsz,
-                   " -c ".join(self.alive_info),
-                   self.freq, self.ref_info, runtime_dir,
-                   self.buf_ctrl_cpu, self.cpt_ctrl, self.bind,
-                   self.rbuf_baseband_ndf_chk, self.tbuf_baseband_ndf_chk,
-                   DADA_HDR_FNAME, PAF_CONFIG["instrument_name"],
-                   SOURCE_DEFAULT, self.pad)
-        if (len(self.dead_info) != 0):
-            cmd = cmd + " -e {}".format(" -d ".join(self.dead_info))
+                raise PipelineError("{} fail".format(inspect.stack()[0][3]))
             
-        log.info(cmd)
-        print cmd
-        if EXECUTE:
-            try:
-                proc = Popen(shlex.split(cmd),
-                             stderr=PIPE,
-                             stdout=PIPE)
-                self.capture_process.append(proc)
-            except:
-                print "we have reach this point"
-                self.state = "error"
-                raise PipelineError("Capture fail")
-
-    def capture_control(self, ctrl_socket, command, socket_addr):
-        if EXECUTE:
-            try:
-                ctrl_socket.sendto(command, socket_addr)
-            except:
-                self.state = "error"
-                raise PipelineError("Capture control fail")
+    def _decode_capture_stdout(self, stdout, callback):
+        log.info('New stdout of capture is {}'.format(str(stdout)))
+        if stdout.find("CAPTURE_READY") != -1:
+            self.capture_ready_counter += 1
+            
+        print stdout
 
 @register_pipeline("Search")
 class Search(Pipeline):
     def __init__(self):
         super(Search, self).__init__()
-        
-        self.heimdall_process               = []
-        self.dbdisk_process                 = []
-        self.baseband2filterbank_process    = []
-        
-        #self.capture_returncode             = []
-        #self.baseband2filterbank_returncode = []
-        #if HEIMDALL:
-        #    self.heimdall_returncode        = []
-        #if DBDISK:
-        #    self.dbdisk_returncode          = []
+        self.capture_executions    = []
+        self.capture_ready_counter = 0
         
     def configure(self, utc_start_capture, freq, ip, general_config, pipeline_config):
-        # Kill running process if there is any and free memory
-        check_call(["ipcrm", "-a"])
-        self.kill_process("capture_main")
-        self.kill_process("baseband2filterbank_main")
-        self.kill_process("heimdall")
-        self.kill_process("dada_dbdisk")
         if (self.state != "idle"):
             raise PipelineError(
                 "Can only configure pipeline in idle state")
 
-        self.state             = "configuring"
-        self.general_config    = general_config
-        self.pipeline_config   = pipeline_config
-        self.ip                = ip
-        self.numa              = int(ip.split(".")[3]) - 1
-        self.freq              = freq
+        # Setup parameters of the pipeline
+        self.state              = "configuring"
+        self._general_config    = general_config
+        self._pipeline_config   = pipeline_config
+        self._ip                = ip
+        self._numa              = int(ip.split(".")[3]) - 1
+        self._freq              = freq
 
-        self.prd                = PAF_CONFIG["prd"]
-        self.port0              = PAF_CONFIG["port0"]
-        self.df_res             = PAF_CONFIG["df_res"]
-        self.df_dtsz            = PAF_CONFIG["df_dtsz"]
-        self.df_pktsz           = PAF_CONFIG["df_pktsz"]
-        self.df_hdrsz           = PAF_CONFIG["df_hdrsz"]
-        self.ncpu_numa          = PAF_CONFIG["ncpu_numa"]
-        self.nchan_chk          = PAF_CONFIG["nchan_chk"]
-        self.nbyte_baseband     = PAF_CONFIG["nbyte_baseband"]
-        self.ndim_pol_baseband  = PAF_CONFIG["ndim_pol_baseband"]
-        self.npol_samp_baseband = PAF_CONFIG["npol_samp_baseband"]
+        self._prd                = PAF_CONFIG["prd"]
+        self._first_port         = PAF_CONFIG["first_port"]
+        self._df_res             = PAF_CONFIG["df_res"]
+        self._df_dtsz            = PAF_CONFIG["df_dtsz"]
+        self._df_pktsz           = PAF_CONFIG["df_pktsz"]
+        self._df_hdrsz           = PAF_CONFIG["df_hdrsz"]
+        self._ncpu_numa          = PAF_CONFIG["ncpu_numa"]
+        self._nchan_chk          = PAF_CONFIG["nchan_chk"]
+        self._nbyte_baseband     = PAF_CONFIG["nbyte_baseband"]
+        self._ndim_pol_baseband  = PAF_CONFIG["ndim_pol_baseband"]
+        self._npol_samp_baseband = PAF_CONFIG["npol_samp_baseband"]
 
-        self.nbeam               = self.pipeline_config["nbeam"]
-        self.nchk_port           = self.pipeline_config["nchk_port"]
-        self.nport_beam          = self.pipeline_config["nport_beam"]
-        self.nchan_keep_band     = self.pipeline_config["nchan_keep_band"]
-        self.rbuf_baseband_key   = self.pipeline_config["rbuf_baseband_key"]
-        self.rbuf_filterbank_key = self.pipeline_config["rbuf_filterbank_key"]
+        self._nbeam               = self._pipeline_config["nbeam"]
+        self._nchk_port           = self._pipeline_config["nchk_port"]
+        self._nport_beam          = self._pipeline_config["nport_beam"]
+        self._nchan_keep_band     = self._pipeline_config["nchan_keep_band"]
+        self._rbuf_baseband_key   = self._pipeline_config["rbuf_baseband_key"]
+        self._rbuf_filterbank_key = self._pipeline_config["rbuf_filterbank_key"]
         
-        self.dm                      = self.general_config["dm"],
-        self.pad                     = self.general_config["pad"]
-        self.bind                    = self.general_config["bind"]
-        self.nstream                 = self.general_config["nstream"]
-        self.cufft_nx                = self.general_config["cufft_nx"]
-        self.zap_chans               = self.general_config["zap_chans"]
-        self.ndf_stream              = self.general_config["ndf_stream"]
-        self.detect_thresh           = self.general_config["detect_thresh"]
-        self.ndf_check_chk           = self.general_config["ndf_check_chk"]
-        self.nchan_filterbank        = self.general_config["nchan_filterbank"]
-        self.nbyte_filterbank        = self.general_config["nbyte_filterbank"]
-        self.rbuf_baseband_nblk      = self.general_config["rbuf_baseband_nblk"]
-        self.ndim_pol_filterbank     = self.general_config["ndim_pol_filterbank"]
-        self.rbuf_baseband_nread     = self.general_config["rbuf_baseband_nread"]
-        self.npol_samp_filterbank    = self.general_config["npol_samp_filterbank"]
-        self.rbuf_filterbank_nblk    = self.general_config["rbuf_filterbank_nblk"]
-        self.rbuf_baseband_ndf_chk   = self.general_config["rbuf_baseband_ndf_chk"]
-        self.rbuf_filterbank_nread   = self.general_config["rbuf_filterbank_nread"]
-        self.tbuf_baseband_ndf_chk   = self.general_config["tbuf_baseband_ndf_chk"]        
-        self.rbuf_filterbank_ndf_chk = self.general_config["rbuf_filterbank_ndf_chk"]
+        self._dm                      = self._general_config["dm"],
+        self._pad                     = self._general_config["pad"]
+        self._bind                    = self._general_config["bind"]
+        self._nstream                 = self._general_config["nstream"]
+        self._cufft_nx                = self._general_config["cufft_nx"]
+        self._zap_chans               = self._general_config["zap_chans"]
+        self._ndf_stream              = self._general_config["ndf_stream"]
+        self._detect_thresh           = self._general_config["detect_thresh"]
+        self._ndf_check_chk           = self._general_config["ndf_check_chk"]
+        self._nchan_filterbank        = self._general_config["nchan_filterbank"]
+        self._nbyte_filterbank        = self._general_config["nbyte_filterbank"]
+        self._rbuf_baseband_nblk      = self._general_config["rbuf_baseband_nblk"]
+        self._ndim_pol_filterbank     = self._general_config["ndim_pol_filterbank"]
+        self._rbuf_baseband_nread     = self._general_config["rbuf_baseband_nread"]
+        self._npol_samp_filterbank    = self._general_config["npol_samp_filterbank"]
+        self._rbuf_filterbank_nblk    = self._general_config["rbuf_filterbank_nblk"]
+        self._rbuf_baseband_ndf_chk   = self._general_config["rbuf_baseband_ndf_chk"]
+        self._rbuf_filterbank_nread   = self._general_config["rbuf_filterbank_nread"]
+        self._tbuf_baseband_ndf_chk   = self._general_config["tbuf_baseband_ndf_chk"]        
+        self._rbuf_filterbank_ndf_chk = self._general_config["rbuf_filterbank_ndf_chk"]
 
-        self.blk_res                 = self.df_res * self.rbuf_baseband_ndf_chk
-        self.nchk_beam               = self.nchk_port*self.nport_beam
-        self.nchan_baseband          = self.nchan_chk*self.nchk_beam
-        self.ncpu_pipeline           = self.ncpu_numa/self.nbeam
-        self.rbuf_baseband_blksz     = self.nchk_port*self.nport_beam*self.df_dtsz*\
-                                       self.rbuf_baseband_ndf_chk
+        self._blk_res                 = self._df_res * self._rbuf_baseband_ndf_chk
+        self._nchk_beam               = self._nchk_port*self._nport_beam
+        self._nchan_baseband          = self._nchan_chk*self._nchk_beam
+        self._ncpu_pipeline           = self._ncpu_numa/self._nbeam
+        self._rbuf_baseband_blksz     = self._nchk_port*self._nport_beam*self._df_dtsz*self._rbuf_baseband_ndf_chk
         
-        if self.rbuf_baseband_ndf_chk%(self.ndf_stream * self.nstream):
+        if self._rbuf_baseband_ndf_chk%(self._ndf_stream * self._nstream):
             self.state = "error"
-            raise PipelineError("data frames in ring buffer block can not "
-                                "be processed by filterbank with integer repeats")
+            raise PipelineError("data frames in ring buffer block can only "
+                                "be processed by baseband2filterbank with integer repeats")
 
-        self.rbuf_filterbank_blksz   = int(self.nchan_filterbank * self.rbuf_baseband_blksz*
-                                         self.nbyte_filterbank*self.npol_samp_filterbank*
-                                         self.ndim_pol_filterbank/
-                                         float(self.nbyte_baseband*
-                                               self.npol_samp_baseband*
-                                               self.ndim_pol_baseband*
-                                               self.nchan_baseband*self.cufft_nx))
+        self._rbuf_filterbank_blksz   = int(self._nchan_filterbank * self._rbuf_baseband_blksz*
+                                            self._nbyte_filterbank*self._npol_samp_filterbank*
+                                            self._ndim_pol_filterbank/float(self._nbyte_baseband*                                         
+                                                                            self._npol_samp_baseband*
+                                                                            self._ndim_pol_baseband*
+                                                                            self._nchan_baseband*
+                                                                            self._cufft_nx))
 
+        # To be safe, kill all related softwares and free shared memory
+        commands = ["pkill -f capture_main",
+                    "pkill -f baseband2filterbank_main",
+                    "pkill -f heimdall",
+                    "pkill -f dada_dbdisk",
+                    "ipcrm -a"]
+        execution_instances = []
+        for command in commands:
+            execution_instance = ExecuteCommand(command)
+            execution_instances.append(execution_instance)
+            try:
+                execution_instance.execute()
+            except Exception as e: # have to do this way as ExecuteCommand is not able to setup self.state
+                self.state = "error"
+                raise e
+            
+        # Wait until the cleanup is done
+        for execution_instance in execution_instances:
+            execution_instance.finish()
+            
         # Create ring buffers
-        for i in range(self.nbeam):
-            self.create_rbuf(self.rbuf_baseband_key[i],
-                             self.rbuf_baseband_blksz,
-                             self.rbuf_baseband_nblk,
-                             self.rbuf_baseband_nread)
-            self.create_rbuf(self.rbuf_filterbank_key[i],
-                             self.rbuf_filterbank_blksz,
-                             self.rbuf_filterbank_nblk,
-                             self.rbuf_filterbank_nread)
-        if EXECUTE:
-            for i in range(self.nbeam * 2):
-                self.createrbuf_process[i].communicate()
-                if self.createrbuf_process[i].returncode:
-                    self.state = "error"
-                    raise PipelineError("Failed to create ring buffer")
-                
+        execution_instances = []
+        for i in range(self._nbeam):
+            # Ring buffer for baseband data
+            command = ("dada_db -l -p  -k {:} " 
+                       "-b {:} -n {:} -r {:}").format(self._rbuf_baseband_key[i],
+                                                      self._rbuf_baseband_blksz,
+                                                      self._rbuf_baseband_nblk,
+                                                      self._rbuf_baseband_nread)
+            execution_instance = ExecuteCommand(command)
+            execution_instances.append(execution_instance)            
+            try:
+                execution_instance.execute()
+            except Exception as e: # have to do this way as ExecuteCommand is not able to setup self.state
+                self.state = "error"
+                raise e
+
+            # Ring buffer for filterbank data
+            command = ("dada_db -l -p  -k {:} " 
+                       "-b {:} -n {:} -r {:}").format(self._rbuf_filterbank_key[i],
+                                                      self._rbuf_filterbank_blksz,
+                                                      self._rbuf_filterbank_nblk,
+                                                      self._rbuf_filterbank_nread)
+            execution_instance = ExecuteCommand(command)
+            execution_instances.append(execution_instance)            
+            try:
+                execution_instance.execute()
+            except Exception as e: # have to do this way as ExecuteCommand is not able to setup self.state
+                self.state = "error"
+                raise e
+
+        # Wait until the buffer creation is done
+        for execution_instance in execution_instances:
+            execution_instance.finish()
+        
         # Start capture
-        self.runtime_dir = []
-        self.socket_addr = []
-        self.ctrl_socket = []
-        for i in range(self.nbeam):
+        self._runtime_directory = []
+        self._socket_address = []
+        self._control_socket = []
+        for i in range(self._nbeam):
+            # To get directory for data and socket for control 
+            runtime_directory  = "{}/beam{:02}".format(DATA_ROOT, beam)
+            socket_address  = "{}/beam{:02}/capture.socket".format(DATA_ROOT, beam)
+            control_socket  = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+            self._runtime_directory.append(runtime_directory)
+            self._socket_address.append(socket_address)
+            self._control_socket.append(control_socket)
+
+            # To setup address
             destination = []
-            for j in range(self.nport_beam):
-                port = self.port0 + i*self.nport_beam + j
-                destination.append("{};{};{}".format(self.ip, port, self.nchk_port))
+            for j in range(self._nport_beam):
+                port = self._first_port + i*self._nport_beam + j
+                destination.append("{};{};{}".format(self._ip, port, self._nchk_port))
+                
             if EXECUTE:
-                destination_alive, self.dead_info = self.connections(destination)
+                destination_alive, dead_info = self._check_connection_beam(destination)
+                first_alive_ip   = destination_alive[0].split(";")[0]
+                first_alive_port = int(destination_alive[0].split(";")[1])
+                
+                beam_index = self._acquire_beam_index(first_alive_ip, first_alive_port)
+                ref_info = self._synced_refinfo(utc_start_capture, first_alive_ip, first_alive_port)
             else:
                 destination_alive = []
-                for item in destination:
-                    nchk_actual = item.split(";")[2]
-                    destination_alive.append(item + ";{}".format(nchk_actual))
-                self.dead_info = []
-            first_alive_ip   = destination_alive[0].split(";")[0]
-            first_alive_port = int(destination_alive[0].split(";")[1])
-                        
-            cpu = self.numa*self.ncpu_numa + i*self.ncpu_pipeline
-            self.alive_info = []
-            for info in destination_alive:
-                self.alive_info.append("{};{}".format(info, cpu))
-                cpu += 1
-            self.buf_ctrl_cpu = self.numa*self.ncpu_numa + i*self.ncpu_pipeline + self.nport_beam
-            cpt_ctrl_cpu = self.numa*self.ncpu_numa + i*self.ncpu_pipeline + self.nport_beam
-            self.cpt_ctrl     = "1;{}".format(cpt_ctrl_cpu)
+                dead_info         = []
 
-            if EXECUTE:
-                beam = self.beam_id(first_alive_ip, first_alive_port)
-            else:
-                beam = i
-            self.beam.append(beam)
-            
-            runtime_dir  = "{}/beam{:02}".format(DATA_ROOT, beam)
-            socket_addr  = "{}/beam{:02}/capture.socket".format(DATA_ROOT, beam)
-            ctrl_socket  = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-            self.runtime_dir.append(runtime_dir)
-            self.socket_addr.append(socket_addr)
-            self.ctrl_socket.append(ctrl_socket)
-            
-            if EXECUTE:
-                ref_info = self.synced_refinfo(utc_start_capture, first_alive_ip, first_alive_port)
-            else:
+                beam_index = i
                 ref_info = [0, 0, 0]
             
-            self.ref_info = "{};{};{}".format(ref_info[0], ref_info[1], ref_info[2])
-            self.capture(self.rbuf_baseband_key[i], runtime_dir)                         
-
-        # To see if we are ready to start or error to quit
-        if EXECUTE:
-            ready = 0
-            while True:
-                try: 
-                    for i in range(self.nbeam):
-                        stdout_line = self.capture_process[i].stdout.readline()
-                        if stdout_line.find("CAPTURE_READY") != -1:
-                            ready = ready + 1
-                except:
-                    self.state = "error"
-                    raise PipelineError("capture_main quit unexpectedly")
-                    
-                if ready == self.nbeam * (self.nport_beam + 1): # Ready to start, nport_beam capture threads and one capture control thread have to be ready 
-                    self.state = "ready"
-                    break
+            # To setup CPU bind information and dead_info
+            cpu = self._numa*self._ncpu_numa + i*self._ncpu_pipeline
+            alive_info = []
+            for info in destination_alive:
+                alive_info.append("{};{}".format(info, cpu))
+                cpu += 1
+            buf_control_cpu     = self._numa*self._ncpu_numa + i*self._ncpu_pipeline + self._nport_beam
+            capture_control_cpu = self._numa*self._ncpu_numa + i*self._ncpu_pipeline + self._nport_beam
+            capture_control     = "1;{}".format(capture_control_cpu)
                 
-        print self.state, "HERE\n"
-        # Update sensor values and to check if the capture process quits unexpectedly
-        if EXECUTE:
-            self.capture_event = threading.Event()
-            self.capture_traffic_monitor_thread = threading.Thread(target=self.capture_traffic_monitor, args=(self.capture_event,))
-            self.capture_traffic_monitor_thread.start()
-            self.capture_process_monitor_thread = threading.Thread(target=self.capture_process_monitor)
-            self.capture_process_monitor_thread.start()
+            self._beam.append(beam_index)
+            ref_info = "{};{};{}".format(ref_info[0], ref_info[1], ref_info[2])
+            
+            # Execute the capture
+            software = "{}/src/capture_main".format(PAF_ROOT)        
+            command  = ("{} -a {} -b {} -c {} -e {} -f {} -g {} -i {} -j {} "
+                        "-k {} -l {} -m {} -n {} -o {} -p {} -q {} ").format(
+                            software, self._rbuf_baseband_key[i], self._df_hdrsz, " -c ".join(alive_info),
+                            self._freq, ref_info, runtime_directory, buf_control_cpu, capture_control, self._bind,
+                            self._rbuf_baseband_ndf_chk, self._tbuf_baseband_ndf_chk,
+                            DADA_HDR_FNAME, PAF_CONFIG["instrument_name"], SOURCE_DEFAULT, self._pad)
+            if EXECUTE:
+                capture_execution = ExecuteCommand(command)            
+                capture_execution.callbacks.add(self._decode_capture_stdout)
+                self._capture_executions.append(capture_execution)            
+                try:
+                    capture_execution.execute()
+                except Exception as e: # have to do this way as ExecuteCommand is not able to setup self.state
+                    self.state = "error"
+                    raise e
+                
+        if EXECUTE: # Ready when all capture threads and the capture control thread of all capture instances are ready
+            while True:
+                if self.capture_ready_counter == (self._nport_beam + 1) * self._nbeam:
+                    break
                 
         self.state = "ready"
         print self.state, "HERE\n"
              
     def start(self, utc_start_process, source_name, ra, dec):
         if self.state != "ready":
-            raise PipelineError(
-                "Pipeline can only be started from ready state")
+            raise PipelineError("Pipeline can only be started from ready state")                
         self.state = "starting"
         print self.state, "HERE\n"
 
@@ -783,13 +680,13 @@ class Search(Pipeline):
                                            (i + 1)*self.ncpu_pipeline - 1
             self.baseband2filterbank(self.rbuf_baseband_key[i],
                                      self.rbuf_filterbank_key[i],
-                                     self.runtime_dir[i])
+                                     self.runtime_directory[i])
             if HEIMDALL:
                 self.heimdall(self.rbuf_filterbank_key[i],
-                              self.runtime_dir[i])
+                              self.runtime_directory[i])
             if DBDISK:
                  self.dbdisk(self.rbuf_filterbank_key[i],
-                             self.runtime_dir[i])
+                             self.runtime_directory[i])
             
         # To see if we are ready to "running" or error to quit
         if EXECUTE: 
@@ -811,10 +708,10 @@ class Search(Pipeline):
             #start_buffer_idx = self.start_buf(utc_start_process, utc_start_capture)
             start_buffer_idx = 0 # Let capture software to enable sod at the last available buffer
             for i in range(self.nbeam):
-                self.capture_control(self.ctrl_socket[i],
+                self.capture_control(self.control_socket[i],
                                      "START-OF-DATA;{};{};{};{}".format(
                                          source_name, ra, dec, start_buffer_idx),
-                                     self.socket_addr[i])
+                                     self.socket_address[i])
 
         # Monitor the process to see if they quit unexpectedly and also stop them with deconfigure
         if EXECUTE:
@@ -833,8 +730,8 @@ class Search(Pipeline):
         
         if EXECUTE:
             for i in range(self.nbeam): #Stop data 
-                self.capture_control(self.ctrl_socket[i],
-                                     "END-OF-DATA", self.socket_addr[i])
+                self.capture_control(self.control_socket[i],
+                                     "END-OF-DATA", self.socket_address[i])
                 
             for i in range(self.nbeam): #wait process done
                 returncode = None
@@ -874,8 +771,8 @@ class Search(Pipeline):
             self.state = "deconfiguring"
             if EXECUTE:
                 for i in range(self.nbeam): # Stop capture
-                    self.capture_control(self.ctrl_socket[i],
-                                         "END-OF-CAPTURE", self.socket_addr[i])                    
+                    self.capture_control(self.control_socket[i],
+                                         "END-OF-CAPTURE", self.socket_address[i])                    
                 self.capture_event.set()
                 self.capture_traffic_monitor_thread.join()
                 self.capture_process_monitor_thread.join()
@@ -911,9 +808,9 @@ class Search(Pipeline):
             
         self.state = "idle"
 
-    def dbdisk(self, key, runtime_dir):
+    def dbdisk(self, key, runtime_directory):
         cmd = "dada_dbdisk -b {} -k {} -D {} -o -s -z".format(
-            self.dbdisk_cpu, key, runtime_dir)
+            self.dbdisk_cpu, key, runtime_directory)
         
         log.info(cmd)
         print cmd
@@ -928,14 +825,14 @@ class Search(Pipeline):
                 raise PipelineError("dada_dbdisk fail")
 
     def baseband2filterbank(self, key_in, key_out,
-                            runtime_dir):
+                            runtime_directory):
         software = "{}/src/baseband2filterbank_main".format(PAF_ROOT)
         cmd = ("taskset -c {} nvprof {} -a {} -b {}" 
                " -c {} -d {} -e {} -f {} -i {} -j {}"
                " -k {} -l {} ").format(
                    self.baseband2filterbank_cpu, software, key_in, key_out,
                    self.rbuf_filterbank_ndf_chk, self.nstream,
-                   self.ndf_stream, runtime_dir, self.nchk_beam,
+                   self.ndf_stream, runtime_directory, self.nchk_beam,
                    self.cufft_nx, self.nchan_filterbank, self.nchan_keep_band)
         if SOD:
             cmd = cmd + "-g 1"
@@ -954,7 +851,7 @@ class Search(Pipeline):
                 self.state = "error"
                 raise PipelineError("baseband2filterbank fail")
 
-    def heimdall(self, key, runtime_dir):
+    def heimdall(self, key, runtime_directory):
         zap = ""
         for zap_chan in self.zap_chans:
             zap += " -zap_chans {} {}".format(zap_chan[0], zap_chan[1])
@@ -962,7 +859,7 @@ class Search(Pipeline):
         cmd = ("taskset -c {} nvprof heimdall -k {}" 
                " -dm {} {} {} -detect_thresh {} -output_dir {}").format(
                 self.heimdall_cpu, key, self.dm[0][0], self.dm[0][1], zap,
-                self.detect_thresh, runtime_dir)
+                self.detect_thresh, runtime_directory)
         log.info(cmd)
         print cmd
         if EXECUTE:
