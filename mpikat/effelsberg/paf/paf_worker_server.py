@@ -1,15 +1,18 @@
+import threading
 import logging
 import tornado
 import coloredlogs
 import signal
 import json
 import os
+from astropy.time import Time
+import astropy.units as units
 from optparse import OptionParser
 from tornado.gen import Return, coroutine
 from tornado.iostream import IOStream
-from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
+from katcp import AsyncDeviceServer, Message, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
-from mpikat.effelsberg.paf.pipeline_old import PIPELINES
+from mpikat.effelsberg.paf.pipeline import PIPELINES
 
 
 log = logging.getLogger("mpikat.paf_worker_server")
@@ -118,9 +121,9 @@ class PafWorkerServer(AsyncDeviceServer):
         self.add_sensor(self._mac_address)
 
 
-    @request(Str(),Str(),Str(),Str())
+    @request(Str(),Str(),Str())
     @return_reply(Str())
-    def request_configure(self, req, pipeline_name, utc_start, freq, ip):
+    def request_configure(self, req, pipeline_name, freq, ip):
         """
         @brief      Configure pipeline
 
@@ -134,25 +137,27 @@ class PafWorkerServer(AsyncDeviceServer):
                 _pipeline_type = PIPELINES[self._pipeline_sensor_name.value()]
             except KeyError as error:
                 msg = "No pipeline called '{}', available pipeline are: {}".format(self._pipeline_sensor_name.value(), " ".join(PIPELINES.keys()))
-                log.info("{}".format(msg))
+                log.error("{}".format(msg))
+                req.reply("fail", msg)
                 self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
-                req.reply("fail", msg)
-            log.info("Trying to create pipeline instance {}".format(pipeline_name))    
+                raise error 
+            log.debug("Trying to create pipeline instance {}".format(pipeline_name))    
             try:
                 self._pipeline_instance = _pipeline_type()
             except Exception as error:
-                log.error(error) 
+                log.error(error)
+                raise error 
             self.add_pipeline_sensors()
             self._pipeline_instance.callbacks.add(self.state_change)
             try:
-                log.info("Trying to configure pipeline {}".format(pipeline_name))
-                self._pipeline_instance.configure(utc_start, freq, str(self._ip_address.value()))
+                log.debug("Trying to configure pipeline {}".format(pipeline_name))
+                self._pipeline_instance.configure(Time.now() + 27.0*units.s, freq, "10.17.8.1")
             except Exception as error:
                 self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
                 msg = "Couldn't start configure pipeline instance {}".format(str(error))
-                log.info("{}".format(msg))
+                log.error("{}".format(msg))
                 req.reply("fail", msg)                
             #else:    
             msg = "pipeline instance {} configured".format(self._pipeline_sensor_name.value())
@@ -166,7 +171,7 @@ class PafWorkerServer(AsyncDeviceServer):
             log.info("{}".format(msg))
             return ("fail", msg)
 
-    @request(Str(),Str(),Str(),Str())
+    @request(Str(),Str(),Str())
     @return_reply(Str())
     def request_start(self, req, source_name, ra, dec):
         """
