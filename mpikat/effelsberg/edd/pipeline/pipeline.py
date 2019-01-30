@@ -78,7 +78,7 @@ dada_dbmonitor_params = {"dada_dbmonitor_params":
                          }}
 
 sensors = {"ra": 123, "dec": -10, "source-name": "Crab",
-           "scannum": 0, "subscannum": 1, "timestamp": datetime.datetime.now().time()}
+           "scannum": 0, "subscannum": 1, "timestamp": str(datetime.datetime.now().time())}
 
 DESCRIPTION = """
 This pipeline captures data from the network and passes it to a dada
