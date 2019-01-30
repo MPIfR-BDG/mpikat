@@ -470,7 +470,7 @@ class FitsWriterTransmitter(Thread):
         """
         Thread.__init__(self, name=name)
         self._input_queue = input_queue
-        self._transmit_socket = None
+        self._transmit_socket = transmit_socket
         self._time_stamp = ""
         self._integ_time = 16
         self._blank_phase = 1
