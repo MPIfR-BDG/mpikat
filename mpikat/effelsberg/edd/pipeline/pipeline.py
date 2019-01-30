@@ -3,6 +3,7 @@ import logging
 import tempfile
 import coloredlogs
 import tornado
+import datetime
 from tornado.gen import Return, coroutine
 import os
 import time
@@ -77,7 +78,7 @@ dada_dbmonitor_params = {"dada_dbmonitor_params":
                          }}
 
 sensors = {"ra": 123, "dec": -10, "source-name": "Crab",
-           "scannum": 0, "subscannum": 1, "timestamp": 0}
+           "scannum": 0, "subscannum": 1, "timestamp": datetime.datetime.now().time()}
 
 DESCRIPTION = """
 This pipeline captures data from the network and passes it to a dada
@@ -189,7 +190,7 @@ class Udp2Db2Dspsr(object):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-        
+
         ###################
         # Start up DSPSR
         ###################
@@ -333,7 +334,7 @@ def main():
     server = Udp2Db2Dspsr()
     server.configure()
     server.start()
-    server.stop()
+    #server.stop()
     server.deconfigure()
 
 if __name__ == "__main__":
