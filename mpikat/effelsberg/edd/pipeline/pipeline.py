@@ -105,7 +105,8 @@ class Udp2Db2Dspsr(object):
         self._volumes = ["/tmp/:/scratch/"]
         self._dada_key = None
         self._config = None
-        self._udp2dp_process = None
+	self._dspsr = None
+	self._mkrecv_ingest_proc = None
 
     def configure(self):
         self.state = "ready"
@@ -167,10 +168,6 @@ class Udp2Db2Dspsr(object):
 
 
         ###################
-        # Start up MKRECV
-        ###################
-
-        ###################
         # Start up DSPSR
         ###################
         tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
@@ -181,8 +178,12 @@ class Udp2Db2Dspsr(object):
         log.debug(cmd)
 
         if RUN is True:
-            process = Popen(cmd, stdout=PIPE, shell=True)
+	    process = Popen(cmd, stdout=PIPE, shell=True)
             process.wait()
+            os.chdir(out_path)
+	#cmd = "mkdir -p ./{}".format("test")
+        #process = Popen(cmd, stdout=PIPE, shell=True)
+        #process.wait()
 
         cmd = "dspsr {args} -N {source_name} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
@@ -190,18 +191,21 @@ class Udp2Db2Dspsr(object):
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
         if RUN is True:
-            process = Popen(cmd, stdout=PIPE, shell=True)
-            process.wait()
+            self._dspsr = Popen(cmd, stdout=PIPE, shell=True)
 
-
-
+        ###################
+        # Start up MKRECV
+        ###################
+        if RUN is True:
+	    self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
 
     def stop(self):
         log.debug("Stopping")
         self.state = "ready"
         return
         try:
-            self._udp2dp_process.terminate()
+	    self._dspsr.terminate()
+            self._mkrecv_ingest_proc.terminate()
         except Exception:
             pass
 
@@ -213,6 +217,22 @@ class Udp2Db2Dspsr(object):
         if RUN is True:
             process = Popen(cmd, stdout=PIPE, shell=True)
             process.wait()
+	    log.debug("Sending SIGTERM to MKRECV process")
+            self._mkrecv_ingest_proc.terminate()
+            self._mkrecv_timeout = 10.0
+            log.debug("Waiting {} seconds for MKRECV to terminate...".format(self._mkrecv_timeout))
+            now = time.time()
+            while time.time()-now < self._mkrecv_timeout:
+                retval = self._mkrecv_ingest_proc.poll()
+                if retval is not None:
+                    log.info("MKRECV returned a return value of {}".format(retval))
+                    break
+                else:
+                    yield sleep(0.5)
+            else:
+                log.warning("MKRECV failed to terminate in alloted time")
+                log.info("Killing MKRECV process")
+                self._mkrecv_ingest_proc.kill()
         return
 
 
