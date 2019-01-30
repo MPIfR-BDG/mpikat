@@ -44,7 +44,9 @@ dada_header_params = {"dada_header_params":
                           "nchan": 1,
                           "resolution": 1,
                           "dsb": 1
-                      }}
+                      }
+                      "base_output_dir":+os.getcwd()
+                      }
 
 udp2db_params = {"udp2db_params":
                  {
@@ -128,10 +130,10 @@ class Udp2Db2Dspsr(object):
 
     # def configure(self, config, sensors):
     def configure(self):
-	print "testing"
+        print "testing"
         log.info("testing")
-	self.state = "ready"
-        #return
+        self.state = "ready"
+        # return
         self._config = dada_header_params
         self._dada_key = dada_db_params["dada_db_params"]["key"]
         try:
@@ -250,7 +252,7 @@ class Udp2Db2Dspsr(object):
         if RUN is True:
             process = Popen(cmd, stdout=PIPE, shell=True)
             process.wait()
-        """    
+        """
         """
         self._docker.run(
             self._config["psrchive_params"]["image"],
@@ -266,7 +268,7 @@ class Udp2Db2Dspsr(object):
         if RUN is True:
             process = Popen(cmd, stdout=PIPE, shell=True)
             process.wait()
-        """    
+        """
         """
         self._docker.run(
             self._config["psrchive_params"]["image"],
@@ -328,14 +330,15 @@ class Udp2Db2Dspsr(object):
         self._docker.run("psr-capture", cmd, remove=True, ipc_mode="host")
         """
 
+
 def main():
     print "\nCreate pipeline ...\n"
     logging.info("Starting pipeline instance")
     server = Udp2Db2Dspsr()
     server.configure()
     server.start()
-    #server.stop()
+    # server.stop()
     server.deconfigure()
 
 if __name__ == "__main__":
-    main()    
+    main()
