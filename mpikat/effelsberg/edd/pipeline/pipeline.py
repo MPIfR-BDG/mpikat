@@ -189,7 +189,7 @@ class Udp2Db2Dspsr(object):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-	return
+        
         ###################
         # Start up DSPSR
         ###################
@@ -326,28 +326,15 @@ class Udp2Db2Dspsr(object):
         """
         self._docker.run("psr-capture", cmd, remove=True, ipc_mode="host")
         """
-@coroutine
-def on_shutdown(ioloop, server):
-    log.info('Shutting down server')
-    yield server.stop()
-    ioloop.stop()
-
 
 def main():
     print "\nCreate pipeline ...\n"
-    #logging.getLogger().addHandler(logging.NullHandler())
-    #logger = logging.getLogger('mpikat.effelsberg.edd.pipeline.pipeline')    
-    #coloredlogs.install(
-    #    fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
-    #    level="DEBUG",
-    #    logger=log)
-    #logging.getLogger('mpikat.effelsberg.edd.pipeline.pipeline').setLevel('DEBUG')
-    logging.info("Starting PafWorkerServer instance")
-    #logging.getLogger
-#    ioloop = tornado.ioloop.IOLoop.current()
+    logging.info("Starting pipeline instance")
     server = Udp2Db2Dspsr()
     server.configure()
     server.start()
+    server.stop()
+    server.deconfigure()
 
 if __name__ == "__main__":
     main()    
