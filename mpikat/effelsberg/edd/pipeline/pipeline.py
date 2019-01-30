@@ -28,35 +28,35 @@ PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
                    "deconfiguring", "error"]
 
-CONFIG={
-                    "base_output_dir":os.getcwd(),
-                    "dspsr_params":
-                    {
-                        "args":"-cpu 2,3 -L 10 -r -F 256:D -fft-bench -cuda 0,0 -minram 1024"
-                    },
-                    "dada_db_params":
-                    {
-                        "args":"-n 8 -b 1280000000 -p -l",
-                        "key":"dada"
-                    },
-                    "dada_header_params":
-                    {
-                        "filesize":25600000000,
-                        "telescope":"Effelsberg",
-                        "instrument":"asterix",
-                        "frequency_mhz":1370,
-                        "receiver_name":"P200-3",
-                        "bandwidth":320,
-                        "tsamp":0.00156250,
-                        "nbit":8,
-                        "ndim":1,
-                        "npol":2,
-                        "nchan":1,
-                        "resolution":1,
-                        "dsb":1
-                    }
-               
-            }
+CONFIG = {
+    "base_output_dir": os.getcwd(),
+    "dspsr_params":
+    {
+        "args": "-cpu 2,3 -L 10 -r -F 256:D -fft-bench -cuda 0,0 -minram 1024"
+    },
+    "dada_db_params":
+    {
+        "args": "-n 8 -b 1280000000 -p -l",
+        "key": "dada"
+    },
+    "dada_header_params":
+    {
+        "filesize": 25600000000,
+        "telescope": "Effelsberg",
+        "instrument": "asterix",
+        "frequency_mhz": 1370,
+        "receiver_name": "P200-3",
+        "bandwidth": 320,
+        "tsamp": 0.00156250,
+        "nbit": 8,
+        "ndim": 1,
+        "npol": 2,
+        "nchan": 1,
+        "resolution": 1,
+        "dsb": 1
+    }
+
+}
 
 sensors = {"ra": 123, "dec": -10, "source-name": "Crab",
            "scannum": 0, "subscannum": 1, "timestamp": str(datetime.now().time())}
@@ -116,9 +116,9 @@ class Udp2Db2Dspsr(object):
             self.deconfigure()
         except Exception:
             pass
-	###################################
-	#####Starting up ring buffer#######
-	###################################
+        ###################################
+        #####Starting up ring buffer#######
+        ###################################
         cmd = "dada_db -k {key} {args}".format(**
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
@@ -165,16 +165,16 @@ class Udp2Db2Dspsr(object):
         dada_header_file.close()
         dada_key_file.close()
 
+
+        ###################
+        # Start up MKRECV
+        ###################
+
         ###################
         # Start up DSPSR
         ###################
         tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
         out_path = os.path.join("/output/", source_name, tstr)
-        host_out_path = os.path.join(self._config["base_output_dir"],
-                                     source_name, tstr)
-        volumes = ["/tmp/:/scratch/",
-                   "{}:/output/".format(
-                       self._config["base_output_dir"])]
 
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(out_path)
@@ -183,8 +183,8 @@ class Udp2Db2Dspsr(object):
         if RUN is True:
             process = Popen(cmd, stdout=PIPE, shell=True)
             process.wait()
-       
-	cmd = "dspsr {args} -N {source_name} {keyfile}".format(
+
+        cmd = "dspsr {args} -N {source_name} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             source_name=source_name,
             keyfile=dada_key_file.name)
@@ -192,23 +192,14 @@ class Udp2Db2Dspsr(object):
         if RUN is True:
             process = Popen(cmd, stdout=PIPE, shell=True)
             process.wait()
-        """
-        self._docker.run(
-            self._config["dspsr_params"]["image"],
-            cmd,
-            detach=True,
-            name="dspsr",
-            ipc_mode="host",
-            volumes=volumes,
-            working_dir=out_path,
-            ulimits=self.ulimits,
-            requires_nvidia=True)
-        """
+
+
+
 
     def stop(self):
-    	log.debug("Stopping")
+        log.debug("Stopping")
         self.state = "ready"
-	return
+        return
         try:
             self._udp2dp_process.terminate()
         except Exception:
@@ -222,7 +213,8 @@ class Udp2Db2Dspsr(object):
         if RUN is True:
             process = Popen(cmd, stdout=PIPE, shell=True)
             process.wait()
-	return 
+        return
+
 
 def main():
     print "\nCreate pipeline ...\n"
