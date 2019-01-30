@@ -5,10 +5,9 @@ import time
 import shutil
 from datetime import datetime
 from subprocess import check_output, PIPE, Popen
-#from reynard.pipelines import Pipeline, reynard_pipeline
-#from reynard.dada import render_dada_header, make_dada_key_string
+from mpikat.effelsberg.edd.pipeline.pipeline.dada import render_dada_header, make_dada_key_string
 
-log = logging.getLogger("mpikat.edd.pipeline.pipeline")
+log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 
 #
 # NOTE: For this to run properly the host /tmp/
@@ -16,6 +15,7 @@ log = logging.getLogger("mpikat.edd.pipeline.pipeline")
 # This is needed as docker doesn't currently support
 # container to container file copies.
 #
+RUN = False
 
 PIPELINES = {}
 
@@ -133,10 +133,11 @@ class Udp2Db2Dspsr(object):
         cmd = "dada_db -k {key} {args}".format(**
                                                dada_header_params["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
-        process = Popen(cmd, stdout=PIPE, shell=True)
-        process.wait()
+        if RUN is True:
+            process = Popen(cmd, stdout=PIPE, shell=True)
+            process.wait()
 
-        #self._docker.run(
+        # self._docker.run(
         #    self._config["dada_db_params"]["image"],
         #    cmd, remove=True,
         #    ipc_mode="host",
@@ -198,22 +199,25 @@ class Udp2Db2Dspsr(object):
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(out_path)
         log.debug(cmd)
-        process = Popen(cmd, stdout=PIPE, shell=True)
-        process.wait()
 
+        if RUN is True:
+            process = Popen(cmd, stdout=PIPE, shell=True)
+            process.wait()
+        """    
         self._docker.run(
             self._config["dspsr_params"]["image"],
             cmd,
             volumes=volumes,
             remove=True)
-
+        """
         cmd = "dspsr {args} -N {source_name} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             source_name=source_name,
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
-        process = Popen(cmd, stdout=PIPE, shell=True)
-        process.wait()
+        if RUN is True:
+            process = Popen(cmd, stdout=PIPE, shell=True)
+            process.wait()
         """
         self._docker.run(
             self._config["dspsr_params"]["image"],
@@ -230,13 +234,16 @@ class Udp2Db2Dspsr(object):
         # Start up PSRCHIVE monitor
         ############################
 
-        #Do we need this monitor?
+        # Do we need this monitor?
+        """
         host_out_dir = os.path.join(
             self._config["base_monitor_dir"], "timing", source_name, tstr)
         out_dir = os.path.join("/output/timing/", source_name, tstr)
         log.debug("Creating directory: {}".format(out_dir))
-        process = Popen(cmd, stdout=PIPE, shell=True)
-        process.wait()
+        if RUN is True:
+            process = Popen(cmd, stdout=PIPE, shell=True)
+            process.wait()
+        """    
         """
         self._docker.run(
             self._config["psrchive_params"]["image"],
@@ -244,12 +251,15 @@ class Udp2Db2Dspsr(object):
             volumes=["{}:/output/".format(self._config["base_monitor_dir"])],
             remove=True)
         """
+        """
         volumes = [
             "{}:/output/".format(host_out_dir),
             "{}:/input/".format(host_out_path)
         ]
-        process = Popen(cmd, stdout=PIPE, shell=True)
-        process.wait()
+        if RUN is True:
+            process = Popen(cmd, stdout=PIPE, shell=True)
+            process.wait()
+        """    
         """
         self._docker.run(
             self._config["psrchive_params"]["image"],
@@ -271,7 +281,8 @@ class Udp2Db2Dspsr(object):
             headerfile=dada_header_file.name)
         cmd = 'bash -c "{cmd}"'.format(cmd=cmd)
         log.debug("Running command: {0}".format(cmd))
-        self._udp2dp_process = Popen(cmd, shell=True)
+        if RUN is True:
+            self._udp2dp_process = Popen(cmd, shell=True)
         """
         self._docker.run(
             self._config["udp2db_params"]["image"],
@@ -288,6 +299,7 @@ class Udp2Db2Dspsr(object):
             requires_vma=True,
             ulimits=self.ulimits)
         """
+
     def stop(self):
         return
         try:
@@ -302,8 +314,52 @@ class Udp2Db2Dspsr(object):
         log.debug("Destroying dada buffer")
         cmd = "dada_db -d -k {0}".format(self._dada_key)
         log.debug("Running command: {0}".format(cmd))
-        process = Popen(cmd, stdout=PIPE, shell=True)
-        process.wait()
+        if RUN is True:
+            process = Popen(cmd, stdout=PIPE, shell=True)
+            process.wait()
         """
         self._docker.run("psr-capture", cmd, remove=True, ipc_mode="host")
         """
+
+
+if __name__ == "__main__":
+    print "\nCreate pipeline ...\n"
+    udp2Db2Dspsr = Udp2Db2Dspsr()
+    logging.getLogger().addHandler(logging.NullHandler())
+    logger = logging.getLogger('mpikat')    
+    logging.getLogger('mpikat').setLevel('DEBUG')
+
+    #def configure(utc_start, freq, ip):
+    #    print "\nConfigure it ...\n"
+    #    udp2Db2Dspsr.configure(utc_start, freq, ip)
+    """    
+    def status():
+        time.sleep(30)
+        while True:
+            print udp2Db2Dspsr.stream_status()
+            # search_mode.stream_status()
+            time.sleep(1)
+    """
+    #def start(source_name, ra, dec, start_buf):
+    #    time.sleep(40)
+    #    print "\nStart it ...\n"
+    #    udp2Db2Dspsr.start(source_name, ra, dec, start_buf)
+
+    #threads = []
+    #threads.append(threading.Thread(target = configure, args = (utc_start, freq, ip, )))
+    #threads.append(threading.Thread(target = start, args = (source_name, ra, dec, start_buf, )))
+    #threads.append(threading.Thread(target = status))
+    # for thread in threads:
+    #    thread.start()
+    # for thread in threads:
+    #    thread.join()
+    print "\nConfigure it ...\n"
+    udp2Db2Dspsr.configure()
+    #udp2Db2Dspsr.start(source_name, ra, dec, start_buf)
+    #udp2Db2Dspsr.stream_status()
+
+    #print "\nStop it ...\n"
+    #udp2Db2Dspsr.stop()
+
+    #print "\nDeconfigure it ...\n"
+    #udp2Db2Dspsr.deconfigure()
