@@ -69,7 +69,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         @note       Suports SCPI request: 'EDD:ABORT'
         """
         self._ioloop.add_callback(self._make_coroutine_wrapper(req,
-            self._mc.deconfigure))
+            self._mc.capture_stop))
 
     @scpi_request()
     def request_edd_start(self, req):
