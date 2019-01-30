@@ -45,7 +45,6 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         page.close()
 
     @scpi_request()
-    @raise_or_ok
     def request_edd_configure(self, req):
         """
         @brief      Configure the EDD backend
@@ -61,7 +60,6 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
                 self._mc.configure, self._config))
 
     @scpi_request()
-    @raise_or_ok
     def request_edd_abort(self, req):
         """
         @brief      Abort EDD backend processing
@@ -74,7 +72,6 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
             self._mc.deconfigure))
 
     @scpi_request()
-    @raise_or_ok
     def request_edd_start(self, req):
         """
         @brief      Start the EDD backend processing
@@ -87,7 +84,6 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
                 self._mc.capture_start))
 
     @scpi_request()
-    @raise_or_ok
     def request_edd_stop(self, req):
         """
         @brief      Stop the EDD backend processing
