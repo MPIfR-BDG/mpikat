@@ -44,8 +44,8 @@ dada_header_params = {"dada_header_params":
                           "nchan": 1,
                           "resolution": 1,
                           "dsb": 1
-                      }
-                      "base_output_dir":+os.getcwd()
+                      },
+                      "base_output_dir":os.getcwd()
                       }
 
 udp2db_params = {"udp2db_params":
