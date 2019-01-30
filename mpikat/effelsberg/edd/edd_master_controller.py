@@ -260,6 +260,7 @@ class EddMasterController(MasterController):
             except Exception as error:
                 log.warning("Unable to deconfigure EDD before configuration: {}".format(str(error)))
         self._packetisers = []
+        self._fits_interfaces = []
         log.debug("Parsing JSON configuration")
         try:
             config_dict = json.loads(config_json)
@@ -333,6 +334,9 @@ class EddMasterController(MasterController):
         log.info("Stopping packetiser data transmission")
         for packetiser in self._packetisers:
             yield packetiser.capture_stop()
+        log.info("Stopping FITS interfaces")
+        for fi in self._fits_interfaces:
+            fi.capture_stop()
         self._products = {}
         self._update_products_sensor()
 

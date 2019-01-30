@@ -5,25 +5,96 @@ import tornado
 import logging
 import signal
 import socket
-import Queue
 import time
 import errno
 import threading
 import coloredlogs
-from threading import Thread, Event
-from optparse import OptionParser
-from time import sleep
 import numpy as np
 import struct
+import time
+import Queue
+from threading import Thread, Event
+from optparse import OptionParser
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import (Str, Float, Int, request, return_reply)
 
 log = logging.getLogger("mpikat.edd_fi_server")
 
-data_Queue = Queue.Queue()
-
 class StopEventException(Exception):
     pass
+
+class FitsWriterNotConnected(Exception):
+    pass
+
+class FitsWriterConnectionManager(Thread):
+    def __init__(self, ip, port):
+        Thread.__init__(self)
+        self._address = (ip, port)
+        self._shutdown = Event()
+        self._has_connection = Event()
+        self._server_socket = None
+        self._transmit_socket = None
+        self._reset_server_socket()
+
+    def _reset_server_socket(self):
+        if self._server_socket:
+            self._server_socket.close()
+        log.debug("Creating the FITS writer TCP listening socket")
+        self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._server_socket.setblocking(False)
+        log.debug("Binding to {}".format(self._address))
+        self._server_socket.bind(self._address)
+        self._server_socket.listen(1)
+
+    def accept_connection(self):
+        while not self._shutdown.is_set():
+            try:
+                log.debug("Accepting connections on FW server socket")
+                transmit_socket, addr = self._server_socket.accept()
+                self._has_connection.set()
+                log.info("Received connection from {}".format(addr))
+                return transmit_socket
+            except socket.error as error:
+                error_id = error.args[0]
+                if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
+                    time.sleep(1)
+                else:
+                    log.exception("Unexpected error on socket accept: {}".format(str(error)))
+                    raise error
+            except Exception as error:
+                log.exception("Unexpected error on socket accept: {}".format(str(error)))
+                raise error
+
+    def drop_connection(self):
+        if self._transmit_socket:
+            self._transmit_socket.shutdown(socket.SHUT_RDWR)
+            self._transmit_socket.close()
+            self._transmit_socket = None
+            self._has_connection.clear()
+
+    def get_transmit_socket(self):
+        if self._has_connection.is_set():
+            return self._transmit_socket
+        else:
+            raise FitsWriterNotConnected
+
+    def stop(self):
+        self._shutdown.set()
+
+    def run(self):
+        while not self._shutdown.is_set():
+            try:
+                if not self._has_connection.is_set():
+                    self._transmit_socket = self.accept_connection()
+                else:
+                    time.sleep(1)
+            except Exception as error:
+                log.exception(str(error))
+                continue
+        self.drop_connection()
+        self._server_socket.close()
+
 
 class FitsInterfaceServer(AsyncDeviceServer):
     """
@@ -56,23 +127,27 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._blank_phase = None
         self._capture_interface = capture_interface
         self._capture_port = capture_port
-        self._fw_ip = fw_ip
-        self._fw_port = fw_port
+        self._fw_connection_manager = FitsWriterConnectionManager(fw_ip,fw_port)
         self._capture_thread = None
         self._transmit_thread = None
+        self._shutdown = False
         super(FitsInterfaceServer, self).__init__(interface, port)
 
     def start(self):
         """
         @brief   Start the server
         """
+        self._fw_connection_manager.start()
         super(FitsInterfaceServer, self).start()
 
     def stop(self):
         """
         @brief   Stop the server
         """
-        self._stop_threads()
+        self._shutdown = True
+        self._stop_capture()
+        self._stop_transmit()
+        self._fw_connection_manager.stop()
         super(FitsInterfaceServer, self).stop()
 
     @property
@@ -144,9 +219,8 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self.add_sensor(self._nblank_phases_sensor)
 
     def _stop_threads(self):
-        log.debug("Stopping any active threads")
-        self._stop_transmit()
         self._stop_capture()
+        self._stop_transmit()
 
     def _stop_capture(self):
         if self._capture_thread:
@@ -185,6 +259,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self.nchannels = channels
         self.integration_time = int_time
         self.nblank_phases = blank_phases
+        self._fw_connection_manager.drop_connection()
         self._stop_threads()
         self._configured = True
         return ("ok",)
@@ -201,16 +276,22 @@ class FitsInterfaceServer(AsyncDeviceServer):
             msg = "FITS interface server is not configured"
             log.error(msg)
             return ("fail", msg)
+        try:
+            socket = self._fw_connection_manager.get_transmit_socket()
+        except Exception as error:
+            log.exception(str(error))
+            return ("fail", str(error))
         log.info("Starting FITS interface capture")
-        self._stop_threads()
+        self._stop_capture()
+        self._stop_transmit()
         buffer_size = 4 * (self.nchannels + 2)
         queue = Queue.Queue()
-        event = Event()
+        self._transmit_thread = FitsWriterTransmitter(socket, queue)
         self._capture_thread = CaptureData(self._capture_interface,
-            self._capture_port, buffer_size, AggregateData(2, self.nchannels, queue, event))
-        self._capture_thread.start()
-        self._transmit_thread = FitsWriterTransmitter(self._fw_ip, self._fw_port, queue, event)
+            self._capture_port, buffer_size, AggregateData(2, self.nchannels,
+                queue))
         self._transmit_thread.start()
+        self._capture_thread.start()
         return ("ok",)
 
     @request()
@@ -226,7 +307,9 @@ class FitsInterfaceServer(AsyncDeviceServer):
             log.error(msg)
             return ("fail", msg)
         log.info("Stopping FITS interface capture")
-        self._stop_threads()
+        self._stop_capture()
+        self._stop_transmit()
+        self._fw_connection_manager.drop_connection()
         return ("ok",)
 
 
@@ -270,7 +353,7 @@ class CaptureData(Thread):
             except socket.error as error:
                 error_id = error.args[0]
                 if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
-                    sleep(0.01)
+                    time.sleep(0.01)
                     continue
                 else:
                     raise error
@@ -292,11 +375,10 @@ class AggregateData(object):
     @brief Aggregates spectrometer data from polarization channel 1 and 2 for the given time
            before sending to the fits writer
     """
-    def __init__(self, no_streams, no_channels, output_queue, fw_active_event, name="AggregateData"):
+    def __init__(self, no_streams, no_channels, output_queue, name="AggregateData"):
         self._no_streams = no_streams
         self._no_channels = no_channels
         self._output_queue = output_queue
-        self._fw_active_event = fw_active_event
         self._data_stream = []
         self._count = 0
         self._previous_payload = 0
@@ -330,12 +412,6 @@ class AggregateData(object):
             t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, ms))
         return time_string
 
-    def _queue_put(self, data):
-        if self._fw_active_event.is_set():
-            self._output_queue.put(data)
-        else:
-            log.debug("Dropping data as transmitter instance is not active")
-
     def aggregate(self, data_to_process):
         self._count += 1
         data = np.zeros(2050,dtype=np.uint32)
@@ -356,14 +432,14 @@ class AggregateData(object):
             self._data_stream.append(data[2:])
             self._data_stream.append(self._previous_payload)
             log.debug("Forwarding packets with sequence numbers: {} and {}".format(sequence_num, self._ref_seq_no))
-            self._queue_put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
+            self._output_queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
             self._count = 0
             self._data_stream = []
         elif ((sequence_num == (self._ref_seq_no + 1)) & (phase == self._blank_phase)):
             self._data_stream.append(self._previous_payload)
             self._data_stream.append(data[2:])
             log.debug("Forwarding packets with sequence numbers: {} and {}".format(self._ref_seq_no, sequence_num))
-            self._queue_put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
+            self._output_queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
             self._count = 0
             self._data_stream = []
         else:
@@ -380,7 +456,7 @@ class FitsWriterTransmitter(Thread):
     """
     @brief  Class for wrapping transmission of packets to the APEX FITS writer
     """
-    def __init__(self, server_ip, tcp_port, input_queue, fw_active_event, name="FitsWriterTransmitter"):
+    def __init__(self, transmit_socket, input_queue, name="FitsWriterTransmitter"):
         """
         @brief  Construct the instance
 
@@ -388,60 +464,20 @@ class FitsWriterTransmitter(Thread):
         @param  tcp_port    The local port to bind to
         """
         Thread.__init__(self, name=name)
-        self._server_addr = (server_ip, tcp_port)
         self._input_queue = input_queue
-        self._fw_active_event = fw_active_event
-        self._server_socket = None
         self._transmit_socket = None
         self._time_stamp = ""
         self._integ_time = 16
         self._blank_phase = 1
         self._no_streams = 0
         self._no_channels = 0
-        self._sending_stop_event = Event()
-
-    def create_server_socket(self):
-        """
-        @brief      Create the TCP listening socket
-
-        @detail     We use a non-blocking socket for all communications
-        """
-        log.debug("Creating the TCP server socket")
-        self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._server_socket.setblocking(False)
-        log.debug("Binding to {}".format(self._server_addr))
-        self._server_socket.bind((self._server_addr))
-        self._server_socket.listen(1)
-
-    def accept_connection(self):
-        """
-        @brief      Wait for an incoming connection
-        """
-        log.info("Waiting on client connection from FITS writer")
-        while not self._sending_stop_event.is_set():
-            try:
-                self._transmit_socket, addr = self._server_socket.accept()
-                log.info("Received connection from {}".format(addr))
-                self._fw_active_event.set()
-                return
-            except socket.error as error:
-                error_id = error.args[0]
-                if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
-                    sleep(0.1)
-                    continue
-                else:
-                    raise error
-            except Exception as error:
-                raise error
-        raise StopEventException
+        self._shutdown = Event()
 
     def stop(self):
         """
         @brief      Stop the server
         """
-        self._fw_active_event.clear()
-        self._sending_stop_event.set()
+        self._shutdown.set()
 
     def pack_metadata(self):
         #IEEE - big endian, EEEI - little endian
@@ -511,7 +547,7 @@ class FitsWriterTransmitter(Thread):
 
     def read_from_queue(self, timeout=1):
         log.debug("Fetching message from queue")
-        while not self._sending_stop_event.is_set():
+        while not self._shutdown.is_set():
             try:
                 return self._input_queue.get(True, timeout)
             except Queue.Empty:
@@ -539,29 +575,18 @@ class FitsWriterTransmitter(Thread):
         data_to_send = self.pack_tcp_data(tcp_data_format, tcp_data)
         return data_to_send
 
-    def transmit(self):
-        log.info("Beginning data transmission to FITS writer")
-        while not self._sending_stop_event.is_set():
-            data_to_fw = self.pack_data()
-            self._transmit_socket.send(data_to_fw)
-        log.info("Finishing data transmission to FITS writer")
-
     def run(self):
-        self.create_server_socket()
         try:
-            self.accept_connection()
-            self.transmit()
+            log.info("Beginning data transmission to FITS writer")
+            while not self._shutdown.is_set():
+                data_to_fw = self.pack_data()
+                self._transmit_socket.send(data_to_fw)
+            log.info("Finishing data transmission to FITS writer")
         except StopEventException:
-            pass
+            log.info("Stop event was set on FITS transmitter")
         except Exception as error:
-            log.exception("Error on transmit to FW: {}".format(str(error)))
-        finally:
-            if self._transmit_socket:
-                log.debug("Closing transmit socket")
-                self._transmit_socket.shutdown(socket.SHUT_RDWR)
-                self._transmit_socket.close()
-            log.debug("Closing server socket")
-            self._server_socket.close()
+            log.exception("Error on transmission to FITS writer: {}".format(str(error)))
+
 
 @tornado.gen.coroutine
 def on_shutdown(ioloop, server):
