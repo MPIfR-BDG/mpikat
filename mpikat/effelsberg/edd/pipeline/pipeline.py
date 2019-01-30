@@ -1,13 +1,18 @@
+import signal
 import logging
 import tempfile
+import coloredlogs
+import tornado
+from tornado.gen import Return, coroutine
 import os
 import time
 import shutil
 from datetime import datetime
 from subprocess import check_output, PIPE, Popen
-from mpikat.effelsberg.edd.pipeline.pipeline.dada import render_dada_header, make_dada_key_string
+from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
+log.setLevel('DEBUG')
 
 #
 # NOTE: For this to run properly the host /tmp/
@@ -122,17 +127,19 @@ class Udp2Db2Dspsr(object):
 
     # def configure(self, config, sensors):
     def configure(self):
-        self.state = "ready"
-        return
+	print "testing"
+        log.info("testing")
+	self.state = "ready"
+        #return
         self._config = dada_header_params
-        self._dada_key = dada_header_params["dada_db_params"]["key"]
+        self._dada_key = dada_db_params["dada_db_params"]["key"]
         try:
-            self.sdeconfigure()
+            self.deconfigure()
         except Exception:
             pass
         cmd = "dada_db -k {key} {args}".format(**
-                                               dada_header_params["dada_db_params"])
-        log.debug("Running command: {0}".format(cmd))
+                                               dada_db_params["dada_db_params"])
+        log.info("Running command: {0}".format(cmd))
         if RUN is True:
             process = Popen(cmd, stdout=PIPE, shell=True)
             process.wait()
@@ -146,7 +153,6 @@ class Udp2Db2Dspsr(object):
     # def start(self, sensors):
     def start(self):
         self.state = "running"
-        return
         header = self._config["dada_header_params"]
         header["ra"] = sensors["ra"]
         header["dec"] = sensors["dec"]
@@ -163,7 +169,7 @@ class Udp2Db2Dspsr(object):
             mode="w",
             prefix="reynard_dada_header_",
             suffix=".txt",
-            dir="/scratch/",
+            dir=os.getcwd(),
             delete=False)
         log.debug(
             "Writing dada header file to {0}".format(
@@ -175,7 +181,7 @@ class Udp2Db2Dspsr(object):
             mode="w",
             prefix="reynard_dada_keyfile_",
             suffix=".key",
-            dir="/scratch/",
+            dir=os.getcwd(),
             delete=False)
         log.debug("Writing dada key file to {0}".format(dada_key_file.name))
         key_string = make_dada_key_string(self._dada_key)
@@ -183,7 +189,7 @@ class Udp2Db2Dspsr(object):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-
+	return
         ###################
         # Start up DSPSR
         ###################
@@ -320,46 +326,28 @@ class Udp2Db2Dspsr(object):
         """
         self._docker.run("psr-capture", cmd, remove=True, ipc_mode="host")
         """
+@coroutine
+def on_shutdown(ioloop, server):
+    log.info('Shutting down server')
+    yield server.stop()
+    ioloop.stop()
 
+
+def main():
+    print "\nCreate pipeline ...\n"
+    #logging.getLogger().addHandler(logging.NullHandler())
+    #logger = logging.getLogger('mpikat.effelsberg.edd.pipeline.pipeline')    
+    #coloredlogs.install(
+    #    fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
+    #    level="DEBUG",
+    #    logger=log)
+    #logging.getLogger('mpikat.effelsberg.edd.pipeline.pipeline').setLevel('DEBUG')
+    logging.info("Starting PafWorkerServer instance")
+    #logging.getLogger
+#    ioloop = tornado.ioloop.IOLoop.current()
+    server = Udp2Db2Dspsr()
+    server.configure()
+    server.start()
 
 if __name__ == "__main__":
-    print "\nCreate pipeline ...\n"
-    udp2Db2Dspsr = Udp2Db2Dspsr()
-    logging.getLogger().addHandler(logging.NullHandler())
-    logger = logging.getLogger('mpikat')    
-    logging.getLogger('mpikat').setLevel('DEBUG')
-
-    #def configure(utc_start, freq, ip):
-    #    print "\nConfigure it ...\n"
-    #    udp2Db2Dspsr.configure(utc_start, freq, ip)
-    """    
-    def status():
-        time.sleep(30)
-        while True:
-            print udp2Db2Dspsr.stream_status()
-            # search_mode.stream_status()
-            time.sleep(1)
-    """
-    #def start(source_name, ra, dec, start_buf):
-    #    time.sleep(40)
-    #    print "\nStart it ...\n"
-    #    udp2Db2Dspsr.start(source_name, ra, dec, start_buf)
-
-    #threads = []
-    #threads.append(threading.Thread(target = configure, args = (utc_start, freq, ip, )))
-    #threads.append(threading.Thread(target = start, args = (source_name, ra, dec, start_buf, )))
-    #threads.append(threading.Thread(target = status))
-    # for thread in threads:
-    #    thread.start()
-    # for thread in threads:
-    #    thread.join()
-    print "\nConfigure it ...\n"
-    udp2Db2Dspsr.configure()
-    #udp2Db2Dspsr.start(source_name, ra, dec, start_buf)
-    #udp2Db2Dspsr.stream_status()
-
-    #print "\nStop it ...\n"
-    #udp2Db2Dspsr.stop()
-
-    #print "\nDeconfigure it ...\n"
-    #udp2Db2Dspsr.deconfigure()
+    main()    
