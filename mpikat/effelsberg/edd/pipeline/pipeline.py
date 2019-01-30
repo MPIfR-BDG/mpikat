@@ -129,6 +129,7 @@ class Udp2Db2Dspsr(object):
 
     def start(self):
         self.state = "running"
+
         header = self._config["dada_header_params"]
         header["ra"] = sensors["ra"]
         header["dec"] = sensors["dec"]
@@ -139,8 +140,18 @@ class Udp2Db2Dspsr(object):
             pass
         header["source_name"] = source_name
         header["obs_id"] = "{0}_{1}".format(
-            sensors["scannum"], sensors["subscannum"])
+        sensors["scannum"], sensors["subscannum"])
+        tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
+        out_path = os.path.join("/output/", source_name, tstr)
 
+        log.debug("Creating directories")
+        cmd = "mkdir -p {}".format(out_path)
+        log.debug(cmd)
+	log.debug(os.getcwd())
+        #if RUN is True:
+        process = Popen(cmd, stdout=PIPE, shell=True)
+        process.wait()
+        os.chdir(out_path)
         dada_header_file = tempfile.NamedTemporaryFile(
             mode="w",
             prefix="edd_dada_header_",
@@ -165,26 +176,10 @@ class Udp2Db2Dspsr(object):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-
-
+	log.debug(os.getcwd())
         ###################
         # Start up DSPSR
         ###################
-        tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
-        out_path = os.path.join("/output/", source_name, tstr)
-
-        log.debug("Creating directories")
-        cmd = "mkdir -p {}".format(out_path)
-        log.debug(cmd)
-
-        if RUN is True:
-	    process = Popen(cmd, stdout=PIPE, shell=True)
-            process.wait()
-            os.chdir(out_path)
-	#cmd = "mkdir -p ./{}".format("test")
-        #process = Popen(cmd, stdout=PIPE, shell=True)
-        #process.wait()
-
         cmd = "dspsr {args} -N {source_name} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             source_name=source_name,
