@@ -132,11 +132,12 @@ class EddRoach2ProductController(ProductController):
         yield self._r2rm_client.until_synced(2)
         self._icom_id = config["icom_id"]
         self._firmware = config["firmware"]
-        log.debug("Deconfiguring board")
+
+
+        log.debug("Trying to force deconfiguring board")
         response = yield self._r2rm_client.req.force_deconfigure_board(self._icom_id)
         if not response.reply.reply_ok():
-            self.log.error("Error on deconfigure request: {}".format(response.reply.arguments[1]))
-            raise EddRoach2ProductError(response.reply.arguments[1])
+            self.log.warning("Unable to deconfigure ROACH2 board: {}".format(response.reply.arguments[1]))
         log.debug("Sending configure request to R2RM server")
         response = yield self._r2rm_client.req.configure_board(self._icom_id, EDD_R2RM_USER, self._firmware, timeout=20)
         if not response.reply.reply_ok():
