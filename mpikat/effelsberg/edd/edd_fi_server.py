@@ -293,7 +293,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._transmit_thread = FitsWriterTransmitter(socket, queue)
         self._capture_thread = CaptureData(self._capture_interface,
             self._capture_port, buffer_size, AggregateData(2, self.nchannels,
-                queue))
+                self.integration_time, queue))
         self._transmit_thread.start()
         self._capture_thread.start()
         return ("ok",)
@@ -380,7 +380,7 @@ class AggregateData(object):
     @brief Aggregates spectrometer data from polarization channel 1 and 2 for the given time
            before sending to the fits writer
     """
-    def __init__(self, no_streams, no_channels, output_queue, name="AggregateData"):
+    def __init__(self, no_streams, no_channels, integration_time, output_queue, name="AggregateData"):
         self._no_streams = no_streams
         self._no_channels = no_channels
         self._output_queue = output_queue
@@ -457,6 +457,45 @@ class AggregateData(object):
             self._data_stream = []
 
 
+def build_fw_object(nsections, nchannels, timestamp, integration_time, blank_phases):
+
+    class FWData(ctypes.LittleEndianStructure):
+        _fields_ = [
+            ('section_id', ctypes.c_uint32),
+            ('nchannels', ctypes.c_uint32),
+            ('data', ctypes.c_float*nchannels)
+        ]
+
+    class FWPacket(ctypes.LittleEndianStructure):
+        _fields_ = [
+            ("data_type", ctypes.c_char*4),
+            ("channel_data_type", ctypes.c_char*4),
+            ("packet_size", ctypes.c_uint32),
+            ("backend_name", ctypes.c_char*8),
+            ("timestamp", ctypes.c_char*28),
+            ("integration_time", ctypes.c_uint32),
+            ("blank_phases", ctypes.c_uint32),
+            ("nsections", ctypes.c_uint32),
+            ("blocking_factor", ctypes.c_uint32),
+            ("sections", FWData * nsections)
+        ]
+
+    packet = FWPacket()
+    packet.data_type = "EEEI"
+    packet.channel_data_type = "F   "
+    packet.packet_size = len(bytearray(packet))
+    packet.backend_name = "EDD     "
+    packet.timestamp = timestamp
+    packet.integration_time = integration_time
+    packet.blank_phases = blank_phases
+    packet.nsections = nsections
+    packet.blocking_factor = 1
+    for ii in range(nsections):
+        packet.sections[ii].section_id = ii + 1
+        packet.sections[ii].nchannels = nchannels
+    return packet
+
+
 class FitsWriterTransmitter(Thread):
     """
     @brief  Class for wrapping transmission of packets to the APEX FITS writer
@@ -471,11 +510,7 @@ class FitsWriterTransmitter(Thread):
         Thread.__init__(self, name=name)
         self._input_queue = input_queue
         self._transmit_socket = transmit_socket
-        self._time_stamp = ""
-        self._integ_time = 16
-        self._blank_phase = 1
-        self._no_streams = 0
-        self._no_channels = 0
+        self._packet = None
         self._shutdown = Event()
 
     def stop(self):
@@ -483,72 +518,6 @@ class FitsWriterTransmitter(Thread):
         @brief      Stop the server
         """
         self._shutdown.set()
-
-    def pack_metadata(self):
-        #IEEE - big endian, EEEI - little endian
-        header_data = ['EEEI']
-        data_type = '<4s'
-
-        #Data format of channel data: 'F' - Float
-        channel_data_type = 'F   '
-        header_data.append(channel_data_type)
-        data_type += '4s'
-
-        #Length of the data package
-        length_header = struct.calcsize('4s4si8s28siiii')
-        length_sec_headers = struct.calcsize('ii')*self._no_streams
-        length_channel_data = struct.calcsize('f')*self._no_channels*self._no_streams
-        data_package_length = length_header + length_sec_headers + length_channel_data
-        header_data.append(data_package_length)
-        data_type += 'l'
-
-        #Backend name
-        backend_name = 'EDD     '
-        header_data.append(backend_name)
-        data_type += '8s'
-
-        #Time info
-        header_data.append(self._time_stamp)
-        data_type += '28s'
-
-        #Integration time
-        header_data.append(self._integ_time)
-        data_type += 'l'
-
-        #Phase number
-        header_data.append(self._blank_phase)
-        data_type += 'l'
-
-        #Number of Back End Sections
-        header_data.append(self._no_streams)
-        data_type += 'l'
-
-        #Blocking factor
-        blockingFactor =  1
-        header_data.append(blockingFactor)
-        data_type += 'l'
-
-        return(data_type, header_data)
-
-    def pack_FI_data(self, data):
-        data_type = ''
-        edd_data = []
-        data_pointer = 0
-        for backend_section_index in range(self._no_streams):
-            backend_section_num = backend_section_index+1
-            data_type += 'l'
-            edd_data.append(backend_section_num)
-            data_type += 'l'
-            edd_data.append(self._no_channels)
-            data_type += str('%sf' % self._no_channels)
-            edd_data.extend(data[data_pointer:data_pointer+self._no_channels])
-            data_pointer += self._no_channels
-        return(data_type, edd_data)
-
-    def pack_tcp_data(self, dataType, data):
-        packer = struct.Struct(dataType)
-        packed_data = packer.pack(*data)
-        return packed_data
 
     def read_from_queue(self, timeout=1):
         log.debug("Fetching message from queue")
@@ -561,24 +530,19 @@ class FitsWriterTransmitter(Thread):
         raise StopEventException
 
     def pack_data(self):
-        self._time_stamp, self._no_streams, self._no_channels, self._blank_phase, data_from_queue = self.read_from_queue()
+        tstamp, nsections, nchans, blank_phases, data = self.read_from_queue()
         message = (
-            "Timestamp: {}".format(self._time_stamp),
-            "Nstreams: {}".format(self._no_streams),
-            "Nchannels: {}".format(self._no_channels),
-            "Data1 size: {}".format(len(data_from_queue[0])),
-            "Data2 size: {}".format(len(data_from_queue[1]))
+            "Timestamp: {}".format(tstamp),
+            "Nsections: {}".format(nsections),
+            "Nchannels: {}".format(nchans),
+            "Data1 size: {}".format(len(data[0])),
+            "Data2 size: {}".format(len(data[1]))
             )
         log.debug("Packing data with parameters:\n{}".format("\n".join(message)))
-        header_format, header_data = self.pack_metadata()
-        data_to_format = np.reshape(data_from_queue, (self._no_streams * self._no_channels))
-        data_format, pol_data = self.pack_FI_data(data_to_format)
-        tcp_data_format = header_format + data_format
-        header_data.extend(pol_data)
-        tcp_data = header_data
-        log.debug("metadata: {}".format(tcp_data[0:11]))
-        data_to_send = self.pack_tcp_data(tcp_data_format, tcp_data)
-        return data_to_send
+        packet = build_fw_object(nsections, nchans, tstamp, integration_time, blank_phases)
+        for section_id in range(nsections):
+            packet.sections[section_id].data[:] = data[section_id]
+        return str(bytearray(packet))
 
     def run(self):
         try:
