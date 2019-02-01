@@ -278,59 +278,59 @@ class Pipeline(object):
         @brief Setup monitoring sensors
         """
         self._beam_sensor0 = Sensor.float(
-            "beam0",
+            "beam0.id",
             description = "The ID of current beam",
             default = 0,
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.sensors.append(self._beam_sensor0)
         
         self._instant_sensor0 = Sensor.float(
-            "instant0",
-            description = "The instant packet loss rate",
+            "beam0.inst-packet-loss-fraction",
+            description = "The instanteous packet loss fraction",
             default = 0,
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.sensors.append(self._instant_sensor0)
         
         self._time_sensor0 = Sensor.float(
-            "time0",
+            "beam0.time-elapsed",
             description = "The time so far in seconds",
             default = 0,
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.sensors.append(self._time_sensor0)
         
         self._average_sensor0 = Sensor.float(
-            "average0",
-            description = "The packet loss rate so far in average",
+            "beam0.total-packet-loss-fraction",
+            description = "Fraction of packets lost",
             default = 0,
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.sensors.append(self._average_sensor0)
 
         self._beam_sensor1 = Sensor.float(
-            "beam1",
+            "beam1.id",
             description = "The ID of current beam",
             default = 0,
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.sensors.append(self._beam_sensor1)
         
         self._instant_sensor1 = Sensor.float(
-            "instant1",
-            description = "The instant packet loss rate",
+            "beam1.inst-packet-loss-fraction",
+            description = "The instanteous packet loss fraction",
             default = 0,
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.sensors.append(self._instant_sensor1)
         
         self._time_sensor1 = Sensor.float(
-            "time1",
+            "beam1.time-elapsed",
             description = "The time so far in seconds",
             default = 0,
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.sensors.append(self._time_sensor1)
         
         self._average_sensor1 = Sensor.float(
-            "average1",
-            description = "The packet loss rate so far in average",
+            "beam1.total-packet-loss-fraction",
+            description = "Fraction of packets lost",
             default = 0,
-            initial_status = Sensor.NOMINAL)
+            initial_status = Sensor.UNKNOWN)
         self.sensors.append(self._average_sensor1)
         
     @property
@@ -506,14 +506,13 @@ class Pipeline(object):
                 process_index = int(capture_status[1])
                 if process_index == 0:
                     self._beam_sensor0.set_value(float(self._beam_index[0]))
-                    self._beam_time0.set_value(float(capture_status[2]))
-                    self._beam_average0.set_value(float(capture_status[3]))
-                    #self._beam_average0.notify(1000000000.0)
+                    self._time_sensor0.set_value(float(capture_status[2]))
+                    self._average_sensor0.set_value(float(capture_status[3]))
                     self._instant_sensor0.set_value(float(capture_status[4]))
                 if process_index == 1:
                     self._beam_sensor1.set_value(float(self._beam_index[1]))
-                    self._beam_time1.set_value(float(capture_status[2]))
-                    self._beam_average1.set_value(float(capture_status[3]))
+                    self._time_sensor1.set_value(float(capture_status[2]))
+                    self._average_sensor1.set_value(float(capture_status[3]))
                     self._instant_sensor1.set_value(float(capture_status[4]))
 
 @register_pipeline("Search")
