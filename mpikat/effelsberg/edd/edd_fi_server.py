@@ -13,6 +13,7 @@ import numpy as np
 import struct
 import time
 import Queue
+import ctypes as C
 from threading import Thread, Event
 from optparse import OptionParser
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
@@ -125,7 +126,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         """
         self._configured = False
         self._no_active_beams = None
-        self._no_channels = None
+        self._nchannels = None
         self._integ_time = None
         self._blank_phase = None
         self._capture_interface = capture_interface
@@ -375,40 +376,68 @@ class CaptureData(Thread):
             self._socket.close()
 
 
+class RoachPacket(object):
+    def __init__(self, raw_data, nchannels):
+        self._raw_data = raw_data
+        self._nchannels = nchannels
+        self._data = self._get_packet_struct().from_buffer_copy(self._raw_data)
+
+    def _get_packet_struct(self):
+        class RoachPacketFormat(c.BigEndianStructure):
+            _fields_ = [
+                ("header", c.c_ulonglong),
+                ("data", c.c_uint32 * self._nchannels)
+            ]
+        return RoachPacketFormat
+
+    @property
+    def sequence_number(self):
+        return self._data.header & 0x00ffffffffffffff
+
+    @property
+    def phase(self):
+        return (self._data.header & 0xf000000000000000) >> 60
+
+    @property
+    def polarisation(self):
+        return (self._data.header & 0x0f00000000000000) >> 56
+
+    @property
+    def data(self):
+        return self._data.data
+
+class PacketQueue(self)
+    def __init__(self, callback, packets_per_slot, size=5):
+        self._slots = deque(maxlen=size)
+        self._callback = callback
+        self._tail_idx = None
+
+    def add(packet):
+        base_idx = self._slots[0]
+
+        idx = packet.sequence_number
+        if not self._tail_idx:
+            self._tail_idx = idx
+
+
+
+
+
 class AggregateData(object):
     """
     @brief Aggregates spectrometer data from polarization channel 1 and 2 for the given time
            before sending to the fits writer
     """
-    def __init__(self, no_streams, no_channels, integration_time, output_queue, name="AggregateData"):
+    def __init__(self, no_streams, nchannels, integration_time, output_queue, name="AggregateData"):
         self._no_streams = no_streams
-        self._no_channels = no_channels
+        self._nchannels = nchannels
         self._output_queue = output_queue
         self._data_stream = []
         self._count = 0
         self._previous_payload = 0
         self._ref_seq_no = 0
-        self._time_info = ""
+        self._timestamp = ""
         self._blank_phase = 0
-
-    def phase_extract(self, num):
-        mask = 0xf0000000
-        phase = (num&mask) >> 28
-        if (phase == 0): phase = 4
-        return phase
-
-    def pol_extract(self, num):
-        mask = 0x0f000000
-        pol = (num&mask) >> 24
-        return pol
-
-    def extract_sequence_num(self, num1, num2):
-        counter_num = struct.pack(">II", num1,num2)
-        unpack_num= np.zeros(1,dtype=np.int64)
-        unpack_num = struct.unpack(">q", counter_num)
-        mask = 0x00ffffffffffffff
-        seq_no = unpack_num[0]&mask
-        return seq_no
 
     def isotime(self, s):
         ms = int(10000 * (s - int(s)))
@@ -417,18 +446,13 @@ class AggregateData(object):
             t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, ms))
         return time_string
 
-    def aggregate(self, data_to_process):
+    def aggregate(self, raw_data):
+        packet = RoachPacket(raw_data, self._nchannels)
         self._count += 1
-        data = np.zeros(2050,dtype=np.uint32)
-        data = struct.unpack('>2050I', data_to_process)
-        phase = self.phase_extract(data[0])
-        pol_id = self.pol_extract(data[0])
-        sequence_num = self.extract_sequence_num(data[0],data[1])
-        log.debug("Phase: {}, pol_id: {}, seq. no.: {}".format(
-            phase, pol_id, sequence_num))
+        log.debug("Phase: {}, pol_id: {}, seq. no.: {}".format(packet.phase, packet.polarsation, packet.sequence_number))
         #Capturing logic based on sequence no.
         if (self._count == 1):
-            self._time_info = self.isotime(time.time())
+            self._timestamp = self.isotime(time.time())
             self._previous_payload = data[2:]
             self._ref_seq_no = sequence_num
             self._blank_phase = phase
@@ -437,46 +461,45 @@ class AggregateData(object):
             self._data_stream.append(data[2:])
             self._data_stream.append(self._previous_payload)
             log.debug("Forwarding packets with sequence numbers: {} and {}".format(sequence_num, self._ref_seq_no))
-            self._output_queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
+            self._output_queue.put((self._timestamp, self._no_streams, self._nchannels, self._blank_phase, self._data_stream))
             self._count = 0
             self._data_stream = []
         elif ((sequence_num == (self._ref_seq_no + 1)) & (phase == self._blank_phase)):
             self._data_stream.append(self._previous_payload)
             self._data_stream.append(data[2:])
             log.debug("Forwarding packets with sequence numbers: {} and {}".format(self._ref_seq_no, sequence_num))
-            self._output_queue.put((self._time_info, self._no_streams, self._no_channels, self._blank_phase, self._data_stream))
+            self._output_queue.put((self._timestamp, self._no_streams, self._nchannels, self._blank_phase, self._data_stream))
             self._count = 0
             self._data_stream = []
         else:
             log.warning("Packet (seq. num. {}) too far out of order an will be dropped".format(self._ref_seq_no))
             self._count = 1
             self._stream = data[2:]
-            self._time_info = self.isotime(time.time())
+            self._timestamp = self.isotime(time.time())
             self._ref_seq_no = sequence_num
             self._blank_phase = phase
             self._data_stream = []
 
 
 def build_fw_object(nsections, nchannels, timestamp, integration_time, blank_phases):
-
-    class FWData(ctypes.LittleEndianStructure):
+    class FWData(C.LittleEndianStructure):
         _fields_ = [
-            ('section_id', ctypes.c_uint32),
-            ('nchannels', ctypes.c_uint32),
-            ('data', ctypes.c_float*nchannels)
+            ('section_id', C.c_uint32),
+            ('nchannels', C.c_uint32),
+            ('data', C.c_float*nchannels)
         ]
 
-    class FWPacket(ctypes.LittleEndianStructure):
+    class FWPacket(C.LittleEndianStructure):
         _fields_ = [
-            ("data_type", ctypes.c_char*4),
-            ("channel_data_type", ctypes.c_char*4),
-            ("packet_size", ctypes.c_uint32),
-            ("backend_name", ctypes.c_char*8),
-            ("timestamp", ctypes.c_char*28),
-            ("integration_time", ctypes.c_uint32),
-            ("blank_phases", ctypes.c_uint32),
-            ("nsections", ctypes.c_uint32),
-            ("blocking_factor", ctypes.c_uint32),
+            ("data_type", C.c_char*4),
+            ("channel_data_type", C.c_char*4),
+            ("packet_size", C.c_uint32),
+            ("backend_name", C.c_char*8),
+            ("timestamp", C.c_char*28),
+            ("integration_time", C.c_uint32),
+            ("blank_phases", C.c_uint32),
+            ("nsections", C.c_uint32),
+            ("blocking_factor", C.c_uint32),
             ("sections", FWData * nsections)
         ]
 
@@ -493,6 +516,7 @@ def build_fw_object(nsections, nchannels, timestamp, integration_time, blank_pha
     for ii in range(nsections):
         packet.sections[ii].section_id = ii + 1
         packet.sections[ii].nchannels = nchannels
+        packet.sections[ii].data[:] = 0
     return packet
 
 
@@ -555,7 +579,6 @@ class FitsWriterTransmitter(Thread):
             log.info("Stop event was set on FITS transmitter")
         except Exception as error:
             log.exception("Error on transmission to FITS writer: {}".format(str(error)))
-
 
 @tornado.gen.coroutine
 def on_shutdown(ioloop, server):
