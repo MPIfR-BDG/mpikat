@@ -502,7 +502,8 @@ class Pipeline(object):
                 if process_index == 0:
                     self._beam_sensor0.set_value(float(self._beam_index[0]))
                     self._beam_time0.set_value(float(capture_status[2]))
-                    self._beam_average0.set_value(float(capture_status[3]))
+                    #self._beam_average0.set_value(float(capture_status[3]))
+                    self._beam_average0.set_value(1000000000.0)
                     self._instant_sensor0.set_value(float(capture_status[4]))
                 if process_index == 1:
                     self._beam_sensor1.set_value(float(self._beam_index[1]))
