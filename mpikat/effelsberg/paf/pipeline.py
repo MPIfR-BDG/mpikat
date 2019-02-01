@@ -177,6 +177,7 @@ class ExecuteCommand(object):
                                       stderr=PIPE,
                                       bufsize=1,
                                       universal_newlines=True)
+                print self._process
             except Exception as error:
                 log.exception("Error while launching command: {}".format(self._executable_command))
                 self.error = True
