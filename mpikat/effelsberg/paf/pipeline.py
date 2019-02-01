@@ -238,7 +238,7 @@ class ExecuteCommand(object):
                 # the event is set, the command does not successfully finish
                 stderr = self._process.stderr.read()
                 log.error(
-                    "Unexpected error during _execution_monitor: {}".format(stderr))
+                    "Process exited unexpectedly with return code: {}".format(self._process.returncode))
                 self.error = True
 
 
