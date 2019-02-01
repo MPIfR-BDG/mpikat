@@ -337,6 +337,11 @@ class Pipeline(object):
     def sensors(self):
         return self._sensors
 
+    @sensors.setter
+    def state(self):
+        #self._state = value
+        self.notify()
+
     def _acquire_beam_index(self, ip, port, ndf_check_chk):
         """
         To get the beam ID
