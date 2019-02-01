@@ -178,7 +178,7 @@ class ExecuteCommand(object):
                                       bufsize=1,
                                       universal_newlines=True)
             except Exception as error:
-                log.execution("Error while launching command: {}".format(self._executable_command))
+                log.exception("Error while launching command: {}".format(self._executable_command))
                 self.error = True
             else:
                 self._monitor_thread = threading.Thread(
