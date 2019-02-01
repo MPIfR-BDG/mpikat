@@ -22,8 +22,8 @@ import inspect
 
 log = logging.getLogger("mpikat.paf_pipeline")
 
-EXECUTE = True
-#EXECUTE        = False
+#EXECUTE = True
+EXECUTE        = False
 
 NVPROF = True
 #NVPROF         = False
