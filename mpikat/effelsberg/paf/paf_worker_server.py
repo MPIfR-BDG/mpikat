@@ -181,12 +181,12 @@ class PafWorkerServer(AsyncDeviceServer):
         @coroutine
         def start_pipeline():
             try:
-                self._pipeline_instance.start(source_name, ra, dec)
+                self._pipeline_instance.start(Time.now(), source_name, ra, dec)
             except Exception as error:
                 msg = "Couldn't start pipeline server {}".format(error)
                 log.info("{}".format(msg))
                 req.reply("fail", msg)
-                self._pipeline_sensor_status.set_value("error")
+                #self._pipeline_sensor_status.set_value("error")
                 raise error
             msg = "Starting pipeline {}".format(self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
@@ -215,7 +215,7 @@ class PafWorkerServer(AsyncDeviceServer):
                 msg = "Couldn't stop pipeline {}".format(error)
                 log.info("{}".format(msg))
                 req.reply("fail", msg)
-                self._pipeline_sensor_status.set_value("error")
+                #self._pipeline_sensor_status.set_value("error")
                 raise error
             msg = "Stopping pipeline {}".format(self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
@@ -247,7 +247,7 @@ class PafWorkerServer(AsyncDeviceServer):
                 msg = "Couldn't deconfigure pipeline {}".format(error)
                 log.error("{}".format(msg))
                 req.reply("fail", msg)
-                self._pipeline_sensor_status.set_value("error")
+                #self._pipeline_sensor_status.set_value("error")
                 raise error
             msg = "Deconfigured pipeline {}".format(self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
