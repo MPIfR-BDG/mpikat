@@ -500,15 +500,15 @@ class Pipeline(object):
                 print "HERE CAPTURE_STATUS", stdout, capture_status
                 process_index = capture_status[1]
                 if process_index == 0:
-                    self._beam_sensor0_status.set_value(self._beam_index[0])
-                    self._beam_time0_status.set_value(capture_status[2])
-                    self._beam_average0_status.set_value(capture_status[3])
-                    self._instant_sensor0_status.set_value(capture_status[4])
+                    self._beam_sensor0_status.set_value(float(self._beam_index[0]))
+                    self._beam_time0_status.set_value(float(capture_status[2]))
+                    self._beam_average0_status.set_value(float(capture_status[3]))
+                    self._instant_sensor0_status.set_value(float(capture_status[4]))
                 if process_index == 1:
-                    self._beam_sensor1_status.set_value(self._beam_index[1])
-                    self._beam_time1_status.set_value(capture_status[2])
-                    self._beam_average1_status.set_value(capture_status[3])
-                    self._instant_sensor1_status.set_value(capture_status[4])
+                    self._beam_sensor1_status.set_value(float(self._beam_index[1]))
+                    self._beam_time1_status.set_value(float(capture_status[2]))
+                    self._beam_average1_status.set_value(float(capture_status[3]))
+                    self._instant_sensor1_status.set_value(float(capture_status[4]))
 
 @register_pipeline("Search")
 class Search(Pipeline):    
