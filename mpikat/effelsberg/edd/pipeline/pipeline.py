@@ -32,7 +32,7 @@ CONFIG = {
     "base_output_dir": os.getcwd(),
     "dspsr_params":
     {
-        "args": "-cpu 2,3 -L 10 -r -F 256:D -fft-bench -cuda 0,0 -minram 1024"
+        "args": "-t 6 -U -L 10 -r -F 256:D -fft-bench -cuda 0 -minram 1024"
     },
     "dada_db_params":
     {
@@ -105,8 +105,8 @@ class Udp2Db2Dspsr(object):
         self._volumes = ["/tmp/:/scratch/"]
         self._dada_key = None
         self._config = None
-	self._dspsr = None
-	self._mkrecv_ingest_proc = None
+        self._dspsr = None 
+        self._mkrecv_ingest_proc = None
 
     def configure(self):
         self.state = "ready"
@@ -193,6 +193,8 @@ class Udp2Db2Dspsr(object):
         ###################
         if RUN is True:
 	    self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
+
+        # ip clock speed(sample clock) sync time 
 
     def stop(self):
         log.debug("Stopping")
