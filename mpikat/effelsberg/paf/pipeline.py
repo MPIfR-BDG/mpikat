@@ -218,12 +218,15 @@ class ExecuteCommand(object):
         if EXECUTE:
             while self._process.poll() == None:
                 stdout = self._process.stdout.readline().rstrip("\n\r")
+                
                 if stdout != b"":
                     self.stdout = stdout
                     print self.stdout, self._command
                     
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before the event is set, the command does not successfully finish
+                stderr = self._process.stderr.read()
+                log.error("Unexpected error during _execution_monitor: {}".format(stderr))
                 self.error = True
                 
 class Pipeline(object):
