@@ -497,7 +497,7 @@ class Pipeline(object):
             
     def _decode_capture_stdout(self, stdout, callback):
         if EXECUTE:
-            log.info('New stdout of capture is {}'.format(str(stdout)))
+            log.debug('New stdout of capture is {}'.format(str(stdout)))
             if stdout.find("CAPTURE_READY") != -1:
                 self._capture_ready_counter += 1
             if stdout.find("CAPTURE_STATUS") != -1:
