@@ -177,11 +177,13 @@ class ExecuteCommand(object):
                                       stderr=PIPE,
                                       bufsize=1,
                                       universal_newlines=True)
-            except:
+            except Exception as error:
+                log.execution("Error while launching command: {}".format(self._executable_command))
                 self.error = True
-            self._monitor_thread = threading.Thread(
-                target=self._execution_monitor)
-            self._monitor_thread.start()
+            else:
+                self._monitor_thread = threading.Thread(
+                    target=self._execution_monitor)
+                self._monitor_thread.start()
 
     def __del__(self):
         class_name = self.__class__.__name__
