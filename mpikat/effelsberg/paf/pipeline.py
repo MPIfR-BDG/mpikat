@@ -793,7 +793,8 @@ class Search(Pipeline):
                 dbdisk_cpu, self._rbuf_filterbank_key[i], self._runtime_directory[i])
             self._dbdisk_commands.append(command)
 
-        # Create baseband ring buffer
+        # Create baseband ring buffer, should before the refinfo calculation
+        #################################################################################
         execution_instances = []
         for command in self._baseband_create_buffer_commands:
             execution_instances.append(ExecuteCommand(command))
