@@ -52,6 +52,7 @@ class PafWorkerServer(AsyncDeviceServer):
         """
         for sensor in self._pipeline_instance.sensors:
             self.add_sensor(sensor)
+            #self._pipeline_instance.register_listener(sensor, reading= True)
             self._managed_sensors.append(sensor)
         self.mass_inform(Message.inform('interface-changed'))
 
@@ -240,8 +241,8 @@ class PafWorkerServer(AsyncDeviceServer):
         def deconfigure():
             log.info("Deconfiguring pipeline {}".format(self._pipeline_sensor_name.value()))
             try:
-                self._pipeline_instance.deconfigure()
                 self.remove_pipeline_sensors()
+                self._pipeline_instance.deconfigure()
                 del self._pipeline_instance
             except Exception as error:
                 msg = "Couldn't deconfigure pipeline {}".format(error)
