@@ -16,6 +16,7 @@ from katcp import Sensor
 import argparse
 import threading
 import inspect
+from memprof import *
 
 # 1. Why capture does not return immediately?
 # 2. why bad memory access?
@@ -40,7 +41,7 @@ DBDISK         = True   # To run dbdisk on filterbank file or not
 PAF_ROOT       = "/home/pulsar/xinping/phased-array-feed/"
 DATA_ROOT      = "/beegfs/DENG/"
 DADA_ROOT      = "{}/AUG/baseband/".format(DATA_ROOT)
-SOURCE_DEFAULT = "UNKNOW;00:00:00.00;00:00:00.00"
+SOURCE_DEFAULT = "UNKNOW_00:00:00.00_00:00:00.00"
 DADA_HDR_FNAME = "{}/config/header_16bit.txt".format(PAF_ROOT)
 
 PAF_CONFIG = {"instrument_name":    "PAF-BMF",
@@ -59,16 +60,17 @@ PAF_CONFIG = {"instrument_name":    "PAF-BMF",
               "ndim_pol_baseband":   2,
               
               "ncpu_numa":           10,
+              #"first_port":          17103,
               "first_port":          17100,
 }
 
 SEARCH_CONFIG_GENERAL = {"rbuf_baseband_ndf_chk":   16384,                 
-                         "rbuf_baseband_nblk":      4,
+                         "rbuf_baseband_nblk":      3,
                          "rbuf_baseband_nread":     1,                 
                          "tbuf_baseband_ndf_chk":   128,
                          
                          "rbuf_filterbank_ndf_chk": 16384,
-                         "rbuf_filterbank_nblk":    20,
+                         "rbuf_filterbank_nblk":    2,
                          "rbuf_filterbank_nread":   (HEIMDALL + DBDISK) if (HEIMDALL + DBDISK) else 1,
                          
                          "nchan_filterbank":        512,
@@ -103,6 +105,7 @@ SEARCH_CONFIG_2BEAMS = {"rbuf_baseband_key":       ["dada", "dadc"],
                         "rbuf_filterbank_key":     ["dade", "dadg"],
                         "nchan_keep_band":         24576,
                         "nbeam":                   2,
+                        #"nbeam":                   1,
                         "nport_beam":              3,
                         "nchk_port":               11,
 }
@@ -163,6 +166,7 @@ class ExecuteCommand(object):
             
         log.info(self._command)
         self._executable_command = shlex.split(self._command)
+        #self._executable_command = self._command
         log.info(self._executable_command)
         
         if EXECUTE:
@@ -170,9 +174,12 @@ class ExecuteCommand(object):
                 self._process = Popen(self._executable_command,
                                       stdout=PIPE,
                                       bufsize=1,
+                                      #shell=True,
                                       universal_newlines=True)
             except:
                 self.error = True
+            if self._process == None:
+                self._error = True
             self._monitor_thread = threading.Thread(target=self._execution_monitor)
             self._monitor_thread.start()
             
@@ -426,12 +433,12 @@ class Pipeline(object):
         destination_dead  = []   # The destination where we can not receive data
         destination_alive = []   # The destination where we can receive data
         for i in range(nport):
-            ip   = destination[i].split(";")[0]
-            port = int(destination[i].split(";")[1])
+            ip   = destination[i].split("_")[0]
+            port = int(destination[i].split("_")[1])
             alive, nchk_alive = self._check_connection_port(ip, port, ndf_check_chk)                                                
 
             if alive == 1:
-                destination_alive.append(destination[i]+";{}".format(nchk_alive))
+                destination_alive.append(destination[i]+"_{}".format(nchk_alive))
             else:
                 destination_dead.append(destination[i])
 
@@ -498,12 +505,12 @@ class Pipeline(object):
             if stdout.find("CAPTURE_STATUS") != -1:
                 capture_status = stdout.split(" ")
                 print "HERE CAPTURE_STATUS", stdout, capture_status
+                print float(self._beam_index[0]), float(capture_status[2]), float(capture_status[3]), float(capture_status[4])
                 process_index = capture_status[1]
                 if process_index == 0:
                     self._beam_sensor0.set_value(float(self._beam_index[0]))
                     self._beam_time0.set_value(float(capture_status[2]))
-                    #self._beam_average0.set_value(float(capture_status[3]))
-                    self._beam_average0.set_value(1000000000.0)
+                    self._beam_average0.set_value(float(capture_status[3]))
                     self._instant_sensor0.set_value(float(capture_status[4]))
                 if process_index == 1:
                     self._beam_sensor1.set_value(float(self._beam_index[1]))
@@ -618,6 +625,7 @@ class Search(Pipeline):
         print self._state, "HERE\n"
 
         # To setup commands for each process
+        #capture             = "G_SLICE=always-malloc G_DEBUG=gc-friendly  valgrind -v --tool=memcheck --leak-check=full --num-callers=40 --log-file=valgrind.log {}/src/capture_main".format(PAF_ROOT)
         capture             = "{}/src/capture_main".format(PAF_ROOT)
         baseband2filterbank = "{}/src/baseband2filterbank_main".format(PAF_ROOT)
         for i in range(self._nbeam):
@@ -626,11 +634,11 @@ class Search(Pipeline):
                 destination = []
                 for j in range(self._nport_beam):
                     port = self._first_port + i*self._nport_beam + j
-                    destination.append("{};{};{}".format(self._ip, port, self._nchk_port))
+                    destination.append("{}_{}_{}".format(self._ip, port, self._nchk_port))
 
                 destination_alive, dead_info = self._check_connection_beam(destination, self._ndf_check_chk)
-                first_alive_ip   = destination_alive[0].split(";")[0]
-                first_alive_port = int(destination_alive[0].split(";")[1])
+                first_alive_ip   = destination_alive[0].split("_")[0]
+                first_alive_port = int(destination_alive[0].split("_")[1])
                 
                 beam_index = self._acquire_beam_index(first_alive_ip, first_alive_port, self._ndf_check_chk)
                 refinfo    = self._synced_refinfo(utc_start_capture, first_alive_ip, first_alive_port)
@@ -658,12 +666,12 @@ class Search(Pipeline):
             cpu = self._numa*self._ncpu_numa + i*self._ncpu_pipeline
             alive_info = []
             for info in destination_alive:
-                alive_info.append("{};{}".format(info, cpu))
+                alive_info.append("{}_{}".format(info, cpu))
                 cpu += 1
             buf_control_cpu = self._numa*self._ncpu_numa + i*self._ncpu_pipeline + self._nport_beam
             capture_control_cpu = self._numa*self._ncpu_numa + i*self._ncpu_pipeline + self._nport_beam
-            capture_control     = "1;{}".format(capture_control_cpu)
-            refinfo = "{};{};{}".format(refinfo[0], refinfo[1], refinfo[2])
+            capture_control     = "1_{}".format(capture_control_cpu)
+            refinfo = "{}_{}_{}".format(refinfo[0], refinfo[1], refinfo[2])
             
             # capture command
             self._capture_commands.append(
@@ -691,14 +699,16 @@ class Search(Pipeline):
             self._baseband2filterbank_commands.append(command)
             
             # Command to create filterbank ring buffer
-            self._filterbank_create_buffer_commands.append(("dada_db -l -p  -k {:} " 
-                                                     "-b {:} -n {:} -r {:}").format(self._rbuf_filterbank_key[i],
-                                                                                    self._rbuf_filterbank_blksz,
-                                                                                    self._rbuf_filterbank_nblk,
-                                                                                    self._rbuf_filterbank_nread))
+            self._filterbank_create_buffer_commands.append(("dada_db -l -p -k {:} "
+            #self._filterbank_create_buffer_commands.append(("dada_db -p -k {:} " 
+                                                            "-b {:} -n {:} -r {:}").format(self._rbuf_filterbank_key[i],
+                                                                                           self._rbuf_filterbank_blksz,
+                                                                                           self._rbuf_filterbank_nblk,
+                                                                                           self._rbuf_filterbank_nread))
 
             # command to create baseband ring buffer
-            self._baseband_create_buffer_commands.append(("dada_db -l -p  -k {:} " 
+            self._baseband_create_buffer_commands.append(("dada_db -l -p  -k {:} "
+            #self._baseband_create_buffer_commands.append(("dada_db -p -k {:} " 
                                                           "-b {:} -n {:} -r {:}").format(self._rbuf_baseband_key[i],
                                                                                          self._rbuf_baseband_blksz,
                                                                                          self._rbuf_baseband_nblk,
@@ -760,6 +770,7 @@ class Search(Pipeline):
         self.state = "ready"
         print self.state, "HERE\n"
         
+    #@memprof
     def start(self, utc_start_process, source_name, ra, dec):
         if self.state != "ready":
             raise PipelineError("Pipeline can only be started from ready state")                
@@ -805,7 +816,7 @@ class Search(Pipeline):
             index = 0
             for control_socket in self._control_socket:
                 self._capture_control(control_socket,
-                                      "START-OF-DATA;{};{};{};{}".format(
+                                      "START-OF-DATA_{}_{}_{}_{}".format(
                                           source_name, ra, dec, 0),
                                       self._socket_address[index])
                 index += 1
@@ -959,23 +970,24 @@ if __name__ == "__main__":
     beam     = args.beam[0]
     ip       = "10.17.{}.{}".format(host_id, numa + 1)
 
-    print "\nCreate pipeline ...\n"
-    if beam == 1:
-        freq = 1340.5
-        search_mode = Search1Beam()
-    if beam == 2:
-        freq = 1337.0
-        search_mode = Search2Beams()
+    for i in range(100):
+        print "\nCreate pipeline ...\n"
+        if beam == 1:
+            freq = 1340.5
+            search_mode = Search1Beam()
+        if beam == 2:
+            freq = 1337.0
+            search_mode = Search2Beams()
         
-    print "\nConfigure it ...\n"
-    search_mode.configure(utc_start_capture, freq, ip)
+        print "\nConfigure it ...\n"
+        search_mode.configure(utc_start_capture, freq, ip)
 
-    for i in range(10):
-        print "\nStart it ...\n"
-        search_mode.start(utc_start_process, source_name, ra, dec)
-        time.sleep(10)
-        print "\nStop it ...\n"
-        search_mode.stop()
+        for j in range(10):
+            print "\nStart it ...\n"
+            search_mode.start(utc_start_process, source_name, ra, dec)
+            time.sleep(10)
+            print "\nStop it ...\n"
+            search_mode.stop()
     
-    print "\nDeconfigure it ...\n"
-    search_mode.deconfigure()
+        print "\nDeconfigure it ...\n"
+        search_mode.deconfigure()
