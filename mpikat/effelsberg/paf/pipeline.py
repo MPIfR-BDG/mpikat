@@ -16,15 +16,14 @@ from katcp import Sensor
 import argparse
 import threading
 import inspect
-from memprof import *
 
-# 1. Why capture does not return immediately?
-# 2. why bad memory access?
+# 1. ExecuteCommand needs more callbacks, so that users can decide how to monitor the execution, callbacks for stderr and returncode
+# 2. cleanup and name of parameters
 
 log = logging.getLogger("mpikat.paf_pipeline")
 
-#EXECUTE = True
-EXECUTE        = False
+EXECUTE = True
+#EXECUTE        = False
 
 NVPROF = True
 #NVPROF         = False
@@ -66,7 +65,7 @@ PAF_CONFIG = {"instrument_name":    "PAF-BMF",
               }
 
 SEARCH_CONFIG_GENERAL = {"rbuf_baseband_ndf_chk":   16384,                 
-                         "rbuf_baseband_nblk":      3,
+                         "rbuf_baseband_nblk":      6,
                          "rbuf_baseband_nread":     1,                 
                          "tbuf_baseband_ndf_chk":   128,
 
@@ -183,7 +182,7 @@ class ExecuteCommand(object):
                                       bufsize=1,
                                       #shell=True,
                                       universal_newlines=True)
-                print self._process
+                #print self._process
             except Exception as error:
                 log.exception("Error while launching command: {}".format(self._executable_command))
                 self.error = True
@@ -533,20 +532,12 @@ class Pipeline(object):
             if stdout.find("CAPTURE_STATUS") != -1:
                 capture_status = stdout.split(" ")
                 print "HERE CAPTURE_STATUS", stdout, capture_status
-<<<<<<< HEAD
                 print float(self._beam_index[0]), float(capture_status[2]), float(capture_status[3]), float(capture_status[4])
                 process_index = capture_status[1]
                 if process_index == 0:
                     self._beam_sensor0.set_value(float(self._beam_index[0]))
                     self._beam_time0.set_value(float(capture_status[2]))
                     self._beam_average0.set_value(float(capture_status[3]))
-=======
-                process_index = int(capture_status[1])
-                if process_index == 0:
-                    self._beam_sensor0.set_value(float(self._beam_index[0]))
-                    self._time_sensor0.set_value(float(capture_status[2]))
-                    self._average_sensor0.set_value(float(capture_status[3]))
->>>>>>> 3402c68d7e30e7343243ff4bb78e30912cdadace
                     self._instant_sensor0.set_value(float(capture_status[4]))
                 if process_index == 1:
                     self._beam_sensor1.set_value(float(self._beam_index[1]))
@@ -674,8 +665,7 @@ class Search(Pipeline):
 
         # To setup commands for each process
         capture = "{}/src/capture_main".format(PAF_ROOT)
-        baseband2filterbank = "{}/src/baseband2filterbank_main".format(
-            PAF_ROOT)
+        baseband2filterbank = "{}/src/baseband2filterbank_main".format(PAF_ROOT)
         for i in range(self._nbeam):
             if EXECUTE:
                 # To setup address
@@ -739,7 +729,7 @@ class Search(Pipeline):
 
             # baseband2filterbank command
             baseband2filterbank_cpu = self._numa * self._ncpu_numa +\
-                (i + 1) * self._ncpu_pipeline - 1
+                                      (i + 1) * self._ncpu_pipeline - 1
             command = "taskset -c {} ".format(baseband2filterbank_cpu)
             if NVPROF:
                 command += "nvprof "
@@ -755,28 +745,28 @@ class Search(Pipeline):
             self._baseband2filterbank_commands.append(command)
 
             # Command to create filterbank ring buffer
-            self._filterbank_create_buffer_commands.append(("dada_db -l -p -k {:} "
-            #self._filterbank_create_buffer_commands.append(("dada_db -p -k {:} " 
-                                                            "-b {:} -n {:} -r {:}").format(self._rbuf_filterbank_key[i],
+            dadadb_cpu = self._numa * self._ncpu_numa +\
+                         (i + 1) * self._ncpu_pipeline - 1
+            self._filterbank_create_buffer_commands.append(("taskset -c {} dada_db -l -p -k {:} "
+                                                            "-b {:} -n {:} -r {:}").format(dadadb_cpu, self._rbuf_filterbank_key[i],
                                                                                            self._rbuf_filterbank_blksz,
                                                                                            self._rbuf_filterbank_nblk,
                                                                                            self._rbuf_filterbank_nread))
 
             # command to create baseband ring buffer
-            self._baseband_create_buffer_commands.append(("dada_db -l -p  -k {:} "
-            #self._baseband_create_buffer_commands.append(("dada_db -p -k {:} " 
-                                                          "-b {:} -n {:} -r {:}").format(self._rbuf_baseband_key[i],
+            self._baseband_create_buffer_commands.append(("taskset -c {} dada_db -l -p -k {:} "
+                                                          "-b {:} -n {:} -r {:}").format(dadadb_cpu, self._rbuf_baseband_key[i],
                                                                                          self._rbuf_baseband_blksz,
                                                                                          self._rbuf_baseband_nblk,
                                                                                          self._rbuf_baseband_nread))
 
             # command to delete filterbank ring buffer
             self._filterbank_delete_buffer_commands.append(
-                "dada_db -d -k {:}".format(self._rbuf_filterbank_key[i]))
+                "taskset -c {} dada_db -d -k {:}".format(dadadb_cpu, self._rbuf_filterbank_key[i]))
 
             # command to delete baseband ring buffer
             self._baseband_delete_buffer_commands.append(
-                "dada_db -d -k {:}".format(self._rbuf_baseband_key[i]))
+                "taskset -c {} dada_db -d -k {:}".format(dadadb_cpu, self._rbuf_baseband_key[i]))
 
             # Command to run heimdall
             heimdall_cpu = self._numa * self._ncpu_numa +\
@@ -1052,8 +1042,7 @@ if __name__ == "__main__":
     beam = args.beam[0]
     ip = "10.17.{}.{}".format(host_id, numa + 1)
 
-<<<<<<< HEAD
-    for i in range(100):
+    for i in range(10):
         print "\nCreate pipeline ...\n"
         if beam == 1:
             freq = 1340.5
@@ -1074,24 +1063,3 @@ if __name__ == "__main__":
     
         print "\nDeconfigure it ...\n"
         search_mode.deconfigure()
-=======
-    print "\nCreate pipeline ...\n"
-    if beam == 1:
-        freq = 1340.5
-        search_mode = Search1Beam()
-    if beam == 2:
-        freq = 1337.0
-        search_mode = Search2Beams()
-
-    print "\nConfigure it ...\n"
-    search_mode.configure(utc_start_capture, freq, ip)
-
-    for i in range(10):
-        print "\nStart it ...\n"
-        search_mode.start(utc_start_process, source_name, ra, dec)
-        time.sleep(10)
-        print "\nStop it ...\n"
-        search_mode.stop()
-
-    print "\nDeconfigure it ...\n"
-    search_mode.deconfigure()
