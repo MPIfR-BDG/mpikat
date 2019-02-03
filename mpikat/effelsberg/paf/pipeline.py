@@ -399,13 +399,18 @@ class Pipeline(object):
         epoch_ref, sec_ref, idf_ref = self._refinfo(ip, port)
         print epoch_ref, sec_ref, idf_ref
 
-        if(utc_start_capture.unix - epoch_ref * 86400.0 - sec_ref) > PAF_CONFIG["prd"]:
+        while utc_start_capture.unix > (epoch_ref * 86400.0 + sec_ref + PAF_CONFIG["prd"]):
             sec_ref = sec_ref + PAF_CONFIG["prd"]
-        idf_ref = int((utc_start_capture.unix - epoch_ref *
-                       86400.0 - sec_ref) / self._df_res)
-        print epoch_ref, int(sec_ref), idf_ref
+            idf_ref = (utc_start_capture.unix - epoch_ref *
+                           86400.0 - sec_ref) / self._df_res
+        while utc_start_capture.unix < (epoch_ref * 86400.0 + sec_ref):
+            sec_ref = sec_ref - PAF_CONFIG["prd"]
+            idf_ref = (utc_start_capture.unix - epoch_ref *
+                           86400.0 - sec_ref) / self._df_res
+            
+        print epoch_ref, sec_ref, int(idf_ref)
 
-        return epoch_ref, int(sec_ref), idf_ref
+        return epoch_ref, sec_ref, int(idf_ref)
 
     def _refinfo(self, ip, port):
         """
@@ -441,7 +446,7 @@ class Pipeline(object):
 
             sock.close()
 
-            return epoch_ref, sec_ref, idf_ref
+            return epoch_ref, int(sec_ref), int(idf_ref)
         except:
             sock.close()
             self.state = "error"
