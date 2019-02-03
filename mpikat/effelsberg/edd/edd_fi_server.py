@@ -14,6 +14,8 @@ import struct
 import time
 import Queue
 import ctypes as C
+import bisect
+from datetime import datetime
 from threading import Thread, Event
 from optparse import OptionParser
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
@@ -383,10 +385,10 @@ class RoachPacket(object):
         self._data = self._get_packet_struct().from_buffer_copy(self._raw_data)
 
     def _get_packet_struct(self):
-        class RoachPacketFormat(c.BigEndianStructure):
+        class RoachPacketFormat(C.BigEndianStructure):
             _fields_ = [
-                ("header", c.c_ulonglong),
-                ("data", c.c_uint32 * self._nchannels)
+                ("header", C.c_ulonglong),
+                ("data", C.c_uint32 * self._nchannels)
             ]
         return RoachPacketFormat
 
@@ -406,82 +408,15 @@ class RoachPacket(object):
     def data(self):
         return self._data.data
 
-class PacketQueue(self)
-    def __init__(self, callback, packets_per_slot, size=5):
-        self._slots = deque(maxlen=size)
-        self._callback = callback
-        self._tail_idx = None
-
-    def add(packet):
-        base_idx = self._slots[0]
-
-        idx = packet.sequence_number
-        if not self._tail_idx:
-            self._tail_idx = idx
+    def __repr__(self):
+        return "<RoachPacket, seq={}, phase={}, pol={}>".format(
+            self.sequence_number, self.phase, self.polarisation)
 
 
+def isotime():
+    return "{}UTC".format(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-2])
 
-
-
-class AggregateData(object):
-    """
-    @brief Aggregates spectrometer data from polarization channel 1 and 2 for the given time
-           before sending to the fits writer
-    """
-    def __init__(self, no_streams, nchannels, integration_time, output_queue, name="AggregateData"):
-        self._no_streams = no_streams
-        self._nchannels = nchannels
-        self._output_queue = output_queue
-        self._data_stream = []
-        self._count = 0
-        self._previous_payload = 0
-        self._ref_seq_no = 0
-        self._timestamp = ""
-        self._blank_phase = 0
-
-    def isotime(self, s):
-        ms = int(10000 * (s - int(s)))
-        t = time.gmtime(s)
-        time_string = str("%4.4i-%2.2i-%2.2iT%2.2i:%2.2i:%2.2i.%4.4iUTC "%(
-            t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, ms))
-        return time_string
-
-    def aggregate(self, raw_data):
-        packet = RoachPacket(raw_data, self._nchannels)
-        self._count += 1
-        log.debug("Phase: {}, pol_id: {}, seq. no.: {}".format(packet.phase, packet.polarsation, packet.sequence_number))
-        #Capturing logic based on sequence no.
-        if (self._count == 1):
-            self._timestamp = self.isotime(time.time())
-            self._previous_payload = data[2:]
-            self._ref_seq_no = sequence_num
-            self._blank_phase = phase
-        elif ((sequence_num == (self._ref_seq_no - 1)) & (phase == self._blank_phase)):
-            #swap
-            self._data_stream.append(data[2:])
-            self._data_stream.append(self._previous_payload)
-            log.debug("Forwarding packets with sequence numbers: {} and {}".format(sequence_num, self._ref_seq_no))
-            self._output_queue.put((self._timestamp, self._no_streams, self._nchannels, self._blank_phase, self._data_stream))
-            self._count = 0
-            self._data_stream = []
-        elif ((sequence_num == (self._ref_seq_no + 1)) & (phase == self._blank_phase)):
-            self._data_stream.append(self._previous_payload)
-            self._data_stream.append(data[2:])
-            log.debug("Forwarding packets with sequence numbers: {} and {}".format(self._ref_seq_no, sequence_num))
-            self._output_queue.put((self._timestamp, self._no_streams, self._nchannels, self._blank_phase, self._data_stream))
-            self._count = 0
-            self._data_stream = []
-        else:
-            log.warning("Packet (seq. num. {}) too far out of order an will be dropped".format(self._ref_seq_no))
-            self._count = 1
-            self._stream = data[2:]
-            self._timestamp = self.isotime(time.time())
-            self._ref_seq_no = sequence_num
-            self._blank_phase = phase
-            self._data_stream = []
-
-
-def build_fw_object(nsections, nchannels, timestamp, integration_time, blank_phases):
+def build_fw_type(nsections, nchannels):
     class FWData(C.LittleEndianStructure):
         _fields_ = [
             ('section_id', C.c_uint32),
@@ -502,11 +437,14 @@ def build_fw_object(nsections, nchannels, timestamp, integration_time, blank_pha
             ("blocking_factor", C.c_uint32),
             ("sections", FWData * nsections)
         ]
+    return FWPacket
 
-    packet = FWPacket()
+def build_fw_object(nsections, nchannels, timestamp, integration_time, blank_phases):
+    packet_format = build_fw_type(nsections, nchannels)
+    packet = packet_format()
     packet.data_type = "EEEI"
     packet.channel_data_type = "F   "
-    packet.packet_size = len(bytearray(packet))
+    packet.packet_size = C.sizeof(packet_format)
     packet.backend_name = "EDD     "
     packet.timestamp = timestamp
     packet.integration_time = integration_time
@@ -516,8 +454,45 @@ def build_fw_object(nsections, nchannels, timestamp, integration_time, blank_pha
     for ii in range(nsections):
         packet.sections[ii].section_id = ii + 1
         packet.sections[ii].nchannels = nchannels
-        packet.sections[ii].data[:] = 0
+        C.addressof(packet.sections[ii].data), 0, C.sizeof(packet.sections[ii].data)
     return packet
+
+
+class AggregateData(object):
+    """
+    @brief Aggregates spectrometer data from polarization channel 1 and 2 for the given time
+           before sending to the fits writer
+    """
+    def __init__(self, nsections, nchannels, integration_time, nphases, output_queue, max_age=1.0):
+        self._nsections = nsections
+        self._nchannels = nchannels
+        self._integration_time = integration_time
+        self._nphases = nphases
+        self._output_queue = output_queue
+        self._active_packets = {}
+        self._max_age = max_age
+        self._first_packet = True
+        self._aggregation_queue = []
+
+    def aggregate(self, raw_data):
+        packet = RoachPacket(raw_data, self._nchannels)
+        log.debug("Aggregate received packet: {}".format(packet))
+        key = packet.sequence_number - packet.polarisation
+        if key not in self._active_packets:
+            fw_packet = build_fw_object(self._nsections, self._nchannels, isotime(), self._integration_time, self._nphases)
+            fw_packet.sections[packet.polarisation].data[:] = packet.data
+            self._active_packets[key] = (time.time(), fw_packet)
+        else:
+            self._active_packets[key][1].sections[packet.polarisation].data[:] = packet.data
+        self.flush()
+
+    def flush(self):
+        now = time.time()
+        for key in sorted(self._active_packets.iterkeys()):
+            timestamp, fw_packet = self._active_packets[key]
+            if (now - timestamp) > self._max_age:
+                self._output_queue.put(fw_packet)
+                del self._active_packets[key]
 
 
 class FitsWriterTransmitter(Thread):
@@ -534,7 +509,6 @@ class FitsWriterTransmitter(Thread):
         Thread.__init__(self, name=name)
         self._input_queue = input_queue
         self._transmit_socket = transmit_socket
-        self._packet = None
         self._shutdown = Event()
 
     def stop(self):
@@ -553,27 +527,12 @@ class FitsWriterTransmitter(Thread):
                 continue
         raise StopEventException
 
-    def pack_data(self):
-        tstamp, nsections, nchans, blank_phases, data = self.read_from_queue()
-        message = (
-            "Timestamp: {}".format(tstamp),
-            "Nsections: {}".format(nsections),
-            "Nchannels: {}".format(nchans),
-            "Data1 size: {}".format(len(data[0])),
-            "Data2 size: {}".format(len(data[1]))
-            )
-        log.debug("Packing data with parameters:\n{}".format("\n".join(message)))
-        packet = build_fw_object(nsections, nchans, tstamp, integration_time, blank_phases)
-        for section_id in range(nsections):
-            packet.sections[section_id].data[:] = data[section_id]
-        return str(bytearray(packet))
-
     def run(self):
         try:
             log.info("Beginning data transmission to FITS writer")
             while not self._shutdown.is_set():
-                data_to_fw = self.pack_data()
-                self._transmit_socket.send(data_to_fw)
+                packet = self.read_from_queue()
+                self._transmit_socket.send(bytearray(packet))
             log.info("Finishing data transmission to FITS writer")
         except StopEventException:
             log.info("Stop event was set on FITS transmitter")
