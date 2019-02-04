@@ -481,16 +481,17 @@ class AggregateData(object):
         if key not in self._active_packets:
             fw_packet = build_fw_object(self._nsections, self._nchannels, isotime(), self._integration_time, self._nphases)
             fw_packet.sections[packet.polarisation].data[:] = packet.data
-            self._active_packets[key] = (time.time(), fw_packet)
+            self._active_packets[key] = (time.time(), 1, fw_packet)
         else:
-            self._active_packets[key][1].sections[packet.polarisation].data[:] = packet.data
+            self._active_packets[key][1] += 1
+            self._active_packets[key][2].sections[packet.polarisation].data[:] = packet.data
         self.flush()
 
     def flush(self):
         now = time.time()
         for key in sorted(self._active_packets.iterkeys()):
-            timestamp, fw_packet = self._active_packets[key]
-            if (now - timestamp) > self._max_age:
+            timestamp, hits, fw_packet = self._active_packets[key]
+            if ((now - timestamp) > self._max_age) or (hits == self._nsections):
                 self._output_queue.put(fw_packet)
                 del self._active_packets[key]
 
