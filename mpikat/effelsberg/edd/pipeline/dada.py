@@ -88,7 +88,7 @@ IDX1_STEP   8192   # The difference between successive timestamps
 
 DADA_DEFAULTS = {
     "obs_id": "unset",
-    "filesize": 2500000000,
+    "filesize": 3200000000,
     "mjd": 5555.55555,
     "source": "B1937+21",
     "ra": "00:00:00.00",
