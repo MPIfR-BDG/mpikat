@@ -181,7 +181,7 @@ class Udp2Db2Dspsr(object):
         ###################
         # Start up DSPSR
         ###################
-        """
+        
         cmd = "dspsr {args} -N {source_name} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             source_name=source_name,
@@ -189,7 +189,7 @@ class Udp2Db2Dspsr(object):
         log.debug("Running command: {0}".format(cmd))
         if RUN is True:
             self._dspsr = Popen(cmd, stdout=PIPE, shell=True)
-        """
+        
         ###################
         # Start up dada_dbnull
         ###################
