@@ -211,7 +211,7 @@ class Udp2Db2Dspsr(object):
         ###################
         # Start up dada_junkdb
         ###################
-        cmd = "dada_junkdb -k {0} -b 3200000000 -r 64 -g {2}".format(
+        cmd = "dada_junkdb -k {0} -b 3200000000 -r 64 -g {1}".format(
                              self._dada_key,
                              dada_header_file.name)
         log.debug(cmd)
