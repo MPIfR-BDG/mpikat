@@ -75,7 +75,7 @@ def register_pipeline(name):
         return cls
     return _register
 
-def safe_popen(*args, **kwargs):
+def safe_popen(cmd, *args, **kwargs):
         if RUN == True:
             process = Popen(cmd, stdout=PIPE, shell=True)
         else:
