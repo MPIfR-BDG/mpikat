@@ -164,8 +164,7 @@ class EddMasterController(MasterController):
         """
         mode = mode.upper()
         if not mode in self.CONTROL_MODES:
-            raise UnknownControlMode("Unknown mode '{}', valid modes are '{}' ".format(
-                mode, ", ".join(self.CONTROL_MODES))
+            raise UnknownControlMode("Unknown mode '{}', valid modes are '{}' ".format(mode, ", ".join(self.CONTROL_MODES)))
         else:
             self._control_mode = mode
         if self._control_mode == self.SCPI:
