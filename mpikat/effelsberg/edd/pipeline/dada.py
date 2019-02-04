@@ -17,36 +17,71 @@ PRIMARY      unset               # primary node host name
 SECONDARY    unset               # secondary node host name
 FILE_NAME    unset               # full path of the data file
 
-FILE_SIZE    {{filesize}}  # requested file size
-FILE_NUMBER  0           # number of data file
+FILE_SIZE    {{filesize}}          # requested size of data files
+FILE_NUMBER  0                   # number of data file
 
 # time of the rising edge of the first time sample
 UTC_START    {{utc_start}}               # yyyy-mm-dd-hh:mm:ss.fs
-MJD_START    {{mjd}}            # MJD equivalent to the start UTC
+MJD_START    {{mjd}}                # MJD equivalent to the start UTC
 
 OBS_OFFSET   0                   # bytes offset from the start MJD/UTC
 OBS_OVERLAP  0                   # bytes by which neighbouring files overlap
 
 # description of the source
-SOURCE {{source_name}}        # source name
-RA     {{ra}}                 # RA of source
-DEC    {{dec}}                # DEC of source
+SOURCE       {{source_name}}               # name of the astronomical source
+RA           {{ra}}               # Right Ascension of the source
+DEC          {{dec}}               # Declination of the source
 
 # description of the instrument
-TELESCOPE    {{telescope}}     # telescope name
-INSTRUMENT   {{instrument}}    # instrument name
-RECEIVER     {{receiver_name}} # Receiver name
-FREQ         {{frequency_mhz}} # observation frequency
-BW           {{bandwidth}}     # bandwidth in MHz
-TSAMP        {{tsamp}}         # sampling interval in microseconds
-BYTES_PER_SECOND {{bytes_per_second}}
+TELESCOPE    {{telescope}}       # telescope name
+INSTRUMENT   {{instrument}}              # instrument name
+RECEIVER     {{receiver_name}}           # Frontend receiver
+FREQ         {{frequency_mhz}}           # centre frequency in MHz
+BW           {{bandwidth}}           # bandwidth of in MHz (-ve lower sb)
+TSAMP        {{tsamp}}       # sampling interval in microseconds
 
-NBIT         {{nbit}}                   # number of bits per sample
-NDIM         {{ndim}}                   # dimension of samples (2=complex, 1=real)
-NPOL         {{npol}}                   # number of polarizations observed
-NCHAN        {{nchan}}                  # number of channels here
-RESOLUTION   {{resolution}}             # a parameter that is unclear
-DSB          {{dsb}}
+
+BYTES_PER_SECOND  {{bytes_per_second}}
+NBIT              {{nbit}}              # number of bits per sample
+NDIM              {{ndim}}               # 1=real, 2=complex
+NPOL              {{npol}}                 # number of polarizations observed
+NCHAN             {{nchan}}                 # number of frequency channels
+RESOLUTION        {{dsb}}                 
+DSB
+
+#MeerKAT specifics
+DADA_KEY     dada                    # The dada key to write to
+DADA_MODE    4                       # The mode, 4=full dada functionality
+ORDER        T                       # Here we are only capturing one polarisation, so data is time only
+SYNC_TIME    unset
+SAMPLE_CLOCK unset
+PACKET_SIZE 8400
+NTHREADS 32
+NHEAPS 256
+NGROUPS_DATA  4096
+NGROUPS_TEMP  2048
+NHEAPS_SWITCH 1024
+MCAST_SOURCES 239.2.1.150   # 239.2.1.150 (+7)
+PORT         60001
+UDP_IF       unset                  
+IBV_IF       10.10.1.10  # This is the ethernet interface on which to capture 
+IBV_VECTOR   -1          # IBV forced into polling mode  
+IBV_MAX_POLL 10
+BUFFER_SIZE 16777216
+#BUFFER_SIZE 1048576
+SAMPLE_CLOCK_START 0 # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock                     
+HEAP_SIZE    262144
+
+#SPEAD specifcation for EDD packetiser data stream
+NINDICES    1   # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
+# The first index item is the running timestamp
+IDX1_ITEM   0      # First item of a SPEAD heap
+IDX1_STEP   8192   # The difference between successive timestamps
+
+# The second index item distinguish between both polarizations
+#IDX2_ITEM   1
+#IDX2_LIST   0,1
+#IDX2_MASK   0x1
 # end of header
 """
 
@@ -57,8 +92,8 @@ DADA_DEFAULTS = {
     "source": "B1937+21",
     "ra": "00:00:00.00",
     "dec": "00:00:00.00",
-    "telescope": "Meerkat",
-    "instrument": "feng",
+    "telescope": "Effelsberg",
+    "instrument": "EDD",
     "receiver_name": "lband",
     "frequency_mhz": 1260,
     "bandwidth": 16,

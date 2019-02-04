@@ -22,6 +22,8 @@ log.setLevel('DEBUG')
 #
 RUN = False
 
+RUNTIME = 10
+
 PIPELINES = {}
 
 PIPELINE_STATES = ["idle", "configuring", "ready",
@@ -147,8 +149,7 @@ class Udp2Db2Dspsr(object):
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(out_path)
         log.debug(cmd)
-	log.debug(os.getcwd())
-        #if RUN is True:
+        log.debug(os.getcwd())
         process = Popen(cmd, stdout=PIPE, shell=True)
         process.wait()
         os.chdir(out_path)
@@ -163,7 +164,7 @@ class Udp2Db2Dspsr(object):
                 dada_header_file.name))
         header_string = render_dada_header(header)
         dada_header_file.write(header_string)
-        log.debug("Header file contains:\n{0}".format(header_string))
+        #log.debug("Header file contains:\n{0}".format(header_string))
         dada_key_file = tempfile.NamedTemporaryFile(
             mode="w",
             prefix="dada_keyfile_",
@@ -175,11 +176,12 @@ class Udp2Db2Dspsr(object):
         dada_key_file.write(make_dada_key_string(self._dada_key))
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
-        dada_key_file.close()
-	log.debug(os.getcwd())
+        dada_key_file.close()  
+        log.debug(os.getcwd())
         ###################
         # Start up DSPSR
         ###################
+        """
         cmd = "dspsr {args} -N {source_name} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             source_name=source_name,
@@ -187,13 +189,27 @@ class Udp2Db2Dspsr(object):
         log.debug("Running command: {0}".format(cmd))
         if RUN is True:
             self._dspsr = Popen(cmd, stdout=PIPE, shell=True)
-
+        """
+        ###################
+        # Start up dada_dbnull
+        ###################
+        cmd = "dada_dbnull -k {0}".format(self._dada_key)
+        log.debug(cmd)
+        #dada_dbnull = Popen(cmd, stdout=PIPE, shell=True)
         ###################
         # Start up MKRECV
         ###################
-        if RUN is True:
-	    self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
+        #if RUN is True:
+	    #self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
 
+        ###################
+        # Start up dada_junkdb
+        ###################
+        cmd = "dada_junkdb -k {0} -r 64 -t {1} -g {2}".format(
+                             self._dada_key,
+                             RUNTIME,
+                             dada_header_file.name)
+        log.debug(cmd)
         # ip clock speed(sample clock) sync time 
 
     def stop(self):
