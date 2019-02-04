@@ -60,7 +60,7 @@ CONFIG = {
 
 }
 
-sensors = {"ra": 123, "dec": -10, "source-name": "J1953+1846A",
+sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
            "scannum": 0, "subscannum": 1, "timestamp": str(datetime.now().time())}
 
 DESCRIPTION = """
