@@ -34,7 +34,7 @@ CONFIG = {
     "base_output_dir": os.getcwd(),
     "dspsr_params":
     {
-        "args": "-t 6 -U -L 10 -r -F 256:D -fft-bench -cuda 0 -minram 1024"
+        "args": "-t 6 -L 10 -r -F 256:D -fft-bench -cuda 0 -minram 1024"
     },
     "dada_db_params":
     {
