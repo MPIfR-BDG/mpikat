@@ -189,8 +189,6 @@ class Udp2Db2Dspsr(object):
         log.debug("Running command: {0}".format(cmd))
         #if RUN is True:
         self._dspsr = Popen(cmd, stdout=PIPE, shell=True)
-        #output = self._dspsr.stdout.readline()
-        print 'STDOUT:{}'.format(stdout)
         ###################
         # Start up dada_dbnull
         ###################
