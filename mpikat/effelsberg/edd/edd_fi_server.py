@@ -277,7 +277,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._stop_capture()
         buffer_size = 4 * (self.nchannels + 2)
         handler = Roach2SpectrometerHandler(2, self.nchannels, self.integration_time,
-            self.nblank_phases fw_socket)
+            self.nblank_phases, fw_socket)
         self._capture_thread = CaptureData(self._capture_interface,
             self._capture_port, buffer_size, handler)
         self._capture_thread.start()
