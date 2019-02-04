@@ -25,6 +25,7 @@
             [
                 ["program", []],
                 ["start", []],
+                ["set_integration_period", [256.0]],
                 ["set_destination_address", ["10.10.1.12", 60001]]
             ]
         }
