@@ -20,7 +20,7 @@ log.setLevel('DEBUG')
 # This is needed as docker doesn't currently support
 # container to container file copies.
 #
-RUN = False
+RUN = True
 
 RUNTIME = 10
 
@@ -187,9 +187,10 @@ class Udp2Db2Dspsr(object):
             source_name=source_name,
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
-        if RUN is True:
-            self._dspsr = Popen(cmd, stdout=PIPE, shell=True)
-        
+        #if RUN is True:
+        self._dspsr = Popen(cmd, stdout=PIPE, shell=True)
+        #output = self._dspsr.stdout.readline()
+        print 'STDOUT:{}'.format(stdout)
         ###################
         # Start up dada_dbnull
         ###################
