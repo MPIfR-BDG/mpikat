@@ -75,6 +75,13 @@ def register_pipeline(name):
         return cls
     return _register
 
+def safe_popen(*args, **kwargs):
+        if RUN = True:
+            process = Popen(cmd, stdout=PIPE, shell=True)
+        else:
+            process = None
+        return process
+
 
 @register_pipeline("DspsrPipeline")
 class Udp2Db2Dspsr(object):
@@ -126,7 +133,7 @@ class Udp2Db2Dspsr(object):
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
         if RUN is True:
-            process = Popen(cmd, stdout=PIPE, shell=True)
+            process = safe_popen(cmd, stdout=PIPE, shell=True)
             process.wait()
 
     def start(self):
@@ -150,7 +157,7 @@ class Udp2Db2Dspsr(object):
         cmd = "mkdir -p {}".format(out_path)
         log.debug(cmd)
         log.debug(os.getcwd())
-        process = Popen(cmd, stdout=PIPE, shell=True)
+        process = safe_popen(cmd, stdout=PIPE, shell=True)
         process.wait()
         os.chdir(out_path)
         dada_header_file = tempfile.NamedTemporaryFile(
@@ -188,7 +195,7 @@ class Udp2Db2Dspsr(object):
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
         #if RUN is True:
-        self._dspsr = Popen(cmd, stdout=PIPE, shell=True)
+        self._dspsr = safe_popen(cmd, stdout=PIPE, shell=True)
         ###################
         # Start up dada_dbnull
         ###################
@@ -209,7 +216,7 @@ class Udp2Db2Dspsr(object):
                              RUNTIME,
                              dada_header_file.name)
         log.debug(cmd)
-        self._dada_junkdb = Popen(cmd, stdout=PIPE, shell=True)
+        self._dada_junkdb = safe_popen(cmd, stdout=PIPE, shell=True)
         # ip clock speed(sample clock) sync time 
 
     def stop(self):
@@ -228,7 +235,7 @@ class Udp2Db2Dspsr(object):
         cmd = "dada_db -d -k {0}".format(self._dada_key)
         log.debug("Running command: {0}".format(cmd))
         if RUN is True:
-            process = Popen(cmd, stdout=PIPE, shell=True)
+            process = safe_popen(cmd, stdout=PIPE, shell=True)
             process.wait()
 	    log.debug("Sending SIGTERM to MKRECV process")
             self._mkrecv_ingest_proc.terminate()
