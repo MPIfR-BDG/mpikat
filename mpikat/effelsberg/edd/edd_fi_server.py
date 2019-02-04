@@ -10,14 +10,12 @@ import errno
 import threading
 import coloredlogs
 import numpy as np
-import struct
 import time
-import Queue
 import ctypes as C
-import bisect
 from datetime import datetime
 from threading import Thread, Event
 from optparse import OptionParser
+from collections import namedtuple
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import (Str, Float, Int, request, return_reply)
 
@@ -133,9 +131,8 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._blank_phase = None
         self._capture_interface = capture_interface
         self._capture_port = capture_port
-        self._fw_connection_manager = FitsWriterConnectionManager(fw_ip,fw_port)
+        self._fw_connection_manager = FitsWriterConnectionManager(fw_ip, fw_port)
         self._capture_thread = None
-        self._transmit_thread = None
         self._shutdown = False
         super(FitsInterfaceServer, self).__init__(interface, port)
 
@@ -224,10 +221,6 @@ class FitsInterfaceServer(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._nblank_phases_sensor)
 
-    def _stop_threads(self):
-        self._stop_capture()
-        self._stop_transmit()
-
     def _stop_capture(self):
         if self._capture_thread:
             log.debug("Cleaning up capture thread")
@@ -235,14 +228,6 @@ class FitsInterfaceServer(AsyncDeviceServer):
             self._capture_thread.join()
             self._capture_thread = None
             log.debug("Capture thread cleaned")
-
-    def _stop_transmit(self):
-        if self._transmit_thread:
-            log.debug("Cleaning up transmit thread")
-            self._transmit_thread.stop()
-            self._transmit_thread.join()
-            self._transmit_thread = None
-            log.debug("Transmit thread cleaned")
 
     @request(Int(), Int(), Float(), Int())
     @return_reply()
@@ -266,7 +251,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self.integration_time = int_time
         self.nblank_phases = blank_phases
         self._fw_connection_manager.drop_connection()
-        self._stop_threads()
+        self._stop_capture()
         self._configured = True
         return ("ok",)
 
@@ -284,20 +269,17 @@ class FitsInterfaceServer(AsyncDeviceServer):
             log.error(msg)
             return ("fail", msg)
         try:
-            socket = self._fw_connection_manager.get_transmit_socket()
+            fw_socket = self._fw_connection_manager.get_transmit_socket()
         except Exception as error:
             log.exception(str(error))
             return ("fail", str(error))
         log.info("Starting FITS interface capture")
         self._stop_capture()
-        self._stop_transmit()
         buffer_size = 4 * (self.nchannels + 2)
-        queue = Queue.Queue()
-        self._transmit_thread = FitsWriterTransmitter(socket, queue)
+        handler = Roach2SpectrometerHandler(2, self.nchannels, self.integration_time,
+            self.nblank_phases fw_socket)
         self._capture_thread = CaptureData(self._capture_interface,
-            self._capture_port, buffer_size, AggregateData(2, self.nchannels,
-                self.integration_time, queue))
-        self._transmit_thread.start()
+            self._capture_port, buffer_size, handler)
         self._capture_thread.start()
         return ("ok",)
 
@@ -316,7 +298,6 @@ class FitsInterfaceServer(AsyncDeviceServer):
             return ("fail", msg)
         log.info("Stopping FITS interface capture")
         self._stop_capture()
-        self._stop_transmit()
         self._fw_connection_manager.drop_connection()
         return ("ok",)
 
@@ -325,12 +306,12 @@ class CaptureData(Thread):
     """
     @brief     Captures formatted data from a UDP socket
     """
-    def __init__(self, ip, port, buffer_size, aggregator, name="CaptureData"):
-        Thread.__init__(self, name=name)
+    def __init__(self, ip, port, buffer_size, handler):
+        Thread.__init__(self, name=self.__class__.__name__)
         self._address = (ip, port)
         self._buffer_size = buffer_size
         self._stop_event = Event()
-        self._aggregator = aggregator
+        self._handler = handler
 
     def _reset_socket(self):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -357,7 +338,7 @@ class CaptureData(Thread):
             try:
                 data, addr = self._socket.recvfrom(self._buffer_size)
                 log.debug("Received {} byte message from {}".format(len(data), addr))
-                self._aggregator.aggregate(data)
+                self._handler(data)
             except socket.error as error:
                 error_id = error.args[0]
                 if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
@@ -458,33 +439,34 @@ def build_fw_object(nsections, nchannels, timestamp, integration_time, blank_pha
     return packet
 
 
-class AggregateData(object):
+class R2SpectrometerHandler(object):
     """
     @brief Aggregates spectrometer data from polarization channel 1 and 2 for the given time
            before sending to the fits writer
     """
-    def __init__(self, nsections, nchannels, integration_time, nphases, output_queue, max_age=1.0):
+    def __init__(self, nsections, nchannels, integration_time, nphases, transmit_socket, max_age=1.0):
         self._nsections = nsections
         self._nchannels = nchannels
         self._integration_time = integration_time
         self._nphases = nphases
-        self._output_queue = output_queue
+        self._transmit_socket = transmit_socket
         self._active_packets = {}
         self._max_age = max_age
-        self._first_packet = True
-        self._aggregation_queue = []
+        self._fw_packet_wrapper = namedtuple('FWPacketWrapper',
+            ['timestamp', 'hits', 'packet'])
 
-    def aggregate(self, raw_data):
+    def __call__(self, raw_data):
         packet = RoachPacket(raw_data, self._nchannels)
         log.debug("Aggregate received packet: {}".format(packet))
         key = packet.sequence_number - packet.polarisation
         if key not in self._active_packets:
-            fw_packet = build_fw_object(self._nsections, self._nchannels, isotime(), self._integration_time, self._nphases)
+            fw_packet = build_fw_object(self._nsections, self._nchannels, isotime(),
+                self._integration_time, self._nphases)
             fw_packet.sections[packet.polarisation].data[:] = packet.data
-            self._active_packets[key] = (time.time(), 1, fw_packet)
+            self._active_packets[key] = self._fw_packet_wrapper(time.time(), 1, fw_packet)
         else:
-            self._active_packets[key][1] += 1
-            self._active_packets[key][2].sections[packet.polarisation].data[:] = packet.data
+            self._active_packets[key]['hits'] += 1
+            self._active_packets[key]['packet'].sections[packet.polarisation].data[:] = packet.data
         self.flush()
 
     def flush(self):
@@ -492,53 +474,10 @@ class AggregateData(object):
         for key in sorted(self._active_packets.iterkeys()):
             timestamp, hits, fw_packet = self._active_packets[key]
             if ((now - timestamp) > self._max_age) or (hits == self._nsections):
-                self._output_queue.put(fw_packet)
+                self._transmit_socket.send(bytearray(fw_packet))
                 del self._active_packets[key]
 
 
-class FitsWriterTransmitter(Thread):
-    """
-    @brief  Class for wrapping transmission of packets to the APEX FITS writer
-    """
-    def __init__(self, transmit_socket, input_queue, name="FitsWriterTransmitter"):
-        """
-        @brief  Construct the instance
-
-        @param  server_ip   The local interface to bind to
-        @param  tcp_port    The local port to bind to
-        """
-        Thread.__init__(self, name=name)
-        self._input_queue = input_queue
-        self._transmit_socket = transmit_socket
-        self._shutdown = Event()
-
-    def stop(self):
-        """
-        @brief      Stop the server
-        """
-        self._shutdown.set()
-
-    def read_from_queue(self, timeout=1):
-        log.debug("Fetching message from queue")
-        while not self._shutdown.is_set():
-            try:
-                return self._input_queue.get(True, timeout)
-            except Queue.Empty:
-                log.debug("No messages in queue")
-                continue
-        raise StopEventException
-
-    def run(self):
-        try:
-            log.info("Beginning data transmission to FITS writer")
-            while not self._shutdown.is_set():
-                packet = self.read_from_queue()
-                self._transmit_socket.send(bytearray(packet))
-            log.info("Finishing data transmission to FITS writer")
-        except StopEventException:
-            log.info("Stop event was set on FITS transmitter")
-        except Exception as error:
-            log.exception("Error on transmission to FITS writer: {}".format(str(error)))
 
 @tornado.gen.coroutine
 def on_shutdown(ioloop, server):
