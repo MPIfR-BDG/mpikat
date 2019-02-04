@@ -210,6 +210,7 @@ class Udp2Db2Dspsr(object):
                              RUNTIME,
                              dada_header_file.name)
         log.debug(cmd)
+        self._dada_junkdb = Popen(cmd, stdout=PIPE, shell=True)
         # ip clock speed(sample clock) sync time 
 
     def stop(self):
@@ -255,8 +256,8 @@ def main():
     server = Udp2Db2Dspsr()
     server.configure()
     server.start()
-    server.stop()
-    server.deconfigure()
+    #server.stop()
+    #server.deconfigure()
 
 if __name__ == "__main__":
     main()
