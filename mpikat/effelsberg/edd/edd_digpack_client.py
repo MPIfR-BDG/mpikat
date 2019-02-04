@@ -24,6 +24,9 @@ class DigitiserPacketiserClient(object):
             controlled=True))
         self._client.start()
 
+    def stop(self):
+        self._client.stop()
+
     @coroutine
     def _safe_request(self, request_name, *args):
         log.info("Sending packetiser request '{}' with arguments {}".format(request_name, args))
