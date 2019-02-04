@@ -87,7 +87,7 @@ IDX1_STEP   8192   # The difference between successive timestamps
 
 DADA_DEFAULTS = {
     "obs_id": "unset",
-    "filesize": 32000000000,
+    "filesize": 3200000000,
     "mjd": 5555.55555,
     "source": "B1937+21",
     "ra": "00:00:00.00",
@@ -97,7 +97,7 @@ DADA_DEFAULTS = {
     "receiver_name": "lband",
     "frequency_mhz": 1260,
     "bandwidth": 16,
-    "tsamp": 0.0625,
+    "tsamp": 0.00156250,
     "nbit": 8,
     "ndim": 2,
     "npol": 2,
