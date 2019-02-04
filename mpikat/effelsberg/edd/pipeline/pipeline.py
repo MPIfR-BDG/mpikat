@@ -211,9 +211,8 @@ class Udp2Db2Dspsr(object):
         ###################
         # Start up dada_junkdb
         ###################
-        cmd = "dada_junkdb -k {0} -r 64 -t {1} -g {2}".format(
+        cmd = "dada_junkdb -k {0} -b 3200000000 -r 64 -g {2}".format(
                              self._dada_key,
-                             RUNTIME,
                              dada_header_file.name)
         log.debug(cmd)
         self._dada_junkdb = safe_popen(cmd, stdout=PIPE, shell=True)
