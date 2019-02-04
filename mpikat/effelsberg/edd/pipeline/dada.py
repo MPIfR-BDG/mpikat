@@ -3,8 +3,7 @@ import binascii
 from datetime import datetime
 import jinja2
 
-DADA_HEADER = """
-HEADER       DADA                # Distributed aquisition and data analysis
+DADA_HEADER = """HEADER       DADA                # Distributed aquisition and data analysis
 HDR_VERSION  1.0                 # Version of this ASCII header
 HDR_SIZE     4096                # Size of the header in bytes
 
