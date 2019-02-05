@@ -142,69 +142,70 @@ class Mkrecv2Db2Dspsr(object):
         self.state = "ready"
         response = yield self._create_ring_buffer
         raise gen.Return(response.body)
-    
+
+    @gen.coroutine
     def start(self):
         """
         @brief Interface object which accepts KATCP commands
     
         """
-        @coroutine
-        def start(self):
-            self.state = "running"
-            header = self._config["dada_header_params"]
-            header["ra"] = sensors["ra"]
-            header["dec"] = sensors["dec"]
-            source_name = sensors["source-name"]
-            try:
-                source_name = source_name.split("_")[0]
-            except Exception:
-                pass
-            header["source_name"] = source_name
-            header["obs_id"] = "{0}_{1}".format(
-            sensors["scannum"], sensors["subscannum"])
-            tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
-            out_path = os.path.join("/beegfs/jason/", source_name, tstr)
-            log.debug("Creating directories")
-            cmd = "mkdir -p {}".format(out_path)
-            log.debug(cmd)
-            log.debug(os.getcwd())
-            process = safe_popen(cmd, stdout=PIPE, shell=True)
-            process.wait()
-            os.chdir(out_path)
-            dada_header_file = tempfile.NamedTemporaryFile(
-            mode="w",
-            prefix="edd_dada_header_",
-            suffix=".txt",
-            dir=os.getcwd(),
-            delete=False)
-            log.debug(
-            "Writing dada header file to {0}".format(
-                dada_header_file.name))
-            header_string = render_dada_header(header)
-            dada_header_file.write(header_string)
-        #log.debug("Header file contains:\n{0}".format(header_string))
-            dada_key_file = tempfile.NamedTemporaryFile(
-            mode="w",
-            prefix="dada_keyfile_",
-            suffix=".key",
-            dir=os.getcwd(),
-            delete=False)
-            log.debug("Writing dada key file to {0}".format(dada_key_file.name))
-            key_string = make_dada_key_string(self._dada_key)
-            dada_key_file.write(make_dada_key_string(self._dada_key))
-            log.debug("Dada key file contains:\n{0}".format(key_string))
-            dada_header_file.close()
-            dada_key_file.close()  
-            log.debug(os.getcwd())
-        ###################
-        # Start up DSPSR
-        ###################
-            cmd = "dspsr {args} -N {source_name} {keyfile}".format(
-            args=self._config["dspsr_params"]["args"],
-            source_name=source_name,
-            keyfile=dada_key_file.name)
-            log.debug("Running command: {0}".format(cmd))
-            self._dspsr = safe_popen(cmd, stdout=PIPE, shell=True)
+        self.state = "running"
+        header = self._config["dada_header_params"]
+        header["ra"] = sensors["ra"]
+        header["dec"] = sensors["dec"]
+        source_name = sensors["source-name"]
+        try:
+            source_name = source_name.split("_")[0]
+        except Exception:
+            pass
+        header["source_name"] = source_name
+        header["obs_id"] = "{0}_{1}".format(
+        sensors["scannum"], sensors["subscannum"])
+        tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
+        out_path = os.path.join("/beegfs/jason/", source_name, tstr)
+        log.debug("Creating directories")
+        cmd = "mkdir -p {}".format(out_path)
+        log.debug(cmd)
+        log.debug(os.getcwd())
+        process = safe_popen(cmd, stdout=PIPE, shell=True)
+        process.wait()
+        os.chdir(out_path)
+        dada_header_file = tempfile.NamedTemporaryFile(
+        mode="w",
+        prefix="edd_dada_header_",
+        suffix=".txt",
+        dir=os.getcwd(),
+        delete=False)
+        log.debug(
+        "Writing dada header file to {0}".format(
+            dada_header_file.name))
+        header_string = render_dada_header(header)
+        dada_header_file.write(header_string)
+    #log.debug("Header file contains:\n{0}".format(header_string))
+        dada_key_file = tempfile.NamedTemporaryFile(
+        mode="w",
+        prefix="dada_keyfile_",
+        suffix=".key",
+        dir=os.getcwd(),
+        delete=False)
+        log.debug("Writing dada key file to {0}".format(dada_key_file.name))
+        key_string = make_dada_key_string(self._dada_key)
+        dada_key_file.write(make_dada_key_string(self._dada_key))
+        log.debug("Dada key file contains:\n{0}".format(key_string))
+        dada_header_file.close()
+        dada_key_file.close()  
+        log.debug(os.getcwd())
+    ###################
+    # Start up DSPSR
+    ###################
+        cmd = "dspsr {args} -N {source_name} {keyfile}".format(
+        args=self._config["dspsr_params"]["args"],
+        source_name=source_name,
+        keyfile=dada_key_file.name)
+        log.debug("Running command: {0}".format(cmd))
+        self._dspsr = safe_popen(cmd, stdout=PIPE, shell=True)
+        dspsr = yield self._dspsr
+        raise gen.Return(dspsr)
         ###################
         # Start up MKRECV
         ###################
@@ -214,17 +215,16 @@ class Mkrecv2Db2Dspsr(object):
         ###################
         # Start up dada_junkdb
         ###################
-            cmd = "dada_junkdb -k {0} -b 32000000000 -r 1024 -g {1}".format(
-                             self._dada_key,
-                             dada_header_file.name)
-            log.debug("running command: {}".format(cmd))
-            self._dada_junkdb = safe_popen(cmd, stdout=PIPE, shell=True)
-            self._dada_junkdb.wait()
-            self._dspsr.wait()
-            self.state = "ready"
-        self.ioloop.add_callback(start)
-        self.state = "running"
-        raise AsyncReply   
+        cmd = "dada_junkdb -k {0} -b 32000000000 -r 1024 -g {1}".format(
+                         self._dada_key,
+                         dada_header_file.name)
+        log.debug("running command: {}".format(cmd))
+        self._dada_junkdb = safe_popen(cmd, stdout=PIPE, shell=True)
+        #self._dada_junkdb.wait()
+        #self._dspsr.wait()
+        #self.state = "ready"
+        dada_junkdb = yield self._dada_junkdb
+        raise gen.Return(dada_junkdb.body)
 
 
     def stop(self):
