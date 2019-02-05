@@ -180,8 +180,6 @@ class ExecuteCommand(object):
                 self.error = True
 
 
-
-
 @register_pipeline("DspsrPipeline")
 class Mkrecv2Db2Dspsr(object):
 
@@ -211,7 +209,7 @@ class Mkrecv2Db2Dspsr(object):
         self._mkrecv_ingest_proc = None
 
     def _decode_capture_stdout(self, stdout, callback):
-        if EXECUTE:
+        if RUN:
             log.debug('New stdout of capture is {}'.format(str(stdout)))
 
     @gen.coroutine
