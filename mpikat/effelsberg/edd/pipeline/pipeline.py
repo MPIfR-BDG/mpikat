@@ -51,7 +51,11 @@ class StreamToLogger(object):
 stdout_logger = logging.getLogger('STDOUT')
 sl = StreamToLogger(stdout_logger, logging.INFO)
 sys.stdout = sl
-         
+
+stderr_logger = logging.getLogger('STDERR')
+sl = StreamToLogger(stderr_logger, logging.ERROR)
+sys.stderr = sl
+
 
 CONFIG = {
     "base_output_dir": os.getcwd(),
