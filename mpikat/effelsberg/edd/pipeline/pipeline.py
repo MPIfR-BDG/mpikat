@@ -4,7 +4,7 @@ import tempfile
 import coloredlogs
 import tornado
 import datetime
-from tornado.gen import Return, coroutine
+from tornado import gen
 import os
 import time
 import shutil
@@ -121,8 +121,8 @@ class Mkrecv2Db2Dspsr(object):
         self._mkrecv_ingest_proc = None
         self.ioloop = tornado.ioloop.IOLoop.current()
         self.ioloop.start()
-        
-    @coroutine
+
+    @gen.coroutine
     def configure(self):
         # return
         self._config = CONFIG
@@ -138,8 +138,10 @@ class Mkrecv2Db2Dspsr(object):
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
         self._create_ring_buffer = safe_popen(cmd, stdout=PIPE, shell=True)
-        self._create_ring_buffer.wait()
+        #self._create_ring_buffer.wait()
+        response = yield self._create_ring_buffer
         self.state = "ready"
+        raise gen.Return(response.body)
     
     def start(self):
         """
