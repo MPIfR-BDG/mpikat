@@ -112,6 +112,14 @@ class Mkrecv2Db2Dspsr(object):
         self._state = value
         self.notify()
 
+    @property
+    def cmd(self):
+        return self._cmd
+
+    @cmd.setter
+    def cmd(self, value):
+        self._state = shlex.split(value)
+        
     ulimits = [{
         "Name": "memlock",
         "Hard": -1,
@@ -143,7 +151,7 @@ class Mkrecv2Db2Dspsr(object):
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
         args = shlex.split(cmd)
-        self._create_ring_buffer = safe_popen(args, stdout=PIPE)
+        self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
         # self._create_ring_buffer.wait()
         self.state = "ready"
         response = yield self._create_ring_buffer
@@ -173,8 +181,8 @@ class Mkrecv2Db2Dspsr(object):
         cmd = "mkdir -p {}".format(out_path)
         log.debug(cmd)
         log.debug(os.getcwd())
-        args = shlex.split(cmd)
-        process = safe_popen(args, stdout=PIPE)
+        #args = shlex.split(cmd)
+        process = safe_popen(cmd, stdout=PIPE)
         process.wait()
         os.chdir(out_path)
         dada_header_file = tempfile.NamedTemporaryFile(
@@ -211,7 +219,7 @@ class Mkrecv2Db2Dspsr(object):
             keyfile=dada_key_file.name)
         args = shlex.split(cmd)
         log.debug("Running command: {0}".format(cmd))
-        self._dspsr = Popen(args, stdout=PIPE)
+        self._dspsr = safe_popen(cmd, stdout=PIPE)
         ###################
         # Start up MKRECV
         ###################
@@ -226,10 +234,7 @@ class Mkrecv2Db2Dspsr(object):
             dada_header_file.name)
         log.debug("running command: {}".format(cmd))
         args = shlex.split(cmd)
-        self._dada_junkdb = Popen(args, stdout=PIPE)
-        # self._dada_junkdb.wait()
-        # self._dspsr.wait()
-        #self.state = "ready"
+        self._dada_junkdb = safe_popen(cmd, stdout=PIPE)
         self.running_process_dada_junkdb = yield self._dada_junkdb
         self.running_process_dspsr = yield self._dspsr
         raise gen.Return(dada_junkdb.body)
@@ -238,11 +243,8 @@ class Mkrecv2Db2Dspsr(object):
     def stop(self):
         log.debug("Stopping")
         try:
-            #kill(_dspsr.pid)
-            #kill(_dada_junkdb.pid)
             self._dspsr.terminate()
             self._dada_junkdb.terminate()
-            #yield time.sleep(10)
         except Exception:
             self._dspsr.kill()
             self._dada_junkdb.kill()
@@ -255,7 +257,7 @@ class Mkrecv2Db2Dspsr(object):
         cmd = "dada_db -d -k {0}".format(self._dada_key)
         log.debug("Running command: {0}".format(cmd))
         args = shlex.split(cmd)
-        process = safe_popen(args, stdout=PIPE)
+        process = safe_popen(cmd, stdout=PIPE)
         process.wait()
 
         #log.debug("Sending SIGTERM to MKRECV process")
@@ -274,7 +276,6 @@ class Mkrecv2Db2Dspsr(object):
         #        log.warning("MKRECV failed to terminate in alloted time")
         #        log.info("Killing MKRECV process")
         #        self._mkrecv_ingest_proc.kill()
-        return
 
 
 def main():
