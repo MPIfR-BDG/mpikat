@@ -104,25 +104,17 @@ class Mkrecv2Db2Dspsr(object):
         self._state = value
         self.notify()
         
-    ulimits = [{
-        "Name": "memlock",
-        "Hard": -1,
-        "Soft": -1
-    }]
-
     def __init__(self):
         self.callbacks = set()
-        self._state = "idle"   # Idle at the very beginning
+        self._state = "idle" 
         self._volumes = ["/tmp/:/scratch/"]
         self._dada_key = None
         self._config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
-        #self._cmd = None
 
     @gen.coroutine
     def configure(self):
-        # return
         self._config = CONFIG
         self._dada_key = CONFIG["dada_db_params"]["key"]
         try:
@@ -136,15 +128,9 @@ class Mkrecv2Db2Dspsr(object):
         self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
         self._create_ring_buffer.wait()
         self.state = "ready"
-        #response = yield self._create_ring_buffer
-        #raise gen.Return(response.body)
 
     @gen.coroutine
     def start(self):
-        """
-        @brief Interface object which accepts KATCP commands
-
-        """
         self.state = "running"
         header = self._config["dada_header_params"]
         header["ra"] = sensors["ra"]
@@ -161,12 +147,12 @@ class Mkrecv2Db2Dspsr(object):
         out_path = os.path.join("/beegfs/jason/", source_name, tstr)
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(out_path)
-        log.debug(cmd)
-        log.debug(os.getcwd())
-        #args = shlex.split(cmd)
+        log.debug("Command to run: {}".format(cmd))
+        log.debug("Current working directory: {}".format(os.getcwd()))
         process = safe_popen(cmd, stdout=PIPE)
         process.wait()
         os.chdir(out_path)
+        log.debug("Change to workdir: {}".format(os.getcwd()))
         dada_header_file = tempfile.NamedTemporaryFile(
             mode="w",
             prefix="edd_dada_header_",
@@ -178,7 +164,7 @@ class Mkrecv2Db2Dspsr(object):
                 dada_header_file.name))
         header_string = render_dada_header(header)
         dada_header_file.write(header_string)
-    #log.debug("Header file contains:\n{0}".format(header_string))
+        #log.debug("Header file contains:\n{0}".format(header_string))
         dada_key_file = tempfile.NamedTemporaryFile(
             mode="w",
             prefix="dada_keyfile_",
@@ -191,15 +177,10 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-        log.debug(os.getcwd())
-        ###################
-        # Start up DSPSR
-        ###################
         cmd = "dspsr {args} -N {source_name} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             source_name=source_name,
             keyfile=dada_key_file.name)
-        #args = shlex.split(cmd)
         log.debug("Running command: {0}".format(cmd))
         self._dspsr = safe_popen(cmd, stdout=PIPE)
         
@@ -209,14 +190,10 @@ class Mkrecv2Db2Dspsr(object):
         # if RUN is True:
         #self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
 
-        ###################
-        # Start up dada_junkdb
-        ###################
         cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
             self._dada_key,
             dada_header_file.name)
         log.debug("running command: {}".format(cmd))
-        #args = shlex.split(cmd)
         self._dada_junkdb = safe_popen(cmd, stdout=PIPE)
         self.running_process_dada_junkdb = yield self._dada_junkdb
         self.running_process_dspsr = yield self._dspsr
