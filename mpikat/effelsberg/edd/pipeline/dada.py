@@ -101,7 +101,7 @@ DADA_DEFAULTS = {
     "nbit": 8,
     "ndim": 2,
     "npol": 2,
-    "nchan": 1,
+    "nchan": 8,
     "resolution":1,
     "dsb":0
 }
