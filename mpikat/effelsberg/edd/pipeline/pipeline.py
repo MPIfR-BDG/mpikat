@@ -139,8 +139,8 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Running command: {0}".format(cmd))
         self._create_ring_buffer = safe_popen(cmd, stdout=PIPE, shell=True)
         #self._create_ring_buffer.wait()
-        response = yield self._create_ring_buffer
         self.state = "ready"
+        response = yield self._create_ring_buffer
         raise gen.Return(response.body)
     
     def start(self):
