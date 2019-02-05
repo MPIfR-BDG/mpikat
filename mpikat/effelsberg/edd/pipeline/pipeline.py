@@ -210,6 +210,9 @@ class Mkrecv2Db2Dspsr(object):
         self._dspsr = None
         self._mkrecv_ingest_proc = None
 
+    def _decode_capture_stdout(self, stdout, callback):
+        if EXECUTE:
+            log.debug('New stdout of capture is {}'.format(str(stdout)))
 
     @gen.coroutine
     def configure(self):
@@ -223,6 +226,8 @@ class Mkrecv2Db2Dspsr(object):
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
         self._create_ring_buffer = safe_popen(cmd, resident=False)
+        self._create_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
         #self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
         #self._create_ring_buffer.wait()
         self.state = "ready"
