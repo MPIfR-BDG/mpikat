@@ -46,9 +46,7 @@ NPOL              {{npol}}                 # number of polarizations observed
 NCHAN             {{nchan}}                 # number of frequency channels
 RESOLUTION        {{dsb}}                 
 DSB
-# end of header
-"""
-"""
+
 #MeerKAT specifics
 DADA_KEY     dada                    # The dada key to write to
 DADA_MODE    4                       # The mode, 4=full dada functionality
