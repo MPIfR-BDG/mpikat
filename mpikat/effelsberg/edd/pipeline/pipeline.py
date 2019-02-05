@@ -151,7 +151,7 @@ class Udp2Db2Dspsr(object):
         header["obs_id"] = "{0}_{1}".format(
         sensors["scannum"], sensors["subscannum"])
         tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
-        out_path = os.path.join("/output/", source_name, tstr)
+        out_path = os.path.join("/beegfs/jason/", source_name, tstr)
 
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(out_path)
