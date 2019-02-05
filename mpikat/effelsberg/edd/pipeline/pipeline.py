@@ -219,15 +219,15 @@ class Mkrecv2Db2Dspsr(object):
         #self._dada_junkdb.wait()
         #self._dspsr.wait()
         #self.state = "ready"
-        dada_junkdb = yield self._dada_junkdb
-        dspsr = yield self._dspsr
+        self.running_process_dada_junkdb = yield self._dada_junkdb
+        self.running_process_dspsr = yield self._dspsr
         raise gen.Return(dada_junkdb.body)
 
     def stop(self):
         log.debug("Stopping")
         try:
-            self._dspsr.kill()
-            self._dada_junkdb.kill()
+            self.running_process_dspsr.kill()
+            self.running_process_dada_junkdb.kill()
         except Exception:
             self.state = "error"
             deconfigure()
