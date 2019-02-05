@@ -13,7 +13,7 @@ from subprocess import check_output, PIPE, Popen
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
-import psutil
+import shlex
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
@@ -207,8 +207,9 @@ class Mkrecv2Db2Dspsr(object):
             args=self._config["dspsr_params"]["args"],
             source_name=source_name,
             keyfile=dada_key_file.name)
+        args = shlex.split(cmd)
         log.debug("Running command: {0}".format(cmd))
-        self._dspsr = Popen(cmd, stdout=PIPE)
+        self._dspsr = Popen(args, stdout=PIPE)
         ###################
         # Start up MKRECV
         ###################
@@ -222,7 +223,8 @@ class Mkrecv2Db2Dspsr(object):
             self._dada_key,
             dada_header_file.name)
         log.debug("running command: {}".format(cmd))
-        self._dada_junkdb = Popen(cmd, stdout=PIPE)
+        args = shlex.split(cmd)
+        self._dada_junkdb = Popen(args, stdout=PIPE)
         # self._dada_junkdb.wait()
         # self._dspsr.wait()
         #self.state = "ready"
