@@ -56,6 +56,8 @@ stderr_logger = logging.getLogger('STDERR')
 sl = StreamToLogger(stderr_logger, logging.ERROR)
 sys.stderr = sl
 
+print "Test to standard out"
+
 
 CONFIG = {
     "base_output_dir": os.getcwd(),
