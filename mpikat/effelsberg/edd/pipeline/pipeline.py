@@ -241,24 +241,23 @@ class Udp2Db2Dspsr(object):
         log.debug("Running command: {0}".format(cmd))
         process = safe_popen(cmd, stdout=PIPE, shell=True)
         process.wait()
-	    """
-        log.debug("Sending SIGTERM to MKRECV process")
-            self._mkrecv_ingest_proc.terminate()
-            self._mkrecv_timeout = 10.0
-            log.debug("Waiting {} seconds for MKRECV to terminate...".format(self._mkrecv_timeout))
-            now = time.time()
-            while time.time()-now < self._mkrecv_timeout:
-                retval = self._mkrecv_ingest_proc.poll()
-                if retval is not None:
-                    log.info("MKRECV returned a return value of {}".format(retval))
-                    break
-                else:
-                    yield sleep(0.5)
-            else:
-                log.warning("MKRECV failed to terminate in alloted time")
-                log.info("Killing MKRECV process")
-                self._mkrecv_ingest_proc.kill()
-        """
+	    
+        #log.debug("Sending SIGTERM to MKRECV process")
+        #    self._mkrecv_ingest_proc.terminate()
+        #    self._mkrecv_timeout = 10.0
+        #    log.debug("Waiting {} seconds for MKRECV to terminate...".format(self._mkrecv_timeout))
+        #    now = time.time()
+        #    while time.time()-now < self._mkrecv_timeout:
+        #        retval = self._mkrecv_ingest_proc.poll()
+        #        if retval is not None:
+        #            log.info("MKRECV returned a return value of {}".format(retval))
+        #            break
+        #        else:
+        #            yield sleep(0.5)
+        #    else:
+        #        log.warning("MKRECV failed to terminate in alloted time")
+        #        log.info("Killing MKRECV process")
+        #        self._mkrecv_ingest_proc.kill()
         return
 
 
