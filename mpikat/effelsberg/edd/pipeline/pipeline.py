@@ -137,7 +137,7 @@ class Mkrecv2Db2Dspsr(object):
         self._create_ring_buffer.wait()
         self.state = "ready"
 
-        
+    @return_reply(Str())    
     def start(self):
         def start(self):
             self.state = "running"
