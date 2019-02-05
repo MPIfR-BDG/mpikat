@@ -68,6 +68,9 @@ This pipeline captures data from the network and passes it to a dada
 ring buffer for processing by DSPSR
 """.lstrip()
 
+def log_subprocess_output(pipe):
+    for line in iter(pipe.readline, b''): # b'\n'-separated lines
+        log.debug('got line from subprocess: %r', line)
 
 def register_pipeline(name):
     def _register(cls):
@@ -124,8 +127,9 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Running command: {0}".format(cmd))
 
         self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
+        with self._create_ring_buffer.stdout:
+            log_subprocess_output(process.stdout)
         self._create_ring_buffer.wait()
-        output, error = self._create_ring_buffer.communicate()
         log.debug(output)
         self.state = "ready"
 
