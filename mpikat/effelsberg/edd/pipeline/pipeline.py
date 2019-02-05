@@ -118,7 +118,7 @@ class Mkrecv2Db2Dspsr(object):
 
     @cmd.setter
     def cmd(self, value):
-        self._state = shlex.split(value)
+        self._cmd = shlex.split(value)
         
     ulimits = [{
         "Name": "memlock",
@@ -134,6 +134,7 @@ class Mkrecv2Db2Dspsr(object):
         self._config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
+        self._cmd = None
 
     @gen.coroutine
     def configure(self):
