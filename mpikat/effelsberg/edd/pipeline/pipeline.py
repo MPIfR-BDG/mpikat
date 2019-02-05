@@ -84,7 +84,7 @@ def safe_popen(cmd, *args, **kwargs):
 
 
 @register_pipeline("DspsrPipeline")
-class Udp2Db2Dspsr(object):
+class Mkrecv2Db2Dspsr(object):
 
     def __del__(self):
         class_name = self.__class__.__name__
@@ -203,13 +203,11 @@ class Udp2Db2Dspsr(object):
         cmd = "dada_junkdb -k {0} -b 32000000000 -r 1024 -g {1}".format(
                              self._dada_key,
                              dada_header_file.name)
-        #cmd = "dada_junkdb -k {0} -b 3200000000 -r 1024 -g {1}".format(
-        #                     self._dada_key,
-        #                     "/beegfs/jason/test_header.txt")
-        log.debug(cmd)
+        log.debug("running command: {}".format(cmd))
         self._dada_junkdb = safe_popen(cmd, stdout=PIPE, shell=True)
         self._dada_junkdb.wait()
         self._dspsr.wait()
+        self.state = "ready"
 
     def stop(self):
         log.debug("Stopping")
@@ -251,7 +249,7 @@ class Udp2Db2Dspsr(object):
 def main():
     print "\nCreate pipeline ...\n"
     logging.info("Starting pipeline instance")
-    server = Udp2Db2Dspsr()
+    server = Mkrecv2Db2Dspsr()
     server.configure()
     server.start()
     #server.stop()
