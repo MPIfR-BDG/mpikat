@@ -68,25 +68,6 @@ This pipeline captures data from the network and passes it to a dada
 ring buffer for processing by DSPSR
 """.lstrip()
 
-def execute(system_command, **kwargs):
-    """Execute a system command, passing STDOUT and STDERR to logger.
-
-    Source: https://stackoverflow.com/a/4417735/2063031
-    """
-    logger.info("system_command: '%s'", system_command)
-    popen = subprocess.Popen(
-        shlex.split(system_command),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        universal_newlines=True,
-        **kwargs)
-    for stdout_line in iter(popen.stdout.readline, ""):
-        logger.debug(stdout_line.strip())
-    popen.stdout.close()
-    return_code = popen.wait()
-    if return_code:
-        raise subprocess.CalledProcessError(return_code, system_command)
-
 def register_pipeline(name):
     def _register(cls):
         PIPELINES[name] = cls
@@ -96,6 +77,8 @@ def register_pipeline(name):
 def safe_popen(cmd, *args, **kwargs):
     if RUN == True:
         process = Popen(shlex.split(cmd), stdout=PIPE)
+        for stdout_line in iter(process.stdout.readline, ""):
+            log.debug(stdout_line.strip())
     else:
         process = None
     return process 
@@ -140,9 +123,8 @@ class Mkrecv2Db2Dspsr(object):
         cmd = "dada_db -k {key} {args}".format(**
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
-        self._create_ring_buffer = execute(cmd)
-        #self._create_ring_buffer.wait()
-        #log.debug(output)
+        self._create_ring_buffer = safe_popen(cmd, stdout=log.debug())
+        self._create_ring_buffer.wait()
         self.state = "ready"
 
     @gen.coroutine
