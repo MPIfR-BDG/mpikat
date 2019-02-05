@@ -81,6 +81,107 @@ def safe_popen(cmd, *args, **kwargs):
         process = None
     return process 
 
+
+class ExecuteCommand(object):
+
+    def __init__(self, command, resident=False):
+        self._command = command
+        self._resident = resident
+        self.stdout_callbacks = set()
+        self.error_callbacks = set()
+
+        self._process = None
+        self._executable_command = None
+        self._monitor_thread = None
+        self._stdout = None
+        self._error = False
+
+        self._finish_event = threading.Event()
+        print self._command
+
+        if not self._resident:  # For the command which stops immediately, we need to set the event before hand
+            self._finish_event.set()
+
+        log.info(self._command)
+        self._executable_command = shlex.split(self._command)
+        #self._executable_command = self._command
+        log.info(self._executable_command)
+
+        if RUN:
+            try:
+                self._process = Popen(self._executable_command,
+                                      stdout=PIPE,
+                                      stderr=PIPE,
+                                      bufsize=1,
+                                      #shell=True,
+                                      universal_newlines=True)
+                #print self._process
+            except Exception as error:
+                log.exception("Error while launching command: {}".format(self._executable_command))
+                self.error = True
+            if self._process == None:
+                self._error = True
+            self._monitor_thread = threading.Thread(target=self._execution_monitor)
+            self._monitor_thread.start()
+
+    def __del__(self):
+        class_name = self.__class__.__name__
+
+    def set_finish_event(self):
+        if not self._finish_event.isSet():
+            self._finish_event.set()
+
+    def finish(self):
+        if RUN:
+            self._monitor_thread.join()
+
+    def stdout_notify(self):
+        for callback in self.stdout_callbacks:
+            callback(self._stdout, self)
+
+    @property
+    def stdout(self):
+        return self._stdout
+
+    @stdout.setter
+    def stdout(self, value):
+        self._stdout = value
+        self.stdout_notify()
+
+    def error_notify(self):
+        for callback in self.error_callbacks:
+            callback(self._error, self)
+
+    @property
+    def error(self):
+        return self._error
+
+    @error.setter
+    def error(self, value):
+        self._error = value
+        self.error_notify()
+
+    def _execution_monitor(self):
+        # Monitor the execution and also the stdout for the outside useage
+        if RUN:
+            while self._process.poll() == None:
+                stdout = self._process.stdout.readline().rstrip("\n\r")
+
+                if stdout != b"":
+                    self.stdout = stdout
+                    print self.stdout, self._command
+
+            if not self._finish_event.isSet():
+                # For the command which runs for a while, if it stops before
+                # the event is set, the command does not successfully finish
+                stderr = self._process.stderr.read()
+                log.error(
+                    "Process exited unexpectedly with return code: {}".format(self._process.returncode))
+                self.error = True
+
+
+
+
 @register_pipeline("DspsrPipeline")
 class Mkrecv2Db2Dspsr(object):
 
@@ -121,8 +222,9 @@ class Mkrecv2Db2Dspsr(object):
         cmd = "dada_db -k {key} {args}".format(**
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
-        self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
-        self._create_ring_buffer.wait()
+        self._create_ring_buffer = safe_popen(cmd, resident=True)
+        #self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
+        #self._create_ring_buffer.wait()
         self.state = "ready"
 
     @gen.coroutine
