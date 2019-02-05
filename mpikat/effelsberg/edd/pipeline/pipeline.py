@@ -239,10 +239,10 @@ class Udp2Db2Dspsr(object):
         log.debug("Destroying dada buffer")
         cmd = "dada_db -d -k {0}".format(self._dada_key)
         log.debug("Running command: {0}".format(cmd))
-        if RUN is True:
-            process = safe_popen(cmd, stdout=PIPE, shell=True)
-            process.wait()
-	    log.debug("Sending SIGTERM to MKRECV process")
+        process = safe_popen(cmd, stdout=PIPE, shell=True)
+        process.wait()
+	    """
+        log.debug("Sending SIGTERM to MKRECV process")
             self._mkrecv_ingest_proc.terminate()
             self._mkrecv_timeout = 10.0
             log.debug("Waiting {} seconds for MKRECV to terminate...".format(self._mkrecv_timeout))
@@ -258,6 +258,7 @@ class Udp2Db2Dspsr(object):
                 log.warning("MKRECV failed to terminate in alloted time")
                 log.info("Killing MKRECV process")
                 self._mkrecv_ingest_proc.kill()
+        """
         return
 
 
