@@ -78,20 +78,12 @@ def register_pipeline(name):
         return cls
     return _register
 
-
 def safe_popen(cmd, *args, **kwargs):
     if RUN == True:
         process = Popen(shlex.split(cmd), stdout=PIPE)
     else:
         process = None
-    return process
-
-def kill(proc_pid):
-    process = psutil.Process(proc_pid)
-    for proc in process.children(recursive=True):
-        proc.kill()
-    process.kill()    
-
+    return process 
 
 @register_pipeline("DspsrPipeline")
 class Mkrecv2Db2Dspsr(object):
@@ -111,14 +103,6 @@ class Mkrecv2Db2Dspsr(object):
     def state(self, value):
         self._state = value
         self.notify()
-
-#    @property
-#    def cmd(self):
-#        return self._cmd
-
-#    @cmd.setter
-#    def cmd(self, value):
-#        self._cmd = shlex.split(value)
         
     ulimits = [{
         "Name": "memlock",
@@ -145,18 +129,15 @@ class Mkrecv2Db2Dspsr(object):
             self.deconfigure()
         except Exception:
             pass
-        ###################################
-        #####Starting up ring buffer#######
-        ###################################
         cmd = "dada_db -k {key} {args}".format(**
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
-        #args = shlex.split(cmd)
+
         self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
-        # self._create_ring_buffer.wait()
+        self._create_ring_buffer.wait()
         self.state = "ready"
-        response = yield self._create_ring_buffer
-        raise gen.Return(response.body)
+        #response = yield self._create_ring_buffer
+        #raise gen.Return(response.body)
 
     @gen.coroutine
     def start(self):
