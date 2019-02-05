@@ -123,7 +123,7 @@ class Mkrecv2Db2Dspsr(object):
         cmd = "dada_db -k {key} {args}".format(**
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
-        self._create_ring_buffer = safe_popen(cmd, stdout=log.debug())
+        self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
         self._create_ring_buffer.wait()
         self.state = "ready"
 
