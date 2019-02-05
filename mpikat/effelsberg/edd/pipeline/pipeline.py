@@ -120,6 +120,7 @@ class Mkrecv2Db2Dspsr(object):
         self._dspsr = None 
         self._mkrecv_ingest_proc = None
         self.ioloop = tornado.ioloop.IOLoop.current()
+        self.ioloop.start()
 
     def configure(self):
         # return
