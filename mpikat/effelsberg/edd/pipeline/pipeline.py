@@ -139,7 +139,7 @@ class Mkrecv2Db2Dspsr(AsyncDeviceServer):
         self.state = "ready"
 
     #@request()
-    #@return_reply()    
+    @return_reply()    
     def start(self):
         def start(self):
             self.state = "running"
