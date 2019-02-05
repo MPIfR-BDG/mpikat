@@ -164,8 +164,7 @@ class EddMasterController(MasterController):
         """
         mode = mode.upper()
         if not mode in self.CONTROL_MODES:
-            raise UnknownControlMode"Unknown mode '{}', valid modes are '{}' ".format(
-                mode, ", ".join(self.CONTROL_MODES))
+            raise UnknownControlMode("Unknown mode '{}', valid modes are '{}' ".format(mode, ", ".join(self.CONTROL_MODES)))
         else:
             self._control_mode = mode
         if self._control_mode == self.SCPI:
@@ -202,6 +201,10 @@ class EddMasterController(MasterController):
     def _packetiser_config_helper(self, config):
         try:
             client = DigitiserPacketiserClient(*config["address"])
+        except Exception as error:
+            log.error("Error while connecting to packetiser: {}".format(str(error)))
+            raise error
+        try:
             yield client.set_sampling_rate(config["sampling_rate"])
             yield client.set_bit_width(config["bit_width"])
             yield client.set_destinations(config["v_destinations"], config["h_destinations"])
@@ -214,6 +217,8 @@ class EddMasterController(MasterController):
             raise error
         else:
             raise Return(client)
+        finally:
+            client.stop()
 
     @coroutine
     def configure(self, config_json):
