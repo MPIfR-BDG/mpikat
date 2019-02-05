@@ -77,8 +77,6 @@ def register_pipeline(name):
 def safe_popen(cmd, *args, **kwargs):
     if RUN == True:
         process = Popen(shlex.split(cmd), stdout=PIPE)
-        for stdout_line in iter(process.stdout.readline, ""):
-            log.debug(stdout_line.strip())
     else:
         process = None
     return process 
