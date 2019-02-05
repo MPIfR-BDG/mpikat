@@ -118,7 +118,6 @@ class Mkrecv2Db2Dspsr(object):
         self._mkrecv_ingest_proc = None
 
     def configure(self):
-        self.state = "ready"
         # return
         self._config = CONFIG
         self._dada_key = CONFIG["dada_db_params"]["key"]
@@ -134,6 +133,7 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Running command: {0}".format(cmd))
         self._create_ring_buffer = safe_popen(cmd, stdout=PIPE, shell=True)
         self._create_ring_buffer.wait()
+        self.state = "ready"
 
     def start(self):
         self.state = "running"
