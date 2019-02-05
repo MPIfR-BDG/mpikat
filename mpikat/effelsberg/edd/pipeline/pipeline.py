@@ -148,11 +148,11 @@ class Mkrecv2Db2Dspsr(object):
         ###################################
         #####Starting up ring buffer#######
         ###################################
-        cmd = "dada_db -k {key} {args}".format(**
+        self.cmd = "dada_db -k {key} {args}".format(**
                                                self._config["dada_db_params"])
-        log.debug("Running command: {0}".format(cmd))
-        args = shlex.split(cmd)
-        self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
+        log.debug("Running command: {0}".format(self.cmd))
+        #args = shlex.split(cmd)
+        self._create_ring_buffer = safe_popen(self.cmd, stdout=PIPE)
         # self._create_ring_buffer.wait()
         self.state = "ready"
         response = yield self._create_ring_buffer
@@ -179,11 +179,11 @@ class Mkrecv2Db2Dspsr(object):
         tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
         out_path = os.path.join("/beegfs/jason/", source_name, tstr)
         log.debug("Creating directories")
-        cmd = "mkdir -p {}".format(out_path)
-        log.debug(cmd)
+        self.cmd = "mkdir -p {}".format(out_path)
+        log.debug(self.cmd)
         log.debug(os.getcwd())
         #args = shlex.split(cmd)
-        process = safe_popen(cmd, stdout=PIPE)
+        process = safe_popen(self.cmd, stdout=PIPE)
         process.wait()
         os.chdir(out_path)
         dada_header_file = tempfile.NamedTemporaryFile(
@@ -214,13 +214,13 @@ class Mkrecv2Db2Dspsr(object):
         ###################
         # Start up DSPSR
         ###################
-        cmd = "dspsr {args} -N {source_name} {keyfile}".format(
+        self.cmd = "dspsr {args} -N {source_name} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             source_name=source_name,
             keyfile=dada_key_file.name)
-        args = shlex.split(cmd)
-        log.debug("Running command: {0}".format(cmd))
-        self._dspsr = safe_popen(cmd, stdout=PIPE)
+        #args = shlex.split(cmd)
+        log.debug("Running command: {0}".format(self.cmd))
+        self._dspsr = safe_popen(self.cmd, stdout=PIPE)
         ###################
         # Start up MKRECV
         ###################
@@ -230,12 +230,12 @@ class Mkrecv2Db2Dspsr(object):
         ###################
         # Start up dada_junkdb
         ###################
-        cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
+        self.cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
             self._dada_key,
             dada_header_file.name)
         log.debug("running command: {}".format(cmd))
-        args = shlex.split(cmd)
-        self._dada_junkdb = safe_popen(cmd, stdout=PIPE)
+        #args = shlex.split(cmd)
+        self._dada_junkdb = safe_popen(self.cmd, stdout=PIPE)
         self.running_process_dada_junkdb = yield self._dada_junkdb
         self.running_process_dspsr = yield self._dspsr
         raise gen.Return(dada_junkdb.body)
@@ -255,10 +255,10 @@ class Mkrecv2Db2Dspsr(object):
     def deconfigure(self):
         self.state = "idle"
         log.debug("Destroying dada buffer")
-        cmd = "dada_db -d -k {0}".format(self._dada_key)
-        log.debug("Running command: {0}".format(cmd))
-        args = shlex.split(cmd)
-        process = safe_popen(cmd, stdout=PIPE)
+        self.cmd = "dada_db -d -k {0}".format(self._dada_key)
+        log.debug("Running command: {0}".format(self.cmd))
+        #args = shlex.split(cmd)
+        process = safe_popen(self.cmd, stdout=PIPE)
         process.wait()
 
         #log.debug("Sending SIGTERM to MKRECV process")
