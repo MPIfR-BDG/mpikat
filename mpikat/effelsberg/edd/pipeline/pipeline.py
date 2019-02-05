@@ -208,7 +208,7 @@ class Mkrecv2Db2Dspsr(object):
             source_name=source_name,
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
-        self._dspsr = safe_popen(cmd, stdout=PIPE)
+        self._dspsr = Popen(cmd, stdout=PIPE)
         ###################
         # Start up MKRECV
         ###################
@@ -222,7 +222,7 @@ class Mkrecv2Db2Dspsr(object):
             self._dada_key,
             dada_header_file.name)
         log.debug("running command: {}".format(cmd))
-        self._dada_junkdb = safe_popen(cmd, stdout=PIPE)
+        self._dada_junkdb = Popen(cmd, stdout=PIPE)
         # self._dada_junkdb.wait()
         # self._dspsr.wait()
         #self.state = "ready"
@@ -234,15 +234,15 @@ class Mkrecv2Db2Dspsr(object):
     def stop(self):
         log.debug("Stopping")
         try:
-            kill(_dspsr.pid)
-            kill(_dada_junkdb.pid)
-            #self._dspsr.terminate()
-            #self._dada_junkdb.terminate()
-            yield time.sleep(10)
+            #kill(_dspsr.pid)
+            #kill(_dada_junkdb.pid)
+            self._dspsr.terminate()
+            self._dada_junkdb.terminate()
+            #yield time.sleep(10)
         except Exception:
             self._dspsr.kill()
             self._dada_junkdb.terminate()
-            self.deconfigure()
+            #self.deconfigure()
         self.state = "ready"
 
     def deconfigure(self):
