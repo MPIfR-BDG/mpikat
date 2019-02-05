@@ -80,7 +80,7 @@ def register_pipeline(name):
 
 def safe_popen(cmd, *args, **kwargs):
     if RUN == True:
-        process = Popen(cmd, stdout=PIPE, shell=True)
+        process = Popen(cmd, stdout=PIPE)
     else:
         process = None
     return process
@@ -233,8 +233,7 @@ class Mkrecv2Db2Dspsr(object):
         except Exception:
             self._dspsr.kill()
             self._dada_junkdb.terminate()
-            #self.state = "error"
-            #self.deconfigure()
+            self.deconfigure()
         self.state = "ready"
 
     def deconfigure(self):
