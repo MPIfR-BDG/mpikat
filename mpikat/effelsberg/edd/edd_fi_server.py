@@ -14,7 +14,7 @@ from threading import Thread, Event
 from optparse import OptionParser
 from collections import namedtuple
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
-from katcp.kattypes import (Str, Float, Int, request, return_reply)
+from katcp.kattypes import (Str, Int, request, return_reply)
 
 log = logging.getLogger("mpikat.edd_fi_server")
 
@@ -225,7 +225,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             self._capture_thread = None
             log.debug("Capture thread cleaned")
 
-    @request(Int(), Int(), Float(), Int())
+    @request(Int(), Int(), Int(), Int())
     @return_reply()
     def request_configure(self, req, beams, channels, int_time, blank_phases):
         """
@@ -233,7 +233,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
 
         @param   beams          The number of beams expected
         @param   channels       The number of channels expected
-        @param   int_time       The integration time (seconds)
+        @param   int_time       The integration time (milliseconds int)
         @param   blank_phases   The number of blank phases (1-4)
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
