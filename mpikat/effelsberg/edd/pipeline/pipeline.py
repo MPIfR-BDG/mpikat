@@ -199,9 +199,22 @@ class Mkrecv2Db2Dspsr(object):
     def stop(self):
         log.debug("Stopping")
         self._dada_junkdb.terminate()
-        self._dspsr.terminate()
         self._timeout = 10.0
-        log.debug("Waiting {} seconds for DSPSR and JUNKDB to terminate...".format(self._timeout))
+        log.debug("Waiting {} seconds for JUNKDB to terminate...".format(self._timeout))
+        now = time.time()
+        while time.time()-now < self._timeout:
+            retval = self._dada_junkdb.poll()
+            if retval is not None:
+                log.info("Returned a return value of {}".format(retval))
+                break
+            else:
+                yield time.sleep(0.5)
+        else:
+            log.warning("Failed to terminate JUNKDB in alloted time")
+            log.info("Killing process")
+            self._dada_junkdb.kill()
+        self._dspsr.terminate()
+        log.debug("Waiting {} seconds for DSPSR to terminate...".format(self._timeout))
         now = time.time()
         while time.time()-now < self._timeout:
             retval = self._dspsr.poll()
@@ -211,10 +224,9 @@ class Mkrecv2Db2Dspsr(object):
             else:
                 yield time.sleep(0.5)
         else:
-            log.warning("Failed to terminate in alloted time")
+            log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
             self._dspsr.kill()
-            self._dada_junkdb.kill()
         self.state = "ready"
 
     def deconfigure(self):
