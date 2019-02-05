@@ -12,7 +12,6 @@ import ctypes as C
 from datetime import datetime
 from threading import Thread, Event
 from optparse import OptionParser
-from collections import namedtuple
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import (Str, Int, request, return_reply)
 
@@ -448,8 +447,6 @@ class R2SpectrometerHandler(object):
         self._transmit_socket = transmit_socket
         self._active_packets = {}
         self._max_age = max_age
-        self._fw_packet_wrapper = namedtuple('FWPacketWrapper',
-            ['timestamp', 'hits', 'packet'])
 
     def __call__(self, raw_data):
         packet = RoachPacket(raw_data, self._nchannels)
@@ -459,10 +456,10 @@ class R2SpectrometerHandler(object):
             fw_packet = build_fw_object(self._nsections, self._nchannels, isotime(),
                 self._integration_time, self._nphases)
             fw_packet.sections[packet.polarisation].data[:] = packet.data
-            self._active_packets[key] = self._fw_packet_wrapper(time.time(), 1, fw_packet)
+            self._active_packets[key] = [time.time(), 1, fw_packet]
         else:
-            self._active_packets[key].hits += 1
-            self._active_packets[key].packet.sections[packet.polarisation].data[:] = packet.data
+            self._active_packets[key][1] += 1
+            self._active_packets[key][2].sections[packet.polarisation].data[:] = packet.data
         self.flush()
 
     def flush(self):
