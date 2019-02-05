@@ -268,7 +268,7 @@ def main():
     server.configure()
     server.start()
     #server.stop()
-    #server.deconfigure()
+    server.deconfigure()
 
 if __name__ == "__main__":
     main()
