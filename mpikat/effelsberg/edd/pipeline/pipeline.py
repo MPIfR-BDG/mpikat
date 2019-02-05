@@ -214,14 +214,14 @@ class Mkrecv2Db2Dspsr(object):
         ###################
         # Start up DSPSR
         ###################
-        self.cmd = "dspsr {args} -N {source_name} {keyfile}".format(
+        test = "dspsr {args} -N {source_name} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             source_name=source_name,
             keyfile=dada_key_file.name)
-        #args = shlex.split(cmd)
+        args = shlex.split(test)
         log.debug("Running command: {0}".format(self.cmd))
-        self._dspsr = safe_popen(self.cmd, stdout=PIPE)
-        self.running_process_dspsr = yield self._dspsr
+        self._dspsr = safe_popen(args, stdout=PIPE)
+        
         ###################
         # Start up MKRECV
         ###################
@@ -238,6 +238,7 @@ class Mkrecv2Db2Dspsr(object):
         #args = shlex.split(cmd)
         self._dada_junkdb = safe_popen(self.cmd, stdout=PIPE)
         self.running_process_dada_junkdb = yield self._dada_junkdb
+        self.running_process_dspsr = yield self._dspsr
         raise gen.Return(dada_junkdb.body)
     
     @gen.coroutine
