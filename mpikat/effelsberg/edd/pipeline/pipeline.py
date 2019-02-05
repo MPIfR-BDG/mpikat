@@ -145,10 +145,11 @@ class Mkrecv2Db2Dspsr(AsyncDeviceServer):
     @request()
     @return_reply()    
     def request_start(self):
-            """
-     @brief Interface object which accepts KATCP commands
+        """
+        @brief Interface object which accepts KATCP commands
     
-    """
+        """
+        @coroutine
         def start(self):
             self.state = "running"
             header = self._config["dada_header_params"]
@@ -222,6 +223,7 @@ class Mkrecv2Db2Dspsr(AsyncDeviceServer):
             self._dada_junkdb.wait()
             self._dspsr.wait()
             self.state = "ready"
+
         self.ioloop.add_callback(start)
         self.state = "running"
         raise AsyncReply   
