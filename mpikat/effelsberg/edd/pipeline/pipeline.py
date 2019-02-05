@@ -14,7 +14,6 @@ from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
 import shlex
-import StringIO
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
 #
@@ -127,7 +126,7 @@ class Mkrecv2Db2Dspsr(object):
         self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
         self._create_ring_buffer.wait()
         output, error = self._create_ring_buffer.communicate()
-        log.debug(StringIO(output))
+        log.debug(output)
         self.state = "ready"
 
     @gen.coroutine
