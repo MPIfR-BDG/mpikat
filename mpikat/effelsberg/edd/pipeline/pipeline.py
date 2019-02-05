@@ -125,9 +125,9 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Running command: {0}".format(cmd))
 
         self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
+        self._create_ring_buffer.wait()
         output, error = self._create_ring_buffer.communicate()
         log.debug(output)
-        self._create_ring_buffer.wait()
         self.state = "ready"
 
     @gen.coroutine
