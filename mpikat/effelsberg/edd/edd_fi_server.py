@@ -463,12 +463,19 @@ class R2SpectrometerHandler(object):
         self.flush()
 
     def flush(self):
+        log.debug("Number of active packets pre-flush: {}".format(len(self._active_packets)))
         now = time.time()
         for key in sorted(self._active_packets.iterkeys()):
             timestamp, hits, fw_packet = self._active_packets[key]
-            if ((now - timestamp) > self._max_age) or (hits == self._nsections):
+            if ((now - timestamp) > self._max_age):
+                log.warning("Age exceeds maximum age. Incomplete packet will be flushed to FITS writer.")
                 self._transmit_socket.send(bytearray(fw_packet))
                 del self._active_packets[key]
+            elif (hits == self._nsections):
+                log.debug("Sending complete packet with timestamp: {}".format(timestamp))
+                self._transmit_socket.send(bytearray(fw_packet))
+                del self._active_packets[key]
+        log.debug("Number of active packets post-flush: {}".format(len(self._active_packets)))
 
 
 
