@@ -461,8 +461,8 @@ class R2SpectrometerHandler(object):
             fw_packet.sections[packet.polarisation].data[:] = packet.data
             self._active_packets[key] = self._fw_packet_wrapper(time.time(), 1, fw_packet)
         else:
-            self._active_packets[key]['hits'] += 1
-            self._active_packets[key]['packet'].sections[packet.polarisation].data[:] = packet.data
+            self._active_packets[key].hits += 1
+            self._active_packets[key].packet.sections[packet.polarisation].data[:] = packet.data
         self.flush()
 
     def flush(self):
