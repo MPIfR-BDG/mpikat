@@ -77,17 +77,17 @@ def register_pipeline(name):
         return cls
     return _register
 
+
 def safe_popen(cmd, *args, **kwargs):
-        if RUN == True:
-            process = Popen(cmd, stdout=PIPE, shell=True)
-        else:
-            process = None
-        return process
+    if RUN == True:
+        process = Popen(cmd, stdout=PIPE, shell=True)
+    else:
+        process = None
+    return process
 
 
 @register_pipeline("DspsrPipeline")
 class Mkrecv2Db2Dspsr(object):
-
 
     def __del__(self):
         class_name = self.__class__.__name__
@@ -117,7 +117,7 @@ class Mkrecv2Db2Dspsr(object):
         self._volumes = ["/tmp/:/scratch/"]
         self._dada_key = None
         self._config = None
-        self._dspsr = None 
+        self._dspsr = None
         self._mkrecv_ingest_proc = None
 
     @gen.coroutine
@@ -136,7 +136,7 @@ class Mkrecv2Db2Dspsr(object):
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
         self._create_ring_buffer = safe_popen(cmd, stdout=PIPE, shell=True)
-        #self._create_ring_buffer.wait()
+        # self._create_ring_buffer.wait()
         self.state = "ready"
         response = yield self._create_ring_buffer
         raise gen.Return(response.body)
@@ -145,7 +145,7 @@ class Mkrecv2Db2Dspsr(object):
     def start(self):
         """
         @brief Interface object which accepts KATCP commands
-    
+
         """
         self.state = "running"
         header = self._config["dada_header_params"]
@@ -158,7 +158,7 @@ class Mkrecv2Db2Dspsr(object):
             pass
         header["source_name"] = source_name
         header["obs_id"] = "{0}_{1}".format(
-        sensors["scannum"], sensors["subscannum"])
+            sensors["scannum"], sensors["subscannum"])
         tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
         out_path = os.path.join("/beegfs/jason/", source_name, tstr)
         log.debug("Creating directories")
@@ -169,55 +169,55 @@ class Mkrecv2Db2Dspsr(object):
         process.wait()
         os.chdir(out_path)
         dada_header_file = tempfile.NamedTemporaryFile(
-        mode="w",
-        prefix="edd_dada_header_",
-        suffix=".txt",
-        dir=os.getcwd(),
-        delete=False)
+            mode="w",
+            prefix="edd_dada_header_",
+            suffix=".txt",
+            dir=os.getcwd(),
+            delete=False)
         log.debug(
-        "Writing dada header file to {0}".format(
-            dada_header_file.name))
+            "Writing dada header file to {0}".format(
+                dada_header_file.name))
         header_string = render_dada_header(header)
         dada_header_file.write(header_string)
     #log.debug("Header file contains:\n{0}".format(header_string))
         dada_key_file = tempfile.NamedTemporaryFile(
-        mode="w",
-        prefix="dada_keyfile_",
-        suffix=".key",
-        dir=os.getcwd(),
-        delete=False)
+            mode="w",
+            prefix="dada_keyfile_",
+            suffix=".key",
+            dir=os.getcwd(),
+            delete=False)
         log.debug("Writing dada key file to {0}".format(dada_key_file.name))
         key_string = make_dada_key_string(self._dada_key)
         dada_key_file.write(make_dada_key_string(self._dada_key))
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
-        dada_key_file.close()  
+        dada_key_file.close()
         log.debug(os.getcwd())
         ###################
         # Start up DSPSR
         ###################
         cmd = "dspsr {args} -N {source_name} {keyfile}".format(
-        args=self._config["dspsr_params"]["args"],
-        source_name=source_name,
-        keyfile=dada_key_file.name)
+            args=self._config["dspsr_params"]["args"],
+            source_name=source_name,
+            keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
-        self._dspsr = safe_popen(cmd, stdout=PIPE, shell=True)
+        self._dspsr = safe_popen(cmd, stdout=PIPE)
         ###################
         # Start up MKRECV
         ###################
-        #if RUN is True:
-	    #self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
+        # if RUN is True:
+        #self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
 
         ###################
         # Start up dada_junkdb
         ###################
         cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
-                         self._dada_key,
-                         dada_header_file.name)
+            self._dada_key,
+            dada_header_file.name)
         log.debug("running command: {}".format(cmd))
-        self._dada_junkdb = safe_popen(cmd, stdout=PIPE, shell=True)
-        #self._dada_junkdb.wait()
-        #self._dspsr.wait()
+        self._dada_junkdb = safe_popen(cmd, stdout=PIPE)
+        # self._dada_junkdb.wait()
+        # self._dspsr.wait()
         #self.state = "ready"
         self.running_process_dada_junkdb = yield self._dada_junkdb
         self.running_process_dspsr = yield self._dspsr
@@ -230,7 +230,7 @@ class Mkrecv2Db2Dspsr(object):
             self.running_process_dada_junkdb.kill()
         except Exception:
             self.state = "error"
-            deconfigure()
+            self.deconfigure()
         self.state = "ready"
 
     def deconfigure(self):
@@ -238,9 +238,9 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Destroying dada buffer")
         cmd = "dada_db -d -k {0}".format(self._dada_key)
         log.debug("Running command: {0}".format(cmd))
-        process = safe_popen(cmd, stdout=PIPE, shell=True)
+        process = safe_popen(cmd, stdout=PIPE)
         process.wait()
-	    
+
         #log.debug("Sending SIGTERM to MKRECV process")
         #    self._mkrecv_ingest_proc.terminate()
         #    self._mkrecv_timeout = 10.0
@@ -266,7 +266,7 @@ def main():
     server = Mkrecv2Db2Dspsr()
     server.configure()
     server.start()
-    #server.stop()
+    # server.stop()
     server.deconfigure()
 
 if __name__ == "__main__":
