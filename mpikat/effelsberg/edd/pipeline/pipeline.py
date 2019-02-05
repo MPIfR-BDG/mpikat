@@ -80,7 +80,7 @@ def register_pipeline(name):
 
 def safe_popen(cmd, *args, **kwargs):
     if RUN == True:
-        process = Popen(cmd, stdout=PIPE, **kwargs)
+        process = Popen(cmd, stdout=PIPE, *args,**kwargs)
     else:
         process = None
     return process
