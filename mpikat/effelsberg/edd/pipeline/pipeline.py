@@ -228,9 +228,11 @@ class Mkrecv2Db2Dspsr(object):
         try:
             self.running_process_dspsr.terminate()
             self.running_process_dada_junkdb.terminate()
+            time.sleep(10)
         except Exception:
-            self.state = "error"
-            self.deconfigure()
+            pass
+            #self.state = "error"
+            #self.deconfigure()
         self.state = "ready"
 
     def deconfigure(self):
