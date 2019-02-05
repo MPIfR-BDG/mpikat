@@ -204,7 +204,7 @@ class Mkrecv2Db2Dspsr(object):
         keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
         self._dspsr = safe_popen(cmd, stdout=PIPE, shell=True)
-        dspsr = yield self._dspsr
+        
         #raise gen.Return(dspsr)
         ###################
         # Start up MKRECV
@@ -224,6 +224,7 @@ class Mkrecv2Db2Dspsr(object):
         #self._dspsr.wait()
         #self.state = "ready"
         dada_junkdb = yield self._dada_junkdb
+        dspsr = yield self._dspsr
         raise gen.Return(dada_junkdb.body)
 
 
