@@ -86,11 +86,8 @@ def safe_popen(cmd, *args, **kwargs):
 
 
 @register_pipeline("DspsrPipeline")
-class Mkrecv2Db2Dspsr(AsyncDeviceServer):
-    """
-    @brief
+class Mkrecv2Db2Dspsr(object):
 
-    """
 
     def __del__(self):
         class_name = self.__class__.__name__
@@ -141,10 +138,8 @@ class Mkrecv2Db2Dspsr(AsyncDeviceServer):
         self._create_ring_buffer = safe_popen(cmd, stdout=PIPE, shell=True)
         self._create_ring_buffer.wait()
         self.state = "ready"
-
-    @request()
-    @return_reply()    
-    def request_start(self):
+    
+    def start(self):
         """
         @brief Interface object which accepts KATCP commands
     
@@ -223,7 +218,6 @@ class Mkrecv2Db2Dspsr(AsyncDeviceServer):
             self._dada_junkdb.wait()
             self._dspsr.wait()
             self.state = "ready"
-
         self.ioloop.add_callback(start)
         self.state = "running"
         raise AsyncReply   
