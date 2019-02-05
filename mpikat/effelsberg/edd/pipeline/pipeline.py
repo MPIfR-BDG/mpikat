@@ -221,6 +221,7 @@ class Udp2Db2Dspsr(object):
         self._dada_junkdb = safe_popen(cmd, stdout=PIPE, shell=True)
         # ip clock speed(sample clock) sync time 
         self._dspsr.wait()
+        self._dspsr.terminate()
     def stop(self):
         log.debug("Stopping")
         self.state = "ready"
