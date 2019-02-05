@@ -11,6 +11,7 @@ import shutil
 from datetime import datetime
 from subprocess import check_output, PIPE, Popen
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
+from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
@@ -137,8 +138,8 @@ class Mkrecv2Db2Dspsr(AsyncDeviceServer):
         self._create_ring_buffer.wait()
         self.state = "ready"
 
-    @request(Str())
-    @return_reply(Str())    
+    @request()
+    @return_reply()    
     def start(self):
         def start(self):
             self.state = "running"
