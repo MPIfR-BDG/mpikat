@@ -81,7 +81,7 @@ def register_pipeline(name):
 
 def safe_popen(cmd, *args, **kwargs):
     if RUN == True:
-        process = Popen(cmd, stdout=PIPE, shell=True)
+        process = Popen(cmd, stdout=PIPE)
     else:
         process = None
     return process
@@ -142,7 +142,8 @@ class Mkrecv2Db2Dspsr(object):
         cmd = "dada_db -k {key} {args}".format(**
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
-        self._create_ring_buffer = safe_popen(cmd, stdout=PIPE, shell=True)
+        args = shlex.split(cmd)
+        self._create_ring_buffer = safe_popen(args, stdout=PIPE)
         # self._create_ring_buffer.wait()
         self.state = "ready"
         response = yield self._create_ring_buffer
@@ -172,7 +173,8 @@ class Mkrecv2Db2Dspsr(object):
         cmd = "mkdir -p {}".format(out_path)
         log.debug(cmd)
         log.debug(os.getcwd())
-        process = safe_popen(cmd, stdout=PIPE, shell=True)
+        args = shlex.split(cmd)
+        process = safe_popen(args, stdout=PIPE)
         process.wait()
         os.chdir(out_path)
         dada_header_file = tempfile.NamedTemporaryFile(
@@ -243,7 +245,7 @@ class Mkrecv2Db2Dspsr(object):
             #yield time.sleep(10)
         except Exception:
             self._dspsr.kill()
-            self._dada_junkdb.terminate()
+            self._dada_junkdb.kill()
             #self.deconfigure()
         self.state = "ready"
 
