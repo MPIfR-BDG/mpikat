@@ -43,7 +43,7 @@ CONFIG = {
     },
     "dada_header_params":
     {
-        "filesize": 25600000000,
+        "filesize": 32000000000,
         "telescope": "Effelsberg",
         "instrument": "asterix",
         "frequency_mhz": 1370,
@@ -211,7 +211,7 @@ class Udp2Db2Dspsr(object):
         ###################
         # Start up dada_junkdb
         ###################
-        cmd = "dada_junkdb -k {0} -b 3200000000 -r 1024 -g {1}".format(
+        cmd = "dada_junkdb -k {0} -b 32000000000 -r 1024 -g {1}".format(
                              self._dada_key,
                              dada_header_file.name)
         #cmd = "dada_junkdb -k {0} -b 3200000000 -r 1024 -g {1}".format(
