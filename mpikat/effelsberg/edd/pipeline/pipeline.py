@@ -17,25 +17,6 @@ import shlex
 import sys
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
-class LoggerWriter(object):
-    def __init__(self, writer):
-        self._writer = writer
-        self._msg = ''
-
-    def write(self, message):
-        self._msg = self._msg + message
-        while '\n' in self._msg:
-            pos = self._msg.find('\n')
-            self._writer(self._msg[:pos])
-            self._msg = self._msg[pos+1:]
-
-    def flush(self):
-        if self._msg != '':
-            self._writer(self._msg)
-            self._msg = ''
-sys.stdout = LoggerWriter(log.debug)
-sys.stderr = LoggerWriter(log.warning)
-
 #
 # NOTE: For this to run properly the host /tmp/
 # directory should be mounted onto the launching container.
@@ -43,8 +24,6 @@ sys.stderr = LoggerWriter(log.warning)
 # container to container file copies.
 #
 RUN = True
-
-RUNTIME = 10
 
 PIPELINES = {}
 
