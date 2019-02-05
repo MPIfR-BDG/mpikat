@@ -138,7 +138,7 @@ class Mkrecv2Db2Dspsr(AsyncDeviceServer):
         self._create_ring_buffer.wait()
         self.state = "ready"
 
-    @request()
+    #@request()
     @return_reply()    
     def start(self):
         def start(self):
