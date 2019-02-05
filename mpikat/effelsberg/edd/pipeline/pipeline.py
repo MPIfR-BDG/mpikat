@@ -85,7 +85,7 @@ def safe_popen(cmd, *args, **kwargs):
 
 
 @register_pipeline("DspsrPipeline")
-class Mkrecv2Db2Dspsr(object):
+class Mkrecv2Db2Dspsr(AsyncDeviceServer):
 
     def __del__(self):
         class_name = self.__class__.__name__
