@@ -132,13 +132,11 @@ class Udp2Db2Dspsr(object):
         cmd = "dada_db -k {key} {args}".format(**
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
-        if RUN is True:
-            process = safe_popen(cmd, stdout=PIPE, shell=True)
-            process.wait()
+        self._create_ring_buffer = safe_popen(cmd, stdout=PIPE, shell=True)
+        self._create_ring_buffer.wait()
 
     def start(self):
         self.state = "running"
-
         header = self._config["dada_header_params"]
         header["ra"] = sensors["ra"]
         header["dec"] = sensors["dec"]
@@ -152,7 +150,6 @@ class Udp2Db2Dspsr(object):
         sensors["scannum"], sensors["subscannum"])
         tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
         out_path = os.path.join("/beegfs/jason/", source_name, tstr)
-
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(out_path)
         log.debug(cmd)
@@ -188,20 +185,12 @@ class Udp2Db2Dspsr(object):
         ###################
         # Start up DSPSR
         ###################
-        
         cmd = "dspsr {args} -N {source_name} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             source_name=source_name,
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
-        #if RUN is True:
         self._dspsr = safe_popen(cmd, stdout=PIPE, shell=True)
-        ###################
-        # Start up dada_dbnull
-        ###################
-        #cmd = "dada_dbnull -k {0}".format(self._dada_key)
-        #log.debug(cmd)
-        #dada_dbnull = Popen(cmd, stdout=PIPE, shell=True)
         ###################
         # Start up MKRECV
         ###################
@@ -219,11 +208,9 @@ class Udp2Db2Dspsr(object):
         #                     "/beegfs/jason/test_header.txt")
         log.debug(cmd)
         self._dada_junkdb = safe_popen(cmd, stdout=PIPE, shell=True)
-        # ip clock speed(sample clock) sync time 
         self._dada_junkdb.wait()
         self._dspsr.wait()
 
-        #self._dspsr.terminate()
     def stop(self):
         log.debug("Stopping")
         self.state = "ready"
