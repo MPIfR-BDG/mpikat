@@ -1,6 +1,3 @@
-
-#start and stop commands implemented and it works.
-
 import tornado
 import logging
 import signal
@@ -149,7 +146,6 @@ class FitsInterfaceServer(AsyncDeviceServer):
         """
         self._shutdown = True
         self._stop_capture()
-        self._stop_transmit()
         self._fw_connection_manager.stop()
         super(FitsInterfaceServer, self).stop()
 
@@ -276,7 +272,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         log.info("Starting FITS interface capture")
         self._stop_capture()
         buffer_size = 4 * (self.nchannels + 2)
-        handler = Roach2SpectrometerHandler(2, self.nchannels, self.integration_time,
+        handler = R2SpectrometerHandler(2, self.nchannels, self.integration_time,
             self.nblank_phases, fw_socket)
         self._capture_thread = CaptureData(self._capture_interface,
             self._capture_port, buffer_size, handler)
