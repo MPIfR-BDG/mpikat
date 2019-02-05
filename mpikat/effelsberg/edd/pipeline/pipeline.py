@@ -226,7 +226,7 @@ class Mkrecv2Db2Dspsr(object):
     def stop(self):
         log.debug("Stopping")
         try:
-            self.running_process_dspsr.kill()
+            self.running_process_dspsr.terminate()
             self.running_process_dada_junkdb.kill()
         except Exception:
             self.state = "error"
