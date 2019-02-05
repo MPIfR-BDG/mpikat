@@ -205,7 +205,7 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Running command: {0}".format(cmd))
         self._dspsr = safe_popen(cmd, stdout=PIPE, shell=True)
         dspsr = yield self._dspsr
-        raise gen.Return(dspsr)
+        #raise gen.Return(dspsr)
         ###################
         # Start up MKRECV
         ###################
