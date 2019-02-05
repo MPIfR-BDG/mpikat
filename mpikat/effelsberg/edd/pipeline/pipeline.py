@@ -246,7 +246,7 @@ class Mkrecv2Db2Dspsr(object):
         except Exception:
             self._dspsr.kill()
             self._dada_junkdb.kill()
-            #self.deconfigure()
+            self.deconfigure()
         self.state = "ready"
 
     def deconfigure(self):
@@ -254,7 +254,8 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Destroying dada buffer")
         cmd = "dada_db -d -k {0}".format(self._dada_key)
         log.debug("Running command: {0}".format(cmd))
-        process = safe_popen(cmd, stdout=PIPE)
+        args = shlex.split(cmd)
+        process = safe_popen(args, stdout=PIPE)
         process.wait()
 
         #log.debug("Sending SIGTERM to MKRECV process")
