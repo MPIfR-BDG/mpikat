@@ -47,6 +47,9 @@ EDD_REQUIRED_KEYS = []
 class EddConfigurationError(Exception):
     pass
 
+class UnknownControlMode(Exception):
+    pass
+
 class EddMasterController(MasterController):
     """The main KATCP interface for the EDD backend"""
     VERSION_INFO = ("mpikat-edd-api", 0, 1)
@@ -145,10 +148,23 @@ class EddMasterController(MasterController):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
+        try:
+            self.set_control_mode(mode)
+        except Exception as error:
+            return ("fail", str(error))
+        else:
+            return ("ok",)
+
+    def set_control_mode(self, mode):
+        """
+        @brief     Set the external control mode for the master controller
+
+        @param     mode   The external control mode to be used by the server
+                          (options: KATCP, SCPI)
+        """
         mode = mode.upper()
         if not mode in self.CONTROL_MODES:
-            return ("fail", "Unknown mode '{}', valid modes are '{}' ".format(
-                mode, ", ".join(self.CONTROL_MODES)))
+            raise UnknownControlMode("Unknown mode '{}', valid modes are '{}' ".format(mode, ", ".join(self.CONTROL_MODES)))
         else:
             self._control_mode = mode
         if self._control_mode == self.SCPI:
@@ -156,7 +172,6 @@ class EddMasterController(MasterController):
         else:
             self._scpi_interface.stop()
         self._control_mode_sensor.set_value(self._control_mode)
-        return ("ok",)
 
     @request(Str())
     @return_reply()
@@ -186,6 +201,10 @@ class EddMasterController(MasterController):
     def _packetiser_config_helper(self, config):
         try:
             client = DigitiserPacketiserClient(*config["address"])
+        except Exception as error:
+            log.error("Error while connecting to packetiser: {}".format(str(error)))
+            raise error
+        try:
             yield client.set_sampling_rate(config["sampling_rate"])
             yield client.set_bit_width(config["bit_width"])
             yield client.set_destinations(config["v_destinations"], config["h_destinations"])
@@ -198,6 +217,8 @@ class EddMasterController(MasterController):
             raise error
         else:
             raise Return(client)
+        finally:
+            client.stop()
 
     @coroutine
     def configure(self, config_json):
@@ -260,6 +281,7 @@ class EddMasterController(MasterController):
             except Exception as error:
                 log.warning("Unable to deconfigure EDD before configuration: {}".format(str(error)))
         self._packetisers = []
+        self._fits_interfaces = []
         log.debug("Parsing JSON configuration")
         try:
             config_dict = json.loads(config_json)
@@ -333,6 +355,9 @@ class EddMasterController(MasterController):
         log.info("Stopping packetiser data transmission")
         for packetiser in self._packetisers:
             yield packetiser.capture_stop()
+        log.info("Stopping FITS interfaces")
+        for fi in self._fits_interfaces:
+            fi.capture_stop()
         self._products = {}
         self._update_products_sensor()
 
@@ -445,6 +470,8 @@ def main():
         help='The IP or host name of the R2RM server to use')
     parser.add_option('', '--r2rm-port', dest='r2rm_port', type=long,
         help='The port number on which R2RM is serving')
+    parser.add_option('', '--scpi-mode', dest='scpi_mode', action="store_true",
+        help='Activate the SCPI interface on startup')
     parser.add_option('', '--log-level',dest='log_level',type=str,
         help='Port number of status server instance',default="INFO")
     (opts, args) = parser.parse_args()
@@ -465,6 +492,8 @@ def main():
         on_shutdown, ioloop, server))
     def start_and_display():
         server.start()
+        if opts.scpi_mode:
+            server.set_control_mode(server.SCPI)
         log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
     ioloop.add_callback(start_and_display)
     ioloop.start()
