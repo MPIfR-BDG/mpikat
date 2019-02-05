@@ -199,8 +199,8 @@ class Udp2Db2Dspsr(object):
         ###################
         # Start up dada_dbnull
         ###################
-        cmd = "dada_dbnull -k {0}".format(self._dada_key)
-        log.debug(cmd)
+        #cmd = "dada_dbnull -k {0}".format(self._dada_key)
+        #log.debug(cmd)
         #dada_dbnull = Popen(cmd, stdout=PIPE, shell=True)
         ###################
         # Start up MKRECV
@@ -220,7 +220,9 @@ class Udp2Db2Dspsr(object):
         log.debug(cmd)
         self._dada_junkdb = safe_popen(cmd, stdout=PIPE, shell=True)
         # ip clock speed(sample clock) sync time 
-        #self._dspsr.wait()
+        self._dada_junkdb.wait()
+        self._dspsr.wait()
+
         #self._dspsr.terminate()
     def stop(self):
         log.debug("Stopping")
