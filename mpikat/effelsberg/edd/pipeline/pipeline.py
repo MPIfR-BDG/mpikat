@@ -198,9 +198,8 @@ class Mkrecv2Db2Dspsr(object):
     @gen.coroutine
     def stop(self):
         log.debug("Stopping")
-        
-        self._dspsr.terminate()
         self._dada_junkdb.terminate()
+        self._dspsr.terminate()
         self._timeout = 10.0
         log.debug("Waiting {} seconds for DSPSR and JUNKDB to terminate...".format(self._timeout))
         now = time.time()
