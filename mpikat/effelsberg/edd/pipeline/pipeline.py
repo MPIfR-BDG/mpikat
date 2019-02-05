@@ -119,8 +119,6 @@ class Mkrecv2Db2Dspsr(object):
         self._config = None
         self._dspsr = None 
         self._mkrecv_ingest_proc = None
-        #self.ioloop = tornado.ioloop.IOLoop.current()
-        #self.ioloop.start()
 
     @gen.coroutine
     def configure(self):
@@ -195,17 +193,15 @@ class Mkrecv2Db2Dspsr(object):
         dada_header_file.close()
         dada_key_file.close()  
         log.debug(os.getcwd())
-    ###################
-    # Start up DSPSR
-    ###################
+        ###################
+        # Start up DSPSR
+        ###################
         cmd = "dspsr {args} -N {source_name} {keyfile}".format(
         args=self._config["dspsr_params"]["args"],
         source_name=source_name,
         keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
         self._dspsr = safe_popen(cmd, stdout=PIPE, shell=True)
-        
-        #raise gen.Return(dspsr)
         ###################
         # Start up MKRECV
         ###################
@@ -215,7 +211,7 @@ class Mkrecv2Db2Dspsr(object):
         ###################
         # Start up dada_junkdb
         ###################
-        cmd = "dada_junkdb -k {0} -b 32000000000 -r 1024 -g {1}".format(
+        cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
                          self._dada_key,
                          dada_header_file.name)
         log.debug("running command: {}".format(cmd))
@@ -227,16 +223,15 @@ class Mkrecv2Db2Dspsr(object):
         dspsr = yield self._dspsr
         raise gen.Return(dada_junkdb.body)
 
-
     def stop(self):
         log.debug("Stopping")
-        self.state = "ready"
-        return
         try:
-	    self._dspsr.terminate()
-            self._mkrecv_ingest_proc.terminate()
+            self._dspsr.terminate()
+            self._dada_junkdb.terminate()
         except Exception:
-            pass
+            self.state = "error"
+            deconfigure()
+        self.state = "ready"
 
     def deconfigure(self):
         self.state = "idle"
