@@ -15,9 +15,10 @@ from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
 import shlex
 from __future__ import print_functio
-print = log.debug
+
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
+print = log.debug
 #
 # NOTE: For this to run properly the host /tmp/
 # directory should be mounted onto the launching container.
@@ -113,6 +114,7 @@ class Mkrecv2Db2Dspsr(object):
         self._config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
+
 
     @gen.coroutine
     def configure(self):
