@@ -18,9 +18,7 @@ import sys
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
-stdout_logger = logging.getLogger('STDOUT')
-sl = StreamToLogger(stdout_logger, logging.INFO)
-sys.stdout = sl
+
 #
 # NOTE: For this to run properly the host /tmp/
 # directory should be mounted onto the launching container.
@@ -49,6 +47,11 @@ class StreamToLogger(object):
    def write(self, buf):
       for line in buf.rstrip().splitlines():
          self.logger.log(self.log_level, line.rstrip())
+
+stdout_logger = logging.getLogger('STDOUT')
+sl = StreamToLogger(stdout_logger, logging.INFO)
+sys.stdout = sl
+         
 
 CONFIG = {
     "base_output_dir": os.getcwd(),
