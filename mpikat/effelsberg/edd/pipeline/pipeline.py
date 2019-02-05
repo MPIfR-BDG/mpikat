@@ -87,6 +87,10 @@ def safe_popen(cmd, *args, **kwargs):
 
 @register_pipeline("DspsrPipeline")
 class Mkrecv2Db2Dspsr(AsyncDeviceServer):
+    """
+    @brief
+
+    """
 
     def __del__(self):
         class_name = self.__class__.__name__
@@ -141,6 +145,10 @@ class Mkrecv2Db2Dspsr(AsyncDeviceServer):
     @request()
     @return_reply()    
     def request_start(self):
+            """
+     @brief Interface object which accepts KATCP commands
+    
+    """
         def start(self):
             self.state = "running"
             header = self._config["dada_header_params"]
