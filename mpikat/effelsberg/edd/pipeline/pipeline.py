@@ -13,6 +13,7 @@ from subprocess import check_output, PIPE, Popen
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
+import psutil
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
@@ -80,10 +81,16 @@ def register_pipeline(name):
 
 def safe_popen(cmd, *args, **kwargs):
     if RUN == True:
-        process = Popen(cmd, stdout=PIPE,shell=True)
+        process = Popen(cmd, stdout=PIPE, shell=True)
     else:
         process = None
     return process
+
+def kill(proc_pid):
+    process = psutil.Process(proc_pid)
+    for proc in process.children(recursive=True):
+        proc.kill()
+    process.kill()    
 
 
 @register_pipeline("DspsrPipeline")
@@ -227,8 +234,10 @@ class Mkrecv2Db2Dspsr(object):
     def stop(self):
         log.debug("Stopping")
         try:
-            self._dspsr.terminate()
-            self._dada_junkdb.terminate()
+            kill(_dspsr.pid)
+            kill(_dada_junkdb.pid)
+            #self._dspsr.terminate()
+            #self._dada_junkdb.terminate()
             yield time.sleep(10)
         except Exception:
             self._dspsr.kill()
