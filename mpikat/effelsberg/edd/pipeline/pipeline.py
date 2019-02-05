@@ -211,12 +211,12 @@ class Udp2Db2Dspsr(object):
         ###################
         # Start up dada_junkdb
         ###################
-        cmd = "dada_junkdb -k {0} -b 3200000000 -r 64 -g {1}".format(
+        cmd = "dada_junkdb -k {0} -b 3200000000 -r 1024 -g {1}".format(
                              self._dada_key,
                              dada_header_file.name)
-        cmd = "dada_junkdb -k {0} -b 3200000000 -r 256 -g {1}".format(
-                             self._dada_key,
-                             "/beegfs/jason/test_header.txt")
+        #cmd = "dada_junkdb -k {0} -b 3200000000 -r 1024 -g {1}".format(
+        #                     self._dada_key,
+        #                     "/beegfs/jason/test_header.txt")
         log.debug(cmd)
         self._dada_junkdb = safe_popen(cmd, stdout=PIPE, shell=True)
         # ip clock speed(sample clock) sync time 

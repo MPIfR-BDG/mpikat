@@ -38,15 +38,15 @@ RECEIVER     {{receiver_name}}           # Frontend receiver
 FREQ         {{frequency_mhz}}           # centre frequency in MHz
 BW           {{bandwidth}}           # bandwidth of in MHz (-ve lower sb)
 TSAMP        {{tsamp}}       # sampling interval in microseconds
-
-
 BYTES_PER_SECOND  {{bytes_per_second}}
+
 NBIT              {{nbit}}              # number of bits per sample
 NDIM              {{ndim}}               # 1=real, 2=complex
 NPOL              {{npol}}                 # number of polarizations observed
 NCHAN             {{nchan}}                 # number of frequency channels
 RESOLUTION        {{dsb}}                 
 DSB
+# end of header
 """
 """
 #MeerKAT specifics
