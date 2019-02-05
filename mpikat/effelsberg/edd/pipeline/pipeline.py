@@ -122,7 +122,7 @@ class Mkrecv2Db2Dspsr(object):
         #self.ioloop = tornado.ioloop.IOLoop.current()
         #self.ioloop.start()
 
-    #@gen.coroutine
+    @gen.coroutine
     def configure(self):
         # return
         self._config = CONFIG
@@ -138,10 +138,10 @@ class Mkrecv2Db2Dspsr(object):
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
         self._create_ring_buffer = safe_popen(cmd, stdout=PIPE, shell=True)
-        self._create_ring_buffer.wait()
-        #response = yield self._create_ring_buffer
+        #self._create_ring_buffer.wait()
+        response = yield self._create_ring_buffer
         self.state = "ready"
-        #raise gen.Return(response.body)
+        raise gen.Return(response.body)
     
     def start(self):
         """
