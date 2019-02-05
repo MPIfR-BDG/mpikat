@@ -222,15 +222,17 @@ class Mkrecv2Db2Dspsr(object):
         self.running_process_dada_junkdb = yield self._dada_junkdb
         self.running_process_dspsr = yield self._dspsr
         raise gen.Return(dada_junkdb.body)
-
+    
+    @gen.coroutine
     def stop(self):
         log.debug("Stopping")
         try:
-            self.running_process_dspsr.terminate()
-            self.running_process_dada_junkdb.terminate()
-            time.sleep(10)
+            self._dspsr.terminate()
+            self._dada_junkdb.terminate()
+            yield time.sleep(10)
         except Exception:
-            pass
+            self._dspsr.kill()
+            self._dada_junkdb.terminate()
             #self.state = "error"
             #self.deconfigure()
         self.state = "ready"
