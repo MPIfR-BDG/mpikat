@@ -14,10 +14,19 @@ from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
 import shlex
-import sys
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
+class LoggerWriter:
+    def __init__(self, logger, level):
+        self.logger = logger
+        self.level = level
+
+    def write(self, message):
+        if message != '\n':
+            self.logger.log(self.level, message)
+sys.stdout = LoggerWriter(log.debug)
+sys.stderr = LoggerWriter(log.warning)
 
 #
 # NOTE: For this to run properly the host /tmp/
@@ -34,30 +43,6 @@ PIPELINES = {}
 PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
                    "deconfiguring", "error"]
-
-class StreamToLogger(object):
-   """
-   Fake file-like stream object that redirects writes to a logger instance.
-   """
-   def __init__(self, logger, log_level=logging.INFO):
-      self.logger = logger
-      self.log_level = log_level
-      self.linebuf = ''
-
-   def write(self, buf):
-      for line in buf.rstrip().splitlines():
-         self.logger.log(self.log_level, line.rstrip())
-
-stdout_logger = logging.getLogger('STDOUT')
-sl = StreamToLogger(stdout_logger, logging.INFO)
-sys.stdout = sl
-
-stderr_logger = logging.getLogger('STDERR')
-sl = StreamToLogger(stderr_logger, logging.ERROR)
-sys.stderr = sl
-
-print "Test to standard out"
-
 
 CONFIG = {
     "base_output_dir": os.getcwd(),
