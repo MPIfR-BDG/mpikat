@@ -313,18 +313,35 @@ class Mkrecv2Db2Dspsr(object):
     @gen.coroutine
     def stop(self):
         log.debug("Stopping")
-
+        self._timeout = 10
 
         self._dada_junkdb.set_finish_event()
         yield self._dada_junkdb.finish()
+
+
+        log.debug(
+            "Waiting {} seconds for dada_junkdb to terminate...".format(self._timeout))
+        now = time.time()
+        while time.time() - now < self._timeout:
+            retval = self._dada_junkdb._process.poll()
+            if retval is not None:
+                log.info("Returned a return value of {}".format(retval))
+                break
+            else:
+                yield time.sleep(0.5)
+        else:
+            log.warning("Failed to terminate dada_junkdb in alloted time")
+            log.info("Killing process")
+            self._dspsr.kill()
+
         self._dspsr.set_finish_event()
         yield self._dspsr.finish()
 
-        """log.debug(
+        log.debug(
             "Waiting {} seconds for DSPSR to terminate...".format(self._timeout))
         now = time.time()
         while time.time() - now < self._timeout:
-            retval = self._dspsr.poll()
+            retval = self._dspsr._process.poll()
             if retval is not None:
                 log.info("Returned a return value of {}".format(retval))
                 break
@@ -334,7 +351,6 @@ class Mkrecv2Db2Dspsr(object):
             log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
             self._dspsr.kill()
-        """
         self.state = "ready"
 
     def deconfigure(self):
