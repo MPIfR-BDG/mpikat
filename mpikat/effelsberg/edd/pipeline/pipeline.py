@@ -217,7 +217,7 @@ class Mkrecv2Db2Dspsr(object):
         self._mkrecv_ingest_proc = None
 
     def _decode_capture_stdout(self, stdout, callback):
-        log.debug('New stdout of capture is {}'.format(str(stdout)))
+        log.debug('{}'.format(str(stdout)))
 
     @gen.coroutine
     def configure(self):
@@ -318,6 +318,7 @@ class Mkrecv2Db2Dspsr(object):
         #self._dada_junkdb.terminate()
         self._dada_junkdb.set_finish_event()
         self._dada_junkdb.finish()
+        self._dada_junkdb._monitor_thread.join()
         self._timeout = 10.0
         """
         log.debug(
@@ -336,8 +337,9 @@ class Mkrecv2Db2Dspsr(object):
             self._dada_junkdb.kill()
         """
         #self._dspsr.terminate()
-        #self._dspsr.set_finish_event()
+        self._dspsr.set_finish_event()
         self._dspsr.finish()
+        self._dspsr._monitor_thread.join()
 
 
         """log.debug(
