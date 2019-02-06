@@ -306,9 +306,9 @@ class Mkrecv2Db2Dspsr(object):
         self._dada_junkdb = ExecuteCommand(cmd, resident=True)
         self._dada_junkdb.stdout_callbacks.add(
             self._decode_capture_stdout)
-        self.running_process_dada_junkdb = yield self._dada_junkdb
-        self.running_process_dspsr = yield self._dspsr
-        raise gen.Return(dada_junkdb.body)
+        #self.running_process_dada_junkdb = yield self._dada_junkdb
+        #self.running_process_dspsr = yield self._dspsr
+        #raise gen.Return(dada_junkdb.body)
 
     @gen.coroutine
     def stop(self):
