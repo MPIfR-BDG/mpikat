@@ -72,14 +72,6 @@ def register_pipeline(name):
     return _register
 
 
-#def safe_popen(cmd, *args, **kwargs):
-#    if RUN == True:
-#        process = Popen(shlex.split(cmd), stdout=PIPE)
-#    else:
-#        process = None
-#    return process
-
-
 class ExecuteCommand(object):
 
     def __init__(self, command, resident=False):
@@ -168,7 +160,7 @@ class ExecuteCommand(object):
         if RUN:
             while self._process.poll() == None:
                 # print "trying to assign the stdout"
-                stdout = self._process.stderr.readline().rstrip("\n\r")
+                stdout = self._process.stderr.readline().rstrip("\n")
                 if stdout != b"":
                     self.stdout = stdout
                     # print self.stdout, self._command
@@ -183,16 +175,19 @@ class ExecuteCommand(object):
 
 @register_pipeline("DspsrPipeline")
 class Mkrecv2Db2Dspsr(object):
+    """@brief dspsr pipeline class."""
 
     def __del__(self):
         class_name = self.__class__.__name__
 
     def notify(self):
+        """@brief callback function."""
         for callback in self.callbacks:
             callback(self._state, self)
 
     @property
     def state(self):
+        """@brief property of the pipeline state."""
         return self._state
 
     @state.setter
@@ -201,6 +196,7 @@ class Mkrecv2Db2Dspsr(object):
         self.notify()
 
     def __init__(self):
+        """@brief initialize the pipeline."""
         self.callbacks = set()
         self._state = "idle"
         self._volumes = ["/tmp/:/scratch/"]
@@ -214,6 +210,7 @@ class Mkrecv2Db2Dspsr(object):
 
     @gen.coroutine
     def configure(self):
+        """@brief destroy any ring buffer and create new ring buffer."""
         self._config = CONFIG
         self._dada_key = CONFIG["dada_db_params"]["key"]
         try:
@@ -231,6 +228,7 @@ class Mkrecv2Db2Dspsr(object):
 
     @gen.coroutine
     def start(self):
+        """@brief start the dspsr instance then turn on dada_junkdb instance."""
         self.state = "running"
         header = self._config["dada_header_params"]
         header["ra"] = sensors["ra"]
@@ -252,9 +250,9 @@ class Mkrecv2Db2Dspsr(object):
         self._create_workdir = ExecuteCommand(cmd, resident=False)
         self._create_workdir.stdout_callbacks.add(
             self._decode_capture_stdout)
-        self._create_workdir._process.wait()        
+        self._create_workdir._process.wait()
         #process = safe_popen(cmd, stdout=PIPE)
-        #process.wait()
+        # process.wait()
         os.chdir(out_path)
         log.debug("Change to workdir: {}".format(os.getcwd()))
         dada_header_file = tempfile.NamedTemporaryFile(
@@ -306,6 +304,7 @@ class Mkrecv2Db2Dspsr(object):
 
     @gen.coroutine
     def stop(self):
+        """@brief stop the dada_junkdb and dspsr instances."""
         log.debug("Stopping")
         self._timeout = 10
 
@@ -347,6 +346,7 @@ class Mkrecv2Db2Dspsr(object):
         self.state = "ready"
 
     def deconfigure(self):
+        """@brief deconfigure the dspsr pipeline."""
         self.state = "idle"
         log.debug("Destroying dada buffer")
         cmd = "dada_db -d -k {0}".format(self._dada_key)
