@@ -310,14 +310,15 @@ class Mkrecv2Db2Dspsr(object):
         self._dada_junkdb.stdout_callbacks.add(
             self._decode_capture_stdout)
 
+    @gen.coroutine
     def stop(self):
         log.debug("Stopping")
 
 
         self._dada_junkdb.set_finish_event()
-        self._dada_junkdb.finish()
+        yield self._dada_junkdb.finish()
         self._dspsr.set_finish_event()
-        self._dspsr.finish()
+        yield self._dspsr.finish()
 
         """log.debug(
             "Waiting {} seconds for DSPSR to terminate...".format(self._timeout))
