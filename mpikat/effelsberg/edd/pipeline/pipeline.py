@@ -178,7 +178,7 @@ class ExecuteCommand(object):
                 stdout = self._process.stderr.readline().rstrip("\n\r")
                 if stdout != b"":
                     self.stdout = stdout
-                    print self.stdout, self._command
+                    #print self.stdout, self._command
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
                 # the event is set, the command does not successfully finish
@@ -316,7 +316,7 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Stopping")
 
         #self._dada_junkdb.terminate()
-        #self._dada_junkdb.set_finish_event()
+        self._dada_junkdb.set_finish_event()
         self._dada_junkdb.finish()
         self._timeout = 10.0
         """
