@@ -101,15 +101,15 @@ class ExecuteCommand(object):
         #self._stopevent = threading.Event( )
 
         self._finish_event = threading.Event()
-        #print self._command
+        # print self._command
 
         if not self._resident:  # For the command which stops immediately, we need to set the event before hand
             self._finish_event.set()
 
-        #log.info(self._command)
+        # log.info(self._command)
         self._executable_command = shlex.split(self._command)
         #self._executable_command = self._command
-        #log.info(self._executable_command)
+        # log.info(self._executable_command)
 
         if RUN:
             try:
@@ -119,14 +119,14 @@ class ExecuteCommand(object):
                                       bufsize=1,
                                       # shell=True,
                                       universal_newlines=True)
-                                      #)
-                #print "self_process = {}".format(self._process.poll())
+                #)
+                # print "self_process = {}".format(self._process.poll())
             except Exception as error:
                 log.exception("Error while launching command: {}".format(
                     self._executable_command))
                 self.error = True
             if self._process == None:
-                self._error = True   
+                self._error = True
             self._monitor_thread = threading.Thread(
                 target=self._execution_monitor)
             self._monitor_thread.start()
@@ -140,7 +140,7 @@ class ExecuteCommand(object):
 
     def finish(self):
         if RUN:
-            self._process.terminate()            
+            self._process.terminate()
 
     def stdout_notify(self):
         for callback in self.stdout_callbacks:
@@ -172,11 +172,11 @@ class ExecuteCommand(object):
         # Monitor the execution and also the stdout for the outside useage
         if RUN:
             while self._process.poll() == None:
-                #print "trying to assign the stdout"
+                # print "trying to assign the stdout"
                 stdout = self._process.stderr.readline().rstrip("\n\r")
                 if stdout != b"":
                     self.stdout = stdout
-                    #print self.stdout, self._command
+                    # print self.stdout, self._command
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
                 # the event is set, the command does not successfully finish
@@ -229,10 +229,10 @@ class Mkrecv2Db2Dspsr(object):
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
         #self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
-        #self._create_ring_buffer.wait()
+        # self._create_ring_buffer.wait()
         self._create_ring_buffer = ExecuteCommand(cmd, resident=False)
         self._create_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
+            self._decode_capture_stdout)
         self._create_ring_buffer._process.wait()
         self.state = "ready"
 
@@ -291,7 +291,7 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Running command: {0}".format(cmd))
         self._dspsr = ExecuteCommand(cmd, resident=True)
         self._dspsr.stdout_callbacks.add(
-                self._decode_capture_stdout)
+            self._decode_capture_stdout)
 
         #self._dspsr = safe_popen(cmd, stdout=PIPE)
 
@@ -317,7 +317,6 @@ class Mkrecv2Db2Dspsr(object):
 
         self._dada_junkdb.set_finish_event()
         yield self._dada_junkdb.finish()
-
 
         log.debug(
             "Waiting {} seconds for dada_junkdb to terminate...".format(self._timeout))
@@ -360,11 +359,11 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Running command: {0}".format(cmd))
         self._destory_ring_buffer = ExecuteCommand(cmd, resident=False)
         self._destory_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
+            self._decode_capture_stdout)
         self._destory_ring_buffer._process.wait()
 
         #process = safe_popen(cmd, stdout=PIPE)
-        #process.wait()
+        # process.wait()
 
         #log.debug("Sending SIGTERM to MKRECV process")
         #    self._mkrecv_ingest_proc.terminate()
