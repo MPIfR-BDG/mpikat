@@ -115,11 +115,11 @@ class ExecuteCommand(object):
                 self._process = Popen(self._executable_command,
                                       stdout=PIPE,
                                       stderr=PIPE,
-                                      #bufsize=1,
+                                      bufsize=1,
                                       # shell=True,
                                       universal_newlines=True)
                                       #)
-                print "self_process = {}".format(self._process.poll())
+                #print "self_process = {}".format(self._process.poll())
             except Exception as error:
                 log.exception("Error while launching command: {}".format(
                     self._executable_command))
@@ -140,7 +140,7 @@ class ExecuteCommand(object):
 
     def finish(self):
         if RUN:
-            self._monitor_thread.join()
+            self._monitor_thread.join(5)
             print "trying to join thread"
 
     def stdout_notify(self):
@@ -318,7 +318,7 @@ class Mkrecv2Db2Dspsr(object):
         #self._dada_junkdb.terminate()
         self._dada_junkdb.set_finish_event()
         self._dada_junkdb.finish()
-        self._dada_junkdb._monitor_thread.join()
+        #self._dada_junkdb._monitor_thread.join()
         self._timeout = 10.0
         """
         log.debug(
@@ -339,7 +339,7 @@ class Mkrecv2Db2Dspsr(object):
         #self._dspsr.terminate()
         self._dspsr.set_finish_event()
         self._dspsr.finish()
-        self._dspsr._monitor_thread.join()
+        #self._dspsr._monitor_thread.join()
 
 
         """log.debug(
