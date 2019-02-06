@@ -141,12 +141,7 @@ class ExecuteCommand(object):
 
     def finish(self):
         if RUN:
-            print "trying to terminate thread"
-            self._process.terminate()
-            #threading.Thread.join(self._monitor_thread)
-            #self._process.join()
-            #self._monitor_thread.join(5)
-            
+            self._process.terminate()            
 
     def stdout_notify(self):
         for callback in self.stdout_callbacks:
@@ -234,8 +229,12 @@ class Mkrecv2Db2Dspsr(object):
         cmd = "dada_db -k {key} {args}".format(**
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
-        self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
-        self._create_ring_buffer.wait()
+        #self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
+        #self._create_ring_buffer.wait()
+        self._create_ring_buffer = ExecuteCommand(cmd, resident=False)
+        self._create_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+
         self.state = "ready"
 
     @gen.coroutine
