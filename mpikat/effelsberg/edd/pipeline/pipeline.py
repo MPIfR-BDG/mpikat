@@ -341,8 +341,8 @@ class Mkrecv2Db2Dspsr(object):
             self._dada_junkdb.kill()
         """
         #self._dspsr.terminate()
-        self._dspsr.set_finish_event()
-        self._dspsr.finish()
+        #self._dspsr.set_finish_event()
+        #self._dspsr.finish()
         #self._dspsr._monitor_thread.join()
 
 
