@@ -141,6 +141,7 @@ class ExecuteCommand(object):
     def finish(self):
         if RUN:
             self._monitor_thread.join()
+            print "trying to join thread"
 
     def stdout_notify(self):
         for callback in self.stdout_callbacks:
@@ -173,7 +174,7 @@ class ExecuteCommand(object):
         if RUN:
             while self._process.poll() == None:
                 stdout = self._process.stdout.readline().rstrip("\n\r")
-
+                print stdout
                 if stdout != b"":
                     self.stdout = stdout
                     print self.stdout, self._command
