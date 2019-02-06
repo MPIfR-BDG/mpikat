@@ -1,17 +1,14 @@
-import signal
+"""
+This pipeline captures data from the network and passes it to a dada ring buffer for processing by DSPSR.
+"""
 import logging
 import tempfile
-import coloredlogs
-import tornado
 import datetime
 from tornado import gen
 import os
 import time
-import shutil
 from datetime import datetime
-from subprocess import check_output, PIPE, Popen
-from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
-from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
+from subprocess import PIPE, Popen
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
 import shlex
 import threading
@@ -59,12 +56,6 @@ CONFIG = {
 sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
            "scannum": 0, "subscannum": 1, "timestamp": str(datetime.now().time())}
 
-DESCRIPTION = """
-This pipeline captures data from the network and passes it to a dada
-ring buffer for processing by DSPSR
-""".lstrip()
-
-
 def register_pipeline(name):
     def _register(cls):
         PIPELINES[name] = cls
@@ -79,24 +70,17 @@ class ExecuteCommand(object):
         self._resident = resident
         self.stdout_callbacks = set()
         self.error_callbacks = set()
-
         self._process = None
         self._executable_command = None
         self._monitor_thread = None
         self._stdout = None
         self._error = False
-        #self._stopevent = threading.Event( )
-
         self._finish_event = threading.Event()
-        # print self._command
 
-        if not self._resident:  # For the command which stops immediately, we need to set the event before hand
+        if not self._resident:
             self._finish_event.set()
 
-        # log.info(self._command)
         self._executable_command = shlex.split(self._command)
-        #self._executable_command = self._command
-        # log.info(self._executable_command)
 
         if RUN:
             try:
@@ -106,8 +90,6 @@ class ExecuteCommand(object):
                                       bufsize=1,
                                       # shell=True,
                                       universal_newlines=True)
-                #)
-                # print "self_process = {}".format(self._process.poll())
             except Exception as error:
                 log.exception("Error while launching command: {}".format(
                     self._executable_command))
