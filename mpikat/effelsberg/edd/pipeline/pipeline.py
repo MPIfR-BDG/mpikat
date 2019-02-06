@@ -68,18 +68,20 @@ This pipeline captures data from the network and passes it to a dada
 ring buffer for processing by DSPSR
 """.lstrip()
 
+
 def register_pipeline(name):
     def _register(cls):
         PIPELINES[name] = cls
         return cls
     return _register
 
+
 def safe_popen(cmd, *args, **kwargs):
     if RUN == True:
         process = Popen(shlex.split(cmd), stdout=PIPE)
     else:
         process = None
-    return process 
+    return process
 
 
 class ExecuteCommand(object):
@@ -113,15 +115,17 @@ class ExecuteCommand(object):
                                       stdout=PIPE,
                                       stderr=PIPE,
                                       bufsize=1,
-                                      #shell=True,
+                                      # shell=True,
                                       universal_newlines=True)
-                #print self._process
+                # print self._process
             except Exception as error:
-                log.exception("Error while launching command: {}".format(self._executable_command))
+                log.exception("Error while launching command: {}".format(
+                    self._executable_command))
                 self.error = True
             if self._process == None:
                 self._error = True
-            self._monitor_thread = threading.Thread(target=self._execution_monitor)
+            self._monitor_thread = threading.Thread(
+                target=self._execution_monitor)
             self._monitor_thread.start()
 
     def __del__(self):
@@ -198,10 +202,10 @@ class Mkrecv2Db2Dspsr(object):
     def state(self, value):
         self._state = value
         self.notify()
-        
+
     def __init__(self):
         self.callbacks = set()
-        self._state = "idle" 
+        self._state = "idle"
         self._volumes = ["/tmp/:/scratch/"]
         self._dada_key = None
         self._config = None
@@ -209,8 +213,7 @@ class Mkrecv2Db2Dspsr(object):
         self._mkrecv_ingest_proc = None
 
     def _decode_capture_stdout(self, stdout, callback):
-        if RUN:
-            log.debug('New stdout of capture is {}'.format(str(stdout)))
+        log.debug('New stdout of capture is {}'.format(str(stdout)))
 
     @gen.coroutine
     def configure(self):
@@ -280,8 +283,9 @@ class Mkrecv2Db2Dspsr(object):
             source_name=source_name,
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
-        self._dspsr = safe_popen(cmd, stdout=PIPE)
-        
+        self._dspsr = ExecuteCommand(cmd, resident=True)
+        #self._dspsr = safe_popen(cmd, stdout=PIPE)
+
         ###################
         # Start up MKRECV
         ###################
@@ -292,19 +296,25 @@ class Mkrecv2Db2Dspsr(object):
             self._dada_key,
             dada_header_file.name)
         log.debug("running command: {}".format(cmd))
-        self._dada_junkdb = safe_popen(cmd, stdout=PIPE)
+        #self._dada_junkdb = safe_popen(cmd, stdout=PIPE)
+        self._dada_junkdb = ExecuteCommand(cmd, resident=True)
         self.running_process_dada_junkdb = yield self._dada_junkdb
         self.running_process_dspsr = yield self._dspsr
         raise gen.Return(dada_junkdb.body)
-    
+
     @gen.coroutine
     def stop(self):
         log.debug("Stopping")
-        self._dada_junkdb.terminate()
+
+        #self._dada_junkdb.terminate()
+        self._dada_junkdb.set_finish_event()
+        self._dada_junkdb.finish()
         self._timeout = 10.0
-        log.debug("Waiting {} seconds for JUNKDB to terminate...".format(self._timeout))
+        """
+        log.debug(
+            "Waiting {} seconds for JUNKDB to terminate...".format(self._timeout))
         now = time.time()
-        while time.time()-now < self._timeout:
+        while time.time() - now < self._timeout:
             retval = self._dada_junkdb.poll()
             if retval is not None:
                 log.info("Returned a return value of {}".format(retval))
@@ -315,10 +325,16 @@ class Mkrecv2Db2Dspsr(object):
             log.warning("Failed to terminate JUNKDB in alloted time")
             log.info("Killing process")
             self._dada_junkdb.kill()
-        self._dspsr.terminate()
-        log.debug("Waiting {} seconds for DSPSR to terminate...".format(self._timeout))
+        """
+        #self._dspsr.terminate()
+        self._dspsr.set_finish_event()
+        self._dspsr.finish()
+
+
+        """log.debug(
+            "Waiting {} seconds for DSPSR to terminate...".format(self._timeout))
         now = time.time()
-        while time.time()-now < self._timeout:
+        while time.time() - now < self._timeout:
             retval = self._dspsr.poll()
             if retval is not None:
                 log.info("Returned a return value of {}".format(retval))
@@ -329,6 +345,7 @@ class Mkrecv2Db2Dspsr(object):
             log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
             self._dspsr.kill()
+        """
         self.state = "ready"
 
     def deconfigure(self):
