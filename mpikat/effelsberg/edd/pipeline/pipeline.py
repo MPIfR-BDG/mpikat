@@ -97,6 +97,7 @@ class ExecuteCommand(object):
         self._monitor_thread = None
         self._stdout = None
         self._error = False
+        print "testing"
 
         self._finish_event = threading.Event()
         print self._command
