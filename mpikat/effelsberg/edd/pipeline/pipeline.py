@@ -310,7 +310,6 @@ class Mkrecv2Db2Dspsr(object):
         self._dada_junkdb.stdout_callbacks.add(
             self._decode_capture_stdout)
 
-    @gen.coroutine
     def stop(self):
         log.debug("Stopping")
 
