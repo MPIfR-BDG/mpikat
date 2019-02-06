@@ -172,7 +172,7 @@ class ExecuteCommand(object):
     def _execution_monitor(self):
         # Monitor the execution and also the stdout for the outside useage
         if RUN:
-            print "here"
+            print "here, poll = ()".format(self._process.poll())
             while self._process.poll() == None:
                 stdout = self._process.stdout.readline().rstrip("\n\r")
                 #print stdout
