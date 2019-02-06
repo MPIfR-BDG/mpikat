@@ -141,8 +141,8 @@ class ExecuteCommand(object):
 
     def finish(self):
         if RUN:
-            print "trying to kill thread"
-            self._process.kill()
+            print "trying to terminate thread"
+            self._process.terminate()
             #threading.Thread.join(self._monitor_thread)
             #self._process.join()
             #self._monitor_thread.join(5)
@@ -177,7 +177,6 @@ class ExecuteCommand(object):
     def _execution_monitor(self):
         # Monitor the execution and also the stdout for the outside useage
         if RUN:
-            print "here, poll = {}".format(self._process.poll())
             while self._process.poll() == None:
                 #print "trying to assign the stdout"
                 stdout = self._process.stderr.readline().rstrip("\n\r")
@@ -312,45 +311,16 @@ class Mkrecv2Db2Dspsr(object):
         self._dada_junkdb = ExecuteCommand(cmd, resident=True)
         self._dada_junkdb.stdout_callbacks.add(
             self._decode_capture_stdout)
-        #self.running_process_dada_junkdb = yield self._dada_junkdb
-        #self.running_process_dspsr = yield self._dspsr
-        #raise gen.Return(dada_junkdb.body)
 
     @gen.coroutine
     def stop(self):
         log.debug("Stopping")
 
-        #self._dada_junkdb.terminate()
+
         self._dada_junkdb.set_finish_event()
         self._dada_junkdb.finish()
-        #self._dada_junkdb._monitor_thread.join()
-        self._timeout = 10.0
-        #self._dada_junkdb._process.terminate()
-        #self._dada_junkdb._process.kill()
-        #print "Here trying to kill the dada_junkdb process"
-        """
-        log.debug(
-            "Waiting {} seconds for JUNKDB to terminate...".format(self._timeout))
-        now = time.time()
-        while time.time() - now < self._timeout:
-            retval = self._dada_junkdb.poll()
-            if retval is not None:
-                log.info("Returned a return value of {}".format(retval))
-                break
-            else:
-                yield time.sleep(0.5)
-        else:
-            log.warning("Failed to terminate JUNKDB in alloted time")
-            log.info("Killing process")
-            self._dada_junkdb.kill()
-        """
-        #self._dspsr.terminate()
         self._dspsr.set_finish_event()
         self._dspsr.finish()
-        #self._dspsr._process.terminate()
-        #self._dspsr._process.kill()
-        #self._dspsr._monitor_thread.join()
-
 
         """log.debug(
             "Waiting {} seconds for DSPSR to terminate...".format(self._timeout))
