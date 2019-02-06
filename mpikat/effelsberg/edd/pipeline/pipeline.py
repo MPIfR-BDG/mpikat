@@ -14,6 +14,7 @@ from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
 import shlex
+import threading
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
 #
@@ -97,7 +98,6 @@ class ExecuteCommand(object):
         self._monitor_thread = None
         self._stdout = None
         self._error = False
-        print "testing"
 
         self._finish_event = threading.Event()
         print self._command
