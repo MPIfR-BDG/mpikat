@@ -119,7 +119,7 @@ class ExecuteCommand(object):
                                       # shell=True,
                                       universal_newlines=True)
                                       #)
-                print "self_process = {}"s.format(self._process.poll())
+                print "self_process = {}".format(self._process.poll())
             except Exception as error:
                 log.exception("Error while launching command: {}".format(
                     self._executable_command))
