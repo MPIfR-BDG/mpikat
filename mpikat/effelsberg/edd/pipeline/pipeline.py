@@ -114,17 +114,19 @@ class ExecuteCommand(object):
             try:
                 self._process = Popen(self._executable_command,
                                       stdout=PIPE,
-                                      stderr=PIPE,
-                                      bufsize=1,
+                                      #stderr=PIPE,
+                                      #bufsize=1,
                                       # shell=True,
-                                      universal_newlines=True)
-                # print self._process
+                                      #universal_newlines=True)
+                                      )
+                print self._process
             except Exception as error:
                 log.exception("Error while launching command: {}".format(
                     self._executable_command))
                 self.error = True
             if self._process == None:
                 self._error = True
+            print "reach this point"    
             self._monitor_thread = threading.Thread(
                 target=self._execution_monitor)
             self._monitor_thread.start()
