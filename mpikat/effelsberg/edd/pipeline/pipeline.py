@@ -316,9 +316,9 @@ class Mkrecv2Db2Dspsr(object):
 
 
         self._dada_junkdb.set_finish_event()
-        yield self._dada_junkdb.finish()
+        self._dada_junkdb.finish()
         self._dspsr.set_finish_event()
-        yield self._dspsr.finish()
+        self._dspsr.finish()
 
         """log.debug(
             "Waiting {} seconds for DSPSR to terminate...".format(self._timeout))
