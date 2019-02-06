@@ -117,8 +117,8 @@ class ExecuteCommand(object):
                                       #stderr=PIPE,
                                       #bufsize=1,
                                       # shell=True,
-                                      #universal_newlines=True)
-                                      )
+                                      universal_newlines=True)
+                                      #)
                 print self._process
             except Exception as error:
                 log.exception("Error while launching command: {}".format(
@@ -172,9 +172,10 @@ class ExecuteCommand(object):
     def _execution_monitor(self):
         # Monitor the execution and also the stdout for the outside useage
         if RUN:
+            print "here"
             while self._process.poll() == None:
                 stdout = self._process.stdout.readline().rstrip("\n\r")
-                print stdout
+                #print stdout
                 if stdout != b"":
                     self.stdout = stdout
                     print self.stdout, self._command
