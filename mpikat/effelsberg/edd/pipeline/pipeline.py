@@ -141,11 +141,12 @@ class ExecuteCommand(object):
 
     def finish(self):
         if RUN:
-            threading.Thread.join(self._process)
-            threading.Thread.join(self._monitor_thread)
+            print "trying to kill thread"
+            self._process.kill()
+            #threading.Thread.join(self._monitor_thread)
             #self._process.join()
             #self._monitor_thread.join(5)
-            print "trying to join thread"
+            
 
     def stdout_notify(self):
         for callback in self.stdout_callbacks:
