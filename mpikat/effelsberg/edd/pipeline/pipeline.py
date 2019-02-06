@@ -106,10 +106,10 @@ class ExecuteCommand(object):
         if not self._resident:  # For the command which stops immediately, we need to set the event before hand
             self._finish_event.set()
 
-        log.info(self._command)
+        #log.info(self._command)
         self._executable_command = shlex.split(self._command)
         #self._executable_command = self._command
-        log.info(self._executable_command)
+        #log.info(self._executable_command)
 
         if RUN:
             try:
@@ -234,7 +234,7 @@ class Mkrecv2Db2Dspsr(object):
         self._create_ring_buffer = ExecuteCommand(cmd, resident=False)
         self._create_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
-        self._destory_ring_buffer.set_finish_event()
+        self._create_ring_buffer.set_finish_event()
         self.state = "ready"
 
     @gen.coroutine
