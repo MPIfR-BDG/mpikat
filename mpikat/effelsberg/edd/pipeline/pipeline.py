@@ -234,7 +234,7 @@ class Mkrecv2Db2Dspsr(object):
         self._create_ring_buffer = ExecuteCommand(cmd, resident=False)
         self._create_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
-        self._create_ring_buffer.set_finish_event()
+        self._create_ring_buffer._process.wait()
         self.state = "ready"
 
     @gen.coroutine
@@ -343,11 +343,10 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Destroying dada buffer")
         cmd = "dada_db -d -k {0}".format(self._dada_key)
         log.debug("Running command: {0}".format(cmd))
-        #args = shlex.split(cmd)
-        self._destory_ring_buffer = ExecuteCommand(cmd, resident=True)
+        self._destory_ring_buffer = ExecuteCommand(cmd, resident=False)
         self._destory_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
-        self._destory_ring_buffer.set_finish_event()
+        self._destory_ring_buffer._process.wait()
 
         #process = safe_popen(cmd, stdout=PIPE)
         #process.wait()
