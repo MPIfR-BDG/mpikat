@@ -114,12 +114,12 @@ class ExecuteCommand(object):
             try:
                 self._process = Popen(self._executable_command,
                                       stdout=PIPE,
-                                      #stderr=PIPE,
+                                      stderr=PIPE,
                                       #bufsize=1,
                                       # shell=True,
                                       universal_newlines=True)
                                       #)
-                print self._process
+                print "self_process = {}"s.format(self._process.poll())
             except Exception as error:
                 log.exception("Error while launching command: {}".format(
                     self._executable_command))
