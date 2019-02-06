@@ -141,7 +141,9 @@ class ExecuteCommand(object):
 
     def finish(self):
         if RUN:
-            self._process.join()
+            threading.Thread.join(self._process)
+            threading.Thread.join(self._monitor_thread)
+            #self._process.join()
             #self._monitor_thread.join(5)
             print "trying to join thread"
 
