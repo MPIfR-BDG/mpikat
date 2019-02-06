@@ -7,7 +7,7 @@ import socket
 import struct
 import time
 import shlex
-from subprocess import PIPE, Popen, check_call, check_output
+from subprocess import PIPE, Popen, check_output
 from inspect import currentframe, getframeinfo
 from astropy.time import Time
 import astropy.units as units
@@ -150,7 +150,6 @@ def register_pipeline(name):
 
 
 class ExecuteCommand(object):
-
     def __init__(self, command, resident=False):
         self._command = command
         self._resident = resident
@@ -237,7 +236,7 @@ class ExecuteCommand(object):
                 if stdout != b"":
                     self.stdout = stdout
                     print self.stdout, self._command
-
+            
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
                 # the event is set, the command does not successfully finish
@@ -538,11 +537,11 @@ class Pipeline(object):
                 capture_status = stdout.split(" ")
                 print "HERE CAPTURE_STATUS", stdout, capture_status
                 print float(self._beam_index[0]), float(capture_status[2]), float(capture_status[3]), float(capture_status[4])
-                process_index = capture_status[1]
+                process_index = int(capture_status[1])
                 if process_index == 0:
                     self._beam_sensor0.set_value(float(self._beam_index[0]))
-                    self._beam_time0.set_value(float(capture_status[2]))
-                    self._beam_average0.set_value(float(capture_status[3]))
+                    self._time_sensor0.set_value(float(capture_status[2]))
+                    self._average_sensor0.set_value(float(capture_status[3]))
                     self._instant_sensor0.set_value(float(capture_status[4]))
                 if process_index == 1:
                     self._beam_sensor1.set_value(float(self._beam_index[1]))
@@ -1020,19 +1019,8 @@ class Search1Beam(Search):
         super(Search1Beam, self).deconfigure()
 
 if __name__ == "__main__":
-    # Question, why the reference seconds is 21 seconds less than the BMF number
-    # The number is random. Everytime reconfigure stream, it will change the reference seconds, sometimes it is multiple times of 27 seconds, but in most case, it is not
-    # To do, find a way to sync capture of beams
-    # understand why the capture does not works sometimes, or try VMA
-    #freq              = 1340.5
-    freq = 1337.0
-    # "YYYY-MM-DDThh:mm:ss", now + stream period (27 seconds)
-    utc_start_capture = Time.now() + PAF_CONFIG["prd"] * units.s
-    utc_start_process = utc_start_capture + PAF_CONFIG["prd"] * units.s
-
-    #source_name   = "UNKNOWN"
     source_name = "DEBUG"
-    ra = "00:00:00.00"   # "HH:MM:SS.SS"
+    ra  = "00:00:00.00"   # "HH:MM:SS.SS"
     dec = "00:00:00.00"   # "DD:MM:SS.SS"
     host_id = check_output("hostname").strip()[-1]
 
@@ -1048,7 +1036,15 @@ if __name__ == "__main__":
     beam = args.beam[0]
     ip = "10.17.{}.{}".format(host_id, numa + 1)
 
-    for i in range(10):
+    if beam == 1:
+        freq = 1340.5
+    if beam == 2:
+        freq = 1337.0
+        
+    for i in range(100):        
+        # "YYYY-MM-DDThh:mm:ss", now + stream period (27 seconds)
+        utc_start_capture = Time.now() + PAF_CONFIG["prd"] * units.s
+        utc_start_process = utc_start_capture + PAF_CONFIG["prd"] * units.s
         print "\nCreate pipeline ...\n"
         if beam == 1:
             freq = 1340.5
@@ -1060,7 +1056,7 @@ if __name__ == "__main__":
         print "\nConfigure it ...\n"
         search_mode.configure(utc_start_capture, freq, ip)
 
-        for j in range(10):
+        for j in range(1):
             print "\nStart it ...\n"
             search_mode.start(utc_start_process, source_name, ra, dec)
             time.sleep(10)
