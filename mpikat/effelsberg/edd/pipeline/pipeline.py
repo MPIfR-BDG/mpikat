@@ -101,7 +101,7 @@ class ExecuteCommand(object):
         #self._stopevent = threading.Event( )
 
         self._finish_event = threading.Event()
-        print self._command
+        #print self._command
 
         if not self._resident:  # For the command which stops immediately, we need to set the event before hand
             self._finish_event.set()
@@ -126,8 +126,7 @@ class ExecuteCommand(object):
                     self._executable_command))
                 self.error = True
             if self._process == None:
-                self._error = True
-            print "reach this point"    
+                self._error = True   
             self._monitor_thread = threading.Thread(
                 target=self._execution_monitor)
             self._monitor_thread.start()
@@ -370,12 +369,11 @@ class Mkrecv2Db2Dspsr(object):
 
 
 def main():
-    print "\nCreate pipeline ...\n"
     logging.info("Starting pipeline instance")
     server = Mkrecv2Db2Dspsr()
     server.configure()
     server.start()
-    # server.stop()
+    server.stop()
     server.deconfigure()
 
 if __name__ == "__main__":
