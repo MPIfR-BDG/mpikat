@@ -120,6 +120,7 @@ class ExecuteCommand(object):
                                       universal_newlines=True)
                                       #)
                 print "self_process = {}".format(self._process.poll())
+                self.
             except Exception as error:
                 log.exception("Error while launching command: {}".format(
                     self._executable_command))
@@ -172,10 +173,10 @@ class ExecuteCommand(object):
     def _execution_monitor(self):
         # Monitor the execution and also the stdout for the outside useage
         if RUN:
-            print "here, poll = ()".format(self._process.poll())
+            print "here, poll = {}".format(self._process.poll())
             while self._process.poll() == None:
+                print "trying to assign the stdout"
                 stdout = self._process.stdout.readline().rstrip("\n\r")
-                #print stdout
                 if stdout != b"":
                     self.stdout = stdout
                     print self.stdout, self._command
