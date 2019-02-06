@@ -17,12 +17,7 @@ import shlex
 import threading
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
-#
-# NOTE: For this to run properly the host /tmp/
-# directory should be mounted onto the launching container.
-# This is needed as docker doesn't currently support
-# container to container file copies.
-#
+
 RUN = True
 
 PIPELINES = {}
@@ -77,12 +72,12 @@ def register_pipeline(name):
     return _register
 
 
-def safe_popen(cmd, *args, **kwargs):
-    if RUN == True:
-        process = Popen(shlex.split(cmd), stdout=PIPE)
-    else:
-        process = None
-    return process
+#def safe_popen(cmd, *args, **kwargs):
+#    if RUN == True:
+#        process = Popen(shlex.split(cmd), stdout=PIPE)
+#    else:
+#        process = None
+#    return process
 
 
 class ExecuteCommand(object):
@@ -228,8 +223,6 @@ class Mkrecv2Db2Dspsr(object):
         cmd = "dada_db -k {key} {args}".format(**
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
-        #self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
-        # self._create_ring_buffer.wait()
         self._create_ring_buffer = ExecuteCommand(cmd, resident=False)
         self._create_ring_buffer.stdout_callbacks.add(
             self._decode_capture_stdout)
@@ -256,8 +249,12 @@ class Mkrecv2Db2Dspsr(object):
         cmd = "mkdir -p {}".format(out_path)
         log.debug("Command to run: {}".format(cmd))
         log.debug("Current working directory: {}".format(os.getcwd()))
-        process = safe_popen(cmd, stdout=PIPE)
-        process.wait()
+        self._create_workdir = ExecuteCommand(cmd, resident=False)
+        self._create_workdir.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._create_workdir._process.wait()        
+        #process = safe_popen(cmd, stdout=PIPE)
+        #process.wait()
         os.chdir(out_path)
         log.debug("Change to workdir: {}".format(os.getcwd()))
         dada_header_file = tempfile.NamedTemporaryFile(
@@ -293,8 +290,6 @@ class Mkrecv2Db2Dspsr(object):
         self._dspsr.stdout_callbacks.add(
             self._decode_capture_stdout)
 
-        #self._dspsr = safe_popen(cmd, stdout=PIPE)
-
         ###################
         # Start up MKRECV
         ###################
@@ -305,7 +300,6 @@ class Mkrecv2Db2Dspsr(object):
             self._dada_key,
             dada_header_file.name)
         log.debug("running command: {}".format(cmd))
-        #self._dada_junkdb = safe_popen(cmd, stdout=PIPE)
         self._dada_junkdb = ExecuteCommand(cmd, resident=True)
         self._dada_junkdb.stdout_callbacks.add(
             self._decode_capture_stdout)
@@ -361,9 +355,6 @@ class Mkrecv2Db2Dspsr(object):
         self._destory_ring_buffer.stdout_callbacks.add(
             self._decode_capture_stdout)
         self._destory_ring_buffer._process.wait()
-
-        #process = safe_popen(cmd, stdout=PIPE)
-        # process.wait()
 
         #log.debug("Sending SIGTERM to MKRECV process")
         #    self._mkrecv_ingest_proc.terminate()
