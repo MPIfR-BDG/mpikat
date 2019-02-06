@@ -284,6 +284,9 @@ class Mkrecv2Db2Dspsr(object):
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
         self._dspsr = ExecuteCommand(cmd, resident=True)
+        self._dspsr.stdout_callbacks.add(
+                self._decode_capture_stdout)
+
         #self._dspsr = safe_popen(cmd, stdout=PIPE)
 
         ###################
@@ -298,6 +301,8 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("running command: {}".format(cmd))
         #self._dada_junkdb = safe_popen(cmd, stdout=PIPE)
         self._dada_junkdb = ExecuteCommand(cmd, resident=True)
+        self._dada_junkdb.stdout_callbacks.add(
+            self._decode_capture_stdout)
         self.running_process_dada_junkdb = yield self._dada_junkdb
         self.running_process_dspsr = yield self._dspsr
         raise gen.Return(dada_junkdb.body)
