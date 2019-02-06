@@ -98,6 +98,7 @@ class ExecuteCommand(object):
         self._monitor_thread = None
         self._stdout = None
         self._error = False
+        #self._stopevent = threading.Event( )
 
         self._finish_event = threading.Event()
         print self._command
@@ -140,7 +141,8 @@ class ExecuteCommand(object):
 
     def finish(self):
         if RUN:
-            self._monitor_thread.join(5)
+            self._process.join()
+            #self._monitor_thread.join(5)
             print "trying to join thread"
 
     def stdout_notify(self):
