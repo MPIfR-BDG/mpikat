@@ -325,6 +325,8 @@ class Mkrecv2Db2Dspsr(object):
         #self._dada_junkdb._monitor_thread.join()
         self._timeout = 10.0
         self._dada_junkdb._process.terminate()
+        self._dada_junkdb._process.kill()
+        print "Here trying to kill the dada_junkdb process"
         """
         log.debug(
             "Waiting {} seconds for JUNKDB to terminate...".format(self._timeout))
@@ -345,6 +347,7 @@ class Mkrecv2Db2Dspsr(object):
         self._dspsr.set_finish_event()
         self._dspsr.finish()
         self._dspsr._process.terminate()
+        self._dspsr._process.kill()
         #self._dspsr._monitor_thread.join()
 
 
