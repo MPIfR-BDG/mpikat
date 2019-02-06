@@ -231,10 +231,10 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Running command: {0}".format(cmd))
         #self._create_ring_buffer = safe_popen(cmd, stdout=PIPE)
         #self._create_ring_buffer.wait()
-        self._create_ring_buffer = ExecuteCommand(cmd, resident=False)
+        self._create_ring_buffer = ExecuteCommand(cmd, resident=True)
         self._create_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
-
+        self._destory_ring_buffer.set_finish_event()
         self.state = "ready"
 
     @gen.coroutine
@@ -344,8 +344,13 @@ class Mkrecv2Db2Dspsr(object):
         cmd = "dada_db -d -k {0}".format(self._dada_key)
         log.debug("Running command: {0}".format(cmd))
         #args = shlex.split(cmd)
-        process = safe_popen(cmd, stdout=PIPE)
-        process.wait()
+        self._destory_ring_buffer = ExecuteCommand(cmd, resident=True)
+        self._destory_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+        self._destory_ring_buffer.set_finish_event()
+
+        #process = safe_popen(cmd, stdout=PIPE)
+        #process.wait()
 
         #log.debug("Sending SIGTERM to MKRECV process")
         #    self._mkrecv_ingest_proc.terminate()
