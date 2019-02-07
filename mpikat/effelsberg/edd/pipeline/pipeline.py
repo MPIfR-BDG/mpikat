@@ -480,12 +480,12 @@ class Mkrecv2Db(object):
         # if RUN is True:
         #self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
 
-         cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
+        cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
             self._dada_key,
             dada_header_file.name)
         log.debug("running command: {}".format(cmd))
         self._dada_junkdb = ExecuteCommand(cmd, resident=True)
-         self._dada_junkdb.stdout_callbacks.add(
+        self._dada_junkdb.stdout_callbacks.add(
             self._decode_capture_stdout)
 
     @gen.coroutine
@@ -493,7 +493,6 @@ class Mkrecv2Db(object):
         """@brief stop the dada_junkdb and dspsr instances."""
         log.debug("Stopping")
         self._timeout = 10
-        
         self._dada_junkdb.set_finish_event()
         yield self._dada_junkdb.finish()
 
