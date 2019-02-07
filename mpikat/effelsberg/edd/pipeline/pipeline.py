@@ -155,7 +155,7 @@ class ExecuteCommand(object):
                 self.error = True
 
 
-@register_pipeline("DspsrPipeline")
+@register_pipeline("DspsrPipelineP0")
 class Mkrecv2Db2Dspsr(object):
     """@brief dspsr pipeline class."""
 
@@ -354,6 +354,208 @@ class Mkrecv2Db2Dspsr(object):
         #        log.warning("MKRECV failed to terminate in alloted time")
         #        log.info("Killing MKRECV process")
         #        self._mkrecv_ingest_proc.kill()
+
+
+@register_pipeline("DspsrPipelineUptotrix")
+class Mkrecv2Db(object):
+    """@brief dspsr pipeline class."""
+
+    def __del__(self):
+        class_name = self.__class__.__name__
+
+    def notify(self):
+        """@brief callback function."""
+        for callback in self.callbacks:
+            callback(self._state, self)
+
+    @property
+    def state(self):
+        """@brief property of the pipeline state."""
+        return self._state
+
+    @state.setter
+    def state(self, value):
+        self._state = value
+        self.notify()
+
+    def __init__(self):
+        """@brief initialize the pipeline."""
+        self.callbacks = set()
+        self._state = "idle"
+        self._volumes = ["/tmp/:/scratch/"]
+        self._dada_key = None
+        self._config = None
+        self._dspsr = None
+        self._mkrecv_ingest_proc = None
+
+    def _decode_capture_stdout(self, stdout, callback):
+        log.debug('{}'.format(str(stdout)))
+
+    @gen.coroutine
+    def configure(self):
+        """@brief destroy any ring buffer and create new ring buffer."""
+        self._config = CONFIG
+        self._dada_key = CONFIG["dada_db_params"]["key"]
+        try:
+            self.deconfigure()
+        except Exception:
+            pass
+        cmd = "dada_db -k {key} {args}".format(**
+                                               self._config["dada_db_params"])
+        log.debug("Running command: {0}".format(cmd))
+        self._create_ring_buffer = ExecuteCommand(cmd, resident=False)
+        self._create_ring_buffer.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._create_ring_buffer._process.wait()
+        self.state = "ready"
+
+    @gen.coroutine
+    def start(self):
+        """@brief start the dspsr instance then turn on dada_junkdb instance."""
+        self.state = "running"
+        header = self._config["dada_header_params"]
+        header["ra"] = sensors["ra"]
+        header["dec"] = sensors["dec"]
+        source_name = sensors["source-name"]
+        try:
+            source_name = source_name.split("_")[0]
+        except Exception:
+            pass
+        header["source_name"] = source_name
+        header["obs_id"] = "{0}_{1}".format(
+            sensors["scannum"], sensors["subscannum"])
+        tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
+        out_path = os.path.join("/media/scratch/mkrecv_testground/", source_name, tstr)
+        log.debug("Creating directories")
+        cmd = "mkdir -p {}".format(out_path)
+        log.debug("Command to run: {}".format(cmd))
+        log.debug("Current working directory: {}".format(os.getcwd()))
+        self._create_workdir = ExecuteCommand(cmd, resident=False)
+        self._create_workdir.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._create_workdir._process.wait()
+        #process = safe_popen(cmd, stdout=PIPE)
+        # process.wait()
+        os.chdir(out_path)
+        log.debug("Change to workdir: {}".format(os.getcwd()))
+        dada_header_file = tempfile.NamedTemporaryFile(
+            mode="w",
+            prefix="edd_dada_header_",
+            suffix=".txt",
+            dir=os.getcwd(),
+            delete=False)
+        log.debug(
+            "Writing dada header file to {0}".format(
+                dada_header_file.name))
+        header_string = render_dada_header(header)
+        dada_header_file.write(header_string)
+        #log.debug("Header file contains:\n{0}".format(header_string))
+        dada_key_file = tempfile.NamedTemporaryFile(
+            mode="w",
+            prefix="dada_keyfile_",
+            suffix=".key",
+            dir=os.getcwd(),
+            delete=False)
+        log.debug("Writing dada key file to {0}".format(dada_key_file.name))
+        key_string = make_dada_key_string(self._dada_key)
+        dada_key_file.write(make_dada_key_string(self._dada_key))
+        log.debug("Dada key file contains:\n{0}".format(key_string))
+        dada_header_file.close()
+        dada_key_file.close()
+        cmd = "dspsr {args} -N {source_name} {keyfile}".format(
+            args=self._config["dspsr_params"]["args"],
+            source_name=source_name,
+            keyfile=dada_key_file.name)
+        log.debug("Running command: {0}".format(cmd))
+        self._dspsr = ExecuteCommand(cmd, resident=True)
+        self._dspsr.stdout_callbacks.add(
+            self._decode_capture_stdout)
+
+        ###################
+        # Start up MKRECV
+        ###################
+        # if RUN is True:
+        #self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
+
+        #cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
+        #    self._dada_key,
+        #    dada_header_file.name)
+        #log.debug("running command: {}".format(cmd))
+        #self._dada_junkdb = ExecuteCommand(cmd, resident=True)
+        #self._dada_junkdb.stdout_callbacks.add(
+        #    self._decode_capture_stdout)
+
+    @gen.coroutine
+    def stop(self):
+        """@brief stop the dada_junkdb and dspsr instances."""
+        log.debug("Stopping")
+        self._timeout = 10
+        """
+        self._dada_junkdb.set_finish_event()
+        yield self._dada_junkdb.finish()
+
+        log.debug(
+            "Waiting {} seconds for dada_junkdb to terminate...".format(self._timeout))
+        now = time.time()
+        while time.time() - now < self._timeout:
+            retval = self._dada_junkdb._process.poll()
+            if retval is not None:
+                log.info("Returned a return value of {}".format(retval))
+                break
+            else:
+                yield time.sleep(0.5)
+        else:
+            log.warning("Failed to terminate dada_junkdb in alloted time")
+            log.info("Killing process")
+            self._dspsr.kill()
+        """
+        self._dspsr.set_finish_event()
+        yield self._dspsr.finish()
+
+        log.debug(
+            "Waiting {} seconds for DSPSR to terminate...".format(self._timeout))
+        now = time.time()
+        while time.time() - now < self._timeout:
+            retval = self._dspsr._process.poll()
+            if retval is not None:
+                log.info("Returned a return value of {}".format(retval))
+                break
+            else:
+                yield time.sleep(0.5)
+        else:
+            log.warning("Failed to terminate DSPSR in alloted time")
+            log.info("Killing process")
+            self._dspsr.kill()
+        self.state = "ready"
+
+    def deconfigure(self):
+        """@brief deconfigure the dspsr pipeline."""
+        self.state = "idle"
+        log.debug("Destroying dada buffer")
+        cmd = "dada_db -d -k {0}".format(self._dada_key)
+        log.debug("Running command: {0}".format(cmd))
+        self._destory_ring_buffer = ExecuteCommand(cmd, resident=False)
+        self._destory_ring_buffer.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._destory_ring_buffer._process.wait()
+
+        #log.debug("Sending SIGTERM to MKRECV process")
+        #    self._mkrecv_ingest_proc.terminate()
+        #    self._mkrecv_timeout = 10.0
+        #    log.debug("Waiting {} seconds for MKRECV to terminate...".format(self._mkrecv_timeout))
+        #    now = time.time()
+        #    while time.time()-now < self._mkrecv_timeout:
+        #        retval = self._mkrecv_ingest_proc.poll()
+        #        if retval is not None:
+        #            log.info("MKRECV returned a return value of {}".format(retval))
+        #            break
+        #        else:
+        #            yield sleep(0.5)
+        #    else:
+        #        log.warning("MKRECV failed to terminate in alloted time")
+        #        log.info("Killing MKRECV process")
+        #        self._mkrecv_ingest_proc.kill()
+
 
 
 def main():
