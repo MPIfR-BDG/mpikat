@@ -56,7 +56,6 @@ CONFIG = {
 sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
            "scannum": 0, "subscannum": 1, "timestamp": str(datetime.now().time())}
 
-
 def register_pipeline(name):
     def _register(cls):
         PIPELINES[name] = cls
@@ -426,8 +425,7 @@ class Mkrecv2Db(object):
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
         tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
-        out_path = os.path.join(
-            "/media/scratch/mkrecv_testground/", source_name, tstr)
+        out_path = os.path.join("/media/scratch/mkrecv_testground/", source_name, tstr)
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(out_path)
         log.debug("Command to run: {}".format(cmd))
@@ -464,9 +462,8 @@ class Mkrecv2Db(object):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-        cmd = "dspsr {args} -N {source_name} {keyfile}".format(
-            args=self._config["dspsr_params"][
-                "-cpu 2,3 -L 10 -r -F 256:D -minram 1024"],
+        cmd = "dspsr -cpu 2,3 -L 10 -r -F 256:D -minram 1024 -N {source_name} {keyfile}".format(
+            #args=self._config["dspsr_params"]["-cpu 2,3 -L 10 -r -F 256:D -minram 1024"],
             source_name=source_name,
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
@@ -480,19 +477,20 @@ class Mkrecv2Db(object):
         # if RUN is True:
         #self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
 
-        cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
-            self._dada_key,
-            dada_header_file.name)
-        log.debug("running command: {}".format(cmd))
-        self._dada_junkdb = ExecuteCommand(cmd, resident=True)
-        self._dada_junkdb.stdout_callbacks.add(
-            self._decode_capture_stdout)
+        #cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
+        #    self._dada_key,
+        #    dada_header_file.name)
+        #log.debug("running command: {}".format(cmd))
+        #self._dada_junkdb = ExecuteCommand(cmd, resident=True)
+        #self._dada_junkdb.stdout_callbacks.add(
+        #    self._decode_capture_stdout)
 
     @gen.coroutine
     def stop(self):
         """@brief stop the dada_junkdb and dspsr instances."""
         log.debug("Stopping")
         self._timeout = 10
+        """
         self._dada_junkdb.set_finish_event()
         yield self._dada_junkdb.finish()
 
@@ -510,7 +508,7 @@ class Mkrecv2Db(object):
             log.warning("Failed to terminate dada_junkdb in alloted time")
             log.info("Killing process")
             self._dspsr.kill()
-        
+        """
         self._dspsr.set_finish_event()
         yield self._dspsr.finish()
 
@@ -557,6 +555,7 @@ class Mkrecv2Db(object):
         #        log.warning("MKRECV failed to terminate in alloted time")
         #        log.info("Killing MKRECV process")
         #        self._mkrecv_ingest_proc.kill()
+
 
 
 def main():
