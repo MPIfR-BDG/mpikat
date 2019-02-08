@@ -51,7 +51,9 @@ class UnknownControlMode(Exception):
     pass
 
 class EddMasterController(MasterController):
-    """The main KATCP interface for the EDD backend"""
+    """
+    The main KATCP interface for the EDD backend
+    """
     VERSION_INFO = ("mpikat-edd-api", 0, 1)
     BUILD_INFO = ("mpikat-edd-implementation", 0, 1, "rc1")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]

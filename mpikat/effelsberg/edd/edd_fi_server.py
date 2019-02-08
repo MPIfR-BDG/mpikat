@@ -24,7 +24,21 @@ class FitsWriterNotConnected(Exception):
     pass
 
 class FitsWriterConnectionManager(Thread):
+    """
+    A class to handle TCP connections to the APEX FITS writer.
+
+    This class implements a TCP/IP server that can accept connections from
+    the FITS writer. Upon acceptance, the new communication socket is stored
+    and made available to any system that produces FITS writer compatible
+    data.
+    """
     def __init__(self, ip, port):
+        """
+        @breif    Construct a new instance
+
+        @param     ip    The IP address to serve on
+        @param     port  The port to serve on
+        """
         Thread.__init__(self)
         self._address = (ip, port)
         self._shutdown = Event()
@@ -44,7 +58,7 @@ class FitsWriterConnectionManager(Thread):
         self._server_socket.bind(self._address)
         self._server_socket.listen(1)
 
-    def accept_connection(self):
+    def _accept_connection(self):
         log.debug("Accepting connections on FW server socket")
         while not self._shutdown.is_set():
             try:
@@ -64,6 +78,9 @@ class FitsWriterConnectionManager(Thread):
                 raise error
 
     def drop_connection(self):
+        """
+        @breif   Drop any current FITS writer connection
+        """
         if self._transmit_socket:
             self._transmit_socket.shutdown(socket.SHUT_RDWR)
             self._transmit_socket.close()
@@ -71,6 +88,11 @@ class FitsWriterConnectionManager(Thread):
             self._has_connection.clear()
 
     def get_transmit_socket(self, timeout=2):
+        """
+        @brief   Get the active FITS writer connection
+
+        @param   timeout   The time to wait for a connection to become available
+        """
         start_time = time.time()
         while (time.time() - start_time) < timeout:
             if self._has_connection.is_set():
@@ -80,13 +102,16 @@ class FitsWriterConnectionManager(Thread):
         raise FitsWriterNotConnected
 
     def stop(self):
+        """
+        @brief   Stop the server
+        """
         self._shutdown.set()
 
     def run(self):
         while not self._shutdown.is_set():
             try:
                 if not self._has_connection.is_set():
-                    self._transmit_socket = self.accept_connection()
+                    self._transmit_socket = self._accept_connection()
                 else:
                     time.sleep(1)
             except Exception as error:
@@ -314,6 +339,9 @@ class CaptureData(Thread):
         self._socket.bind(self._address)
 
     def stop(self):
+        """
+        @brief     Stop the capture thread
+        """
         self._stop_event.set()
 
     def _flush(self):
@@ -436,8 +464,8 @@ def build_fw_object(nsections, nchannels, timestamp, integration_time, blank_pha
 
 class R2SpectrometerHandler(object):
     """
-    @brief Aggregates spectrometer data from polarization channel 1 and 2 for the given time
-           before sending to the fits writer
+    Aggregates spectrometer data from polarization channel 1 and 2 for the given time
+    before sending to the fits writer
     """
     def __init__(self, nsections, nchannels, integration_time, nphases, transmit_socket, max_age=1.0):
         self._nsections = nsections
@@ -449,6 +477,11 @@ class R2SpectrometerHandler(object):
         self._max_age = max_age
 
     def __call__(self, raw_data):
+        """
+        @brief      Handle a raw packet from the network
+
+        @param      raw_data  The raw data captured from the network
+        """
         packet = RoachPacket(raw_data, self._nchannels)
         log.debug("Aggregate received packet: {}".format(packet))
         key = packet.sequence_number - packet.polarisation
@@ -463,6 +496,10 @@ class R2SpectrometerHandler(object):
         self.flush()
 
     def flush(self):
+        """
+        @brief      Iterate through all currently managed packets and flush complete or
+                    stale packet groups to the FITS writer
+        """
         log.debug("Number of active packets pre-flush: {}".format(len(self._active_packets)))
         now = time.time()
         for key in sorted(self._active_packets.iterkeys()):
@@ -518,7 +555,6 @@ def main():
         server.start()
         log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
     ioloop.add_callback(start_and_display)
-    #ioloop.add_callback(server.start)
     ioloop.start()
 
 if __name__ == "__main__":

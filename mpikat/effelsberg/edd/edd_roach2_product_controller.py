@@ -132,8 +132,6 @@ class EddRoach2ProductController(ProductController):
         yield self._r2rm_client.until_synced(2)
         self._icom_id = config["icom_id"]
         self._firmware = config["firmware"]
-
-
         log.debug("Trying to force deconfiguring board")
         response = yield self._r2rm_client.req.force_deconfigure_board(self._icom_id)
         if not response.reply.reply_ok():

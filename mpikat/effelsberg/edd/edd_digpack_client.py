@@ -37,7 +37,7 @@ class DigitiserPacketiserClient(object):
         yield self._client.until_synced()
         response = yield self._client.req[request_name](*args)
         if not response.reply.reply_ok():
-            log.error("'{}' request failed with error: {}".format(response.reply.arguments[1]))
+            log.error("'{}' request failed with error: {}".format(request_name, response.reply.arguments[1]))
             raise DigitiserPacketiserError(response.reply.arguments[1])
         else:
             log.debug("'{}' request successful".format(request_name))
@@ -135,7 +135,12 @@ class DigitiserPacketiserClient(object):
 
     @coroutine
     def set_interface_address(self, intf, ip):
-        """blah"""
+        """
+        @brief      Set the interface address for a packetiser qsfp interface
+
+        @param      intf   The interface specified as a string integer, e.g. '0' or '1'
+        @param      ip     The IP address to assign to the interface
+        """
         yield self._safe_request("rxs_packetizer_40g_source_ip_set", intf, ip)
 
     @coroutine
