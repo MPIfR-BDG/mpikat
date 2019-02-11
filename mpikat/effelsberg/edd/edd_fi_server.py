@@ -4,21 +4,20 @@ import signal
 import socket
 import time
 import errno
-import threading
 import coloredlogs
-import numpy as np
-import time
 import ctypes as C
 from datetime import datetime
 from threading import Thread, Event
 from optparse import OptionParser
-from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
-from katcp.kattypes import (Str, Int, request, return_reply)
+from katcp import AsyncDeviceServer, Sensor, ProtocolFlags
+from katcp.kattypes import (Int, request, return_reply)
 
 log = logging.getLogger("mpikat.edd_fi_server")
 
+
 class StopEventException(Exception):
     pass
+
 
 class FitsWriterNotConnected(Exception):
     pass
@@ -32,6 +31,7 @@ class FitsWriterConnectionManager(Thread):
     and made available to any system that produces FITS writer compatible
     data.
     """
+
     def __init__(self, ip, port):
         """
         @breif    Construct a new instance
@@ -52,7 +52,8 @@ class FitsWriterConnectionManager(Thread):
             self._server_socket.close()
         log.debug("Creating the FITS writer TCP listening socket")
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._server_socket.setsockopt(
+            socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._server_socket.setblocking(False)
         log.debug("Binding to {}".format(self._address))
         self._server_socket.bind(self._address)
@@ -71,10 +72,13 @@ class FitsWriterConnectionManager(Thread):
                 if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
                     time.sleep(1)
                 else:
-                    log.exception("Unexpected error on socket accept: {}".format(str(error)))
+                    log.exception(
+                        "Unexpected error on socket accept: {}".format(
+                            str(error)))
                     raise error
             except Exception as error:
-                log.exception("Unexpected error on socket accept: {}".format(str(error)))
+                log.exception(
+                    "Unexpected error on socket accept: {}".format(str(error)))
                 raise error
 
     def drop_connection(self):
@@ -91,7 +95,8 @@ class FitsWriterConnectionManager(Thread):
         """
         @brief   Get the active FITS writer connection
 
-        @param   timeout   The time to wait for a connection to become available
+        @param   timeout   The time to wait for a connection to
+                           become available
         """
         start_time = time.time()
         while (time.time() - start_time) < timeout:
@@ -134,13 +139,14 @@ class FitsInterfaceServer(AsyncDeviceServer):
         ProtocolFlags.MESSAGE_IDS,
     ]))
 
-    def __init__(self, interface, port, capture_interface, capture_port, fw_ip, fw_port):
+    def __init__(self, interface, port, capture_interface,
+                 capture_port, fw_ip, fw_port):
         """
         @brief Initialization of the FitsInterfaceServer object
 
         @param  interface          Interface address to serve on
         @param  port               Port number to serve on
-        @param  capture_interface  Interface to capture data on from instruments
+        @param  capture_interface  Interface to capture data on
         @param  capture_port       Port to capture data on from instruments
         @param  fw_ip              IP address of the FITS writer
         @param  fw_port            Port number to connected to on FITS writer
@@ -152,7 +158,8 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._blank_phase = None
         self._capture_interface = capture_interface
         self._capture_port = capture_port
-        self._fw_connection_manager = FitsWriterConnectionManager(fw_ip, fw_port)
+        self._fw_connection_manager = FitsWriterConnectionManager(
+            fw_ip, fw_port)
         self._capture_thread = None
         self._shutdown = False
         super(FitsInterfaceServer, self).__init__(interface, port)
@@ -263,9 +270,11 @@ class FitsInterfaceServer(AsyncDeviceServer):
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
 
-        message = "nbeams={}, nchannels={}, integration_time={}, nblank_phases={}".format(
-            beams, channels, int_time, blank_phases)
-        log.info("Configuring FITS interface server with params: {}".format(message))
+        message = ("nbeams={}, nchannels={}, integration_time={},"
+                   " nblank_phases={}").format(beams, channels,
+                                               int_time, blank_phases)
+        log.info("Configuring FITS interface server with params: {}".format(
+            message))
         self.nbeams = beams
         self.nchannels = channels
         self.integration_time = int_time
@@ -296,10 +305,14 @@ class FitsInterfaceServer(AsyncDeviceServer):
         log.info("Starting FITS interface capture")
         self._stop_capture()
         buffer_size = 4 * (self.nchannels + 2)
-        handler = R2SpectrometerHandler(2, self.nchannels, self.integration_time,
-            self.nblank_phases, fw_socket)
+        handler = R2SpectrometerHandler(2, self.nchannels,
+                                        self.integration_time,
+                                        self.nblank_phases,
+                                        fw_socket)
         self._capture_thread = CaptureData(self._capture_interface,
-            self._capture_port, buffer_size, handler)
+                                           self._capture_port,
+                                           buffer_size,
+                                           handler)
         self._capture_thread.start()
         return ("ok",)
 
@@ -326,6 +339,7 @@ class CaptureData(Thread):
     """
     @brief     Captures formatted data from a UDP socket
     """
+
     def __init__(self, ip, port, buffer_size, handler):
         Thread.__init__(self, name=self.__class__.__name__)
         self._address = (ip, port)
@@ -351,7 +365,7 @@ class CaptureData(Thread):
             try:
                 message, addr = self._socket.recvfrom(self._buffer_size)
                 flush_count += 1
-            except:
+            except Exception:
                 break
         log.debug("Flushed {} messages".format(flush_count))
 
@@ -360,7 +374,8 @@ class CaptureData(Thread):
         while not self._stop_event.is_set():
             try:
                 data, addr = self._socket.recvfrom(self._buffer_size)
-                log.debug("Received {} byte message from {}".format(len(data), addr))
+                log.debug("Received {} byte message from {}".format(
+                    len(data), addr))
                 self._handler(data)
             except socket.error as error:
                 error_id = error.args[0]
@@ -383,6 +398,7 @@ class CaptureData(Thread):
 
 
 class RoachPacket(object):
+
     def __init__(self, raw_data, nchannels):
         self._raw_data = raw_data
         self._nchannels = nchannels
@@ -418,23 +434,25 @@ class RoachPacket(object):
 
 
 def isotime():
-    return "{}UTC".format(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-2])
+    return "{}UTC".format(datetime.utcnow().strftime(
+        '%Y-%m-%dT%H:%M:%S.%f')[:-2])
+
 
 def build_fw_type(nsections, nchannels):
     class FWData(C.LittleEndianStructure):
         _fields_ = [
             ('section_id', C.c_uint32),
             ('nchannels', C.c_uint32),
-            ('data', C.c_float*nchannels)
+            ('data', C.c_float * nchannels)
         ]
 
     class FWPacket(C.LittleEndianStructure):
         _fields_ = [
-            ("data_type", C.c_char*4),
-            ("channel_data_type", C.c_char*4),
+            ("data_type", C.c_char * 4),
+            ("channel_data_type", C.c_char * 4),
             ("packet_size", C.c_uint32),
-            ("backend_name", C.c_char*8),
-            ("timestamp", C.c_char*28),
+            ("backend_name", C.c_char * 8),
+            ("timestamp", C.c_char * 28),
             ("integration_time", C.c_uint32),
             ("blank_phases", C.c_uint32),
             ("nsections", C.c_uint32),
@@ -443,7 +461,9 @@ def build_fw_type(nsections, nchannels):
         ]
     return FWPacket
 
-def build_fw_object(nsections, nchannels, timestamp, integration_time, blank_phases):
+
+def build_fw_object(nsections, nchannels, timestamp, integration_time,
+                    blank_phases):
     packet_format = build_fw_type(nsections, nchannels)
     packet = packet_format()
     packet.data_type = "EEEI"
@@ -458,16 +478,18 @@ def build_fw_object(nsections, nchannels, timestamp, integration_time, blank_pha
     for ii in range(nsections):
         packet.sections[ii].section_id = ii + 1
         packet.sections[ii].nchannels = nchannels
-        C.addressof(packet.sections[ii].data), 0, C.sizeof(packet.sections[ii].data)
+        C.addressof(packet.sections[ii].data), 0, C.sizeof(
+            packet.sections[ii].data)
     return packet
 
 
 class R2SpectrometerHandler(object):
     """
-    Aggregates spectrometer data from polarization channel 1 and 2 for the given time
-    before sending to the fits writer
+    Aggregates spectrometer data from polarization channel 1 and 2 for
+    the given time before sending to the fits writer
     """
-    def __init__(self, nsections, nchannels, integration_time, nphases, transmit_socket, max_age=1.0):
+    def __init__(self, nsections, nchannels, integration_time, nphases,
+                 transmit_socket, max_age=1.0):
         self._nsections = nsections
         self._nchannels = nchannels
         self._integration_time = integration_time
@@ -486,34 +508,42 @@ class R2SpectrometerHandler(object):
         log.debug("Aggregate received packet: {}".format(packet))
         key = packet.sequence_number - packet.polarisation
         if key not in self._active_packets:
-            fw_packet = build_fw_object(self._nsections, self._nchannels, isotime(),
-                self._integration_time, self._nphases)
+            fw_packet = build_fw_object(self._nsections, self._nchannels,
+                                        isotime(), self._integration_time,
+                                        self._nphases)
             fw_packet.sections[packet.polarisation].data[:] = packet.data
             self._active_packets[key] = [time.time(), 1, fw_packet]
         else:
             self._active_packets[key][1] += 1
-            self._active_packets[key][2].sections[packet.polarisation].data[:] = packet.data
+            self._active_packets[key][2].sections[
+                packet.polarisation].data[:] = packet.data
         self.flush()
 
     def flush(self):
         """
-        @brief      Iterate through all currently managed packets and flush complete or
-                    stale packet groups to the FITS writer
+        @brief      Iterate through all currently managed packets and
+                    flush complete or stale packet groups to the FITS writer
         """
-        log.debug("Number of active packets pre-flush: {}".format(len(self._active_packets)))
+        log.debug(
+            "Number of active packets pre-flush: {}".format(
+                len(self._active_packets)))
         now = time.time()
         for key in sorted(self._active_packets.iterkeys()):
             timestamp, hits, fw_packet = self._active_packets[key]
             if ((now - timestamp) > self._max_age):
-                log.warning("Age exceeds maximum age. Incomplete packet will be flushed to FITS writer.")
+                log.warning(("Age exceeds maximum age. Incomplete packet"
+                             " will be flushed to FITS writer."))
                 self._transmit_socket.send(bytearray(fw_packet))
                 del self._active_packets[key]
             elif (hits == self._nsections):
-                log.debug("Sending complete packet with timestamp: {}".format(timestamp))
+                log.debug(
+                    "Sending complete packet with timestamp: {}".format(
+                        timestamp))
                 self._transmit_socket.send(bytearray(fw_packet))
                 del self._active_packets[key]
-        log.debug("Number of active packets post-flush: {}".format(len(self._active_packets)))
-
+        log.debug(
+            "Number of active packets post-flush: {}".format(
+                len(self._active_packets)))
 
 
 @tornado.gen.coroutine
@@ -522,40 +552,52 @@ def on_shutdown(ioloop, server):
     yield server.stop()
     ioloop.stop()
 
+
 def main():
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('', '--host', dest='host', type=str,
-        help='Host interface to bind to', default='127.0.0.1')
-    parser.add_option('-p', '--port', dest='port', type=long,
-        help='Port number to bind to', default=5000)
+                      help='Host interface to bind to', default='127.0.0.1')
+    parser.add_option('-p', '--port', dest='port', type=int,
+                      help='Port number to bind to', default=5000)
     parser.add_option('', '--cap-ip', dest='cap_ip', type=str,
-        help='Host interface to bind to for data capture', default='127.0.0.1')
-    parser.add_option('', '--cap-port', dest='cap_port', type=long,
-        help='Port number to bind to for data capture', default=5001)
+                      help='Host interface to bind to for data capture',
+                      default='127.0.0.1')
+    parser.add_option('', '--cap-port', dest='cap_port', type=int,
+                      help='Port number to bind to for data capture',
+                      default=5001)
     parser.add_option('', '--fw-ip', dest='fw_ip', type=str,
-        help='FITS writer interface to bind to for data trasmission', default='127.0.0.1')
-    parser.add_option('', '--fw-port', dest='fw_port', type=long,
-        help='FITS writer port number to bind to for data transmission', default=5002)
+                      help='IP to serve on for FW connections',
+                      default='127.0.0.1')
+    parser.add_option('', '--fw-port', dest='fw_port', type=int,
+                      help='Port to serve on for FW connections',
+                      default=5002)
     parser.add_option('', '--log-level', dest='log_level', type=str,
-        help='Defauly logging level', default="INFO")
+                      help='Defauly logging level', default="INFO")
     (opts, args) = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     coloredlogs.install(
-        fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
+        fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
+             "- %(filename)s:%(lineno)s] %(message)s"),
         level=opts.log_level.upper(),
         logger=log)
     log.setLevel(opts.log_level.upper())
     ioloop = tornado.ioloop.IOLoop.current()
-    server = FitsInterfaceServer(opts.host, opts.port, opts.cap_ip, opts.cap_port, opts.fw_ip, opts.fw_port)
+    server = FitsInterfaceServer(
+        opts.host, opts.port, opts.cap_ip,
+        opts.cap_port, opts.fw_ip, opts.fw_port)
     # Hook up to SIGINT so that ctrl-C results in a clean shutdown
-    signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
-        on_shutdown, ioloop, server))
+    signal.signal(signal.SIGINT,
+                  lambda sig, frame: ioloop.add_callback_from_signal(
+                    on_shutdown, ioloop, server))
+
     def start_and_display():
         server.start()
-        log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
+        log.info("Listening at {0}, Ctrl-C to terminate server".format(
+            server.bind_address))
     ioloop.add_callback(start_and_display)
     ioloop.start()
+
 
 if __name__ == "__main__":
     main()

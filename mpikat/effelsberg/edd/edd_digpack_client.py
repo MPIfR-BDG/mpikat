@@ -214,7 +214,7 @@ if __name__ == "__main__":
     parser.add_option('', '--sampling_rate', dest='sampling_rate', type=float,
         help='The digitiser sampling rate (Hz)', default=2600000000.0)
     parser.add_option('', '--v-destinations', dest='v_destinations', type=str,
-        help='V polarisation destinations', default="225.0.0.156+3:7148")
+        help='V polarisation destinations', default="225.0.0.152+3:7148")
     parser.add_option('', '--h-destinations', dest='h_destinations', type=str,
         help='H polarisation destinations', default="225.0.0.156+3:7148")
     parser.add_option('', '--log-level',dest='log_level',type=str,

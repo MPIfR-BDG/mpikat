@@ -24,16 +24,13 @@ import coloredlogs
 import json
 import tornado
 import signal
-import time
-import numpy as np
-from datetime import datetime
 from optparse import OptionParser
 from tornado.gen import Return, coroutine
-from tornado.iostream import IOStream
 from katcp import Sensor, AsyncReply
-from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
+from katcp.kattypes import request, return_reply, Str
 from mpikat.core.master_controller import MasterController
-from mpikat.effelsberg.edd.edd_roach2_product_controller import EddRoach2ProductController
+from mpikat.effelsberg.edd.edd_roach2_product_controller import (
+    EddRoach2ProductController)
 from mpikat.effelsberg.edd.edd_worker_wrapper import EddWorkerPool
 from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
@@ -44,11 +41,14 @@ from mpikat.effelsberg.edd.edd_fi_client import EddFitsInterfaceClient
 log = logging.getLogger("mpikat.edd_master_controller")
 EDD_REQUIRED_KEYS = []
 
+
 class EddConfigurationError(Exception):
     pass
 
+
 class UnknownControlMode(Exception):
     pass
+
 
 class EddMasterController(MasterController):
     """
@@ -83,7 +83,8 @@ class EddMasterController(MasterController):
         @brief    Start the server
         """
         super(EddMasterController, self).start()
-        self._scpi_interface = EddScpiInterface(self, self._scpi_ip, self._scpi_port, self.ioloop)
+        self._scpi_interface = EddScpiInterface(
+            self, self._scpi_ip, self._scpi_port, self.ioloop)
 
     def stop(self):
         """
@@ -166,7 +167,8 @@ class EddMasterController(MasterController):
         """
         mode = mode.upper()
         if not mode in self.CONTROL_MODES:
-            raise UnknownControlMode("Unknown mode '{}', valid modes are '{}' ".format(mode, ", ".join(self.CONTROL_MODES)))
+            raise UnknownControlMode("Unknown mode '{}', valid modes are '{}' ".format(
+                mode, ", ".join(self.CONTROL_MODES)))
         else:
             self._control_mode = mode
         if self._control_mode == self.SCPI:
@@ -187,6 +189,7 @@ class EddMasterController(MasterController):
         """
         if not self.katcp_control_mode:
             return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
+
         @coroutine
         def configure_wrapper():
             try:
@@ -204,7 +207,8 @@ class EddMasterController(MasterController):
         try:
             client = DigitiserPacketiserClient(*config["address"])
         except Exception as error:
-            log.error("Error while connecting to packetiser: {}".format(str(error)))
+            log.error(
+                "Error while connecting to packetiser: {}".format(str(error)))
             raise error
         try:
             yield client.set_sampling_rate(config["sampling_rate"])
@@ -215,7 +219,8 @@ class EddMasterController(MasterController):
             yield client.synchronize()
             yield client.capture_start()
         except Exception as error:
-            log.error("Error during packetiser configuration: {}".format(str(error)))
+            log.error(
+                "Error during packetiser configuration: {}".format(str(error)))
             raise error
         else:
             raise Return(client)
@@ -277,11 +282,13 @@ class EddMasterController(MasterController):
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
         if self._products:
-            log.warning("EDD already has configured data products, attempting deconfigure")
+            log.warning(
+                "EDD already has configured data products, attempting deconfigure")
             try:
                 yield self.deconfigure()
             except Exception as error:
-                log.warning("Unable to deconfigure EDD before configuration: {}".format(str(error)))
+                log.warning(
+                    "Unable to deconfigure EDD before configuration: {}".format(str(error)))
         self._packetisers = []
         self._fits_interfaces = []
         log.debug("Parsing JSON configuration")
@@ -294,7 +301,8 @@ class EddMasterController(MasterController):
         log.info("Configuring digitisers/packetisers")
         dp_configure_futures = []
         for dp_config in config_dict["packetisers"]:
-            dp_configure_futures.append(self._packetiser_config_helper(dp_config))
+            dp_configure_futures.append(
+                self._packetiser_config_helper(dp_config))
         for future in dp_configure_futures:
             dp_client = yield future
             self._packetisers.append(dp_client)
@@ -305,9 +313,10 @@ class EddMasterController(MasterController):
             product_id = product_config["id"]
             if product_config["type"] == "roach2":
                 self._products[product_id] = EddRoach2ProductController(self, product_id,
-                    (self._r2rm_host, self._r2rm_port))
+                                                                        (self._r2rm_host, self._r2rm_port))
             else:
-                raise NotImplementedError("Only roach2 products are currently supported")
+                raise NotImplementedError(
+                    "Only roach2 products are currently supported")
             future = self._products[product_id].configure(product_config)
             product_configure_futures.append(future)
         for future in product_configure_futures:
@@ -334,6 +343,7 @@ class EddMasterController(MasterController):
         """
         if not self.katcp_control_mode:
             return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
+
         @coroutine
         def deconfigure_wrapper():
             try:
@@ -379,6 +389,7 @@ class EddMasterController(MasterController):
         """
         if not self.katcp_control_mode:
             return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
+
         @coroutine
         def start_wrapper():
             try:
@@ -422,6 +433,7 @@ class EddMasterController(MasterController):
         """
         if not self.katcp_control_mode:
             return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
+
         @coroutine
         def stop_wrapper():
             try:
@@ -450,38 +462,41 @@ class EddMasterController(MasterController):
         for product in self._products.values():
             yield product.capture_stop()
 
+
 @coroutine
 def on_shutdown(ioloop, server):
     log.info("Shutting down server")
     yield server.stop()
     ioloop.stop()
 
+
 def main():
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('-H', '--host', dest='host', type=str,
-        help='Host interface to bind to')
-    parser.add_option('-p', '--port', dest='port', type=long,
-        help='Port number to bind to')
+                      help='Host interface to bind to')
+    parser.add_option('-p', '--port', dest='port', type=int,
+                      help='Port number to bind to')
     parser.add_option('', '--scpi-interface', dest='scpi_interface', type=str,
-        help='The interface to listen on for SCPI requests',
-        default="")
-    parser.add_option('', '--scpi-port', dest='scpi_port', type=long,
-        help='The port number to listen on for SCPI requests')
+                      help='The interface to listen on for SCPI requests',
+                      default="")
+    parser.add_option('', '--scpi-port', dest='scpi_port', type=int,
+                      help='The port number to listen on for SCPI requests')
     parser.add_option('', '--r2rm-host', dest='r2rm_host', type=str,
-        help='The IP or host name of the R2RM server to use')
-    parser.add_option('', '--r2rm-port', dest='r2rm_port', type=long,
-        help='The port number on which R2RM is serving')
+                      help='The IP or host name of the R2RM server to use')
+    parser.add_option('', '--r2rm-port', dest='r2rm_port', type=int,
+                      help='The port number on which R2RM is serving')
     parser.add_option('', '--scpi-mode', dest='scpi_mode', action="store_true",
-        help='Activate the SCPI interface on startup')
-    parser.add_option('', '--log-level',dest='log_level',type=str,
-        help='Port number of status server instance',default="INFO")
+                      help='Activate the SCPI interface on startup')
+    parser.add_option('', '--log-level', dest='log_level', type=str,
+                      help='Port number of status server instance', default="INFO")
     (opts, args) = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
     logging.getLogger('katcp').setLevel(logging.DEBUG)
     coloredlogs.install(
-        fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
+        fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
+             "- %(filename)s:%(lineno)s] %(message)s"),
         level=opts.log_level.upper(),
         logger=logger)
     ioloop = tornado.ioloop.IOLoop.current()
@@ -490,20 +505,20 @@ def main():
         opts.host, opts.port,
         opts.scpi_interface, opts.scpi_port,
         opts.r2rm_host, opts.r2rm_port)
-    signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
-        on_shutdown, ioloop, server))
+    signal.signal(
+        signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
+            on_shutdown, ioloop, server))
+
     def start_and_display():
         server.start()
         if opts.scpi_mode:
             server.set_control_mode(server.SCPI)
-        log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
+        log.info(
+            "Listening at {0}, Ctrl-C to terminate server".format(
+                server.bind_address))
     ioloop.add_callback(start_and_display)
     ioloop.start()
 
+
 if __name__ == "__main__":
     main()
-
-
-
-
-
