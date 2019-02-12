@@ -31,7 +31,7 @@ CONFIG = {
     },
     "dada_db_params":
     {
-        "args": "-n 8 -b 26214400000 -p -l",
+        "args": "-n 8 -b 2621440000 -p -l",
         "key": "dada"
     },
     "dada_header_params":
