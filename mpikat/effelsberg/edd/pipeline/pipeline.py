@@ -69,11 +69,13 @@ class ExecuteCommand(object):
         self._command = command
         self._resident = resident
         self.stdout_callbacks = set()
+        self.stderr_callbacks = set()
         self.error_callbacks = set()
         self._process = None
         self._executable_command = None
         self._monitor_thread = None
         self._stdout = None
+        self._stderr = None
         self._error = False
         self._finish_event = threading.Event()
 
@@ -115,6 +117,10 @@ class ExecuteCommand(object):
         for callback in self.stdout_callbacks:
             callback(self._stdout, self)
 
+    def stderr_notify(self):
+        for callback in self.stderr_callbacks:
+            callback(self._stderr, self)
+
     @property
     def stdout(self):
         return self._stdout
@@ -123,6 +129,15 @@ class ExecuteCommand(object):
     def stdout(self, value):
         self._stdout = value
         self.stdout_notify()
+
+    @property
+    def stderr(self):
+        return self._stderr
+
+    @stderr.setter
+    def stderr(self, value):
+        self._stderr = value
+        self.stderr_notify()
 
     def error_notify(self):
         for callback in self.error_callbacks:
@@ -142,10 +157,14 @@ class ExecuteCommand(object):
         if RUN:
             while self._process.poll() == None:
                 # print "trying to assign the stdout"
-                stdout = self._process.stderr.readline().rstrip("\n\r")
+                stdout = self._process.stdout.readline().rstrip("\n\r")
+                stderr = self._process.stderr.readline().rstrip("\n\r")
                 if stdout != b"":
                     self.stdout = stdout
                     # print self.stdout, self._command
+                if stderr != b"":
+                    self.stderr = stderr    
+
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
                 # the event is set, the command does not successfully finish
@@ -205,6 +224,8 @@ class Mkrecv2Db2Dspsr(object):
         self._create_ring_buffer = ExecuteCommand(cmd, resident=False)
         self._create_ring_buffer.stdout_callbacks.add(
             self._decode_capture_stdout)
+        self._create_ring_buffer.stderr_callbacks.add(
+            self._decode_capture_stdout)
         self._create_ring_buffer._process.wait()
         self.state = "ready"
 
@@ -231,6 +252,8 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Current working directory: {}".format(os.getcwd()))
         self._create_workdir = ExecuteCommand(cmd, resident=False)
         self._create_workdir.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._create_workdir.stderr_callbacks.add(
             self._decode_capture_stdout)
         self._create_workdir._process.wait()
         #process = safe_popen(cmd, stdout=PIPE)
@@ -269,7 +292,8 @@ class Mkrecv2Db2Dspsr(object):
         self._dspsr = ExecuteCommand(cmd, resident=True)
         self._dspsr.stdout_callbacks.add(
             self._decode_capture_stdout)
-
+        self._dspsr.stderr_callbacks.add(
+            self._decode_capture_stdout)
         ###################
         # Start up MKRECV
         ###################
@@ -284,6 +308,8 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("running command: {}".format(cmd))
         self._dada_junkdb = ExecuteCommand(cmd, resident=True)
         self._dada_junkdb.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._dada_junkdb.stderr_callbacks.add(
             self._decode_capture_stdout)
 
     @gen.coroutine
@@ -407,6 +433,8 @@ class Db2Dbnull(object):
         self._create_ring_buffer = ExecuteCommand(cmd, resident=False)
         self._create_ring_buffer.stdout_callbacks.add(
             self._decode_capture_stdout)
+        self._create_ring_buffer.stderr_callbacks.add(
+            self._decode_capture_stdout)
         self._create_ring_buffer._process.wait()
         self.state = "ready"
 
@@ -433,6 +461,8 @@ class Db2Dbnull(object):
         log.debug("Current working directory: {}".format(os.getcwd()))
         self._create_workdir = ExecuteCommand(cmd, resident=False)
         self._create_workdir.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._create_workdir.stderr_callbacks.add(
             self._decode_capture_stdout)
         self._create_workdir._process.wait()
         #process = safe_popen(cmd, stdout=PIPE)
@@ -463,7 +493,7 @@ class Db2Dbnull(object):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-        """cmd = "dspsr {args} -N {source_name} {keyfile}".format(
+        cmd = "dspsr {args} -N {source_name} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             source_name=source_name,
             keyfile=dada_key_file.name)
@@ -471,12 +501,14 @@ class Db2Dbnull(object):
         self._dspsr = ExecuteCommand(cmd, resident=True)
         self._dspsr.stdout_callbacks.add(
             self._decode_capture_stdout)
-        """
-
-        cmd = "dada_dbnull -k {0}".format(self._dada_key)
-        self._dada_dbnull = ExecuteCommand(cmd, resident=True)
-        self._dada_dbnull.stdout_callbacks.add(
+        self._dspsr.stderr_callbacks.add(
             self._decode_capture_stdout)
+        
+
+        #cmd = "dada_dbnull -k {0}".format(self._dada_key)
+        #self._dada_dbnull = ExecuteCommand(cmd, resident=True)
+        #self._dada_dbnull.stdout_callbacks.add(
+        #    self._decode_capture_stdout)
 
         ###################
         # Start up MKRECV
@@ -485,6 +517,8 @@ class Db2Dbnull(object):
         cmd = "mkrecv --header {} --dada-mode 4".format(dada_header_file.name)
         self._mkrecv_ingest_proc = ExecuteCommand(cmd, resident=True)
         self._mkrecv_ingest_proc.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._mkrecv_ingest_proc.stderr_callbacks.add(
             self._decode_capture_stdout)
 
         """
@@ -519,7 +553,7 @@ class Db2Dbnull(object):
             log.warning("Failed to terminate _mkrecv_ingest_proc in alloted time")
             log.info("Killing process")
             self._mkrecv_ingest_proc.kill()
-
+        """
         self._dada_dbnull.set_finish_event()
         yield self._dada_dbnull.finish()
 
@@ -537,8 +571,8 @@ class Db2Dbnull(object):
             log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
             self._dada_dbnull.kill()
-        self.state = "ready"
         """
+        
         self._dspsr.set_finish_event()
         yield self._dspsr.finish()
 
@@ -556,7 +590,8 @@ class Db2Dbnull(object):
             log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
             self._dspsr.kill()
-            """
+        self.state = "ready"
+        
 
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
@@ -566,6 +601,8 @@ class Db2Dbnull(object):
         log.debug("Running command: {0}".format(cmd))
         self._destory_ring_buffer = ExecuteCommand(cmd, resident=False)
         self._destory_ring_buffer.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._destory_ring_buffer.stderr_callbacks.add(
             self._decode_capture_stdout)
         self._destory_ring_buffer._process.wait()
 
@@ -637,6 +674,8 @@ class Mkrecv2Db(object):
         self._create_ring_buffer = ExecuteCommand(cmd, resident=False)
         self._create_ring_buffer.stdout_callbacks.add(
             self._decode_capture_stdout)
+        self._create_ring_buffer.stderr_callbacks.add(
+            self._decode_capture_stdout)
         self._create_ring_buffer._process.wait()
         self.state = "ready"
 
@@ -663,6 +702,8 @@ class Mkrecv2Db(object):
         log.debug("Current working directory: {}".format(os.getcwd()))
         self._create_workdir = ExecuteCommand(cmd, resident=False)
         self._create_workdir.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._create_workdir.stderr_callbacks.add(
             self._decode_capture_stdout)
         self._create_workdir._process.wait()
         #process = safe_popen(cmd, stdout=PIPE)
@@ -701,6 +742,8 @@ class Mkrecv2Db(object):
         self._dspsr = ExecuteCommand(cmd, resident=True)
         self._dspsr.stdout_callbacks.add(
             self._decode_capture_stdout)
+        self._dspsr.stderr_callbacks.add(
+            self._decode_capture_stdout)
 
         ###################
         # Start up MKRECV
@@ -714,6 +757,8 @@ class Mkrecv2Db(object):
         log.debug("running command: {}".format(cmd))
         self._dada_junkdb = ExecuteCommand(cmd, resident=True)
         self._dada_junkdb.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._dspsr.stderr_callbacks.add(
             self._decode_capture_stdout)
 
     @gen.coroutine
@@ -767,6 +812,8 @@ class Mkrecv2Db(object):
         log.debug("Running command: {0}".format(cmd))
         self._destory_ring_buffer = ExecuteCommand(cmd, resident=False)
         self._destory_ring_buffer.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._destory_ring_buffer.stderr_callbacks.add(
             self._decode_capture_stdout)
         self._destory_ring_buffer._process.wait()
 
