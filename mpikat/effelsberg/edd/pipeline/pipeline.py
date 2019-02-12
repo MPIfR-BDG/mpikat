@@ -142,13 +142,13 @@ class ExecuteCommand(object):
         if RUN:
             while self._process.poll() == None:
                 # print "trying to assign the stdout"
-                stdout = self._process.stdout.readline().rstrip("\n\r")
-                if stdout != b"":
-                    self.stdout = stdout
-                    # print self.stdout, self._command
                 stdout = self._process.stderr.readline().rstrip("\n\r")
                 if stdout != b"":
                     self.stdout = stdout
+                    # print self.stdout, self._command
+                #stdout = self._process.stderr.readline().rstrip("\n\r")
+                #if stdout != b"":
+                #    self.stdout = stdout
 
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
