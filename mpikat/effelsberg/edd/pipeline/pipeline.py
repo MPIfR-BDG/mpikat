@@ -482,7 +482,10 @@ class Db2Dbnull(object):
         # Start up MKRECV
         ###################
         # if RUN is True:
-        self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
+        cmd = "mkrecv --header {} --dada-mode 4".format(dada_header_file.name)
+        self._mkrecv_ingest_proc = ExecuteCommand(cmd, resident=True)
+        self._mkrecv_ingest_proc.stdout_callbacks.add(
+            self._decode_capture_stdout)
 
         """
         cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
@@ -499,23 +502,23 @@ class Db2Dbnull(object):
         log.debug("Stopping")
         self._timeout = 10
 
-        self._dada_junkdb.set_finish_event()
-        yield self._dada_junkdb.finish()
+        self._mkrecv_ingest_proc.set_finish_event()
+        yield self._mkrecv_ingest_proc.finish()
 
         log.debug(
-            "Waiting {} seconds for dada_junkdb to terminate...".format(self._timeout))
+            "Waiting {} seconds for _mkrecv_ingest_proc to terminate...".format(self._timeout))
         now = time.time()
         while time.time() - now < self._timeout:
-            retval = self._dada_junkdb._process.poll()
+            retval = self._mkrecv_ingest_proc._process.poll()
             if retval is not None:
                 log.info("Returned a return value of {}".format(retval))
                 break
             else:
                 yield time.sleep(0.5)
         else:
-            log.warning("Failed to terminate dada_junkdb in alloted time")
+            log.warning("Failed to terminate _mkrecv_ingest_proc in alloted time")
             log.info("Killing process")
-            self._dada_junkdb.kill()
+            self._mkrecv_ingest_proc.kill()
 
         self._dada_dbnull.set_finish_event()
         yield self._dada_dbnull.finish()
