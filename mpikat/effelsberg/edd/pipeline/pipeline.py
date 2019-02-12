@@ -276,7 +276,9 @@ class Mkrecv2Db2Dspsr(object):
         # if RUN is True:
         #self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
 
-        cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
+
+
+        cmd = "dada_junkdb -k {0} -b 262144000000 -r 1024 -g {1}".format(
             self._dada_key,
             dada_header_file.name)
         log.debug("running command: {}".format(cmd))
@@ -461,13 +463,19 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-        cmd = "dspsr {args} -N {source_name} {keyfile}".format(
+        """cmd = "dspsr {args} -N {source_name} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             source_name=source_name,
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
         self._dspsr = ExecuteCommand(cmd, resident=True)
         self._dspsr.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        """
+
+        cmd = "dada_dbnull -k {0}".format(self._dada_key)
+        self._dada_dbnull = ExecuteCommand(cmd, resident=True)
+        self._dada_dbnull.stdout_callbacks.add(
             self._decode_capture_stdout)
 
         ###################
@@ -506,8 +514,27 @@ class Mkrecv2Db2Dspsr(object):
         else:
             log.warning("Failed to terminate dada_junkdb in alloted time")
             log.info("Killing process")
-            self._dspsr.kill()
+            self._dada_junkdb.kill()
 
+        self._dada_dbnull.set_finish_event()
+        yield self._dada_dbnull.finish()
+
+        log.debug(
+            "Waiting {} seconds for DSPSR to terminate...".format(self._timeout))
+        now = time.time()
+        while time.time() - now < self._timeout:
+            retval = self._dada_dbnull._process.poll()
+            if retval is not None:
+                log.info("Returned a return value of {}".format(retval))
+                break
+            else:
+                yield time.sleep(0.5)
+        else:
+            log.warning("Failed to terminate DSPSR in alloted time")
+            log.info("Killing process")
+            self._dada_dbnull.kill()
+
+"""
         self._dspsr.set_finish_event()
         yield self._dspsr.finish()
 
@@ -525,6 +552,7 @@ class Mkrecv2Db2Dspsr(object):
             log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
             self._dspsr.kill()
+            """
         self.state = "ready"
 
     def deconfigure(self):
