@@ -533,8 +533,8 @@ class Db2Dbnull(object):
             log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
             self._dada_dbnull.kill()
-
-"""
+        self.state = "ready"
+        """
         self._dspsr.set_finish_event()
         yield self._dspsr.finish()
 
@@ -553,7 +553,6 @@ class Db2Dbnull(object):
             log.info("Killing process")
             self._dspsr.kill()
             """
-        self.state = "ready"
 
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
