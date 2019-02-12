@@ -147,8 +147,8 @@ class ExecuteCommand(object):
                 if stdout != b"":
                     self.stdout = stdout
                     # print self.stdout, self._command
-                with stderr = self._process.stdout.readline().rstrip("\n\r")
-                    if stderr != b"":
+                stderr = self._process.stdout.readline().rstrip("\n\r")
+                if stderr != b"":
                     self.stdout = stderr
 
             if not self._finish_event.isSet():
