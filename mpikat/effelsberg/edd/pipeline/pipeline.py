@@ -506,7 +506,7 @@ class Db2Dbnull(object):
         """@brief stop the dada_junkdb and dspsr instances."""
         log.debug("Stopping")
         self._timeout = 10
-        if self._mkrecv_ingest_proc
+        #if self._mkrecv_ingest_proc
         self._mkrecv_ingest_proc.set_finish_event()
         yield self._mkrecv_ingest_proc.finish()
         log.debug(
