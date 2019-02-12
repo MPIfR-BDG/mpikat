@@ -358,7 +358,7 @@ class Mkrecv2Db2Dspsr(object):
         #        self._mkrecv_ingest_proc.kill()
 
 @register_pipeline("DspsrPipelineSrxdev")
-class Mkrecv2Db2Dspsr(object):
+class Db2Dbnull(object):
     """@brief dspsr pipeline class."""
 
     def __del__(self):
