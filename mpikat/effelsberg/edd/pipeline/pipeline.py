@@ -499,8 +499,8 @@ class Db2Dbnull(object):
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
         self._dspsr = ExecuteCommand(cmd, resident=True)
-        self._dspsr.stdout_callbacks.add(
-            self._decode_capture_stdout)
+        #self._dspsr.stdout_callbacks.add(
+        #    self._decode_capture_stdout)
         self._dspsr.stderr_callbacks.add(
             self._decode_capture_stdout)
         
