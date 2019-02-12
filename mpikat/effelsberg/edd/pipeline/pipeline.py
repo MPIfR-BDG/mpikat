@@ -31,7 +31,7 @@ CONFIG = {
     },
     "dada_db_params":
     {
-        "args": "-n 8 -b 1280000000 -p -l",
+        "args": "-n 8 -b 2621440000 -p -l",
         "key": "dada"
     },
     "dada_header_params":
@@ -482,8 +482,9 @@ class Db2Dbnull(object):
         # Start up MKRECV
         ###################
         # if RUN is True:
-        #self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
+        self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
 
+        """
         cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
             self._dada_key,
             dada_header_file.name)
@@ -491,7 +492,7 @@ class Db2Dbnull(object):
         self._dada_junkdb = ExecuteCommand(cmd, resident=True)
         self._dada_junkdb.stdout_callbacks.add(
             self._decode_capture_stdout)
-
+        """
     @gen.coroutine
     def stop(self):
         """@brief stop the dada_junkdb and dspsr instances."""
