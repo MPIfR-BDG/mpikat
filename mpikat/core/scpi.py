@@ -33,7 +33,7 @@ class ScpiRequest(object):
 
     @property
     def data(self):
-        return self._data
+        return self._data.rstrip()
 
     @property
     def command(self):
@@ -101,6 +101,18 @@ class ScpiAsyncDeviceServer(object):
             except:
                 break
 
+    def _make_coroutine_wrapper(self, req, cr, *args, **kwargs):
+        @coroutine
+        def wrapper():
+            try:
+                yield cr(*args, **kwargs)
+            except Exception as error:
+                log.error(str(error))
+                req.error(str(error))
+            else:
+                req.ok()
+        return wrapper
+
     def start(self):
         """
         @brief      Start the SCPI interface listening for new commands
@@ -115,7 +127,7 @@ class ScpiAsyncDeviceServer(object):
             request = None
             try:
                 message, addr = self._socket.recvfrom(self._buffer_size)
-                log.info("Message received from {}: {}".format(addr, message))
+                log.info("Message received from {}: {}".format(addr, message.strip()))
             except socket.error as error:
                 error_id = error.args[0]
                 if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
@@ -147,7 +159,7 @@ class ScpiAsyncDeviceServer(object):
     @coroutine
     def _dispatch(self, req):
         handler_name = "request_{}".format(req.command.replace(":","_"))
-        log.info("Searching for handler '{}'".format(handler_name))
+        log.debug("Searching for handler '{}'".format(handler_name))
         try:
             handler = self.__getattribute__(handler_name)
         except AttributeError:
@@ -159,7 +171,7 @@ class ScpiAsyncDeviceServer(object):
             req.error(str(error))
             raise error
         else:
-            log.info('exec handler')
+            log.debug('Executing handler')
             handler(req)
 
 

@@ -80,6 +80,7 @@ if __name__ == "__main__":
     parser.add_option('-H', '--host', dest='host', type=str, help='IP to send to')
     parser.add_option('-p', '--port', dest='port', type=long, help='Port number to send to')
     parser.add_option('-m', '--msg', dest='msg',type=str, help='Message to send')
+    parser.add_option('-t', '--timeout', dest='timeout',type=float, help='Timeout for message send')
     parser.add_option('', '--log-level',dest='log_level',type=str, help='Set the logging level',default="INFO")
     (opts, args) = parser.parse_args()
     logger = logging.getLogger('mpikat.scpi_client')
@@ -89,4 +90,4 @@ if __name__ == "__main__":
         logger=logger)
     logger.setLevel(opts.log_level.upper())
     client = ScpiClient(opts.host, opts.port)
-    client.send(opts.msg)
+    client.send(opts.msg, timeout=opts.timeout)

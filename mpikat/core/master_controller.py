@@ -68,6 +68,10 @@ class MasterController(AsyncDeviceServer):
         """
         super(MasterController,self).start()
 
+    def stop(self):
+        self._ntp_callback.stop()
+        super(MasterController,self).stop()
+
     def add_sensor(self, sensor):
         log.debug("Adding sensor: {}".format(sensor.name))
         super(MasterController, self).add_sensor(sensor)

@@ -149,7 +149,7 @@ class RoutingTable(object):
         self.last_chunk  = start_chunk + self.nchunk + self.nchunk_offset
         log.info("first chunk {}, last chunk {}".format(self.first_chunk, self.last_chunk))
 
-        if ((self.first_chunk<0) or (self.last_chunk)>(NCHUNK_PER_BEAM - 1)):
+        if ((self.first_chunk<0) or (self.last_chunk)>NCHUNK_PER_BEAM):
             raise RoutingTableError("Required frequency chunks are out of range")
 
         self.generate_table()
