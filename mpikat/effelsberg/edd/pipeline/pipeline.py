@@ -31,7 +31,7 @@ CONFIG = {
     },
     "dada_db_params":
     {
-        "args": "-n 8 -b 2621440000 -p -l",
+        "args": "-n 64 -b 67108864 -p -l",
         "key": "dada"
     },
     "dada_header_params":
@@ -506,8 +506,9 @@ class Db2Dbnull(object):
         """@brief stop the dada_junkdb and dspsr instances."""
         log.debug("Stopping")
         self._timeout = 10
+        if self._mkrecv_ingest_proc
         self._mkrecv_ingest_proc.set_finish_event()
-        self._mkrecv_ingest_proc.finish()
+        yield self._mkrecv_ingest_proc.finish()
         log.debug(
             "Waiting {} seconds for _mkrecv_ingest_proc to terminate...".format(self._timeout))
         now = time.time()
