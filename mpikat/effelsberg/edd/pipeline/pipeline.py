@@ -56,6 +56,7 @@ CONFIG = {
 sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
            "scannum": 0, "subscannum": 1, "timestamp": str(datetime.now().time())}
 
+
 def register_pipeline(name):
     def _register(cls):
         PIPELINES[name] = cls
@@ -147,7 +148,7 @@ class ExecuteCommand(object):
                     self.stdout = stdout
                     # print self.stdout, self._command
                 #stdout = self._process.stderr.readline().rstrip("\n\r")
-                #if stdout != b"":
+                # if stdout != b"":
                 #    self.stdout = stdout
 
             if not self._finish_event.isSet():
@@ -280,8 +281,6 @@ class Mkrecv2Db2Dspsr(object):
         # if RUN is True:
         #self._mkrecv_ingest_proc = Popen(["mkrecv","--config",self._mkrecv_config_filename], stdout=PIPE, stderr=PIPE)
 
-
-
         cmd = "dada_junkdb -k {0} -b 262144000000 -r 1024 -g {1}".format(
             self._dada_key,
             dada_header_file.name)
@@ -360,6 +359,7 @@ class Mkrecv2Db2Dspsr(object):
         #        log.warning("MKRECV failed to terminate in alloted time")
         #        log.info("Killing MKRECV process")
         #        self._mkrecv_ingest_proc.kill()
+
 
 @register_pipeline("DspsrPipelineSrxdev")
 class Db2Dbnull(object):
@@ -475,7 +475,7 @@ class Db2Dbnull(object):
         self._dspsr = ExecuteCommand(cmd, resident=True)
         self._dspsr.stdout_callbacks.add(
             self._decode_capture_stdout)
-        
+
         """
         cmd = "dada_dbnull -k {0}".format(self._dada_key)
         self._dada_dbnull = ExecuteCommand(cmd, resident=True)
@@ -486,29 +486,29 @@ class Db2Dbnull(object):
         # Start up MKRECV
         ###################
         # if RUN is True:
-        cmd = "mkrecv_nt --header {} --dada-mode 4".format(dada_header_file.name)
+        cmd = "mkrecv_nt --header {} --dada-mode 4".format(
+            dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         self._mkrecv_ingest_proc = ExecuteCommand(cmd, resident=True)
         self._mkrecv_ingest_proc.stdout_callbacks.add(
             self._decode_capture_stdout)
-        
-        #cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
+
+        # cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
         #    self._dada_key,
         #    dada_header_file.name)
         #log.debug("running command: {}".format(cmd))
         #self._dada_junkdb = ExecuteCommand(cmd, resident=True)
-        #self._dada_junkdb.stdout_callbacks.add(
+        # self._dada_junkdb.stdout_callbacks.add(
         #    self._decode_capture_stdout)
-        
+
     @gen.coroutine
     def stop(self):
         """@brief stop the dada_junkdb and dspsr instances."""
         log.debug("Stopping")
         self._timeout = 10
-        
-        self._mkrecv_ingest_proc.set_finish_event()
-        yield self._mkrecv_ingest_proc.finish()
-
+        try :
+            self._mkrecv_ingest_proc.set_finish_event()
+            self._mkrecv_ingest_proc.finish()
         log.debug(
             "Waiting {} seconds for _mkrecv_ingest_proc to terminate...".format(self._timeout))
         now = time.time()
@@ -520,7 +520,8 @@ class Db2Dbnull(object):
             else:
                 yield time.sleep(0.5)
         else:
-            log.warning("Failed to terminate _mkrecv_ingest_proc in alloted time")
+            log.warning(
+                "Failed to terminate _mkrecv_ingest_proc in alloted time")
             log.info("Killing process")
             self._mkrecv_ingest_proc.kill()
         """
@@ -680,7 +681,8 @@ class Mkrecv2Db(object):
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
         tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
-        out_path = os.path.join("/media/scratch/mkrecv_testground/", source_name, tstr)
+        out_path = os.path.join(
+            "/media/scratch/mkrecv_testground/", source_name, tstr)
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(out_path)
         log.debug("Command to run: {}".format(cmd))
@@ -745,7 +747,7 @@ class Mkrecv2Db(object):
         """@brief stop the dada_junkdb and dspsr instances."""
         log.debug("Stopping")
         self._timeout = 10
-        
+
         self._dada_junkdb.set_finish_event()
         yield self._dada_junkdb.finish()
 
@@ -763,7 +765,7 @@ class Mkrecv2Db(object):
             log.warning("Failed to terminate dada_junkdb in alloted time")
             log.info("Killing process")
             self._dspsr.kill()
-        
+
         self._dspsr.set_finish_event()
         yield self._dspsr.finish()
 
@@ -810,7 +812,6 @@ class Mkrecv2Db(object):
         #        log.warning("MKRECV failed to terminate in alloted time")
         #        log.info("Killing MKRECV process")
         #        self._mkrecv_ingest_proc.kill()
-
 
 
 def main():
