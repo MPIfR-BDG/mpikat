@@ -62,7 +62,7 @@ def register_pipeline(name):
         PIPELINES[name] = cls
         return cls
     return _register
-
+"""
 
 class ExecuteCommand(object):
 
@@ -147,9 +147,6 @@ class ExecuteCommand(object):
                 if stdout != b"":
                     self.stdout = stdout
                     # print self.stdout, self._command
-                stderr = self._process.stdout.readline().rstrip("\n\r")
-                if stderr != b"":
-                    self.stdout = stderr
 
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
@@ -158,6 +155,117 @@ class ExecuteCommand(object):
                 log.error(
                     "Process exited unexpectedly with return code: {}".format(self._process.returncode))
                 self.error = True
+
+"""
+class ExecuteCommand(object):
+    def __init__(self, command):
+        self._command = command
+        self.stdout_callbacks = set()
+        self.stderr_callbacks = set()
+        self.returncode_callbacks = set()
+        self._monitor_threads = []
+        
+        self._process = None
+        self._executable_command = None
+        self._monitor_thread = None
+        self._stdout = None
+        self._stderr = None
+        self._returncode = None
+        
+        print self._command
+        log.info(self._command)
+        self._executable_command = shlex.split(self._command)
+        log.info(self._executable_command)
+
+        if RUN:
+            try:
+                self._process = Popen(self._executable_command,
+                                      stdout=PIPE,
+                                      stderr=PIPE,
+                                      bufsize=1,
+                                      universal_newlines=True)
+            except Exception as error:
+                log.exception("Error while launching command: {} with error {}".format(self._command, error))
+                self.returncode = self._command + "; RETURNCODE is: ' 1'"
+            if self._process == None:
+                self.returncode = self._command + "; RETURNCODE is: ' 1'"
+
+            # Start monitors
+            self._monitor_threads.append(threading.Thread(target=self._stdout_monitor))
+            self._monitor_threads.append(threading.Thread(target=self._stderr_monitor))
+
+            for thread in self._monitor_threads:
+                thread.start()
+
+    def __del__(self):
+        class_name = self.__class__.__name__
+
+    def finish(self):
+        if RUN:
+            for thread in self._monitor_threads:
+                thread.join()
+                
+    def stdout_notify(self):
+        for callback in self.stdout_callbacks:
+            callback(self._stdout, self)
+
+    @property
+    def stdout(self):
+        return self._stdout
+
+    @stdout.setter
+    def stdout(self, value):
+        self._stdout = value
+        self.stdout_notify()
+
+    def returncode_notify(self):
+        for callback in self.returncode_callbacks:
+            callback(self._returncode, self)
+
+    @property
+    def returncode(self):
+        return self._returncode
+
+    @returncode.setter
+    def returncode(self, value):
+        self._returncode = value
+        self.returncode_notify()
+
+    def stderr_notify(self):
+        for callback in self.stderr_callbacks:
+            callback(self._stderr, self)
+
+    @property
+    def stderr(self):
+        return self._stderr
+
+    @stderr.setter
+    def stderr(self, value):
+        self._stderr = value
+        self.stderr_notify()
+
+    
+    def _stdout_monitor(self):
+        if RUN:
+            while self._process.poll() == None:
+                stdout = self._process.stdout.readline().rstrip("\n\r")
+                if stdout != b"":
+                    self.stdout = stdout
+                    #print self.stdout, self._command
+            
+            if self._process.returncode:
+                self.returncode = self._command + "; RETURNCODE is: " + str(self._process.returncode)
+                
+    def _stderr_monitor(self):
+        if RUN:
+            while self._process.poll() == None:
+                stderr = self._process.stderr.readline().rstrip("\n\r")
+                if stderr != b"":
+                    self.stderr = self._command + "; STDERR is: " + stderr
+                    #print self.stderr
+            
+            if self._process.returncode:
+                self.returncode = self._command + "; RETURNCODE is: " + str(self._process.returncode)
 
 
 @register_pipeline("DspsrPipelineP0")
@@ -396,6 +504,12 @@ class Db2Dbnull(object):
     def _decode_capture_stdout(self, stdout, callback):
         log.debug('{}'.format(str(stdout)))
 
+    def _handle_execution_returncode(self, returncode, callback):
+        log.debug(returncode)
+
+    def _handle_execution_stderr(self, stderr, callback):
+        log.debug(stderr)
+
     @gen.coroutine
     def configure(self):
         """@brief destroy any ring buffer and create new ring buffer."""
@@ -411,6 +525,9 @@ class Db2Dbnull(object):
         self._create_ring_buffer = ExecuteCommand(cmd, resident=False)
         self._create_ring_buffer.stdout_callbacks.add(
             self._decode_capture_stdout)
+        self._create_ring_buffer.stderr_callbacks.add(
+            self._handle_execution_stderr)
+
         self._create_ring_buffer._process.wait()
         self.state = "ready"
 
@@ -438,6 +555,8 @@ class Db2Dbnull(object):
         self._create_workdir = ExecuteCommand(cmd, resident=False)
         self._create_workdir.stdout_callbacks.add(
             self._decode_capture_stdout)
+        self._create_workdir.stderr_callbacks.add(
+            self._handle_execution_stderr)
         self._create_workdir._process.wait()
         #process = safe_popen(cmd, stdout=PIPE)
         # process.wait()
@@ -475,6 +594,8 @@ class Db2Dbnull(object):
         self._dspsr = ExecuteCommand(cmd, resident=True)
         self._dspsr.stdout_callbacks.add(
             self._decode_capture_stdout)
+        self._dspsr.stderr_callbacks.add(
+            self._handle_execution_stderr)
 
         """
         cmd = "dada_dbnull -k {0}".format(self._dada_key)
@@ -492,6 +613,8 @@ class Db2Dbnull(object):
         self._mkrecv_ingest_proc = ExecuteCommand(cmd, resident=True)
         self._mkrecv_ingest_proc.stdout_callbacks.add(
             self._decode_capture_stdout)
+        self._mkrecv_ingest_proc.stderr_callbacks.add(
+            self._handle_execution_stderr)
 
         # cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
         #    self._dada_key,
