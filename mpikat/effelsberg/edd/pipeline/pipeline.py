@@ -158,20 +158,23 @@ class ExecuteCommand(object):
 
 """
 class ExecuteCommand(object):
-    def __init__(self, command):
+    def __init__(self, command,resident=False):
         self._command = command
         self.stdout_callbacks = set()
         self.stderr_callbacks = set()
         self.returncode_callbacks = set()
         self._monitor_threads = []
-        
+        self._resident = resident
         self._process = None
         self._executable_command = None
         self._monitor_thread = None
         self._stdout = None
         self._stderr = None
         self._returncode = None
-        
+
+        if not self._resident:
+            self._finish_event.set()
+
         print self._command
         log.info(self._command)
         self._executable_command = shlex.split(self._command)
