@@ -157,7 +157,7 @@ class PafWorkerServer(AsyncDeviceServer):
             try:
                 log.debug(
                     "Trying to configure pipeline {}".format(pipeline_name))
-                self._pipeline_instance.configure(config_json)
+                self._pipeline_instance.configure(config_dict)
                 #self._pipeline_instance.configure(Time.now() + 27.0*units.s, freq, "10.17.8.1")
             except Exception as error:
                 #self._pipeline_sensor_status.set_value("error")
@@ -191,7 +191,8 @@ class PafWorkerServer(AsyncDeviceServer):
         @coroutine
         def start_pipeline():
             try:
-                self._pipeline_instance.start(config_json)
+                config_dict = json.loads(config_json)
+                self._pipeline_instance.start(config_dict)
             except Exception as error:
                 msg = "Couldn't start pipeline server {}".format(error)
                 log.info("{}".format(msg))
