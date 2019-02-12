@@ -467,7 +467,7 @@ class Db2Dbnull(object):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-        """cmd = "dspsr {args} -N {source_name} {keyfile}".format(
+        cmd = "dspsr {args} -N {source_name} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             source_name=source_name,
             keyfile=dada_key_file.name)
@@ -475,13 +475,13 @@ class Db2Dbnull(object):
         self._dspsr = ExecuteCommand(cmd, resident=True)
         self._dspsr.stdout_callbacks.add(
             self._decode_capture_stdout)
+        
         """
-
         cmd = "dada_dbnull -k {0}".format(self._dada_key)
         self._dada_dbnull = ExecuteCommand(cmd, resident=True)
         self._dada_dbnull.stdout_callbacks.add(
             self._decode_capture_stdout)
-
+        """
         ###################
         # Start up MKRECV
         ###################
@@ -523,7 +523,7 @@ class Db2Dbnull(object):
             log.warning("Failed to terminate _mkrecv_ingest_proc in alloted time")
             log.info("Killing process")
             self._mkrecv_ingest_proc.kill()
-
+        """
         self._dada_dbnull.set_finish_event()
         yield self._dada_dbnull.finish()
 
@@ -560,7 +560,7 @@ class Db2Dbnull(object):
             log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
             self._dspsr.kill()
-            """
+        self.state = "ready"
 
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
