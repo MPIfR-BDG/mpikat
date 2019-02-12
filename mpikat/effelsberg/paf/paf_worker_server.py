@@ -161,7 +161,7 @@ class PafWorkerServer(AsyncDeviceServer):
                 self._pipeline_sensor_name.set_value("")
                 msg = "Couldn't start configure pipeline instance {}".format(str(error))
                 log.error("{}".format(msg))
-                req.reply("fail", msg)                    
+                req.reply("fail", msg)
             msg = "pipeline instance {} configured".format(self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
             req.reply("ok", msg)
