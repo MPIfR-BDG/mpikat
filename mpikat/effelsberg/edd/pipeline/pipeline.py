@@ -161,10 +161,10 @@ class ExecuteCommand(object):
                 stderr = self._process.stderr.readline().rstrip("\n\r")
                 if stdout != b"":
                     self.stdout = stdout
-                    # print self.stdout, self._command
+                    print self.stdout, self._command
                 if stderr != b"":
-                    self.stderr = stderr    
-
+                    self.stderr = stderr
+                    print self.stderr
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
                 # the event is set, the command does not successfully finish
