@@ -486,7 +486,7 @@ class Db2Dbnull(object):
         # Start up MKRECV
         ###################
         # if RUN is True:
-        cmd = "mkrecv --header {} --dada-mode 4".format(dada_header_file.name)
+        cmd = "mkrecv_nt --header {} --dada-mode 4".format(dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         self._mkrecv_ingest_proc = ExecuteCommand(cmd, resident=True)
         self._mkrecv_ingest_proc.stdout_callbacks.add(
