@@ -171,7 +171,8 @@ class PafWorkerServer(AsyncDeviceServer):
             log.info("{}".format(msg))
             req.reply("ok", msg)
         if self._pipeline_sensor_status.value() == "idle":
-            pipeline_name = config_json["mode"]
+            config_dict = json.loads(config_json)
+            pipeline_name = config_dict["mode"]
             self.ioloop.add_callback(configure_pipeline)
             raise AsyncReply
         else:
