@@ -124,7 +124,8 @@ class PafWorkerServer(AsyncDeviceServer):
 
     @request(Str(),Str(),Str())
     @return_reply(Str())
-    def request_configure(self, req, pipeline_name, freq, ip):
+    #def request_configure(self, req, pipeline_name, freq, ip):
+    def request_configure(self, req, config_json):    
         """
         @brief      Configure pipeline
 
@@ -153,18 +154,19 @@ class PafWorkerServer(AsyncDeviceServer):
             self._pipeline_instance.callbacks.add(self.state_change)
             try:
                 log.debug("Trying to configure pipeline {}".format(pipeline_name))
-                self._pipeline_instance.configure(Time.now() + 27.0*units.s, freq, "10.17.8.1")
+                self._pipeline_instance.configure(config_json)
+                #self._pipeline_instance.configure(Time.now() + 27.0*units.s, freq, "10.17.8.1")
             except Exception as error:
                 self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
                 msg = "Couldn't start configure pipeline instance {}".format(str(error))
                 log.error("{}".format(msg))
-                req.reply("fail", msg)                
-            #else:    
+                req.reply("fail", msg)                    
             msg = "pipeline instance {} configured".format(self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
             req.reply("ok", msg)
         if self._pipeline_sensor_status.value() == "idle":
+            pipeline_name = config_json["products"][0]['pipeline']
             self.ioloop.add_callback(configure_pipeline)
             raise AsyncReply
         else:
