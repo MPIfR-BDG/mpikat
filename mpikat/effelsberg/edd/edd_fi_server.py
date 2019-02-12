@@ -22,6 +22,7 @@ class StopEventException(Exception):
 class FitsWriterNotConnected(Exception):
     pass
 
+
 class FitsWriterConnectionManager(Thread):
     """
     A class to handle TCP connections to the APEX FITS writer.
@@ -31,7 +32,6 @@ class FitsWriterConnectionManager(Thread):
     and made available to any system that produces FITS writer compatible
     data.
     """
-
     def __init__(self, ip, port):
         """
         @breif    Construct a new instance
@@ -398,7 +398,6 @@ class CaptureData(Thread):
 
 
 class RoachPacket(object):
-
     def __init__(self, raw_data, nchannels):
         self._raw_data = raw_data
         self._nchannels = nchannels

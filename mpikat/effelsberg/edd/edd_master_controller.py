@@ -443,7 +443,6 @@ class EddMasterController(MasterController):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-            req.reply(*response)
         self.ioloop.add_callback(stop_wrapper)
         raise AsyncReply
 
