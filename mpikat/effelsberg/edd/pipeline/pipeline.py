@@ -486,12 +486,12 @@ class Db2Dbnull(object):
         # Start up MKRECV
         ###################
         # if RUN is True:
-        cmd = "mkrecv --header {} --dada-mode 4".format(dada_header_file.name)
-        self._mkrecv_ingest_proc = ExecuteCommand(cmd, resident=True)
-        self._mkrecv_ingest_proc.stdout_callbacks.add(
-            self._decode_capture_stdout)
+        #cmd = "mkrecv --header {} --dada-mode 4".format(dada_header_file.name)
+        #self._mkrecv_ingest_proc = ExecuteCommand(cmd, resident=True)
+        #self._mkrecv_ingest_proc.stdout_callbacks.add(
+        #    self._decode_capture_stdout)
 
-        """
+        
         cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
             self._dada_key,
             dada_header_file.name)
@@ -499,13 +499,13 @@ class Db2Dbnull(object):
         self._dada_junkdb = ExecuteCommand(cmd, resident=True)
         self._dada_junkdb.stdout_callbacks.add(
             self._decode_capture_stdout)
-        """
+        
     @gen.coroutine
     def stop(self):
         """@brief stop the dada_junkdb and dspsr instances."""
         log.debug("Stopping")
         self._timeout = 10
-
+        """
         self._mkrecv_ingest_proc.set_finish_event()
         yield self._mkrecv_ingest_proc.finish()
 
@@ -523,6 +523,26 @@ class Db2Dbnull(object):
             log.warning("Failed to terminate _mkrecv_ingest_proc in alloted time")
             log.info("Killing process")
             self._mkrecv_ingest_proc.kill()
+        """
+        self._dada_junkdb.set_finish_event()
+        yield self._dada_junkdb.finish()
+
+        log.debug(
+            "Waiting {} seconds for _mkrecv_ingest_proc to terminate...".format(self._timeout))
+        now = time.time()
+        while time.time() - now < self._timeout:
+            retval = self._dada_junkdb._process.poll()
+            if retval is not None:
+                log.info("Returned a return value of {}".format(retval))
+                break
+            else:
+                yield time.sleep(0.5)
+        else:
+            log.warning("Failed to terminate _mkrecv_ingest_proc in alloted time")
+            log.info("Killing process")
+            self._dada_junkdb.kill()
+
+
         """
         self._dada_dbnull.set_finish_event()
         yield self._dada_dbnull.finish()
