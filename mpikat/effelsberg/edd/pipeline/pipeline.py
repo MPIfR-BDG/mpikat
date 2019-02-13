@@ -58,7 +58,7 @@ CONFIG = {
 }
 
 sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
-           "scannum": 0, "subscannum": 1, "timestamp": Time.now().isot}
+           "scannum": 0, "subscannum": 1}
 
 
 def register_pipeline(name):
@@ -337,7 +337,7 @@ class Mkrecv2Db2Dspsr(object):
         header["source_name"] = source_name
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
-        tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
+        tstr = Time.now().isot.replace(":", "-")  # to fix docker bug
         out_path = os.path.join("/beegfs/jason/", source_name, tstr)
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(out_path)
@@ -546,7 +546,7 @@ class Db2Dbnull(object):
         header["source_name"] = source_name
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
-        tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
+        tstr = Time.now().isot.replace(":", "-")  # to fix docker bug
         in_path = os.path.join("/data/jason/", source_name, tstr, "raw_data")
         out_path = os.path.join(
             "/data/jason/", source_name, tstr, "combined_data")
@@ -654,7 +654,26 @@ class Db2Dbnull(object):
             log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
             self._dspsr.kill()
+
+        self._archive_directory_monitor.set_finish_event()
+        yield self._archive_directory_monitor.finish()
+
+        log.debug(
+            "Waiting {} seconds for _archive_directory_monitor to terminate...".format(self._timeout))
+        now = time.time()
+        while time.time() - now < self._timeout:
+            retval = self._dspsr._process.poll()
+            if retval is not None:
+                log.info("Returned a return value of {}".format(retval))
+                break
+            else:
+                yield time.sleep(0.5)
+        else:
+            log.warning("Failed to terminate DSPSR in alloted time")
+            log.info("Killing process")
+            self._archive_directory_monitor.kill()
         self.state = "ready"
+
 
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
