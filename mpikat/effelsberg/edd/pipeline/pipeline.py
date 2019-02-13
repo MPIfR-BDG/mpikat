@@ -145,7 +145,7 @@ class ExecuteCommand(object):
             while self._process.poll() == None:
                 # print "trying to assign the stdout"
                 stdout = self._process.stderr.readline().rstrip("\n\r")
-                stderr = self._process.stdout.readline().rstrip("\n\r")
+                #stderr = self._process.stdout.readline().rstrip("\n\r")
                 if stdout != b"":
                     self.stdout = stdout
                     # print self.stdout, self._command
@@ -451,6 +451,7 @@ class Db2Dbnull(object):
         #process = safe_popen(cmd, stdout=PIPE)
         # process.wait()
         os.chdir(out_path)
+        log.debug("Current working directory: {}".format(os.getcwd()))
         log.debug("Change to workdir: {}".format(os.getcwd()))
         dada_header_file = tempfile.NamedTemporaryFile(
             mode="w",
