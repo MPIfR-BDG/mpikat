@@ -145,6 +145,7 @@ class ExecuteCommand(object):
             while self._process.poll() == None:
                 # print "trying to assign the stdout"
                 stdout = self._process.stderr.readline().rstrip("\n\r")
+                stderr = self._process.stdout.readline().rstrip("\n\r")
                 if stdout != b"":
                     self.stdout = stdout
                     # print self.stdout, self._command
