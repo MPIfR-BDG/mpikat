@@ -205,7 +205,7 @@ class PafWorkerServer(AsyncDeviceServer):
             try:
                 config = json.loads(config_json)
                 utc_start_process = Time.now()
-                source_name = config["source_name"]
+                source_name = config["source-name"]
                 ra = config["ra"]
                 dec = config["dec"]
                 self._pipeline_instance.start(utc_start_process, source_name, ra, dec)
