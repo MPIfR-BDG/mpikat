@@ -520,8 +520,8 @@ class Db2Dbnull(object):
         self._dspsr = ExecuteCommand(cmd, resident=True)
         self._dspsr.stdout_callbacks.add(
             self._decode_capture_stdout)
-#        self._dspsr.stderr_callbacks.add(
-#            self._handle_execution_stderr)
+        self._dspsr.stderr_callbacks.add(
+            self._handle_execution_stderr)
 
         """
         cmd = "dada_dbnull -k {0}".format(self._dada_key)
