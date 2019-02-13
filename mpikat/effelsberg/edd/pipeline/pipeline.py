@@ -189,6 +189,76 @@ class ExecuteCommand(object):
                 self.error = True
 
 
+class ArchiveAdder(FileSystemEventHandler):
+
+    def __init__(self, output_dir):
+        super(ArchiveAdder, self).__init__()
+        self.output_dir = output_dir
+        self.first_file = True
+
+    def _syscall(self, cmd):
+        log.debug("Calling: {}".format(cmd))
+        proc = Popen(shlex.split(cmd), stdout=PIPE, stderr=PIPE)
+        proc.wait()
+        if proc.returncode != 0:
+            log.error(proc.stderr.read())
+        else:
+            log.debug("Call success")
+
+    def fscrunch(self, fname):
+        self._syscall("pam -F -e fscrunch {}".format(fname))
+        return fname.replace(".ar", ".fscrunch")
+
+    def process(self, fname):
+        fscrunch_fname = self.fscrunch(fname)
+        if self.first_file:
+            log.debug("First file in set. Copying to sum.?scrunch.")
+            shutil.copy2(fscrunch_fname, "sum.fscrunch")
+            shutil.copy2(fname, "sum.tscrunch")
+            self.first_file = False
+        else:
+            self._syscall("psradd -T -inplace sum.tscrunch {}".format(fname))
+            self._syscall(
+                "psradd -inplace sum.fscrunch {}".format(fscrunch_fname))
+        os.remove(fscrunch_fname)
+        shutil.copy2("sum.fscrunch", self.output_dir)
+        shutil.copy2("sum.tscrunch", self.output_dir)
+
+    def on_created(self, event):
+        log.debug("New file created: {}".format(event.src_path))
+        try:
+            fname = event.src_path
+            if fname.endswith(".ar"):
+                log.debug("Passing archive file for processing")
+                self.process(fname)
+        except Exception as error:
+            log.error(error)
+
+def psrchive_monitor(input_dir,output_dir,handler):
+    observer = Observer()
+    observer.daemon = False
+    log.debug("Input directory: {}".format(input_dir))
+    log.debug("Output directory: {}".format(output_dir))
+    log.debug("Setting up ArchiveAdder handler")
+    observer.schedule(handler, input_dir, recursive=False)
+
+    def shutdown(sig,func):
+        log.debug("Signal handler called on signal: {}".format(sig))
+        observer.stop()
+        observer.join()
+        sys.exit()
+
+    log.debug("Setting SIGTERM and SIGINT handler")
+    signal.signal(signal.SIGTERM,shutdown)
+    signal.signal(signal.SIGINT,shutdown)
+
+    log.debug("Starting directory monitor")
+    observer.start()
+    log.debug("Parent thread entering 1 second polling loop")
+    while not observer.stopped_event.wait(1):
+        pass
+
+
 @register_pipeline("DspsrPipelineP0")
 class Mkrecv2Db2Dspsr(object):
     """@brief dspsr pipeline class."""
@@ -467,17 +537,25 @@ class Db2Dbnull(object):
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
         tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
-        out_path = os.path.join("/data/jason/", source_name, tstr)
+        in_path = os.path.join("/data/jason/", source_name, tstr, "raw_data")
+        out_path = os.path.join("/data/jason/", source_name, tstr, "combined_data")
         log.debug("Creating directories")
-        cmd = "mkdir -p {}".format(out_path)
+        cmd = "mkdir -p {}".format(in_path)
         log.debug("Command to run: {}".format(cmd))
         log.debug("Current working directory: {}".format(os.getcwd()))
-        self._create_workdir = ExecuteCommand(cmd, resident=False)
-        self._create_workdir.stdout_callbacks.add(
+        self._create_workdir_in_path = ExecuteCommand(cmd, resident=False)
+        self._create_workdir_in_path.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._create_workdir_in_path._process.wait()
+        cmd = "mkdir -p {}".format(out_path)
+        log.debug("Command to run: {}".format(cmd))
+        self._create_workdir_out_path = ExecuteCommand(cmd, resident=False)
+        self._create_workdir_out_path.stdout_callbacks.add(
             self._decode_capture_stdout)
         self._create_workdir._process.wait()
-        os.chdir(out_path)
+        os.chdir(in_path)
         log.debug("Change to workdir: {}".format(os.getcwd()))
+        log.debug("Current working directory: {}".format(os.getcwd()))
         dada_header_file = tempfile.NamedTemporaryFile(
             mode="w",
             prefix="edd_dada_header_",
@@ -517,6 +595,10 @@ class Db2Dbnull(object):
         self._mkrecv_ingest_proc = ExecuteCommand(cmd, resident=True)
         self._mkrecv_ingest_proc.stdout_callbacks.add(
             self._decode_capture_stdout)
+
+        #handler = ArchiveAdder(args.output_dir)
+        #psrchive_monitor(args.input_dir,args.output_dir,handler)
+
 
     @gen.coroutine
     def stop(self):
