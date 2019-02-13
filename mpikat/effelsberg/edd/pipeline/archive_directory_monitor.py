@@ -51,6 +51,7 @@ class ArchiveAdder(FileSystemEventHandler):
         log.info("New file created: {}".format(event.src_path))
         try:
             fname = event.src_path
+            log.info(fname.find('.ar.') != -1)
             if fname.find('.ar.') != -1:
                 log.info(
                     "Passing archive file {} for processing".format(fname[0:-9]))
