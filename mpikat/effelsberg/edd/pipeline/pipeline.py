@@ -3,11 +3,10 @@ This pipeline captures data from the network and passes it to a dada ring buffer
 """
 import logging
 import tempfile
-import datetime
 from tornado import gen
 import os
 import time
-from datetime import datetime
+from astropy.time import Time
 from subprocess import PIPE, Popen
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
 import shlex
@@ -54,7 +53,7 @@ CONFIG = {
 }
 
 sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
-           "scannum": 0, "subscannum": 1, "timestamp": str(datetime.now().time())}
+           "scannum": 0, "subscannum": 1, "timestamp": Time.now().isot}
 
 
 def register_pipeline(name):
