@@ -91,10 +91,9 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
     @raise_or_ok
     def request_pafbe_cmdbeamposfile(self, req, filename):
         """
-        @brief      Set
+        @brief      Set the beam positions
 
         @param      req      An ScpiRequest object
-        @param      mode     A
         """
         self._config['beam_pos_fname'] = filename
 

@@ -167,6 +167,7 @@ class PafMasterController(MasterController):
             try:
                 yield self.configure(config_json)
             except Exception as error:
+                log.exception(str(error))
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
@@ -248,6 +249,7 @@ class PafMasterController(MasterController):
             try:
                 yield self.capture_start()
             except Exception as error:
+                log.exception(str(error))
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")

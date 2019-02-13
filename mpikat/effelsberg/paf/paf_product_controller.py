@@ -228,7 +228,7 @@ class PafProductController(object):
         configure_futures = []
         for server in servers:
             self._servers.append(server)
-            configure_futures.append(server._client.req.configure(config_json))
+            configure_futures.append(server._client.req.configure(config_json, timeout=60.0))
         for future in configure_futures:
             result = yield future
             if not result.reply.reply_ok():
@@ -256,7 +256,7 @@ class PafProductController(object):
         self.log.debug("Product moved to 'starting' state")
         start_futures = []
         for server in self._servers:
-            start_futures.append(server._client.req.capture_start(status_json))
+            start_futures.append(server._client.req.start(status_json))
         for future in start_futures:
             result = yield future
         self._state_sensor.set_value(self.CAPTURING)
@@ -270,7 +270,7 @@ class PafProductController(object):
         self.log.debug("Product moved to 'stopping' state")
         stop_futures = []
         for server in self._servers:
-            stop_futures.append(server._client.req.capture_stop())
+            stop_futures.append(server._client.req.stop())
         for future in stop_futures:
             result = yield future
         self._state_sensor.set_value(self.READY)

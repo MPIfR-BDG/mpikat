@@ -211,7 +211,7 @@ class JsonStatusServer(AsyncDeviceServer):
         out = {}
         for name, sensor in self._sensors.items():
             out[name] = str(sensor.value())
-        return ("ok", json.dumps(out))
+        return json.dumps(out)
 
     @request(Str())
     @return_reply(Str())

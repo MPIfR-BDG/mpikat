@@ -166,7 +166,6 @@ class PafWorkerServer(AsyncDeviceServer):
                 log.debug("Unpacked config: {}".format(config))
                 capture_start_time = Time.now() + 27.0*units.s
                 frequency = config["frequency"]
-
                 self._pipeline_instance.configure(
                     capture_start_time,
                     frequency,
@@ -204,8 +203,12 @@ class PafWorkerServer(AsyncDeviceServer):
         @coroutine
         def start_pipeline():
             try:
-                config_dict = json.loads(config_json)
-                self._pipeline_instance.start(config_dict)
+                config = json.loads(config_json)
+                utc_start_process = Time.now()
+                source_name = config["source_name"]
+                ra = config["ra"]
+                dec = config["dec"]
+                self._pipeline_instance.start(utc_start_process, source_name, ra, dec)
             except Exception as error:
                 msg = "Couldn't start pipeline server {}".format(error)
                 log.info("{}".format(msg))
