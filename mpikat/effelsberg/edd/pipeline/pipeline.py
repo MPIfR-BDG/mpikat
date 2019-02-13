@@ -146,7 +146,7 @@ class ExecuteCommand(object):
                 # print "trying to assign the stdout"
                 stdout = self._process.stdout.readline().rstrip("\n\r")
                 if stdout != b"":
-                    if not stdout.startswith("heap") & not stdout.startswith("mark"):
+                    if (not stdout.startswith("heap")) & (not stdout.startswith("mark")):
                         self.stdout = stdout
                     # print self.stdout, self._command
 
