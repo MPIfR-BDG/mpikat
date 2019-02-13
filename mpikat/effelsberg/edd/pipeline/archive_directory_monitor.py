@@ -47,7 +47,7 @@ class ArchiveAdder(FileSystemEventHandler):
         log.info("New file created: {}".format(event.src_path))
         try:
             fname = event.src_path
-            if fname.endswith(".ar"):
+            if fname.startswith("1970"):
                 log.info("Passing archive file for processing")
                 self.process(fname)
         except Exception as error:
