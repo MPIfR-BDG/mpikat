@@ -2,13 +2,18 @@
 This pipeline captures data from the network and passes it to a dada ring buffer for processing by DSPSR.
 """
 import logging
+import signal
 import tempfile
+import sys
+import shutil
 from tornado import gen
 import os
 import time
 from astropy.time import Time
 from subprocess import PIPE, Popen
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 import shlex
 import threading
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
