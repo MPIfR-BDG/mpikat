@@ -145,8 +145,10 @@ class ExecuteCommand(object):
             while self._process.poll() == None:
                 # print "trying to assign the stdout"
                 stdout = self._process.stdout.readline().rstrip("\n\r")
-                if stdout != b"" & ((not stdout.startswith("heap")) & (not stdout.startswith("mark"))):
-                    self.stdout = stdout
+                if stdout != b"":
+                    if not stdout.startswith("heap"):
+#& (not stdout.startswith("mark")))
+                        self.stdout = stdout
                     # print self.stdout, self._command
 
             if not self._finish_event.isSet():
