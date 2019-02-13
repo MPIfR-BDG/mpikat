@@ -613,9 +613,6 @@ class Db2Dbnull(object):
         self._archive_directory_monitor.stdout_callbacks.add(
             self._decode_capture_stdout)
 
-        psrplot -p time -D fscrunch.png/png sum.fscrunch 
-        psrplot -p freq -D tscrunch.png/png sum.tscrunch
-
 
     @gen.coroutine
     def stop(self):
