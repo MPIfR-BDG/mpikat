@@ -417,7 +417,6 @@ class Db2Dbnull(object):
             self._decode_capture_stdout)
 #        self._create_ring_buffer.stderr_callbacks.add(
 #            self._handle_execution_stderr)
-
         self._create_ring_buffer._process.wait()
         self.state = "ready"
 
@@ -447,7 +446,7 @@ class Db2Dbnull(object):
             self._decode_capture_stdout)
 #        self._create_workdir.stderr_callbacks.add(
 #            self._handle_execution_stderr)
-        self._create_workdir._process.wait()
+        #self._create_workdir._process.wait()
         #process = safe_popen(cmd, stdout=PIPE)
         # process.wait()
         os.chdir(out_path)
