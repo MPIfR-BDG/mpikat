@@ -177,6 +177,7 @@ class ExecuteCommand(object):
                 stdout = self._process.stdout.read()
                 log.error(
                     "Process exited unexpectedly with return code: {}".format(self._process.returncode))
+                log.error("exited unexpectedly, stdout = {}".format(stdout))
                 self.error = True
 
     def _stderr_monitor(self):
@@ -191,6 +192,7 @@ class ExecuteCommand(object):
                 stderr = self._process.stderr.read()
                 log.error(
                     "Process exited unexpectedly with return code: {}".format(self._process.returncode))
+                log.error("exited unexpectedly, stderr = {}".format(stderr))
                 self.error = True
 
 
