@@ -74,7 +74,7 @@ HEAP_SIZE    262144
 NINDICES    1   # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
 # The first index item is the running timestamp
 IDX1_ITEM   0      # First item of a SPEAD heap
-IDX1_STEP   8192   # The difference between successive timestamps
+IDX1_STEP   1048576   # The difference between successive timestamps
 
 # The second index item distinguish between both polarizations
 #IDX2_ITEM   1
