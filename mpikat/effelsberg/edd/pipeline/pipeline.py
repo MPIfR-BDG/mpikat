@@ -602,8 +602,12 @@ class Db2Dbnull(object):
         self._mkrecv_ingest_proc = ExecuteCommand(cmd, resident=True)
         self._mkrecv_ingest_proc.stdout_callbacks.add(
             self._decode_capture_stdout)
-        #handler = ArchiveAdder(out_path)
-        #psrchive_monitor(in_path, out_path, handler)
+
+        cmd = "python archive_directory_monitor.py -i {} -o {}".format(in_path, out_path)
+        log.debug("Running command: {0}".format(cmd))
+        self._archive_directory_monitor = ExecuteCommand(cmd, resident=True)
+        self._archive_directory_monitor.stdout_callbacks.add(
+            self._decode_capture_stdout)
 
     @gen.coroutine
     def stop(self):
