@@ -423,10 +423,8 @@ class Db2Dbnull(object):
         self._mkrecv_ingest_proc = None
 
     def _decode_capture_stdout(self, stdout, callback):
-        if not stdout.startswith("STAT"):
-            log.debug('{}'.format(str(stdout)))
-        else:
-            log.debug('{}'.format(str(stdout)))
+        log.debug('{}'.format(str(stdout)))
+
     def _handle_execution_returncode(self, returncode, callback):
         log.debug(returncode)
 
