@@ -97,16 +97,10 @@ class ExecuteCommand(object):
                 self.error = True
             if self._process == None:
                 self._error = True
-            #self._monitor_thread = threading.Thread(target=self._execution_monitor)
+            self._monitor_thread = threading.Thread(target=self._execution_monitor)
             # self._monitor_threads.append(threading.Thread(target=self._stderr_monitor))
 
-            self._monitor_threads.append(threading.Thread(
-                target=self.self._execution_monitor))
-            #self._monitor_threads.append(
-            #    threading.Thread(target=self._stderr_monitor))
-
-            for thread in self._monitor_threads:
-                thread.start()
+            self._monitor_thread.start()
 
     def __del__(self):
         class_name = self.__class__.__name__
