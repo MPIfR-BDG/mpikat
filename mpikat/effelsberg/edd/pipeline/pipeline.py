@@ -54,7 +54,7 @@ CONFIG = {
 }
 
 sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
-           "scannum": 0, "subscannum": 1, "timestamp": str(datetime.now().time())}
+           "scannum": 0, "subscannum": 1, "timestamp": str(datetime.now())}
 
 
 def register_pipeline(name):
