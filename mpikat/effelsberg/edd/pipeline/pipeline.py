@@ -69,11 +69,14 @@ class ExecuteCommand(object):
         self._command = command
         self._resident = resident
         self.stdout_callbacks = set()
+        self.stderr_callbacks = set()
         self.error_callbacks = set()
+        self._monitor_threads = []
         self._process = None
         self._executable_command = None
         self._monitor_thread = None
         self._stdout = None
+        self._stderr = None
         self._error = False
         self._finish_event = threading.Event()
 
@@ -97,9 +100,11 @@ class ExecuteCommand(object):
             if self._process == None:
                 self._error = True
             self._monitor_thread = threading.Thread(target=self._execution_monitor)
+            self._stderr_monitor_thread = threading.Thread(target=self._stderr_monitor)
             # self._monitor_threads.append(threading.Thread(target=self._stderr_monitor))
 
             self._monitor_thread.start()
+            self._stderr_monitor_thread.start()
 
     def __del__(self):
         class_name = self.__class__.__name__
@@ -124,6 +129,21 @@ class ExecuteCommand(object):
     def stdout(self, value):
         self._stdout = value
         self.stdout_notify()
+
+
+    def stderr_notify(self):
+        for callback in self.stderr_callbacks:
+            callback(self._stderr, self)
+
+    @property
+    def stderr(self):
+        return self._stderr
+
+    @stderr.setter
+    def stderr(self, value):
+        self._stderr = value
+        self.stderr_notify()
+
 
     def error_notify(self):
         for callback in self.error_callbacks:
@@ -156,6 +176,23 @@ class ExecuteCommand(object):
                 log.error(
                     "Process exited unexpectedly with return code: {}".format(self._process.returncode))
                 self.error = True
+
+    def _stderr_monitor(self):
+        if RUN:
+            while self._process.poll() == None:
+                stderr = self._process.stderr.readline().rstrip("\n\r")
+                if stderr != b"":
+                    self.stderr = stderr
+                    #print self.stderr
+            
+            if not self._finish_event.isSet():
+                # For the command which runs for a while, if it stops before
+                # the event is set, the command does not successfully finish
+                stderr = self._process.stderr.read()
+                log.error(
+                    "Process exited unexpectedly with return code: {}".format(self._process.returncode))
+                self.error = True
+
 
 @register_pipeline("DspsrPipelineP0")
 class Mkrecv2Db2Dspsr(object):
