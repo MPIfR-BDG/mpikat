@@ -24,16 +24,12 @@ import coloredlogs
 import json
 import tornado
 import signal
-import time
-import numpy as np
-from datetime import datetime
 from optparse import OptionParser
-from tornado.gen import Return, coroutine
-from tornado.iostream import IOStream
+from tornado.gen import coroutine
 from katcp import Sensor, AsyncReply
-from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
+from katcp.kattypes import request, return_reply, Str
 from mpikat.core.master_controller import MasterController
-from mpikat.core.exceptions import ProductLookupError
+from mpikat.effelsberg.status_server import JsonStatusServer
 from mpikat.effelsberg.paf.paf_product_controller import PafProductController
 from mpikat.effelsberg.paf.paf_worker_wrapper import PafWorkerPool
 from mpikat.effelsberg.paf.paf_scpi_interface import PafScpiInterface
@@ -46,10 +42,13 @@ log = logging.getLogger("mpikat.paf_master_controller")
 
 PAF_PRODUCT_ID = "paf0"
 SCPI_BASE_ID = "PAFBE"
-PAF_REQUIRED_KEYS = ["nbeams", "nbands", "band_offset", "mode", "frequency", "write_filterbank"]
+PAF_REQUIRED_KEYS = ["nbeams", "nbands", "band_offset",
+                     "mode", "frequency", "write_filterbank"]
+
 
 class PafConfigurationError(Exception):
     pass
+
 
 class PafMasterController(MasterController):
     """This is the main KATCP interface for the PAF
@@ -78,14 +77,21 @@ class PafMasterController(MasterController):
         self._control_mode = self.KATCP
         self._scpi_ip = scpi_ip
         self._scpi_port = scpi_port
+        self._status_server = JsonStatusServer(ip, 0)
 
     def start(self):
         super(PafMasterController, self).start()
-        self._scpi_interface = PafScpiInterface(self, self._scpi_ip, self._scpi_port, self.ioloop)
+        self._status_server.start()
+        address = self._status_server.bind_address
+        log.info("Status server started at {}".format(address))
+        self._status_server_sensor.set_value(address)
+        self._scpi_interface = PafScpiInterface(
+            self, self._scpi_ip, self._scpi_port, self.ioloop)
 
     def stop(self):
         self._scpi_interface.stop()
         self._scpi_interface = None
+        self._status_server.stop()
         super(PafMasterController, self).stop()
 
     def setup_sensors(self):
@@ -96,6 +102,13 @@ class PafMasterController(MasterController):
             default="",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._paf_config_sensor)
+
+        self._status_server_sensor = Sensor.address(
+            "status-server-address",
+            description="The address of the status server",
+            default="",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._status_server_sensor)
 
     @property
     def katcp_control_mode(self):
@@ -127,12 +140,28 @@ class PafMasterController(MasterController):
         """
         @brief      Configure PAF to receive and process data
 
-        @param      req               A katcp request object
+        @param      req           A katcp request object
+        @param      config_json   A JSON object containing configuration
+                                  information.
+
+        @note  The JSON configuration object should be of the form:
+               @code
+               {
+                   "mode": "Search1Beam",
+                   "nbands": 48,
+                   "frequency": 1340.5,
+                   "nbeams": 18,
+                   "band_offset": 0,
+                   "write_filterbank": 0
+               }
+               @endcode
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
         if not self.katcp_control_mode:
-            return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
+            return ("fail", "Master controller is in control mode: {}".format(
+                self._control_mode))
+
         @coroutine
         def configure_wrapper():
             try:
@@ -150,23 +179,28 @@ class PafMasterController(MasterController):
         log.debug("Configuration string: '{}'".format(config_json))
         if self._products:
             log.error("PAF already has a configured data product")
-            raise PafConfigurationError("PAF already has a configured data product")
+            raise PafConfigurationError(
+                "PAF already has a configured data product")
         config_dict = json.loads(config_json)
         for key in PAF_REQUIRED_KEYS:
             if key not in config_dict:
-                message = "No value set for required configuration parameter '{}'".format(key)
+                message = "No value set for required configuration parameter '{}'".format(
+                    key)
                 log.error(message)
                 raise PafConfigurationError(message)
-        self._products[PAF_PRODUCT_ID] = PafProductController(self, PAF_PRODUCT_ID)
+        self._products[PAF_PRODUCT_ID] = PafProductController(
+            self, PAF_PRODUCT_ID)
         self._paf_config_sensor.set_value(config_json)
         self._update_products_sensor()
         try:
             yield self._products[PAF_PRODUCT_ID].configure(config_json)
         except Exception as error:
-            log.error("Failed to configure product with error: {}".format(str(error)))
+            log.error(
+                "Failed to configure product with error: {}".format(str(error)))
             raise PafConfigurationError(str(error))
         else:
-            log.debug("Configured PAF instance with ID: {}".format(PAF_PRODUCT_ID))
+            log.debug(
+                "Configured PAF instance with ID: {}".format(PAF_PRODUCT_ID))
 
     @request()
     @return_reply()
@@ -174,18 +208,13 @@ class PafMasterController(MasterController):
         """
         @brief      Deconfigure the PAF instance.
 
-        @note       Deconfigure the PAF instance. If PAF uses katportalclient to get information
-                    from CAM, then it should disconnect at this time.
-
         @param      req               A katcp request object
-
-        @param      PAF_PRODUCT_ID        This is a name for the data product, used to track which subarray is being deconfigured.
-                                      For example "array_1_bc856M4k".
 
         @return     katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]
         """
         if not self.katcp_control_mode:
             return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
+
         @coroutine
         def deconfigure_wrapper():
             try:
@@ -211,10 +240,14 @@ class PafMasterController(MasterController):
         """ arse """
         if not self.katcp_control_mode:
             return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
+
         @coroutine
         def start_wrapper():
+            status_json = self._status_server.as_json()
+            log.info("Passing the status info to product:\n{}".format(
+                json.loads(status_json)))
             try:
-                yield self.capture_start()
+                yield self.capture_start(status_json)
             except Exception as error:
                 req.reply("fail", str(error))
             else:
@@ -238,6 +271,7 @@ class PafMasterController(MasterController):
         """
         if not self.katcp_control_mode:
             return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
+
         @coroutine
         def stop_wrapper():
             try:
@@ -246,7 +280,6 @@ class PafMasterController(MasterController):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-            req.reply(*response)
         self.ioloop.add_callback(stop_wrapper)
         raise AsyncReply
 
@@ -255,26 +288,28 @@ class PafMasterController(MasterController):
         product = self._get_product(PAF_PRODUCT_ID)
         yield product.capture_stop()
 
+
 @coroutine
 def on_shutdown(ioloop, server):
     log.info("Shutting down server")
     yield server.stop()
     ioloop.stop()
 
+
 def main():
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('-H', '--host', dest='host', type=str,
-        help='Host interface to bind to')
-    parser.add_option('-p', '--port', dest='port', type=long,
-        help='Port number to bind to')
+                      help='Host interface to bind to')
+    parser.add_option('-p', '--port', dest='port', type=int,
+                      help='Port number to bind to')
     parser.add_option('', '--scpi-interface', dest='scpi_interface', type=str,
-        help='The interface to listen on for SCPI requests',
-        default="")
-    parser.add_option('', '--scpi-port', dest='scpi_port', type=long,
-        help='The port number to listen on for SCPI requests')
-    parser.add_option('', '--log-level',dest='log_level',type=str,
-        help='Port number of status server instance',default="INFO")
+                      help='The interface to listen on for SCPI requests',
+                      default="")
+    parser.add_option('', '--scpi-port', dest='scpi_port', type=int,
+                      help='The port number to listen on for SCPI requests')
+    parser.add_option('', '--log-level', dest='log_level', type=str,
+                      help='Port number of status server instance', default="INFO")
     (opts, args) = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
@@ -285,15 +320,17 @@ def main():
     logging.getLogger('katcp').setLevel('INFO')
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting PafMasterController instance")
-    server = PafMasterController(opts.host, opts.port, opts.scpi_interface, opts.scpi_port)
+    server = PafMasterController(
+        opts.host, opts.port, opts.scpi_interface, opts.scpi_port)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
+
     def start_and_display():
         server.start()
-        log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
+        log.info(
+            "Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
     ioloop.add_callback(start_and_display)
     ioloop.start()
 
 if __name__ == "__main__":
     main()
-

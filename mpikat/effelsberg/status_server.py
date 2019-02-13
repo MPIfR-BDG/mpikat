@@ -204,10 +204,14 @@ class JsonStatusServer(AsyncDeviceServer):
     @return_reply(Str())
     def request_json(self, req):
         """request an JSON version of the status message"""
+        return ("ok", self.as_json())
+
+    def as_json(self):
+        """Convert status sensors to JSON object"""
         out = {}
         for name, sensor in self._sensors.items():
-            out[name] = sensor.value()
-        return ("ok", pack_dict(out))
+            out[name] = str(sensor.value())
+        return ("ok", json.dumps(out))
 
     @request(Str())
     @return_reply(Str())
@@ -338,9 +342,11 @@ def main():
     server = JsonStatusServer(opts.host, opts.port)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
+
     def start_and_display():
         server.start()
         log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
+
     ioloop.add_callback(start_and_display)
     ioloop.start()
 

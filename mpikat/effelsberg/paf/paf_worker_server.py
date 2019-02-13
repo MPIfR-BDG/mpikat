@@ -171,6 +171,7 @@ class PafWorkerServer(AsyncDeviceServer):
                 self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
             req.reply("ok", msg)
+
         if self._pipeline_sensor_status.value() == "idle":
             pipeline_name = config_json["products"][0]['pipeline']
             self.ioloop.add_callback(configure_pipeline)

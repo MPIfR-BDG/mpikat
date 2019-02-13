@@ -21,10 +21,12 @@ SOFTWARE.
 """
 
 import logging
+from tornado.gen import coroutine, Return
 from katcp import KATCPClientResource
 from mpikat.core.worker_pool import WorkerPool, WorkerWrapper
 
 log = logging.getLogger("mpikat.pafuse_worker_wrapper")
+
 
 class PafWorkerWrapper(WorkerWrapper):
     """Wrapper around a client to an PafWorkerServer
@@ -38,6 +40,7 @@ class PafWorkerWrapper(WorkerWrapper):
         @params port     The port number that the worker server serves on
         """
         super(PafWorkerWrapper, self).__init__(hostname, port)
+
 
 class PafWorkerPool(WorkerPool):
     def make_wrapper(self, hostname, port):
