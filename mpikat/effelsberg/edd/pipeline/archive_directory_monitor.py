@@ -45,6 +45,9 @@ class ArchiveAdder(FileSystemEventHandler):
                 "psradd -inplace sum.fscrunch {}".format(fscrunch_fname))
             self._syscall("psrplot -p time -D {}/fscrunch.png/png sum.fscrunch".format(self.output_dir))
             self._syscall("psrplot -p freq -D {}/tscrunch.png/png sum.tscrunch".format(self.output_dir))
+            #with open("{}/fscrunch.png".format(self.output_dir), "rb") as imageFile:
+            #    str = base64.b64encode(imageFile.read())
+
         os.remove(fscrunch_fname)
         shutil.copy2("sum.fscrunch", self.output_dir)
         shutil.copy2("sum.tscrunch", self.output_dir)

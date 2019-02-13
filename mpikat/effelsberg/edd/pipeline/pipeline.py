@@ -16,6 +16,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import shlex
 import threading
+from katcp import sensor
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
 
@@ -76,6 +77,7 @@ class ExecuteCommand(object):
         self.stdout_callbacks = set()
         self.stderr_callbacks = set()
         self.error_callbacks = set()
+        self.png_callbacks = set()
         self._monitor_threads = []
         self._process = None
         self._executable_command = None
@@ -84,6 +86,7 @@ class ExecuteCommand(object):
         self._stderr = None
         self._error = False
         self._finish_event = threading.Event()
+
 
         if not self._resident:
             self._finish_event.set()
@@ -110,6 +113,9 @@ class ExecuteCommand(object):
                 target=self._stderr_monitor)
             self._monitor_thread.start()
             self._stderr_monitor_thread.start()
+            self._png_monitor_thread = threading.Thread(
+                target=self._execution_monitor)
+            self._png_monitor_thread.start()
 
     def __del__(self):
         class_name = self.__class__.__name__
@@ -147,6 +153,19 @@ class ExecuteCommand(object):
     def stderr(self, value):
         self._stderr = value
         self.stderr_notify()
+
+    def stdout_notify(self):
+        for callback in self.png_callbacks:
+            callback(self._png, self)
+            
+    @property
+    def png(self):
+        return self._png
+
+    @png.setter
+    def png(self, value):
+        self._png = value
+        self.png_notify()
 
     def error_notify(self):
         for callback in self.error_callbacks:
@@ -196,77 +215,6 @@ class ExecuteCommand(object):
                 log.error("exited unexpectedly, stderr = {}".format(stderr))
                 log.error("exited unexpectedly, cmd = {}".format(self._command))
                 self.error = True
-
-
-class ArchiveAdder(FileSystemEventHandler):
-
-    def __init__(self, output_dir):
-        super(ArchiveAdder, self).__init__()
-        self.output_dir = output_dir
-        self.first_file = True
-
-    def _syscall(self, cmd):
-        log.debug("Calling: {}".format(cmd))
-        proc = Popen(shlex.split(cmd), stdout=PIPE, stderr=PIPE)
-        proc.wait()
-        if proc.returncode != 0:
-            log.error(proc.stderr.read())
-        else:
-            log.debug("Call success")
-
-    def fscrunch(self, fname):
-        self._syscall("pam -F -e fscrunch {}".format(fname))
-        return fname.replace(".ar", ".fscrunch")
-
-    def process(self, fname):
-        fscrunch_fname = self.fscrunch(fname)
-        if self.first_file:
-            log.debug("First file in set. Copying to sum.?scrunch.")
-            shutil.copy2(fscrunch_fname, "sum.fscrunch")
-            shutil.copy2(fname, "sum.tscrunch")
-            self.first_file = False
-        else:
-            self._syscall("psradd -T -inplace sum.tscrunch {}".format(fname))
-            self._syscall(
-                "psradd -inplace sum.fscrunch {}".format(fscrunch_fname))
-        os.remove(fscrunch_fname)
-        shutil.copy2("sum.fscrunch", self.output_dir)
-        shutil.copy2("sum.tscrunch", self.output_dir)
-
-    def on_created(self, event):
-        log.debug("New file created: {}".format(event.src_path))
-        try:
-            fname = event.src_path
-            if fname.endswith(".ar"):
-                log.debug("Passing archive file for processing")
-                self.process(fname)
-        except Exception as error:
-            log.error(error)
-
-
-def psrchive_monitor(input_dir, output_dir, handler):
-    observer = Observer()
-    observer.daemon = False
-    log.info("Input directory: {}".format(input_dir))
-    log.info("Output directory: {}".format(output_dir))
-    log.info("Setting up ArchiveAdder handler")
-    observer.schedule(handler, input_dir, recursive=False)
-
-    def shutdown(sig, func):
-        log.debug("Signal handler called on signal: {}".format(sig))
-        observer.stop()
-        observer.join()
-        sys.exit()
-
-    log.info("Setting SIGTERM and SIGINT handler")
-    signal.signal(signal.SIGTERM, shutdown)
-    signal.signal(signal.SIGINT, shutdown)
-
-    log.info("Starting directory monitor")
-    observer.start()
-    log.info("Parent thread entering 1 second polling loop")
-    while not observer.stopped_event.wait(1):
-        pass
 
 
 @register_pipeline("DspsrPipelineP0")
@@ -612,6 +560,9 @@ class Db2Dbnull(object):
         self._archive_directory_monitor = ExecuteCommand(cmd, resident=True)
         self._archive_directory_monitor.stdout_callbacks.add(
             self._decode_capture_stdout)
+        self._archive_directory_monitor.png_callbacks.add()
+
+
 
 
     @gen.coroutine
