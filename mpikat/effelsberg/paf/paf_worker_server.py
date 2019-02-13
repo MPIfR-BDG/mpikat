@@ -124,7 +124,6 @@ class PafWorkerServer(AsyncDeviceServer):
 
     @request(Str())
     @return_reply(Str())
-    # def request_configure(self, req, pipeline_name, freq, ip):
     def request_configure(self, req, config_json):
         """
         @brief      Configure pipeline
@@ -143,7 +142,7 @@ class PafWorkerServer(AsyncDeviceServer):
                     self._pipeline_sensor_name.value(), " ".join(PIPELINES.keys()))
                 log.error("{}".format(msg))
                 req.reply("fail", msg)
-                self._pipeline_sensor_status.set_value("error")
+                #self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
                 raise error
             log.debug(
@@ -158,10 +157,10 @@ class PafWorkerServer(AsyncDeviceServer):
             try:
                 log.debug(
                     "Trying to configure pipeline {}".format(pipeline_name))
-                self._pipeline_instance.configure(config_json)
+                self._pipeline_instance.configure(config_dict)
                 #self._pipeline_instance.configure(Time.now() + 27.0*units.s, freq, "10.17.8.1")
             except Exception as error:
-                self._pipeline_sensor_status.set_value("error")
+                #self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
                 msg = "Couldn't start configure pipeline instance {}".format(
                     str(error))
@@ -173,7 +172,8 @@ class PafWorkerServer(AsyncDeviceServer):
             req.reply("ok", msg)
 
         if self._pipeline_sensor_status.value() == "idle":
-            pipeline_name = config_json["products"][0]['pipeline']
+            config_dict = json.loads(config_json)
+            pipeline_name = config_dict["mode"]
             self.ioloop.add_callback(configure_pipeline)
             raise AsyncReply
         else:
@@ -182,9 +182,9 @@ class PafWorkerServer(AsyncDeviceServer):
             log.info("{}".format(msg))
             return ("fail", msg)
 
-    @request(Str(), Str(), Str())
+    @request(Str())
     @return_reply(Str())
-    def request_start(self, req, source_name, ra, dec):
+    def request_start(self, req, config_json):
         """
         @brief      Start pipeline
 
@@ -192,7 +192,8 @@ class PafWorkerServer(AsyncDeviceServer):
         @coroutine
         def start_pipeline():
             try:
-                self._pipeline_instance.start(Time.now(), source_name, ra, dec)
+                config_dict = json.loads(config_json)
+                self._pipeline_instance.start(config_dict)
             except Exception as error:
                 msg = "Couldn't start pipeline server {}".format(error)
                 log.info("{}".format(msg))
@@ -228,7 +229,6 @@ class PafWorkerServer(AsyncDeviceServer):
                 msg = "Couldn't stop pipeline {}".format(error)
                 log.info("{}".format(msg))
                 req.reply("fail", msg)
-                # self._pipeline_sensor_status.set_value("error")
                 raise error
             msg = "Stopping pipeline {}".format(
                 self._pipeline_sensor_name.value())
