@@ -98,8 +98,10 @@ class PafWorkerServer(AsyncDeviceServer):
             initial_status=Sensor.NOMINAL)
         self.add_sensor(self._device_status)
 
-        self._pipeline_sensor_name = Sensor.string("pipeline-name",
-                                                   "the name of the pipeline", "")
+        self._pipeline_sensor_name = Sensor.string(
+            "pipeline-name",
+            "the name of the pipeline",
+            "")
         self.add_sensor(self._pipeline_sensor_name)
 
         self._pipeline_sensor_status = Sensor.discrete(
@@ -110,16 +112,18 @@ class PafWorkerServer(AsyncDeviceServer):
             initial_status=Sensor.NOMINAL)
         self.add_sensor(self._pipeline_sensor_status)
 
-        self._ip_address = Sensor.string("ip",
-                                         description="the ip address of the node controller",
-                                         default=os.environ['PAF_NODE_IP'],
-                                         initial_status=Sensor.NOMINAL)
+        self._ip_address = Sensor.string(
+            "ip",
+            description="the ip address of the node controller",
+            default=os.environ['PAF_NODE_IP'],
+            initial_status=Sensor.NOMINAL)
         self.add_sensor(self._ip_address)
 
-        self._mac_address = Sensor.string("mac",
-                                          description="the mac address of the node controller",
-                                          default=os.environ['PAF_NODE_MAC'],
-                                          initial_status=Sensor.NOMINAL)
+        self._mac_address = Sensor.string(
+            "mac",
+            description="the mac address of the node controller",
+            default=os.environ['PAF_NODE_MAC'],
+            initial_status=Sensor.NOMINAL)
         self.add_sensor(self._mac_address)
 
     @request(Str())
@@ -157,8 +161,16 @@ class PafWorkerServer(AsyncDeviceServer):
             try:
                 log.debug(
                     "Trying to configure pipeline {}".format(pipeline_name))
-                self._pipeline_instance.configure(config_dict)
-                #self._pipeline_instance.configure(Time.now() + 27.0*units.s, freq, "10.17.8.1")
+                #self._pipeline_instance.configure(config_dict)
+                config = json.loads(config_json)
+                log.debug("Unpacked config: {}".format(config))
+                capture_start_time = Time.now() + 27.0*units.s
+                frequency = config["frequency"]
+
+                self._pipeline_instance.configure(
+                    capture_start_time,
+                    frequency,
+                    self._ip_address.value())
             except Exception as error:
                 #self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")

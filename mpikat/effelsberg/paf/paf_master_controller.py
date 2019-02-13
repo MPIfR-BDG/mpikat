@@ -213,7 +213,8 @@ class PafMasterController(MasterController):
         @return     katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]
         """
         if not self.katcp_control_mode:
-            return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
+            return ("fail", "Master controller is in control mode: {}".format(
+                self._control_mode))
 
         @coroutine
         def deconfigure_wrapper():
@@ -239,15 +240,13 @@ class PafMasterController(MasterController):
     def request_capture_start(self, req):
         """ arse """
         if not self.katcp_control_mode:
-            return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
+            return ("fail", "Master controller is in control mode: {}".format(
+                self._control_mode))
 
         @coroutine
         def start_wrapper():
-            status_json = self._status_server.as_json()
-            log.info("Passing the status info to product:\n{}".format(
-                json.loads(status_json)))
             try:
-                yield self.capture_start(status_json)
+                yield self.capture_start()
             except Exception as error:
                 req.reply("fail", str(error))
             else:
@@ -257,8 +256,11 @@ class PafMasterController(MasterController):
 
     @coroutine
     def capture_start(self):
+        status_json = self._status_server.as_json()
+        log.info("Telescope status at capture start:\n{}".format(
+                json.loads(status_json)))
         product = self._get_product(PAF_PRODUCT_ID)
-        yield product.capture_start()
+        yield product.capture_start(status_json)
 
     @request()
     @return_reply()
@@ -266,11 +268,12 @@ class PafMasterController(MasterController):
         """
         @brief      Stop PAF streaming
 
-        @param      PAF_PRODUCT_ID      This is a name for the data product, used to track which subarray is being deconfigured.
+        @param      PAF_PRODUCT_ID  This is a name for the data product, used to track which subarray is being deconfigured.
                                     For example "array_1_bc856M4k".
         """
         if not self.katcp_control_mode:
-            return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
+            return ("fail", "Master controller is in control mode: {}".format(
+                self._control_mode))
 
         @coroutine
         def stop_wrapper():
