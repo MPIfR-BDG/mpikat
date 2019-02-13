@@ -557,7 +557,7 @@ class Db2Dbnull(object):
         self._create_workdir_out_path = ExecuteCommand(cmd, resident=False)
         self._create_workdir_out_path.stdout_callbacks.add(
             self._decode_capture_stdout)
-        self._create_workdir._process.wait()
+        self._create_workdir_out_path._process.wait()
         os.chdir(in_path)
         log.debug("Change to workdir: {}".format(os.getcwd()))
         log.debug("Current working directory: {}".format(os.getcwd()))
