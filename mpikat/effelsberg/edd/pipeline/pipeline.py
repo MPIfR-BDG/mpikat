@@ -239,27 +239,28 @@ class ArchiveAdder(FileSystemEventHandler):
         except Exception as error:
             log.error(error)
 
-def psrchive_monitor(input_dir,output_dir,handler):
+
+def psrchive_monitor(input_dir, output_dir, handler):
     observer = Observer()
     observer.daemon = False
-    log.debug("Input directory: {}".format(input_dir))
-    log.debug("Output directory: {}".format(output_dir))
-    log.debug("Setting up ArchiveAdder handler")
+    log.info("Input directory: {}".format(input_dir))
+    log.info("Output directory: {}".format(output_dir))
+    log.info("Setting up ArchiveAdder handler")
     observer.schedule(handler, input_dir, recursive=False)
 
-    def shutdown(sig,func):
+    def shutdown(sig, func):
         log.debug("Signal handler called on signal: {}".format(sig))
         observer.stop()
         observer.join()
         sys.exit()
 
-    log.debug("Setting SIGTERM and SIGINT handler")
-    signal.signal(signal.SIGTERM,shutdown)
-    signal.signal(signal.SIGINT,shutdown)
+    log.info("Setting SIGTERM and SIGINT handler")
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)
 
-    log.debug("Starting directory monitor")
+    log.info("Starting directory monitor")
     observer.start()
-    log.debug("Parent thread entering 1 second polling loop")
+    log.info("Parent thread entering 1 second polling loop")
     while not observer.stopped_event.wait(1):
         pass
 
@@ -543,7 +544,8 @@ class Db2Dbnull(object):
             sensors["scannum"], sensors["subscannum"])
         tstr = sensors["timestamp"].replace(":", "-")  # to fix docker bug
         in_path = os.path.join("/data/jason/", source_name, tstr, "raw_data")
-        out_path = os.path.join("/data/jason/", source_name, tstr, "combined_data")
+        out_path = os.path.join(
+            "/data/jason/", source_name, tstr, "combined_data")
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(in_path)
         log.debug("Command to run: {}".format(cmd))
@@ -600,10 +602,8 @@ class Db2Dbnull(object):
         self._mkrecv_ingest_proc = ExecuteCommand(cmd, resident=True)
         self._mkrecv_ingest_proc.stdout_callbacks.add(
             self._decode_capture_stdout)
-
-        #handler = ArchiveAdder(args.output_dir)
-        #psrchive_monitor(args.input_dir,args.output_dir,handler)
-
+        handler = ArchiveAdder(out_path)
+        psrchive_monitor(in_path, out_path, handler)
 
     @gen.coroutine
     def stop(self):
