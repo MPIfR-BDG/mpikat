@@ -61,9 +61,9 @@ NGROUPS_TEMP  2048
 NHEAPS_SWITCH 1024
 MCAST_SOURCES 239.2.1.150   # 239.2.1.150 (+7)
 PORT         60001
-UDP_IF       unset                  
-IBV_IF       10.10.1.10  # This is the ethernet interface on which to capture 
-IBV_VECTOR   -1          # IBV forced into polling mode  
+UDP_IF       unset
+IBV_IF       10.10.1.10  # This is the ethernet interface on which to capture
+IBV_VECTOR   -1          # IBV forced into polling mode
 IBV_MAX_POLL 10
 BUFFER_SIZE 16777216
 #BUFFER_SIZE 1048576

@@ -99,10 +99,10 @@ class ExecuteCommand(object):
                 self.error = True
             if self._process == None:
                 self._error = True
-            self._monitor_thread = threading.Thread(target=self._execution_monitor)
-            self._stderr_monitor_thread = threading.Thread(target=self._stderr_monitor)
-            # self._monitor_threads.append(threading.Thread(target=self._stderr_monitor))
-
+            self._monitor_thread = threading.Thread(
+                target=self._execution_monitor)
+            self._stderr_monitor_thread = threading.Thread(
+                target=self._stderr_monitor)
             self._monitor_thread.start()
             self._stderr_monitor_thread.start()
 
@@ -130,7 +130,6 @@ class ExecuteCommand(object):
         self._stdout = value
         self.stdout_notify()
 
-
     def stderr_notify(self):
         for callback in self.stderr_callbacks:
             callback(self._stderr, self)
@@ -143,7 +142,6 @@ class ExecuteCommand(object):
     def stderr(self, value):
         self._stderr = value
         self.stderr_notify()
-
 
     def error_notify(self):
         for callback in self.error_callbacks:
@@ -162,10 +160,9 @@ class ExecuteCommand(object):
         # Monitor the execution and also the stdout for the outside useage
         if RUN:
             while self._process.poll() == None:
-                # print "trying to assign the stdout"
                 stdout = self._process.stdout.readline().rstrip("\n\r")
                 if stdout != b"":
-                    if (not stdout.startswith("heap")) & (not stdout.startswith("mark"))& (not stdout.startswith("[")) &(not stdout.startswith("-> parallel"))& (not stdout.startswith("-> sequential")):
+                    if (not stdout.startswith("heap")) & (not stdout.startswith("mark")) & (not stdout.startswith("[")) & (not stdout.startswith("-> parallel")) & (not stdout.startswith("-> sequential")):
                         self.stdout = stdout
                     # print self.stdout, self._command
 
@@ -183,8 +180,6 @@ class ExecuteCommand(object):
                 stderr = self._process.stderr.readline().rstrip("\n\r")
                 if stderr != b"":
                     self.stderr = stderr
-                    #print self.stderr
-            
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
                 # the event is set, the command does not successfully finish
@@ -428,13 +423,15 @@ class Db2Dbnull(object):
         self._mkrecv_ingest_proc = None
 
     def _decode_capture_stdout(self, stdout, callback):
-        log.debug('{}'.format(str(stdout)))
-
+        if not stdout.startswith("STAT"):
+            log.debug('{}'.format(str(stdout)))
+        else:
+            log.info('{}'.format(str(stdout)))
     def _handle_execution_returncode(self, returncode, callback):
         log.debug(returncode)
 
     def _handle_execution_stderr(self, stderr, callback):
-        log.debug(stderr)
+        log.info(stderr)
 
     @gen.coroutine
     def configure(self):
@@ -453,7 +450,6 @@ class Db2Dbnull(object):
             self._decode_capture_stdout)
 #        self._create_ring_buffer.stderr_callbacks.add(
 #            self._handle_execution_stderr)
-
         self._create_ring_buffer._process.wait()
         self.state = "ready"
 
@@ -481,11 +477,7 @@ class Db2Dbnull(object):
         self._create_workdir = ExecuteCommand(cmd, resident=False)
         self._create_workdir.stdout_callbacks.add(
             self._decode_capture_stdout)
-#        self._create_workdir.stderr_callbacks.add(
-#            self._handle_execution_stderr)
         self._create_workdir._process.wait()
-        #process = safe_popen(cmd, stdout=PIPE)
-        # process.wait()
         os.chdir(out_path)
         log.debug("Change to workdir: {}".format(os.getcwd()))
         dada_header_file = tempfile.NamedTemporaryFile(
@@ -499,7 +491,6 @@ class Db2Dbnull(object):
                 dada_header_file.name))
         header_string = render_dada_header(header)
         dada_header_file.write(header_string)
-        #log.debug("Header file contains:\n{0}".format(header_string))
         dada_key_file = tempfile.NamedTemporaryFile(
             mode="w",
             prefix="dada_keyfile_",
@@ -522,33 +513,12 @@ class Db2Dbnull(object):
             self._decode_capture_stdout)
         self._dspsr.stderr_callbacks.add(
             self._handle_execution_stderr)
-
-        """
-        cmd = "dada_dbnull -k {0}".format(self._dada_key)
-        self._dada_dbnull = ExecuteCommand(cmd, resident=True)
-        self._dada_dbnull.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        """
-        ###################
-        # Start up MKRECV
-        ###################
-        # if RUN is True:
         cmd = "mkrecv_nt --header {} --dada-mode 4".format(
             dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         self._mkrecv_ingest_proc = ExecuteCommand(cmd, resident=True)
         self._mkrecv_ingest_proc.stdout_callbacks.add(
             self._decode_capture_stdout)
-#        self._mkrecv_ingest_proc.stderr_callbacks.add(
-#            self._handle_execution_stderr)
-
-        # cmd = "dada_junkdb -k {0} -b 320000000000 -r 1024 -g {1}".format(
-        #    self._dada_key,
-        #    dada_header_file.name)
-        #log.debug("running command: {}".format(cmd))
-        #self._dada_junkdb = ExecuteCommand(cmd, resident=True)
-        # self._dada_junkdb.stdout_callbacks.add(
-        #    self._decode_capture_stdout)
 
     @gen.coroutine
     def stop(self):
@@ -573,46 +543,7 @@ class Db2Dbnull(object):
                 "Failed to terminate _mkrecv_ingest_proc in alloted time")
             log.info("Killing process")
             self._mkrecv_ingest_proc.kill()
-        """
-        self._dada_junkdb.set_finish_event()
-        yield self._dada_junkdb.finish()
 
-        log.debug(
-            "Waiting {} seconds for _mkrecv_ingest_proc to terminate...".format(self._timeout))
-        now = time.time()
-        while time.time() - now < self._timeout:
-            retval = self._dada_junkdb._process.poll()
-            if retval is not None:
-                log.info("Returned a return value of {}".format(retval))
-                break
-            else:
-                yield time.sleep(0.5)
-        else:
-            log.warning("Failed to terminate _mkrecv_ingest_proc in alloted time")
-            log.info("Killing process")
-            self._dada_junkdb.kill()
-
-
-        
-        self._dada_dbnull.set_finish_event()
-        yield self._dada_dbnull.finish()
-
-        log.debug(
-            "Waiting {} seconds for DSPSR to terminate...".format(self._timeout))
-        now = time.time()
-        while time.time() - now < self._timeout:
-            retval = self._dada_dbnull._process.poll()
-            if retval is not None:
-                log.info("Returned a return value of {}".format(retval))
-                break
-            else:
-                yield time.sleep(0.5)
-        else:
-            log.warning("Failed to terminate DSPSR in alloted time")
-            log.info("Killing process")
-            self._dada_dbnull.kill()
-        self.state = "ready"
-        """
         self._dspsr.set_finish_event()
         yield self._dspsr.finish()
 
