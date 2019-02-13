@@ -54,7 +54,7 @@ CONFIG = {
 }
 
 sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
-           "scannum": 0, "subscannum": 1, "timestamp": str(datetime.now())}
+           "scannum": 0, "subscannum": 1, "timestamp": str(datetime.now().time())}
 
 
 def register_pipeline(name):
@@ -145,7 +145,6 @@ class ExecuteCommand(object):
             while self._process.poll() == None:
                 # print "trying to assign the stdout"
                 stdout = self._process.stderr.readline().rstrip("\n\r")
-                #stderr = self._process.stdout.readline().rstrip("\n\r")
                 if stdout != b"":
                     self.stdout = stdout
                     # print self.stdout, self._command
@@ -417,6 +416,7 @@ class Db2Dbnull(object):
             self._decode_capture_stdout)
 #        self._create_ring_buffer.stderr_callbacks.add(
 #            self._handle_execution_stderr)
+
         self._create_ring_buffer._process.wait()
         self.state = "ready"
 
@@ -446,11 +446,10 @@ class Db2Dbnull(object):
             self._decode_capture_stdout)
 #        self._create_workdir.stderr_callbacks.add(
 #            self._handle_execution_stderr)
-        #self._create_workdir._process.wait()
+        self._create_workdir._process.wait()
         #process = safe_popen(cmd, stdout=PIPE)
         # process.wait()
         os.chdir(out_path)
-        log.debug("Current working directory: {}".format(os.getcwd()))
         log.debug("Change to workdir: {}".format(os.getcwd()))
         dada_header_file = tempfile.NamedTemporaryFile(
             mode="w",
