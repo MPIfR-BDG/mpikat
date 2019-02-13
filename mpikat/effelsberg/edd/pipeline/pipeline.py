@@ -153,7 +153,7 @@ class ExecuteCommand(object):
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
                 # the event is set, the command does not successfully finish
-                stdout = self._process.stderr.read()
+                stdout = self._process.stdout.read()
                 log.error(
                     "Process exited unexpectedly with return code: {}".format(self._process.returncode))
                 self.error = True
