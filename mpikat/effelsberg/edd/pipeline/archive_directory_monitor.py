@@ -82,7 +82,7 @@ if __name__ == "__main__":
     FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
     logger = logging.getLogger('mpikat.effelsberg.edd.pipeline.archive_directory_monitor')
     logging.basicConfig(format=FORMAT)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
 
     usage = "usage: {prog} [options]".format(prog=sys.argv[0])
     parser = ArgumentParser(usage=usage)
