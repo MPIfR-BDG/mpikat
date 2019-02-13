@@ -165,9 +165,7 @@ class ExecuteCommand(object):
                 # print "trying to assign the stdout"
                 stdout = self._process.stdout.readline().rstrip("\n\r")
                 if stdout != b"":
-                    if (not stdout.startswith("heap")) & (not stdout.startswith("mark"))
-                    & (not stdout.startswith("[")) &(not stdout.startswith("-> parallel"))
-                    & (not stdout.startswith("-> sequential")):
+                    if (not stdout.startswith("heap")) & (not stdout.startswith("mark"))& (not stdout.startswith("[")) &(not stdout.startswith("-> parallel"))& (not stdout.startswith("-> sequential")):
                         self.stdout = stdout
                     # print self.stdout, self._command
 
