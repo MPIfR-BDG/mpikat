@@ -426,7 +426,7 @@ class Db2Dbnull(object):
         if not stdout.startswith("STAT"):
             log.debug('{}'.format(str(stdout)))
         else:
-            log.info('{}'.format(str(stdout)))
+            log.debug('{}'.format(str(stdout)))
     def _handle_execution_returncode(self, returncode, callback):
         log.debug(returncode)
 
