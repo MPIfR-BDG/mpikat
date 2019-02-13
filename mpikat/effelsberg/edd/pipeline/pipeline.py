@@ -607,7 +607,7 @@ class Db2Dbnull(object):
         self._mkrecv_ingest_proc.stdout_callbacks.add(
             self._decode_capture_stdout)
 
-        cmd = "python archive_directory_monitor.py -i {} -o {}".format(in_path, out_path)
+        cmd = "python /home/psr/software/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(in_path, out_path)
         log.debug("Running command: {0}".format(cmd))
         self._archive_directory_monitor = ExecuteCommand(cmd, resident=True)
         self._archive_directory_monitor.stdout_callbacks.add(
