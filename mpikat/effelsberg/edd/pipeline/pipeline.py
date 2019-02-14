@@ -72,10 +72,10 @@ def register_pipeline(name):
 
 class ExecuteCommand(object):
 
-    def __init__(self, command, outpath = None, resident=False):
+    def __init__(self, command, outpath=None, resident=False):
         self._command = command
         self._resident = resident
-        self._outpath =  outpath
+        self._outpath = outpath
         self.stdout_callbacks = set()
         self.stderr_callbacks = set()
         self.error_callbacks = set()
@@ -88,7 +88,6 @@ class ExecuteCommand(object):
         self._stderr = None
         self._error = False
         self._finish_event = threading.Event()
-
 
         if not self._resident:
             self._finish_event.set()
@@ -160,7 +159,7 @@ class ExecuteCommand(object):
     def stdout_notify(self):
         for callback in self.png_callbacks:
             callback(self._png, self)
-         
+
     @property
     def png(self):
         return self._png
@@ -238,6 +237,7 @@ class ExecuteCommand(object):
                 log.error("exited unexpectedly, cmd = {}".format(self._command))
                 self.error = True
             """
+
 
 @register_pipeline("DspsrPipelineP0")
 class Mkrecv2Db2Dspsr(object):
@@ -509,7 +509,8 @@ class Db2Dbnull(object):
         cmd = "dada_db -k {key} {args}".format(**
                                                self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
-        self._create_ring_buffer = ExecuteCommand(cmd, resident=False)
+        self._create_ring_buffer = ExecuteCommand(
+            cmd, outpath=None, resident=False)
         self._create_ring_buffer.stdout_callbacks.add(
             self._decode_capture_stdout)
 #        self._create_ring_buffer.stderr_callbacks.add(
@@ -541,13 +542,15 @@ class Db2Dbnull(object):
         cmd = "mkdir -p {}".format(in_path)
         log.debug("Command to run: {}".format(cmd))
         log.debug("Current working directory: {}".format(os.getcwd()))
-        self._create_workdir_in_path = ExecuteCommand(cmd, resident=False)
+        self._create_workdir_in_path = ExecuteCommand(
+            cmd,  outpath=None, resident=False)
         self._create_workdir_in_path.stdout_callbacks.add(
             self._decode_capture_stdout)
         self._create_workdir_in_path._process.wait()
         cmd = "mkdir -p {}".format(out_path)
         log.debug("Command to run: {}".format(cmd))
-        self._create_workdir_out_path = ExecuteCommand(cmd, resident=False)
+        self._create_workdir_out_path = ExecuteCommand(
+            cmd,  outpath=None, resident=False)
         self._create_workdir_out_path.stdout_callbacks.add(
             self._decode_capture_stdout)
         self._create_workdir_out_path._process.wait()
@@ -582,7 +585,7 @@ class Db2Dbnull(object):
             source_name=source_name,
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
-        self._dspsr = ExecuteCommand(cmd, resident=True)
+        self._dspsr = ExecuteCommand(cmd,  outpath=None, resident=True)
         self._dspsr.stdout_callbacks.add(
             self._decode_capture_stdout)
         self._dspsr.stderr_callbacks.add(
@@ -590,19 +593,20 @@ class Db2Dbnull(object):
         cmd = "mkrecv_nt --header {} --dada-mode 4".format(
             dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
-        self._mkrecv_ingest_proc = ExecuteCommand(cmd, resident=True)
+        self._mkrecv_ingest_proc = ExecuteCommand(
+            cmd,  outpath=None, resident=True)
         self._mkrecv_ingest_proc.stdout_callbacks.add(
             self._decode_capture_stdout)
 
-        cmd = "python /home/psr/software/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(in_path, out_path)
+        cmd = "python /home/psr/software/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
+            in_path, out_path)
         log.debug("Running command: {0}".format(cmd))
-        self._archive_directory_monitor = ExecuteCommand(cmd, resident=True)
+        self._archive_directory_monitor = ExecuteCommand(
+            cmd, outpath=out_path, resident=True)
         self._archive_directory_monitor.stdout_callbacks.add(
             self._decode_capture_stdout)
-        self._archive_directory_monitor.png_callbacks.add(self._add_png_to_sensor)
-
-
-
+        self._archive_directory_monitor.png_callbacks.add(
+            self._add_png_to_sensor)
 
     @gen.coroutine
     def stop(self):
@@ -665,14 +669,14 @@ class Db2Dbnull(object):
             self._archive_directory_monitor.kill()
         self.state = "ready"
 
-
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
         self.state = "idle"
         log.debug("Destroying dada buffer")
         cmd = "dada_db -d -k {0}".format(self._dada_key)
         log.debug("Running command: {0}".format(cmd))
-        self._destory_ring_buffer = ExecuteCommand(cmd, resident=False)
+        self._destory_ring_buffer = ExecuteCommand(
+            cmd, outpath=None, resident=False)
         self._destory_ring_buffer.stdout_callbacks.add(
             self._decode_capture_stdout)
         self._destory_ring_buffer._process.wait()
