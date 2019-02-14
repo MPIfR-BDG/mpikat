@@ -475,9 +475,7 @@ class Db2Dbnull(object):
         self._mkrecv_ingest_proc = None
         self.setup_sensors()
 
-    @property
-    def sensors(self):
-        return self._sensors
+
 
     def setup_sensors(self):
         """
@@ -489,6 +487,10 @@ class Db2Dbnull(object):
             default=0,
             initial_status=Sensor.UNKNOWN)
         self.sensors.append(self._png_sensor)
+
+    @property
+    def sensors(self):
+        return self._sensors    
 
     def _decode_capture_stdout(self, stdout, callback):
         log.debug('{}'.format(str(stdout)))
