@@ -225,7 +225,7 @@ class ExecuteCommand(object):
                 with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
                     print "trying to access {}/fscrunch.png".format(self._outpath)
                     png = base64.b64encode(imageFile.read())
-                    #print png
+                    print png
                     time.sleep(5)
             """
             if not self._finish_event.isSet():
