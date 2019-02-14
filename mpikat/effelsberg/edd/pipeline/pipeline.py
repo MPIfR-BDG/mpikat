@@ -47,7 +47,7 @@ CONFIG = {
         "instrument": "EDD",
         "frequency_mhz": 1370,
         "receiver_name": "P200-3",
-        "bandwidth": 650,
+        "bandwidth": 80,
         "tsamp": 0.04923076923076923,
         "nbit": 8,
         "ndim": 2,
