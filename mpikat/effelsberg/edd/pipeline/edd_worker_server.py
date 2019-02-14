@@ -48,6 +48,8 @@ class PafWorkerServer(AsyncDeviceServer):
         @brief Add pipeline sensors to the managed sensors list
 
         """
+        log.debug("trying to add_sensor")
+        log.debug(self._pipeline_instance.sensors)
         for sensor in self._pipeline_instance.sensors:
             self.add_sensor(sensor)
             #self._pipeline_instance.register_listener(sensor, reading= True)
