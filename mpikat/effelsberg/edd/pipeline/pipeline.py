@@ -17,7 +17,7 @@ from watchdog.events import FileSystemEventHandler
 import shlex
 import threading
 import base64
-from katcp import sensor
+from katcp import Sensor
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
 
