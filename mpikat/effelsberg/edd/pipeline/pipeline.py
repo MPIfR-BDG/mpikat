@@ -33,7 +33,7 @@ CONFIG = {
     "base_output_dir": os.getcwd(),
     "dspsr_params":
     {
-        "args": "-cpu 2,3 -L 10 -r -F 256:D -cuda 0,0 -minram 1024"
+        "args": "-cpu 2,3 -L 10 -r -F 128:D -cuda 0,0 -minram 1024"
     },
     "dada_db_params":
     {
@@ -50,7 +50,7 @@ CONFIG = {
         "bandwidth": 162.5,
         "tsamp": 0.04923076923076923,
         "nbit": 8,
-        "ndim": 1,
+        "ndim": 2,
         "npol": 2,
         "nchan": 8,
         "resolution": 1,
