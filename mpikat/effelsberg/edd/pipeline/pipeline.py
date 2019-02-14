@@ -79,7 +79,8 @@ class ExecuteCommand(object):
         self.stdout_callbacks = set()
         self.stderr_callbacks = set()
         self.error_callbacks = set()
-        self.png_callbacks = set()
+        self.fscrunch_callbacks = set()
+        self.tscrunch_callbacks = set()
         self._monitor_threads = []
         self._process = None
         self._executable_command = None
@@ -119,6 +120,7 @@ class ExecuteCommand(object):
                     target=self._png_monitor)
                 self._png_monitor_thread.start()
 
+
     def __del__(self):
         class_name = self.__class__.__name__
 
@@ -156,18 +158,32 @@ class ExecuteCommand(object):
         self._stderr = value
         self.stderr_notify()
 
-    def png_notify(self):
-        for callback in self.png_callbacks:
-            callback(self._png, self)
+    def fscrunch_notify(self):
+        for callback in self.fscrunch_callbacks:
+            callback(self._fscrunch, self)
 
     @property
-    def png(self):
-        return self._png
+    def fscrunch(self):
+        return self._fscrunch
 
-    @png.setter
-    def png(self, value):
-        self._png = value
-        self.png_notify()
+    @fscrunch.setter
+    def fscrunch(self, value):
+        self._fscrunch = value
+        self.fscrunch_notify()
+
+    def tscrunch_notify(self):
+        for callback in self.tscrunch_callbacks:
+            callback(self._tscrunch, self)
+
+    @property
+    def tscrunch(self):
+        return self._tscrunch
+
+    @tscrunch.setter
+    def tscrunch(self, value):
+        self._tscrunch = value
+        self.tscrunch_notify()
+
 
     def error_notify(self):
         for callback in self.error_callbacks:
@@ -223,21 +239,13 @@ class ExecuteCommand(object):
             time.sleep(20)
             while self._process.poll() == None:
                 with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
-                    print "trying to access {}/fscrunch.png".format(self._outpath)
-                    self.png = base64.b64encode(imageFile.read())
+                    #print "trying to access {}/fscrunch.png".format(self._outpath)
+                    self.fscrunch = base64.b64encode(imageFile.read())
                     #print png
+                with open("{}/tscrunch.png".format(self._outpath), "rb") as imageFile:
+                    #print "trying to access {}/fscrunch.png".format(self._outpath)
+                    self.tscrunch = base64.b64encode(imageFile.read())
                     time.sleep(5)
-            """
-            if not self._finish_event.isSet():
-                # For the command which runs for a while, if it stops before
-                # the event is set, the command does not successfully finish
-                stderr = self._process.stderr.read()
-                log.error(
-                    "Process exited unexpectedly with return code: {}".format(self._process.returncode))
-                log.error("exited unexpectedly, stderr = {}".format(stderr))
-                log.error("exited unexpectedly, cmd = {}".format(self._command))
-                self.error = True
-            """
 
 
 @register_pipeline("DspsrPipelineP0")
@@ -481,12 +489,20 @@ class Db2Dbnull(object):
         """
         @brief Setup monitoring sensors
         """
-        self._png_sensor = Sensor.string(
-            "png_1",
-            description="PNG 1",
+        self._tscrunch = Sensor.string(
+            "tscrunch_PNG",
+            description="tscrunch png",
             default=0,
             initial_status=Sensor.UNKNOWN)
-        self.sensors.append(self._png_sensor)
+        self.sensors.append(self._tscrunch)
+
+        self._fscrunch = Sensor.string(
+            "fscrunch_PNG",
+            description="fscrunch png",
+            default=0,
+            initial_status=Sensor.UNKNOWN)
+        self.sensors.append(self._fscrunch)        
+
 
     @property
     def sensors(self):
@@ -501,8 +517,11 @@ class Db2Dbnull(object):
     def _handle_execution_stderr(self, stderr, callback):
         log.info(stderr)
 
-    def _add_png_to_sensor(self, png_blob, callback):
-        self._png_sensor.set_value(png_blob)
+    def _add_tscrunch_to_sensor(self, png_blob, callback):
+        self._tscrunch.set_value(png_blob)
+
+    def _add_fscrunch_to_sensor(self, png_blob, callback):
+        self._fscrunch.set_value(png_blob)    
 
     @gen.coroutine
     def configure(self):
@@ -612,8 +631,10 @@ class Db2Dbnull(object):
             cmd, outpath=out_path, resident=True)
         self._archive_directory_monitor.stdout_callbacks.add(
             self._decode_capture_stdout)
-        self._archive_directory_monitor.png_callbacks.add(
-            self._add_png_to_sensor)
+        self._archive_directory_monitor.fscrunch_callbacks.add(
+            self._add_fscrunch_to_sensor)
+        self._archive_directory_monitor.tscrunch_callbacks.add(
+            self._add_tscrunch_to_sensor)
 
     @gen.coroutine
     def stop(self):
