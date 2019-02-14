@@ -16,6 +16,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import shlex
 import threading
+import base64
 from katcp import sensor
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
@@ -71,9 +72,10 @@ def register_pipeline(name):
 
 class ExecuteCommand(object):
 
-    def __init__(self, command, resident=False):
+    def __init__(self, command, outpath = None, resident=False):
         self._command = command
         self._resident = resident
+        self._outpath =  outpath
         self.stdout_callbacks = set()
         self.stderr_callbacks = set()
         self.error_callbacks = set()
@@ -113,9 +115,10 @@ class ExecuteCommand(object):
                 target=self._stderr_monitor)
             self._monitor_thread.start()
             self._stderr_monitor_thread.start()
-            self._png_monitor_thread = threading.Thread(
-                target=self._execution_monitor)
-            self._png_monitor_thread.start()
+            if self._outpath is not None:
+                self._png_monitor_thread = threading.Thread(
+                    target=self._png_monitor)
+                self._png_monitor_thread.start()
 
     def __del__(self):
         class_name = self.__class__.__name__
@@ -157,7 +160,7 @@ class ExecuteCommand(object):
     def stdout_notify(self):
         for callback in self.png_callbacks:
             callback(self._png, self)
-            
+         
     @property
     def png(self):
         return self._png
@@ -216,6 +219,25 @@ class ExecuteCommand(object):
                 log.error("exited unexpectedly, cmd = {}".format(self._command))
                 self.error = True
 
+    def _png_monitor(self):
+        if RUN:
+            while self._process.poll() == None:
+                with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
+                    print "trying to access {}/fscrunch.png".format(self._outpath)
+                    png = base64.b64encode(imageFile.read())
+                    print png
+                    os.sleep(5)
+            """
+            if not self._finish_event.isSet():
+                # For the command which runs for a while, if it stops before
+                # the event is set, the command does not successfully finish
+                stderr = self._process.stderr.read()
+                log.error(
+                    "Process exited unexpectedly with return code: {}".format(self._process.returncode))
+                log.error("exited unexpectedly, stderr = {}".format(stderr))
+                log.error("exited unexpectedly, cmd = {}".format(self._command))
+                self.error = True
+            """
 
 @register_pipeline("DspsrPipelineP0")
 class Mkrecv2Db2Dspsr(object):
@@ -444,11 +466,24 @@ class Db2Dbnull(object):
         """@brief initialize the pipeline."""
         self.callbacks = set()
         self._state = "idle"
+        self._sensors = []
         self._volumes = ["/tmp/:/scratch/"]
         self._dada_key = None
         self._config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
+        self.setup_sensors()
+
+    def setup_sensors(self):
+        """
+        @brief Setup monitoring sensors
+        """
+        self._png_sensor = Sensor.string(
+            "png_1",
+            description="PNG 1",
+            default=0,
+            initial_status=Sensor.UNKNOWN)
+        self.sensors.append(self._png_sensor)
 
     def _decode_capture_stdout(self, stdout, callback):
         log.debug('{}'.format(str(stdout)))
@@ -458,6 +493,9 @@ class Db2Dbnull(object):
 
     def _handle_execution_stderr(self, stderr, callback):
         log.info(stderr)
+
+    def _add_png_to_sensor(self, png_blob, callback):
+        self._png_sensor.set_value("test")
 
     @gen.coroutine
     def configure(self):
@@ -498,6 +536,7 @@ class Db2Dbnull(object):
         in_path = os.path.join("/data/jason/", source_name, tstr, "raw_data")
         out_path = os.path.join(
             "/data/jason/", source_name, tstr, "combined_data")
+        self.out_path = out_path
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(in_path)
         log.debug("Command to run: {}".format(cmd))
@@ -560,7 +599,7 @@ class Db2Dbnull(object):
         self._archive_directory_monitor = ExecuteCommand(cmd, resident=True)
         self._archive_directory_monitor.stdout_callbacks.add(
             self._decode_capture_stdout)
-        self._archive_directory_monitor.png_callbacks.add()
+        self._archive_directory_monitor.png_callbacks.add(self._add_png_to_sensor)
 
 
 
