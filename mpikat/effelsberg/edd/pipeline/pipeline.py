@@ -220,12 +220,13 @@ class ExecuteCommand(object):
 
     def _png_monitor(self):
         if RUN:
+            time.sleep(20)
             while self._process.poll() == None:
                 with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
                     print "trying to access {}/fscrunch.png".format(self._outpath)
                     png = base64.b64encode(imageFile.read())
                     print png
-                    os.sleep(5)
+                    time.sleep(5)
             """
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
@@ -472,7 +473,11 @@ class Db2Dbnull(object):
         self._config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
-        #self.setup_sensors()
+        self.setup_sensors()
+
+    @property
+    def sensors(self):
+        return self._sensors
 
     def setup_sensors(self):
         """
