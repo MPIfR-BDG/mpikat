@@ -41,6 +41,28 @@ class PafWorkerServer(AsyncDeviceServer):
         """
         super(PafWorkerServer, self).__init__(ip, port)
         self.ip = ip
+        self._managed_sensors = []
+
+    def add_pipeline_sensors(self):
+        """
+        @brief Add pipeline sensors to the managed sensors list
+
+        """
+        for sensor in self._pipeline_instance.sensors:
+            self.add_sensor(sensor)
+            #self._pipeline_instance.register_listener(sensor, reading= True)
+            self._managed_sensors.append(sensor)
+        self.mass_inform(Message.inform('interface-changed'))
+
+    def remove_pipeline_sensors(self):
+        """
+        @brief Remove pipeline sensors from the managed sensors list
+
+        """
+        for sensor in self._managed_sensors:
+            self.remove_sensor(sensor)
+            self._managed_sensors.remove(sensor)
+        self.mass_inform(Message.inform('interface-changed'))
 
     def state_change(self, state, callback):
         """
@@ -53,6 +75,11 @@ class PafWorkerServer(AsyncDeviceServer):
 
     def start(self):
         super(PafWorkerServer, self).start()
+
+    @coroutine
+    def stop(self):
+        """Stop PafWorkerServer server"""
+        yield super(PafWorkerServer, self).stop()
 
     def setup_sensors(self):
         """
@@ -102,6 +129,7 @@ class PafWorkerServer(AsyncDeviceServer):
                 self._pipeline_sensor_name.set_value("")
                 raise error
             self._pipeline_instance = _pipeline_type()
+            self.add_pipeline_sensors()
             self._pipeline_instance.callbacks.add(self.state_change)
             try:
                 self._pipeline_instance.configure()
@@ -199,7 +227,9 @@ class PafWorkerServer(AsyncDeviceServer):
             log.info("deconfiguring pipeline {}".format(
                 self._pipeline_sensor_name.value()))
             try:
+                self.remove_pipeline_sensors()
                 self._pipeline_instance.deconfigure()
+                del self._pipeline_instance
             except Exception as error:
                 msg = "Couldn't deconfigure pipeline {}".format(error)
                 log.info("{}".format(msg))
