@@ -129,7 +129,7 @@ class PafWorkerServer(AsyncDeviceServer):
                 self._pipeline_sensor_name.set_value("")
                 raise error
             self._pipeline_instance = _pipeline_type()
-            self.add_pipeline_sensors()
+            
             self._pipeline_instance.callbacks.add(self.state_change)
             try:
                 self._pipeline_instance.configure()
