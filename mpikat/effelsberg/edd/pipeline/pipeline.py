@@ -120,7 +120,6 @@ class ExecuteCommand(object):
                     target=self._png_monitor)
                 self._png_monitor_thread.start()
 
-
     def __del__(self):
         class_name = self.__class__.__name__
 
@@ -184,7 +183,6 @@ class ExecuteCommand(object):
         self._tscrunch = value
         self.tscrunch_notify()
 
-
     def error_notify(self):
         for callback in self.error_callbacks:
             callback(self._error, self)
@@ -236,16 +234,25 @@ class ExecuteCommand(object):
 
     def _png_monitor(self):
         if RUN:
-            time.sleep(20)
+            #time.sleep(30)
             while self._process.poll() == None:
-                with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
-                    #print "trying to access {}/fscrunch.png".format(self._outpath)
-                    self.fscrunch = base64.b64encode(imageFile.read())
-                    #print png
-                with open("{}/tscrunch.png".format(self._outpath), "rb") as imageFile:
-                    #print "trying to access {}/fscrunch.png".format(self._outpath)
-                    self.tscrunch = base64.b64encode(imageFile.read())
-                    time.sleep(5)
+                try:
+                    with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
+                        # print "trying to access
+                        # {}/fscrunch.png".format(self._outpath)
+                        self.fscrunch = base64.b64encode(imageFile.read())
+                    # print png
+                except:
+                    pass
+
+                try:
+                    with open("{}/tscrunch.png".format(self._outpath), "rb") as imageFile:
+                        # print "trying to access
+                        # {}/fscrunch.png".format(self._outpath)
+                        self.tscrunch = base64.b64encode(imageFile.read())
+                except:
+                    pass
+                time.sleep(2)
 
 
 @register_pipeline("DspsrPipelineP0")
@@ -483,8 +490,6 @@ class Db2Dbnull(object):
         self._mkrecv_ingest_proc = None
         self.setup_sensors()
 
-
-
     def setup_sensors(self):
         """
         @brief Setup monitoring sensors
@@ -501,12 +506,11 @@ class Db2Dbnull(object):
             description="fscrunch png",
             default=0,
             initial_status=Sensor.UNKNOWN)
-        self.sensors.append(self._fscrunch)        
-
+        self.sensors.append(self._fscrunch)
 
     @property
     def sensors(self):
-        return self._sensors    
+        return self._sensors
 
     def _decode_capture_stdout(self, stdout, callback):
         log.debug('{}'.format(str(stdout)))
@@ -521,7 +525,7 @@ class Db2Dbnull(object):
         self._tscrunch.set_value(png_blob)
 
     def _add_fscrunch_to_sensor(self, png_blob, callback):
-        self._fscrunch.set_value(png_blob)    
+        self._fscrunch.set_value(png_blob)
 
     @gen.coroutine
     def configure(self):
