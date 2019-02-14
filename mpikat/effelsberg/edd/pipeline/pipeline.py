@@ -44,10 +44,10 @@ CONFIG = {
     {
         "filesize": 32000000000,
         "telescope": "Effelsberg",
-        "instrument": "EDD",
+        "instrument": "asterix",
         "frequency_mhz": 1370,
         "receiver_name": "P200-3",
-        "bandwidth": -162.5,
+        "bandwidth": 162,
         "tsamp": 0.04923076923076923,
         "nbit": 8,
         "ndim": 2,

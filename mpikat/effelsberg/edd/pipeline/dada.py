@@ -44,7 +44,7 @@ NBIT              {{nbit}}              # number of bits per sample
 NDIM              {{ndim}}               # 1=real, 2=complex
 NPOL              {{npol}}                 # number of polarizations observed
 NCHAN             {{nchan}}                 # number of frequency channels
-RESOLUTION        {{dsb}}                 
+RESOLUTION        {{dsb}}
 DSB
 
 #MeerKAT specifics
