@@ -7,7 +7,7 @@ import os
 from optparse import OptionParser
 from tornado.gen import Return, coroutine
 from tornado.iostream import IOStream
-from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
+from katcp import AsyncDeviceServer, Message, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from mpikat.effelsberg.edd.pipeline.pipeline import PIPELINES
 
@@ -56,7 +56,7 @@ class PafWorkerServer(AsyncDeviceServer):
             log.debug("trying to add_sensor?")
             #self._pipeline_instance.register_listener(sensor, reading= True)
             self._managed_sensors.append(sensor)
-        self.inform(Message.inform('interface-changed'))
+        self.mass_inform(Message.inform('interface-changed'))
 
     def remove_pipeline_sensors(self):
         """
