@@ -47,7 +47,7 @@ CONFIG = {
         "instrument": "EDD",
         "frequency_mhz": 1370,
         "receiver_name": "P200-3",
-        "bandwidth": 162,
+        "bandwidth": 162.5,
         "tsamp": 0.04923076923076923,
         "nbit": 8,
         "ndim": 2,
@@ -202,8 +202,8 @@ class ExecuteCommand(object):
             while self._process.poll() == None:
                 stdout = self._process.stdout.readline().rstrip("\n\r")
                 if stdout != b"":
-                    if (not stdout.startswith("heap")) & (not stdout.startswith("mark")) & (not stdout.startswith("[")) & (not stdout.startswith("-> parallel")) & (not stdout.startswith("-> sequential")):
-                        self.stdout = stdout
+                    #if (not stdout.startswith("heap")) & (not stdout.startswith("mark")) & (not stdout.startswith("[")) & (not stdout.startswith("-> parallel")) & (not stdout.startswith("-> sequential")):
+                    self.stdout = stdout
                     # print self.stdout, self._command
 
             if not self._finish_event.isSet():
