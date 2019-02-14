@@ -156,7 +156,7 @@ class ExecuteCommand(object):
         self._stderr = value
         self.stderr_notify()
 
-    def stdout_notify(self):
+    def png_notify(self):
         for callback in self.png_callbacks:
             callback(self._png, self)
 
@@ -225,7 +225,7 @@ class ExecuteCommand(object):
                 with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
                     print "trying to access {}/fscrunch.png".format(self._outpath)
                     png = base64.b64encode(imageFile.read())
-                    print png
+                    #print png
                     time.sleep(5)
             """
             if not self._finish_event.isSet():
