@@ -225,7 +225,7 @@ class ExecuteCommand(object):
                 with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
                     print "trying to access {}/fscrunch.png".format(self._outpath)
                     png = base64.b64encode(imageFile.read())
-                    print png
+                    #print png
                     time.sleep(5)
             """
             if not self._finish_event.isSet():
@@ -500,7 +500,7 @@ class Db2Dbnull(object):
         log.info(stderr)
 
     def _add_png_to_sensor(self, png_blob, callback):
-        self._png_sensor.set_value("test")
+        self._png_sensor.set_value(png_blob)
 
     @gen.coroutine
     def configure(self):
