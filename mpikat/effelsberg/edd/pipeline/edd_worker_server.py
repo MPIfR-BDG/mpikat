@@ -53,6 +53,7 @@ class PafWorkerServer(AsyncDeviceServer):
         for sensor in self._pipeline_instance.sensors:
             log.debug("sensor name is {}".format(sensor))
             self.add_sensor(sensor)
+            log.debug("trying to add_sensor?")
             #self._pipeline_instance.register_listener(sensor, reading= True)
             self._managed_sensors.append(sensor)
         self.mass_inform(Message.inform('interface-changed'))
