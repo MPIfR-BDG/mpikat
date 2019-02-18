@@ -143,24 +143,17 @@ class PafWorkerServer(AsyncDeviceServer):
             except KeyError as error:
                 msg = "No pipeline called '{}', available pipeline are: {}".format(
                     self._pipeline_sensor_name.value(), " ".join(PIPELINES.keys()))
+                self._pipeline_sensor_name.set_value("")
                 log.error("{}".format(msg))
                 req.reply("fail", msg)
-                # self._pipeline_sensor_status.set_value("error")
-                self._pipeline_sensor_name.set_value("")
-                raise error
-            log.debug(
-                "Trying to create pipeline instance {}".format(pipeline_name))
-            try:
-                self._pipeline_instance = _pipeline_type()
-            except Exception as error:
-                log.error(error)
-                raise error
-            self.add_pipeline_sensors()
-            self._pipeline_instance.callbacks.add(self.state_change)
             try:
                 log.debug(
+                "Trying to create pipeline instance {}".format(pipeline_name))
+                self._pipeline_instance = _pipeline_type()
+                self.add_pipeline_sensors()
+                self._pipeline_instance.callbacks.add(self.state_change)
+                log.debug(
                     "Trying to configure pipeline {}".format(pipeline_name))
-                # self._pipeline_instance.configure(config_dict)
                 config = json.loads(config_json)
                 log.debug("Unpacked config: {}".format(config))
                 capture_start_time = Time.now() + 27.0 * units.s
@@ -170,7 +163,6 @@ class PafWorkerServer(AsyncDeviceServer):
                     frequency,
                     self._ip_address.value())
             except Exception as error:
-                # self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
                 msg = "Couldn't start configure pipeline instance {}".format(
                     str(error))
@@ -180,7 +172,6 @@ class PafWorkerServer(AsyncDeviceServer):
                 self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
             req.reply("ok", msg)
-
         if self._pipeline_sensor_status.value() == "idle":
             config_dict = json.loads(config_json)
             pipeline_name = config_dict["mode"]
@@ -213,8 +204,6 @@ class PafWorkerServer(AsyncDeviceServer):
                 msg = "Couldn't start pipeline server {}".format(error)
                 log.info("{}".format(msg))
                 req.reply("fail", msg)
-                # self._pipeline_sensor_status.set_value("error")
-                raise error
             msg = "Starting pipeline {}".format(
                 self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
@@ -244,7 +233,6 @@ class PafWorkerServer(AsyncDeviceServer):
                 msg = "Couldn't stop pipeline {}".format(error)
                 log.info("{}".format(msg))
                 req.reply("fail", msg)
-                raise error
             msg = "Stopping pipeline {}".format(
                 self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
@@ -278,14 +266,12 @@ class PafWorkerServer(AsyncDeviceServer):
                 msg = "Couldn't deconfigure pipeline {}".format(error)
                 log.error("{}".format(msg))
                 req.reply("fail", msg)
-                # self._pipeline_sensor_status.set_value("error")
-                raise error
             msg = "Deconfigured pipeline {}".format(
                 self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
             req.reply("ok", msg)
             self._pipeline_sensor_name.set_value("")
-        if self._pipeline_sensor_status.value() == "ready":
+        if self._pipeline_sensor_status.value():
             self.ioloop.add_callback(deconfigure)
             raise AsyncReply
         else:
