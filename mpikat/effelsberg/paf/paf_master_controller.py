@@ -377,6 +377,7 @@ def main():
     (opts, args) = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
+    logging.getLogger('mpikat.effelsberg.status_server').setLevel(logging.INFO)
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
         level=opts.log_level.upper(),
