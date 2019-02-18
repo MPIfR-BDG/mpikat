@@ -156,7 +156,6 @@ class PafProductController(ProductController):
         log.info("Configuring all servers")
         for server in servers:
             log.debug("Sending configure request to server {}".format(server))
-            self._servers.append(server)
             configure_futures.append(server._client.req.configure(
                 config_json, timeout=60.0))
         for server, future in zip(servers, configure_futures):
