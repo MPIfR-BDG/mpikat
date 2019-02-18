@@ -53,7 +53,6 @@ class PafWorkerServer(AsyncDeviceServer):
         """
         for sensor in self._pipeline_instance.sensors:
             self.add_sensor(sensor)
-            #self._pipeline_instance.register_listener(sensor, reading= True)
             self._managed_sensors.append(sensor)
         self.mass_inform(Message.inform('interface-changed'))
 
@@ -146,7 +145,7 @@ class PafWorkerServer(AsyncDeviceServer):
                     self._pipeline_sensor_name.value(), " ".join(PIPELINES.keys()))
                 log.error("{}".format(msg))
                 req.reply("fail", msg)
-                #self._pipeline_sensor_status.set_value("error")
+                # self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
                 raise error
             log.debug(
@@ -161,17 +160,17 @@ class PafWorkerServer(AsyncDeviceServer):
             try:
                 log.debug(
                     "Trying to configure pipeline {}".format(pipeline_name))
-                #self._pipeline_instance.configure(config_dict)
+                # self._pipeline_instance.configure(config_dict)
                 config = json.loads(config_json)
                 log.debug("Unpacked config: {}".format(config))
-                capture_start_time = Time.now() + 27.0*units.s
+                capture_start_time = Time.now() + 27.0 * units.s
                 frequency = config["frequency"]
                 self._pipeline_instance.configure(
                     capture_start_time,
                     frequency,
                     self._ip_address.value())
             except Exception as error:
-                #self._pipeline_sensor_status.set_value("error")
+                # self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
                 msg = "Couldn't start configure pipeline instance {}".format(
                     str(error))
@@ -208,7 +207,8 @@ class PafWorkerServer(AsyncDeviceServer):
                 source_name = config["source-name"]
                 ra = config["ra"]
                 dec = config["dec"]
-                self._pipeline_instance.start(utc_start_process, source_name, ra, dec)
+                self._pipeline_instance.start(
+                    utc_start_process, source_name, ra, dec)
             except Exception as error:
                 msg = "Couldn't start pipeline server {}".format(error)
                 log.info("{}".format(msg))
