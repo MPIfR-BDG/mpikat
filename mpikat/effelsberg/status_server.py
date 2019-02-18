@@ -32,7 +32,9 @@ STATUS_MAP = {
     "warn": 2  # Sensor.STATUSES 'warn'
 }
 
+
 class StatusCatcherThread(Thread):
+
     def __init__(
             self,
             mcast_group=JSON_STATUS_MCAST_GROUP,
@@ -320,15 +322,16 @@ def on_shutdown(ioloop, server):
     yield server.stop()
     ioloop.stop()
 
+
 def main():
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('-H', '--host', dest='host', type=str,
-        help='Host interface to bind to')
+                      help='Host interface to bind to')
     parser.add_option('-p', '--port', dest='port', type=long,
-        help='Port number to bind to')
-    parser.add_option('', '--log-level',dest='log_level',type=str,
-        help='Port number of status server instance',default="INFO")
+                      help='Port number to bind to')
+    parser.add_option('', '--log-level', dest='log_level', type=str,
+                      help='Port number of status server instance', default="INFO")
     (opts, args) = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
@@ -345,7 +348,8 @@ def main():
 
     def start_and_display():
         server.start()
-        log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
+        log.info(
+            "Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
 
     ioloop.add_callback(start_and_display)
     ioloop.start()

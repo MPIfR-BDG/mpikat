@@ -29,16 +29,23 @@ from katcp import Sensor, AsyncDeviceServer
 from katcp.kattypes import request, return_reply, Int, Str
 from mpikat.core.utils import check_ntp_sync
 
-NTP_CALLBACK_PERIOD = 60 * 5 * 1000 # 5 minutes (in milliseconds)
+NTP_CALLBACK_PERIOD = 60 * 5 * 1000  # 5 minutes (in milliseconds)
+
 
 class ProductLookupError(Exception):
     pass
 
+
 class ProductExistsError(Exception):
     pass
 
-# ?halt message means shutdown everything and power off all machines
+
+class ServerDeallocationError(Exception):
+    pass
+
+
 log = logging.getLogger("mpikat.master_controller")
+
 
 class MasterController(AsyncDeviceServer):
     """This is the main KATCP interface for the FBFUSE
@@ -51,6 +58,7 @@ class MasterController(AsyncDeviceServer):
     VERSION_INFO = ("mpikat-api", 0, 1)
     BUILD_INFO = ("mpikat-implementation", 0, 1, "rc1")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
+
     def __init__(self, ip, port, worker_pool):
         """
         @brief       Construct new MasterController instance
@@ -58,7 +66,7 @@ class MasterController(AsyncDeviceServer):
         @params  ip       The IP address on which the server should listen
         @params  port     The port that the server should bind to
         """
-        super(MasterController, self).__init__(ip,port)
+        super(MasterController, self).__init__(ip, port)
         self._products = {}
         self._server_pool = worker_pool
 
@@ -66,11 +74,11 @@ class MasterController(AsyncDeviceServer):
         """
         @brief  Start the MasterController server
         """
-        super(MasterController,self).start()
+        super(MasterController, self).start()
 
     def stop(self):
         self._ntp_callback.stop()
-        super(MasterController,self).stop()
+        super(MasterController, self).stop()
 
     def add_sensor(self, sensor):
         log.debug("Adding sensor: {}".format(sensor.name))
@@ -112,11 +120,12 @@ class MasterController(AsyncDeviceServer):
             default=True,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._local_time_synced)
+
         def ntp_callback():
             log.debug("Checking NTP sync")
             try:
                 synced = check_ntp_sync()
-            except Exception as error:
+            except Exception:
                 log.exception("Unable to check NTP sync")
                 self._local_time_synced.set_value(False)
             else:
@@ -124,7 +133,8 @@ class MasterController(AsyncDeviceServer):
                     log.warning("Server is not NTP synced")
                 self._local_time_synced.set_value(synced)
         ntp_callback()
-        self._ntp_callback = PeriodicCallback(ntp_callback, NTP_CALLBACK_PERIOD)
+        self._ntp_callback = PeriodicCallback(
+            ntp_callback, NTP_CALLBACK_PERIOD)
         self._ntp_callback.start()
 
         self._products_sensor = Sensor.string(
@@ -139,7 +149,8 @@ class MasterController(AsyncDeviceServer):
 
     def _get_product(self, product_id):
         if product_id not in self._products:
-            raise ProductLookupError("No product configured with ID: {}".format(product_id))
+            raise ProductLookupError(
+                "No product configured with ID: {}".format(product_id))
         else:
             return self._products[product_id]
 
@@ -211,10 +222,9 @@ class MasterController(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !product-list ok | (fail [error description]) <number of configured products> ]]],
         """
-        for product_id,product in self._products.items():
+        for product_id, product in self._products.items():
             info = {}
             info[product_id] = product.info()
             as_json = json.dumps(info)
             req.inform(as_json)
-        return ("ok",len(self._products))
-
+        return ("ok", len(self._products))

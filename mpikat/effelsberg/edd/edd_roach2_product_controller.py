@@ -21,11 +21,8 @@ SOFTWARE.
 """
 
 import logging
-import json
-import time
-from tornado.gen import coroutine, Return
+from tornado.gen import coroutine
 from katcp import Sensor, Message, KATCPClientResource
-from mpikat.core.utils import LoggingSensor
 from mpikat.core.product_controller import ProductController, state_change
 
 log = logging.getLogger("mpikat.edd_roach2_product_controller")
