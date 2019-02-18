@@ -64,7 +64,7 @@ class PafWorkerServer(AsyncDeviceServer):
         """
         for sensor in self._managed_sensors:
             self.remove_sensor(sensor)
-            self._managed_sensors.remove(sensor)
+        self._managed_sensors = []
         self.mass_inform(Message.inform('interface-changed'))
 
     def state_change(self, state, callback):
