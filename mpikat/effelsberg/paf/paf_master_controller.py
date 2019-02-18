@@ -224,8 +224,6 @@ class PafMasterController(MasterController):
                     key)
                 log.error(message)
                 raise PafConfigurationError(message)
-        self._products[PAF_PRODUCT_ID] = PafProductController(
-            self, PAF_PRODUCT_ID)
         self._paf_config_sensor.set_value(config_json)
         log.debug("Building product controller for PAF processing")
         self._products[PAF_PRODUCT_ID] = PafProductController(

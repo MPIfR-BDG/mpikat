@@ -86,8 +86,6 @@ class MasterController(AsyncDeviceServer):
 
     def remove_sensor(self, sensor):
         log.debug("Removing sensor: {}".format(sensor.name))
-        import inspect
-        print(inspect.stack())
         super(MasterController, self).remove_sensor(sensor)
 
     def setup_sensors(self):
