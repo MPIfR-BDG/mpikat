@@ -132,9 +132,10 @@ class RoutingTable(object):
                           + means we shift the center frequency towards the band top
         center_freq_band: the center_freq from telescope control system, which is the center frequency of the full band, float, MHz
         """
-
+        formatted_destimations = "\n".join(
+            ["IP={}, MAC={}".format(ip, mac) for ip, mac in destinations])
         log.info("Generating routing table for the following destinations:\n{}".format(
-            destinations))
+            formatted_destimations))
         validate_destinations(destinations)
         self.table_file = tempfile.NamedTemporaryFile(
             mode="w", suffix=".csv", delete=True)
