@@ -131,7 +131,6 @@ class PafWorkerServer(AsyncDeviceServer):
                 req.reply("fail", msg)
                 self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
-                raise error
             self._pipeline_instance = _pipeline_type()
             self.add_pipeline_sensors()
             self._pipeline_instance.callbacks.add(self.state_change)
@@ -144,7 +143,6 @@ class PafWorkerServer(AsyncDeviceServer):
                 req.reply("fail", msg)
                 self._pipeline_sensor_status.set_value("error")
                 self._pipeline_sensor_name.set_value("")
-                raise error
             msg = "pipeline instance configured"
             log.info("{}".format(msg))
             req.reply("ok", msg)
@@ -172,8 +170,7 @@ class PafWorkerServer(AsyncDeviceServer):
                 msg = "Couldn't start pipeline server {}".format(error)
                 log.info("{}".format(msg))
                 req.reply("fail", msg)
-                self._pipeline_sensor_status.set_value("error")
-                raise error
+                self._pipeline_sensor_status.set_value("error")   
             msg = "Start pipeline {}".format(
                 self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
@@ -205,7 +202,6 @@ class PafWorkerServer(AsyncDeviceServer):
                 log.info("{}".format(msg))
                 req.reply("fail", msg)
                 self._pipeline_sensor_status.set_value("error")
-                raise error
             msg = "Stop pipeline {}".format(self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
             req.reply("ok", msg)
@@ -239,7 +235,6 @@ class PafWorkerServer(AsyncDeviceServer):
                 log.info("{}".format(msg))
                 req.reply("fail", msg)
                 self._pipeline_sensor_status.set_value("error")
-                raise error
             msg = "deconfigured pipeline {}".format(
                 self._pipeline_sensor_name.value())
             log.info("{}".format(msg))
