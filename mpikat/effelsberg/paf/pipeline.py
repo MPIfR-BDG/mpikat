@@ -259,7 +259,7 @@ class ExecuteCommand(object):
 
     def _stderr_monitor(self):
         if EXECUTE:
-            while (self._process.poll() == None) and not self._stop_event.is_set()::
+            while (self._process.poll() == None) and not self._stop_event.is_set():
                 stderr = self._process.stderr.readline().rstrip("\n\r")
                 if stderr != b"":
                     self.stderr = self._command + "; STDERR is: " + stderr
