@@ -178,7 +178,7 @@ class PafProductController(ProductController):
             log.error(message)
             raise PafProductError(message)
         else:
-            log.info("Successfully configured {} of {} server".format(
+            log.info("Successfully configured {} of {} servers".format(
                 len(self._servers)-failures, len(self._servers)))
 
     @state_change(["ready", "error"], "capturing", "starting")
@@ -194,7 +194,8 @@ class PafProductController(ProductController):
         start_futures = []
         for server in self._servers:
             log.debug("Sending start request to server {}".format(server))
-            start_futures.append(server._client.req.start(status_json))
+            start_futures.append(server._client.req.start(
+                status_json, timeout=10.0))
         for future, server in zip(start_futures, self._servers):
             log.debug("Awaiting response from server {}".format(server))
             result = yield future
@@ -219,7 +220,7 @@ class PafProductController(ProductController):
         stop_futures = []
         for server in self._servers:
             log.debug("Sending stop request to server {}".format(server))
-            stop_futures.append(server._client.req.stop())
+            stop_futures.append(server._client.req.stop(timeout=10.0))
         for future, server in zip(stop_futures, self._servers):
             result = yield future
             if not result.reply.reply_ok():
