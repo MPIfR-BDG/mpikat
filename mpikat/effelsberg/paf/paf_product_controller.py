@@ -24,8 +24,6 @@ import logging
 import json
 from paramiko import PasswordRequiredException
 from tornado.gen import coroutine
-from katcp import Sensor, Message
-from mpikat.core.utils import LoggingSensor
 from mpikat.core.product_controller import ProductController, state_change
 from mpikat.effelsberg.paf.routingtable import RoutingTable
 
@@ -124,6 +122,7 @@ class PafProductController(ProductController):
         nservers = self._parent._server_pool.navailable()
         log.info("PAF servers available: {}".format(nservers))
         if nservers == 0:
+            raise PafProductError("No servers available for processing")
             raise PafProductError("No servers available for processing")
         log.info("Allocating PAF servers")
         servers = self._parent._server_pool.allocate(nservers)
