@@ -161,7 +161,7 @@ class ExecuteCommand(object):
         self.stderr_callbacks = set()
         self.returncode_callbacks = set()
         self._monitor_threads = []
-
+        self._stop_event = threading.Event()
         self._process = None
         self._executable_command = None
         self._monitor_thread = None
@@ -202,6 +202,7 @@ class ExecuteCommand(object):
 
     def finish(self):
         if EXECUTE:
+            self._stop_event.set()
             for thread in self._monitor_threads:
                 thread.join()
 
@@ -246,7 +247,7 @@ class ExecuteCommand(object):
 
     def _stdout_monitor(self):
         if EXECUTE:
-            while self._process.poll() == None:
+            while (self._process.poll() == None) and not self._stop_event.is_set():
                 stdout = self._process.stdout.readline().rstrip("\n\r")
                 if stdout != b"":
                     self.stdout = stdout
@@ -258,7 +259,7 @@ class ExecuteCommand(object):
 
     def _stderr_monitor(self):
         if EXECUTE:
-            while self._process.poll() == None:
+            while (self._process.poll() == None) and not self._stop_event.is_set()::
                 stderr = self._process.stderr.readline().rstrip("\n\r")
                 if stderr != b"":
                     self.stderr = self._command + "; STDERR is: " + stderr
