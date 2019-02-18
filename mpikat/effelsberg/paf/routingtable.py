@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 
 import logging
-import numpy as np
-import csv
 import math
 import paramiko
 import ipaddress
 import time
 import tempfile
-from os.path import join, isfile
+import socket
+from os.path import join
 
 log = logging.getLogger("mpikat.paf_routingtable")
 
@@ -40,8 +39,10 @@ TOSSIX_SCRIPT_ROOT = "/home/pulsar/aaron/askap-trunk/"
 class RoutingTableError(Exception):
     pass
 
+
 class RoutingTableUploadError(RoutingTableError):
     pass
+
 
 class RemoteAccess(object):
 
@@ -55,9 +56,9 @@ class RemoteAccess(object):
         self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.ssh_client.connect(
             hostname=ip, username=username, password=password)
-        log.info("Successful connection {} ...".format(self.ip))
+        log.debug("Successful connection {} ...".format(self.ip))
 
-        log.info("Invoke shell from {}... ".format(self.ip))
+        log.debug("Invoke shell from {}... ".format(self.ip))
         self.remote_shell = self.ssh_client.invoke_shell()
 
     def control(self, cmd):
@@ -71,21 +72,21 @@ class RemoteAccess(object):
                 continue
             output += data
             if output.find("\r\nPARAMIKO_COMMAND_DONE\r\n") != -1:
-                log.info(output)
+                log.debug(output)
                 return
             if output.find("\r\nFAIL\r\n") != -1:
                 raise RoutingTableError("Command {} fail".format(cmd))
 
     def scp(self, src, dst):
-        log.info("Create SCP connection with {}... ".format(self.ip))
+        log.debug("Create SCP connection with {}... ".format(self.ip))
         self.sftp_client = self.ssh_client.open_sftp()
-        log.info("Copy {} to {}".format(src, dst))
+        log.debug("Copy {} to {}".format(src, dst))
         self.sftp_client.put(src, dst)
-        log.info("Close scp channel")
+        log.debug("Close scp channel")
         self.sftp_client.close()
 
     def disconnect(self):
-        log.info("Disconnect from {} ...".format(self.ip))
+        log.debug("Disconnect from {} ...".format(self.ip))
         self.ssh_client.close()
 
 
@@ -102,6 +103,7 @@ def validate_destinations(destinations):
 
 
 class RoutingTable(object):
+
     def __init__(self, destinations, nbeam, nchunk, nchunk_offset, center_freq_band):
         """ To configure the class and check the input
         destinations: The MAC and IP of alive NiCs;
@@ -131,7 +133,8 @@ class RoutingTable(object):
         center_freq_band: the center_freq from telescope control system, which is the center frequency of the full band, float, MHz
         """
 
-        log.info("Generating routing table for the following destinations:\n{}".format(destinations))
+        log.info("Generating routing table for the following destinations:\n{}".format(
+            destinations))
         validate_destinations(destinations)
         self.table_file = tempfile.NamedTemporaryFile(
             mode="w", suffix=".csv", delete=True)
@@ -143,7 +146,7 @@ class RoutingTable(object):
         self.center_freq_band = center_freq_band
         log.debug("Routing table temporary file: {}".format(self.fname))
         log.debug(("Routing table input parameters: nbeam={}, nchunk={}, "
-                  "nchunk_offset={}, center_Freq_band={}, fname={}").format(
+                   "nchunk_offset={}, center_Freq_band={}, fname={}").format(
                   self.nbeam, self.nchunk, self.nchunk_offset,
                   self.center_freq_band, self.fname))
 
@@ -157,7 +160,8 @@ class RoutingTable(object):
                 ("We can only work with 18 beams or 36 beams configuration, "
                  "but {} is given").format(self.nbeam))
         log.info("Routing table configuation mode: {}".format(self.config))
-        self.nchunk_expect = self.config["nchunk_per_port"] * self.config["nport_per_beam"]
+        self.nchunk_expect = self.config[
+            "nchunk_per_port"] * self.config["nport_per_beam"]
         if self.nchunk_expect != self.nchunk:
             raise RoutingTableError("We expect {} chunks of each beam for {} beams configuration, but {} is given".format(
                 self.nchunk_expect, self.nbeam, self.nchunk))
@@ -243,7 +247,7 @@ class RoutingTable(object):
             TOSSIX_SCRIPT_ROOT), self.fname.split("/")[-1]))
 
         # Initial the tossix
-        log.info("Running routing table update script on Tossix")
+        log.info("Applying routing table on Tossix")
         tossix.control("bash")
         tossix.control(". {}/initaskap.sh".format(TOSSIX_SCRIPT_ROOT))
         tossix.control(
@@ -294,5 +298,5 @@ if __name__ == "__main__":
     routing_table = RoutingTable(
         destinations, nbeam, nchunk, nchunk_offset, center_freq)
     time.sleep(10)
-    print routing_table.center_freq_stream()
+    print(routing_table.center_freq_stream())
     routing_table.upload_table()
