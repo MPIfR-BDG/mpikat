@@ -653,15 +653,16 @@ class Db2Dbnull(object):
         self._timeout = 10
         #self._mkrecv_ingest_proc.set_finish_event()
         #yield self._mkrecv_ingest_proc.finish()
+        process = [self._mkrecv_ingest_proc, self._dspsr, self._archive_directory_monitor]
 
-        for proc in [self._mkrecv_ingest_proc, self._dspsr, self._archive_directory_monitor]:
-            self.proc.set_finish_event()
-            yield self.proc.finish()
+        for proc in process:
+            proc.set_finish_event()
+            yield proc.finish()
             log.debug(
                 "Waiting {} seconds for proc {} to terminate...".format(self._timeout, proc))
             now = time.time()
             while time.time() - now < self._timeout:
-                retval = self.proc._process.poll()
+                retval = proc._process.poll()
                 if retval is not None:
                     log.debug("Returned a return value of {}".format(retval))
                     break
@@ -671,7 +672,7 @@ class Db2Dbnull(object):
                 log.warning(
                     "Failed to terminate _mkrecv_ingest_proc in alloted time")
                 log.info("Killing process")
-                self.proc._process.kill() 
+                proc._process.kill() 
 
             """
         log.debug(
