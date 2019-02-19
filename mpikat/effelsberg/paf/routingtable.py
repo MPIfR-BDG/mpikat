@@ -133,7 +133,7 @@ class RoutingTable(object):
         center_freq_band: the center_freq from telescope control system, which is the center frequency of the full band, float, MHz
         """
         formatted_destimations = "\n".join(
-            ["IP={}, MAC={}".format(ip, mac) for ip, mac in destinations])
+            ["IP={}, MAC={}".format(ip, mac) for mac, ip in destinations])
         log.info("Generating routing table for the following destinations:\n{}".format(
             formatted_destimations))
         validate_destinations(destinations)

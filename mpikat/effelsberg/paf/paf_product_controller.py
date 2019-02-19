@@ -49,10 +49,6 @@ class PafProductController(ProductController):
     """
     Wrapper class for an PAF product.
     """
-    STATES = ["idle", "preparing", "ready",
-              "starting", "capturing", "stopping", "error"]
-    IDLE, PREPARING, READY, STARTING, CAPTURING, STOPPING, ERROR = STATES
-
     def __init__(self, parent, product_id):
         """
         @brief      Construct new instance
