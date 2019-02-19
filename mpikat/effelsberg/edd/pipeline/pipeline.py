@@ -645,25 +645,6 @@ class Db2Dbnull(object):
         """@brief stop the dada_junkdb and dspsr instances."""
         log.debug("Stopping")
         self._timeout = 10
-        # if self._mkrecv_ingest_proc
-        self._mkrecv_ingest_proc.set_finish_event()
-        yield self._mkrecv_ingest_proc.finish()
-        log.debug(
-            "Waiting {} seconds for _mkrecv_ingest_proc to terminate...".format(self._timeout))
-        now = time.time()
-        while time.time() - now < self._timeout:
-            retval = self._mkrecv_ingest_proc._process.poll()
-            if retval is not None:
-                log.info("Returned a return value of {}".format(retval))
-                break
-            else:
-                yield time.sleep(0.5)
-        else:
-            log.warning(
-                "Failed to terminate _mkrecv_ingest_proc in alloted time")
-            log.info("Killing process")
-            self._mkrecv_ingest_proc._process.kill()
-
         self._dspsr.set_finish_event()
         yield self._dspsr.finish()
 
@@ -681,6 +662,25 @@ class Db2Dbnull(object):
             log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
             self._dspsr._process.kill()
+        # if self._mkrecv_ingest_proc
+
+        self._mkrecv_ingest_proc.set_finish_event()
+        yield self._mkrecv_ingest_proc.finish()
+        log.debug(
+            "Waiting {} seconds for _mkrecv_ingest_proc to terminate...".format(self._timeout))
+        now = time.time()
+        while time.time() - now < self._timeout:
+            retval = self._mkrecv_ingest_proc._process.poll()
+            if retval is not None:
+                log.info("Returned a return value of {}".format(retval))
+                break
+            else:
+                yield time.sleep(0.5)
+        else:
+            log.warning(
+                "Failed to terminate _mkrecv_ingest_proc in alloted time")
+            log.info("Killing process")
+            self._mkrecv_ingest_proc._process.kill()
 
         self._archive_directory_monitor.set_finish_event()
         yield self._archive_directory_monitor.finish()
