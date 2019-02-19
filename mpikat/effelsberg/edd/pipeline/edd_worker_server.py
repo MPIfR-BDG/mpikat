@@ -90,7 +90,7 @@ class EddWorkerServer(AsyncDeviceServer):
         """Stop PafWorkerServer server"""
         #if self._pipeline_sensor_status.value() == "ready":
         #    log.info("Pipeline still running, stopping pipeline")
-        yield self.deconfigure()
+       #yield self.deconfigure()
         yield super(EddWorkerServer, self).stop()
 
     def setup_sensors(self):
