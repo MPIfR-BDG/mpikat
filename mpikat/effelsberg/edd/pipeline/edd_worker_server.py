@@ -297,6 +297,8 @@ def on_shutdown(ioloop, server):
     #    yield server.deconfigure()
     #else:
     #    pass
+    while server._pipeline_sensor_status.value() != "idle":
+        yield server.deconfigure()
     yield server.stop()
     ioloop.stop()
 
