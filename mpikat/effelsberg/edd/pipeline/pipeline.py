@@ -129,6 +129,10 @@ class ExecuteCommand(object):
 
     def finish(self):
         if RUN:
+            self._monitor_thread.join()
+            self._stderr_monitor_thread.join()
+            if self._outpath is not None:
+                self._png_monitor_thread.join()
             self._process.terminate()
 
     def stdout_notify(self):
