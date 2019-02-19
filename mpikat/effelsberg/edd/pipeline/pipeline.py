@@ -645,25 +645,6 @@ class Db2Dbnull(object):
         """@brief stop the dada_junkdb and dspsr instances."""
         log.debug("Stopping")
         self._timeout = 10
-        self._dspsr.set_finish_event()
-        yield self._dspsr.finish()
-
-        log.debug(
-            "Waiting {} seconds for DSPSR to terminate...".format(self._timeout))
-        now = time.time()
-        while time.time() - now < self._timeout:
-            retval = self._dspsr._process.poll()
-            if retval is not None:
-                log.info("Returned a return value of {}".format(retval))
-                break
-            else:
-                yield time.sleep(0.5)
-        else:
-            log.warning("Failed to terminate DSPSR in alloted time")
-            log.info("Killing process")
-            self._dspsr._process.kill()
-        # if self._mkrecv_ingest_proc
-
         self._mkrecv_ingest_proc.set_finish_event()
         yield self._mkrecv_ingest_proc.finish()
         log.debug(
@@ -699,6 +680,24 @@ class Db2Dbnull(object):
             log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
             self._archive_directory_monitor._process.kill()
+
+        self._dspsr.set_finish_event()
+        yield self._dspsr.finish()
+
+        log.debug(
+            "Waiting {} seconds for DSPSR to terminate...".format(self._timeout))
+        now = time.time()
+        while time.time() - now < self._timeout:
+            retval = self._dspsr._process.poll()
+            if retval is not None:
+                log.info("Returned a return value of {}".format(retval))
+                break
+            else:
+                yield time.sleep(0.5)
+        else:
+            log.warning("Failed to terminate DSPSR in alloted time")
+            log.info("Killing process")
+            self._dspsr._process.kill()
         self.state = "ready"
 
     def deconfigure(self):
