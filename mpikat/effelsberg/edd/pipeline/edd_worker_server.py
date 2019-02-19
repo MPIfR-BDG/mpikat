@@ -88,6 +88,7 @@ class EddWorkerServer(AsyncDeviceServer):
     @coroutine
     def stop(self):
         """Stop PafWorkerServer server"""
+        yield self.deconfigure()
         yield super(EddWorkerServer, self).stop()
 
     def setup_sensors(self):
@@ -285,14 +286,13 @@ class EddWorkerServer(AsyncDeviceServer):
 @coroutine
 def on_shutdown(ioloop, server):
     log.info('Shutting down server')
-    while server._pipeline_sensor_status.value() == "running":
+    if server._pipeline_sensor_status.value() == "running":
         log.info("Pipeline still running, stopping pipeline")
         yield server.stop_pipeline()
-        break
-    while server._pipeline_sensor_status.value() == "ready":
-        log.info("Pipeline still configured, deconfiguring pipeline")
-        yield server.deconfigure()
-        break
+    #
+    #elif server._pipeline_sensor_status.value() == "ready":
+    #    log.info("Pipeline still configured, deconfiguring pipeline")
+    #    yield server.deconfigure()
     #else:
     #    pass
     yield server.stop()
