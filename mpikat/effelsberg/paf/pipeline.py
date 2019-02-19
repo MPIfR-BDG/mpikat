@@ -1103,6 +1103,13 @@ class Search1Beam(Search):
 
 
 if __name__ == "__main__":
+    logging.getLogger().addHandler(logging.NullHandler())
+    logger = logging.getLogger('mpikat')
+    coloredlogs.install(
+        fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
+        level='DEBUG',
+        logger=logger)
+
     source_name = "DEBUG"
     ra = "00:00:00.00"   # "HH:MM:SS.SS"
     dec = "00:00:00.00"   # "DD:MM:SS.SS"
@@ -1114,13 +1121,6 @@ if __name__ == "__main__":
                         help='The ID of numa node')
     parser.add_argument('-b', '--beam', type=int, nargs='+',
                         help='The number of beams')
-
-    logging.getLogger().addHandler(logging.NullHandler())
-    logger = logging.getLogger('mpikat')
-    coloredlogs.install(
-        fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
-        level='DEBUG',
-        logger=logger)
 
     args = parser.parse_args()
     numa = args.numa[0]
