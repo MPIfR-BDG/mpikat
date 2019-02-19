@@ -651,15 +651,13 @@ class Db2Dbnull(object):
         """@brief stop the dada_junkdb and dspsr instances."""
         log.debug("Stopping")
         self._timeout = 10
-        #self._mkrecv_ingest_proc.set_finish_event()
-        #yield self._mkrecv_ingest_proc.finish()
-        process = [self._mkrecv_ingest_proc, self._dspsr, self._archive_directory_monitor]
-
+        process = [self._mkrecv_ingest_proc,
+                   self._dspsr, self._archive_directory_monitor]
         for proc in process:
             proc.set_finish_event()
             yield proc.finish()
             log.debug(
-                "Waiting {} seconds for proc {} to terminate...".format(self._timeout, proc))
+                "Waiting {} seconds for proc to terminate...".format(self._timeout, proc))
             now = time.time()
             while time.time() - now < self._timeout:
                 retval = proc._process.poll()
@@ -670,63 +668,9 @@ class Db2Dbnull(object):
                     yield time.sleep(0.5)
             else:
                 log.warning(
-                    "Failed to terminate _mkrecv_ingest_proc in alloted time")
+                    "Failed to terminate proc in alloted time")
                 log.info("Killing process")
-                proc._process.kill() 
-
-            """
-        log.debug(
-            "Waiting {} seconds for _mkrecv_ingest_proc to terminate...".format(self._timeout))
-        now = time.time()
-        while time.time() - now < self._timeout:
-            retval = self._mkrecv_ingest_proc._process.poll()
-            if retval is not None:
-                log.debug("Returned a return value of {}".format(retval))
-                break
-            else:
-                yield time.sleep(0.5)
-        else:
-            log.warning(
-                "Failed to terminate _mkrecv_ingest_proc in alloted time")
-            log.info("Killing process")
-            self._mkrecv_ingest_proc._process.kill()
-
-        self._dspsr.set_finish_event()
-        yield self._dspsr.finish()
-
-        log.debug(
-            "Waiting {} seconds for DSPSR to terminate...".format(self._timeout))
-        now = time.time()
-        while time.time() - now < self._timeout:
-            retval = self._dspsr._process.poll()
-            if retval is not None:
-                log.debug("Returned a return value of {}".format(retval))
-                break
-            else:
-                yield time.sleep(0.5)
-        else:
-            log.warning("Failed to terminate DSPSR in alloted time")
-            log.info("Killing process")
-            self._dspsr._process.kill()
-
-        self._archive_directory_monitor.set_finish_event()
-        yield self._archive_directory_monitor.finish()
-
-        log.debug(
-            "Waiting {} seconds for _archive_directory_monitor to terminate...".format(self._timeout))
-        now = time.time()
-        while time.time() - now < self._timeout:
-            retval = self._dspsr._process.poll()
-            if retval is not None:
-                log.debug("Returned a return value of {}".format(retval))
-                break
-            else:
-                yield time.sleep(0.5)
-        else:
-            log.warning("Failed to terminate DSPSR in alloted time")
-            log.info("Killing process")
-            self._archive_directory_monitor._process.kill()
-            """
+                proc._process.kill()
         self.state = "ready"
 
     def deconfigure(self):
