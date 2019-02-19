@@ -584,6 +584,7 @@ class Db2Dbnull(object):
         self._create_workdir_in_path._process.wait()
         cmd = "mkdir -p {}".format(out_path)
         log.debug("Command to run: {}".format(cmd))
+        log.info("Createing data directory {}".format(self.out_path))
         self._create_workdir_out_path = ExecuteCommand(
             cmd, outpath=None, resident=False)
         self._create_workdir_out_path.stdout_callbacks.add(
@@ -620,6 +621,7 @@ class Db2Dbnull(object):
             source_name=source_name,
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
+        log.info("Staring DSPSR")
         self._dspsr = ExecuteCommand(cmd,  outpath=None, resident=True)
         self._dspsr.stdout_callbacks.add(
             self._decode_capture_stdout)
@@ -628,6 +630,7 @@ class Db2Dbnull(object):
         cmd = "mkrecv_nt --header {} --dada-mode 4".format(
             dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
+        log.info("Staring MKRECV")
         self._mkrecv_ingest_proc = ExecuteCommand(
             cmd,  outpath=None, resident=True)
         self._mkrecv_ingest_proc.stdout_callbacks.add(
@@ -636,6 +639,7 @@ class Db2Dbnull(object):
         cmd = "python /home/psr/software/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
             in_path, out_path)
         log.debug("Running command: {0}".format(cmd))
+        log.info("Staring archive monitor")
         self._archive_directory_monitor = ExecuteCommand(
             cmd, outpath=out_path, resident=True)
         self._archive_directory_monitor.stdout_callbacks.add(
