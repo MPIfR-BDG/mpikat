@@ -130,10 +130,10 @@ class ExecuteCommand(object):
     def finish(self):
         if RUN:
             self._process.terminate()
-#            self._monitor_thread.join()
-#            self._stderr_monitor_thread.join()
-#            if self._outpath is not None:
-#                self._png_monitor_thread.join()
+            self._monitor_thread.join()
+            self._stderr_monitor_thread.join()
+            if self._outpath is not None:
+                self._png_monitor_thread.join()
 
     def stdout_notify(self):
         for callback in self.stdout_callbacks:
