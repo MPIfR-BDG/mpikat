@@ -647,7 +647,7 @@ class Db2Dbnull(object):
         self._timeout = 10
         # if self._mkrecv_ingest_proc
         self._mkrecv_ingest_proc.set_finish_event()
-        self._mkrecv_ingest_proc.finish()
+        yield self._mkrecv_ingest_proc.finish()
         log.debug(
             "Waiting {} seconds for _mkrecv_ingest_proc to terminate...".format(self._timeout))
         now = time.time()
@@ -665,7 +665,7 @@ class Db2Dbnull(object):
             self._mkrecv_ingest_proc.kill()
 
         self._dspsr.set_finish_event()
-        self._dspsr.finish()
+        yield self._dspsr.finish()
 
         log.debug(
             "Waiting {} seconds for DSPSR to terminate...".format(self._timeout))
@@ -683,7 +683,7 @@ class Db2Dbnull(object):
             self._dspsr.kill()
 
         self._archive_directory_monitor.set_finish_event()
-        self._archive_directory_monitor.finish()
+        yield self._archive_directory_monitor.finish()
 
         log.debug(
             "Waiting {} seconds for _archive_directory_monitor to terminate...".format(self._timeout))
