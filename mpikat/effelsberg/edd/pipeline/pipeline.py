@@ -662,7 +662,7 @@ class Db2Dbnull(object):
             log.warning(
                 "Failed to terminate _mkrecv_ingest_proc in alloted time")
             log.info("Killing process")
-            self._mkrecv_ingest_proc.kill()
+            self._mkrecv_ingest_proc._process.kill()
 
         self._dspsr.set_finish_event()
         yield self._dspsr.finish()
@@ -680,7 +680,7 @@ class Db2Dbnull(object):
         else:
             log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
-            self._dspsr.kill()
+            self._dspsr._process.kill()
 
         self._archive_directory_monitor.set_finish_event()
         yield self._archive_directory_monitor.finish()
@@ -698,7 +698,7 @@ class Db2Dbnull(object):
         else:
             log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
-            self._archive_directory_monitor.kill()
+            self._archive_directory_monitor._process.kill()
         self.state = "ready"
 
     def deconfigure(self):
