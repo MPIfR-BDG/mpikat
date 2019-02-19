@@ -519,7 +519,7 @@ class Db2Dbnull(object):
         log.debug(returncode)
 
     def _handle_execution_stderr(self, stderr, callback):
-        log.info(stderr)
+        log.debug(stderr)
 
     def _add_tscrunch_to_sensor(self, png_blob, callback):
         self._tscrunch.set_value(png_blob)
