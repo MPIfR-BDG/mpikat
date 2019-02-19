@@ -164,7 +164,7 @@ class EddWorkerServer(AsyncDeviceServer):
             log.info("pipeline instance {} configured".format(
                 self._pipeline_sensor_name.value()))
 
-    @request(Str())
+    @request()
     @return_reply(Str())
     def request_start(self, req):
         """
