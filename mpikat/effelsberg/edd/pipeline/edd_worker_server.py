@@ -4,6 +4,7 @@ import coloredlogs
 import signal
 import json
 import os
+import Time
 from optparse import OptionParser
 from tornado.gen import Return, coroutine
 from tornado.iostream import IOStream
@@ -298,7 +299,10 @@ def on_shutdown(ioloop, server):
     #else:
     #    pass
     while server._pipeline_sensor_status.value() != "idle":
+        log.info("Pipeline still configured, deconfiguring pipeline")
+        Time.sleep(10)
         yield server.deconfigure()
+        break
     yield server.stop()
     ioloop.stop()
 
