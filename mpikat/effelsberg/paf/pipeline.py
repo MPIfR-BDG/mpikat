@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import coloredlogs
 import ConfigParser
 import json
 import numpy as np
@@ -25,7 +25,7 @@ import os
 # 4. Add callbacks for stderr and returncode for class ExecuteCommand;
 # 5. Check the memory size before execute;
 
-log = logging.getLogger("mpikat.paf_pipeline")
+#log = logging.getLogger("mpikat.paf_pipeline")
 
 EXECUTE = True
 #EXECUTE        = False
@@ -1072,6 +1072,14 @@ class Search1Beam(Search):
 
 
 if __name__ == "__main__":
+    logging.getLogger().addHandler(logging.NullHandler())
+    logger = logging.getLogger('mpikat')
+    coloredlogs.install(
+        fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
+        level='DEBUG',
+        logger=logger)
+    logging.getLogger('katcp').setLevel('INFO')
+    log = logging.getLogger("mpikat.effelsberg.edd.pipeline.edd_worker_server")
     source_name = "DEBUG"
     ra = "00:00:00.00"   # "HH:MM:SS.SS"
     dec = "00:00:00.00"   # "DD:MM:SS.SS"
@@ -1083,7 +1091,7 @@ if __name__ == "__main__":
                         help='The ID of numa node')
     parser.add_argument('-b', '--beam', type=int, nargs='+',
                         help='The number of beams')
-
+    log.debug("testing")
     args = parser.parse_args()
     numa = args.numa[0]
     beam = args.beam[0]
