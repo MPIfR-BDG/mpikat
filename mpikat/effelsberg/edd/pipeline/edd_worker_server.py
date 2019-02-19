@@ -165,7 +165,7 @@ class EddWorkerServer(AsyncDeviceServer):
             log.error(msg)
             raise EddPipelineError(msg)
         else:
-            log.info("pipeline instance {} configured".format(
+            log.info("Pipeline instance {} configured".format(
                 self._pipeline_sensor_name.value()))
 
     @request()

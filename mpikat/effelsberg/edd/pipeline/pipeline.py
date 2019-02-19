@@ -238,7 +238,7 @@ class ExecuteCommand(object):
 
     def _png_monitor(self):
         if RUN:
-            #time.sleep(30)
+            # time.sleep(30)
             while self._process.poll() == None:
                 try:
                     with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
@@ -578,14 +578,14 @@ class Db2Dbnull(object):
         log.debug("Command to run: {}".format(cmd))
         log.debug("Current working directory: {}".format(os.getcwd()))
         self._create_workdir_in_path = ExecuteCommand(
-            cmd,  outpath=None, resident=False)
+            cmd, outpath=None, resident=False)
         self._create_workdir_in_path.stdout_callbacks.add(
             self._decode_capture_stdout)
         self._create_workdir_in_path._process.wait()
         cmd = "mkdir -p {}".format(out_path)
         log.debug("Command to run: {}".format(cmd))
         self._create_workdir_out_path = ExecuteCommand(
-            cmd,  outpath=None, resident=False)
+            cmd, outpath=None, resident=False)
         self._create_workdir_out_path.stdout_callbacks.add(
             self._decode_capture_stdout)
         self._create_workdir_out_path._process.wait()
@@ -651,8 +651,29 @@ class Db2Dbnull(object):
         """@brief stop the dada_junkdb and dspsr instances."""
         log.debug("Stopping")
         self._timeout = 10
-        self._mkrecv_ingest_proc.set_finish_event()
-        yield self._mkrecv_ingest_proc.finish()
+        #self._mkrecv_ingest_proc.set_finish_event()
+        #yield self._mkrecv_ingest_proc.finish()
+
+        for proc in [self._mkrecv_ingest_proc, self._dspsr, self._archive_directory_monitor]:
+            self.proc.set_finish_event()
+            yield self.proc.finish()
+            log.debug(
+                "Waiting {} seconds for proc {} to terminate...".format(self._timeout, proc))
+            now = time.time()
+            while time.time() - now < self._timeout:
+                retval = self.proc._process.poll()
+                if retval is not None:
+                    log.debug("Returned a return value of {}".format(retval))
+                    break
+                else:
+                    yield time.sleep(0.5)
+            else:
+                log.warning(
+                    "Failed to terminate _mkrecv_ingest_proc in alloted time")
+                log.info("Killing process")
+                self.proc._process.kill() 
+
+            """
         log.debug(
             "Waiting {} seconds for _mkrecv_ingest_proc to terminate...".format(self._timeout))
         now = time.time()
@@ -704,6 +725,7 @@ class Db2Dbnull(object):
             log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
             self._archive_directory_monitor._process.kill()
+            """
         self.state = "ready"
 
     def deconfigure(self):
@@ -718,6 +740,7 @@ class Db2Dbnull(object):
             self._decode_capture_stdout)
         self._destory_ring_buffer._process.wait()
         self.state = "idle"
+
 
 @register_pipeline("DspsrPipelineUptotrix")
 class Mkrecv2Db(object):
