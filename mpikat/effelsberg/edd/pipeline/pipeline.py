@@ -534,6 +534,7 @@ class Db2Dbnull(object):
     @gen.coroutine
     def configure(self):
         """@brief destroy any ring buffer and create new ring buffer."""
+        self.state = "configuring"
         self._config = CONFIG
         self._dada_key = CONFIG["dada_db_params"]["key"]
         try:
@@ -555,7 +556,7 @@ class Db2Dbnull(object):
     @gen.coroutine
     def start(self):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
-        self.state = "running"
+        self.state = "starting"
         header = self._config["dada_header_params"]
         header["ra"] = sensors["ra"]
         header["dec"] = sensors["dec"]
@@ -643,6 +644,7 @@ class Db2Dbnull(object):
             self._add_fscrunch_to_sensor)
         self._archive_directory_monitor.tscrunch_callbacks.add(
             self._add_tscrunch_to_sensor)
+        self.state = "running"
 
     @gen.coroutine
     def stop(self):
@@ -657,7 +659,7 @@ class Db2Dbnull(object):
         while time.time() - now < self._timeout:
             retval = self._mkrecv_ingest_proc._process.poll()
             if retval is not None:
-                log.info("Returned a return value of {}".format(retval))
+                log.debug("Returned a return value of {}".format(retval))
                 break
             else:
                 yield time.sleep(0.5)
@@ -676,7 +678,7 @@ class Db2Dbnull(object):
         while time.time() - now < self._timeout:
             retval = self._dspsr._process.poll()
             if retval is not None:
-                log.info("Returned a return value of {}".format(retval))
+                log.debug("Returned a return value of {}".format(retval))
                 break
             else:
                 yield time.sleep(0.5)
@@ -694,7 +696,7 @@ class Db2Dbnull(object):
         while time.time() - now < self._timeout:
             retval = self._dspsr._process.poll()
             if retval is not None:
-                log.info("Returned a return value of {}".format(retval))
+                log.debug("Returned a return value of {}".format(retval))
                 break
             else:
                 yield time.sleep(0.5)
@@ -702,12 +704,11 @@ class Db2Dbnull(object):
             log.warning("Failed to terminate DSPSR in alloted time")
             log.info("Killing process")
             self._archive_directory_monitor._process.kill()
-
         self.state = "ready"
 
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
-        self.state = "idle"
+        self.state = "deconfiguring"
         log.debug("Destroying dada buffer")
         cmd = "dada_db -d -k {0}".format(self._dada_key)
         log.debug("Running command: {0}".format(cmd))
@@ -716,24 +717,7 @@ class Db2Dbnull(object):
         self._destory_ring_buffer.stdout_callbacks.add(
             self._decode_capture_stdout)
         self._destory_ring_buffer._process.wait()
-
-        #log.debug("Sending SIGTERM to MKRECV process")
-        #    self._mkrecv_ingest_proc.terminate()
-        #    self._mkrecv_timeout = 10.0
-        #    log.debug("Waiting {} seconds for MKRECV to terminate...".format(self._mkrecv_timeout))
-        #    now = time.time()
-        #    while time.time()-now < self._mkrecv_timeout:
-        #        retval = self._mkrecv_ingest_proc.poll()
-        #        if retval is not None:
-        #            log.info("MKRECV returned a return value of {}".format(retval))
-        #            break
-        #        else:
-        #            yield sleep(0.5)
-        #    else:
-        #        log.warning("MKRECV failed to terminate in alloted time")
-        #        log.info("Killing MKRECV process")
-        #        self._mkrecv_ingest_proc.kill()
-
+        self.state = "idle"
 
 @register_pipeline("DspsrPipelineUptotrix")
 class Mkrecv2Db(object):

@@ -263,7 +263,6 @@ class EddWorkerServer(AsyncDeviceServer):
 
     @coroutine
     def stop_pipeline(self):
-        self._pipeline_sensor_status.set_value("stopping")
         try:
             self._pipeline_instance.stop()
         except Exception as error:
