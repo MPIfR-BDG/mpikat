@@ -287,16 +287,10 @@ def on_shutdown(ioloop, server):
     log.info('Shutting down server')
     if server._pipeline_sensor_status.value() == "running":
         log.info("Pipeline still running, stopping pipeline")
-        try:
-            server.stop_pipeline()
-        except:
-            server.deconfigure()
+        yield server.stop_pipeline()
     elif server._pipeline_sensor_status.value() == "ready":
         log.info("Pipeline still configured, deconfiguring pipeline")
-        try:
-            server.deconfigure()
-        except:
-            pass
+        yield server.deconfigure()
     else:
         pass
     yield server.stop()
