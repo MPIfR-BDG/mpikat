@@ -12,20 +12,28 @@ from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from mpikat.effelsberg.edd.pipeline.pipeline import PIPELINES
 
 
-log = logging.getLogger("mpikat.edd.pipeline.edd_worker_server")
+log = logging.getLogger("mpikat.effelsberg.edd.pipeline.edd_worker_server")
 
 #PIPELINES = {"mock":mock.Mock()}
 
 # P8_IP="10.17.8.2"
 
 
-class PafWorkerServer(AsyncDeviceServer):
+class EddPipelineKeyError(Exception):
+    pass
+
+
+class EddPipelineError(Exception):
+    pass
+
+
+class EddWorkerServer(AsyncDeviceServer):
     """
     @brief Interface object which accepts KATCP commands
 
     """
-    VERSION_INFO = ("mpikat-paf-api", 1, 0)
-    BUILD_INFO = ("mpikat-paf-implementation", 0, 1, "rc1")
+    VERSION_INFO = ("mpikat-edd-api", 1, 0)
+    BUILD_INFO = ("mpikat-edd-implementation", 0, 1, "rc1")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
     PIPELINE_STATES = ["idle", "configuring", "ready",
                        "starting", "running", "stopping",
@@ -39,7 +47,7 @@ class PafWorkerServer(AsyncDeviceServer):
         @param port     port of the PafWorkerServer
 
         """
-        super(PafWorkerServer, self).__init__(ip, port)
+        super(EddWorkerServer, self).__init__(ip, port)
         self.ip = ip
         self._managed_sensors = []
 
@@ -48,13 +56,9 @@ class PafWorkerServer(AsyncDeviceServer):
         @brief Add pipeline sensors to the managed sensors list
 
         """
-        log.debug("trying to add_sensor")
-        log.debug(self._pipeline_instance.sensors)
         for sensor in self._pipeline_instance.sensors:
             log.debug("sensor name is {}".format(sensor))
             self.add_sensor(sensor)
-            log.debug("trying to add_sensor?")
-            #self._pipeline_instance.register_listener(sensor, reading= True)
             self._managed_sensors.append(sensor)
         self.mass_inform(Message.inform('interface-changed'))
 
@@ -65,7 +69,7 @@ class PafWorkerServer(AsyncDeviceServer):
         """
         for sensor in self._managed_sensors:
             self.remove_sensor(sensor)
-            self._managed_sensors.remove(sensor)
+        self._managed_sensors = []
         self.mass_inform(Message.inform('interface-changed'))
 
     def state_change(self, state, callback):
@@ -77,13 +81,14 @@ class PafWorkerServer(AsyncDeviceServer):
         log.info('New state of the pipeline is {}'.format(str(state)))
         self._pipeline_sensor_status.set_value(str(state))
 
+    @coroutine
     def start(self):
-        super(PafWorkerServer, self).start()
+        super(EddWorkerServer, self).start()
 
     @coroutine
     def stop(self):
         """Stop PafWorkerServer server"""
-        yield super(PafWorkerServer, self).stop()
+        yield super(EddWorkerServer, self).stop()
 
     def setup_sensors(self):
         """
@@ -110,7 +115,7 @@ class PafWorkerServer(AsyncDeviceServer):
         self.add_sensor(self._pipeline_sensor_status)
 
     @request(Str())
-    @return_reply(Str())
+    @return_reply()
     def request_configure(self, req, pipeline_name):
         """
         @brief      Configure pipeline
@@ -118,44 +123,48 @@ class PafWorkerServer(AsyncDeviceServer):
         @param      pipeline    name of the pipeline
         """
         @coroutine
-        def configure_pipeline():
-            self._pipeline_sensor_name.set_value(pipeline_name)
-            log.info("Configuring pipeline {}".format(
-                self._pipeline_sensor_name.value()))
+        def configure_wrapper():
             try:
-                _pipeline_type = PIPELINES[self._pipeline_sensor_name.value()]
-            except KeyError as error:
-                msg = "No pipeline called '{}', available pipeline are: \n{}".format(
-                    self._pipeline_sensor_name.value(), "\n".join(PIPELINES.keys()))
-                log.info("{}".format(msg))
-                req.reply("fail", msg)
-                self._pipeline_sensor_status.set_value("error")
-                self._pipeline_sensor_name.set_value("")
+                yield self.configure_pipeline(pipeline_name)
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(configure_wrapper)
+        raise AsyncReply
+
+    @coroutine
+    def configure_pipeline(self, pipeline_name):
+        self._pipeline_sensor_name.set_value(pipeline_name)
+        log.info("Configuring pipeline {}".format(
+            self._pipeline_sensor_name.value()))
+        try:
+            _pipeline_type = PIPELINES[self._pipeline_sensor_name.value()]
+        except KeyError as error:
+            msg = "No pipeline called '{}', available pipeline are: \n{}".format(
+                self._pipeline_sensor_name.value(), "\n".join(PIPELINES.keys()))
+            log.err(msg)
+            self._pipeline_sensor_name.set_value("")
+            raise EddPipelineKeyError(msg)
+        try:
+            log.debug(
+                "Trying to create pipeline instance: {}".format(pipeline_name))
             self._pipeline_instance = _pipeline_type()
             self.add_pipeline_sensors()
             self._pipeline_instance.callbacks.add(self.state_change)
-            try:
-                self._pipeline_instance.configure()
-            except Exception as error:
-                msg = "Couldn't start configure pipeline instance {}".format(
-                    str(error))
-                log.info("{}".format(msg))
-                req.reply("fail", msg)
-                self._pipeline_sensor_status.set_value("error")
-                self._pipeline_sensor_name.set_value("")
-            msg = "pipeline instance configured"
-            log.info("{}".format(msg))
-            req.reply("ok", msg)
-        if self._pipeline_sensor_status.value() == "idle":
-            self.ioloop.add_callback(configure_pipeline)
-            raise AsyncReply
+            self._pipeline_instance.configure()
+        except Exception as error:
+            self._pipeline_sensor_name.set_value("")
+            msg = "Couldn't start configure pipeline instance {}".format(
+                str(error))
+            log.error(msg)
+            raise EddPipelineError(msg)
         else:
-            msg = "Can't Configure, status = {}".format(
-                self._pipeline_sensor_status.value())
-            log.info("{}".format(msg))
-            return ("fail", msg)
+            log.info("pipeline instance {} configured".format(
+                self._pipeline_sensor_name.value()))
 
-    @request()
+    @request(Str())
     @return_reply(Str())
     def request_start(self, req):
         """
@@ -163,57 +172,35 @@ class PafWorkerServer(AsyncDeviceServer):
 
         """
         @coroutine
-        def start_pipeline():
+        def start_wrapper():
             try:
-                self._pipeline_instance.start()
+                yield self.start_pipeline()
             except Exception as error:
-                msg = "Couldn't start pipeline server {}".format(error)
-                log.info("{}".format(msg))
-                req.reply("fail", msg)
-                self._pipeline_sensor_status.set_value("error")   
-            msg = "Start pipeline {}".format(
-                self._pipeline_sensor_name.value())
-            log.info("{}".format(msg))
-            req.reply("ok", msg)
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(start_wrapper)
+        raise AsyncReply
 
-        if self._pipeline_sensor_status.value() == "ready":
-            self.ioloop.add_callback(start_pipeline)
-            raise AsyncReply
+    @coroutine
+    def start_pipeline(self):
+        try:
+            #config = json.loads(config_json)
+            #utc_start_process = Time.now()
+            #source_name = config["source-name"]
+            #ra = config["ra"]
+            #dec = config["dec"]
+            # self._pipeline_instance.start(
+            #    utc_start_process, source_name, ra, dec)
+            self._pipeline_instance.start()
+        except Exception as error:
+            msg = "Couldn't start pipeline server {}".format(str(error))
+            log.error(msg)
+            raise EddPipelineError(msg)
         else:
-            msg = "pipeline is not in the state of configured, status = {} ".format(
-                self._pipeline_sensor_status.value())
-            log.info("{}".format(msg))
-            return ("fail", msg)
-
-    @request()
-    @return_reply(Str())
-    def request_stop(self, req):
-        """
-        @brief      Stop pipeline
-
-        """
-        @coroutine
-        def stop_pipeline():
-            self._pipeline_sensor_status.set_value("stopping")
-            try:
-                self._pipeline_instance.stop()
-            except Exception as error:
-                msg = "Couldn't stop pipeline {}".format(error)
-                log.info("{}".format(msg))
-                req.reply("fail", msg)
-                self._pipeline_sensor_status.set_value("error")
-            msg = "Stop pipeline {}".format(self._pipeline_sensor_name.value())
-            log.info("{}".format(msg))
-            req.reply("ok", msg)
-
-        if self._pipeline_sensor_status.value() == "running":
-            self.ioloop.add_callback(stop_pipeline)
-            raise AsyncReply
-        else:
-            msg = "nothing to stop, status = {}".format(
-                self._pipeline_sensor_status.value())
-            log.info("{}".format(msg))
-            return ("fail", msg)
+            log.info("Starting pipeline {}".format(
+                self._pipeline_sensor_name.value()))
 
     @request()
     @return_reply(Str())
@@ -223,31 +210,65 @@ class PafWorkerServer(AsyncDeviceServer):
 
         """
         @coroutine
-        def deconfigure():
-            log.info("deconfiguring pipeline {}".format(
-                self._pipeline_sensor_name.value()))
+        def deconfigure_wrapper():
             try:
-                self.remove_pipeline_sensors()
-                self._pipeline_instance.deconfigure()
-                del self._pipeline_instance
+                yield self.deconfigure()
             except Exception as error:
-                msg = "Couldn't deconfigure pipeline {}".format(error)
-                log.info("{}".format(msg))
-                req.reply("fail", msg)
-                self._pipeline_sensor_status.set_value("error")
-            msg = "deconfigured pipeline {}".format(
-                self._pipeline_sensor_name.value())
-            log.info("{}".format(msg))
-            req.reply("ok", msg)
-            self._pipeline_sensor_name.set_value("")
-        if self._pipeline_sensor_status.value() == "ready":
-            self.ioloop.add_callback(deconfigure)
-            raise AsyncReply
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(deconfigure_wrapper)
+        raise AsyncReply
+
+    @coroutine
+    def deconfigure(self):
+        log.info("Deconfiguring pipeline {}".format(
+            self._pipeline_sensor_name.value()))
+        try:
+            self.remove_pipeline_sensors()
+            self._pipeline_instance.deconfigure()
+            del self._pipeline_instance
+        except Exception as error:
+            msg = "Couldn't deconfigure pipeline {}".format(str(error))
+            log.error(msg)
+            raise EddPipelineError(msg)
         else:
-            msg = "nothing to deconfigure, status = {}".format(
-                self._pipeline_sensor_status.value())
-            log.info("{}".format(msg))
-            return ("fail", msg)
+            log.info("Deconfigured pipeline {}".format(
+                self._pipeline_sensor_name.value()))
+            self._pipeline_sensor_name.set_value("")
+
+    @request()
+    @return_reply(Str())
+    def request_stop(self, req):
+        """
+        @brief      Stop pipeline
+
+        """
+        @coroutine
+        def stop_wrapper():
+            try:
+                yield self.stop_pipeline()
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(stop_wrapper)
+        raise AsyncReply
+
+    @coroutine
+    def stop_pipeline(self):
+        self._pipeline_sensor_status.set_value("stopping")
+        try:
+            self._pipeline_instance.stop()
+        except Exception as error:
+            msg = "Couldn't stop pipeline {}".format(str(error))
+            log.error(msg)
+            raise EddPipelineError(msg)
+        else:
+            log.info("Stopping pipeline {}".format(
+                self._pipeline_sensor_name.value()))
 
     @request()
     @return_reply(Str())
@@ -264,6 +285,12 @@ class PafWorkerServer(AsyncDeviceServer):
 @coroutine
 def on_shutdown(ioloop, server):
     log.info('Shutting down server')
+    if server._pipeline_sensor_status.value() == "running":
+        yield server.stop_pipeline()
+    elif server._pipeline_sensor_status.value() == "stop":
+        yield server.deconfigure()
+    else:
+        pass
     yield server.stop()
     ioloop.stop()
 
@@ -287,7 +314,7 @@ def main():
     logging.getLogger('katcp').setLevel('INFO')
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting PafWorkerServer instance")
-    server = PafWorkerServer(opts.host, opts.port)
+    server = EddWorkerServer(opts.host, opts.port)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
 
