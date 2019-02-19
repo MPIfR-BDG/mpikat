@@ -261,7 +261,7 @@ class EddWorkerServer(AsyncDeviceServer):
     def stop_pipeline(self):
         self._pipeline_sensor_status.set_value("stopping")
         try:
-            yield self._pipeline_instance.stop()
+            self._pipeline_instance.stop()
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
             log.error(msg)
@@ -288,14 +288,14 @@ def on_shutdown(ioloop, server):
     if server._pipeline_sensor_status.value() == "running":
         log.info("Pipeline still running, stopping pipeline")
         try:
-            yield server.stop_pipeline()
-            yield server.deconfigure()
+            server.stop_pipeline()
+            server.deconfigure()
         except:
             pass
     elif server._pipeline_sensor_status.value() == "ready":
         log.info("Pipeline still configured, deconfiguring pipeline")
         try:
-            yield server.deconfigure()
+            server.deconfigure()
         except:
             pass
     else:
