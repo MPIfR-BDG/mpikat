@@ -276,7 +276,7 @@ class ExecuteCommand(object):
 
 
 @register_pipeline("DspsrPipelineSrxdev")
-class Db2Dbnull(object):
+class Mkrecv2Db2Dspsr(object):
     """@brief dspsr pipeline class."""
 
     def __del__(self):
@@ -371,11 +371,12 @@ class Db2Dbnull(object):
     def start(self, config_json):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
         self.state = "starting"
-        self._source_config= json.loads(config_json)
+        self._source_config = json.loads(config_json)
         header = self._config["dada_header_params"]
         header["ra"] = self._source_config["ra"]
         header["dec"] = self._source_config["dec"]
         source_name = self._source_config["source-name"]
+        log.debug("config recevied {} {} {}".format(source_name, header["ra"], header["dec"]))
         try:
             source_name = source_name.split("_")[0]
         except Exception as error:
@@ -437,7 +438,7 @@ class Db2Dbnull(object):
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring DSPSR")
-        self._dspsr = ExecuteCommand(cmd,  outpath=None, resident=True)
+        self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
         self._dspsr.stdout_callbacks.add(
             self._decode_capture_stdout)
         self._dspsr.stderr_callbacks.add(
