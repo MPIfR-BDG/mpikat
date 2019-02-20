@@ -47,11 +47,11 @@ CONFIG = {
     "base_output_dir": os.getcwd(),
     "dspsr_params":
     {
-        "args": "-cpu 2,3 -L 10 -r -F 256:D -cuda 0,0 -minram 1024"
+        "args": "-cpu 2,3 -L 10 -r -F 256:D -x 16384 -cuda 0,0 -minram 1024"
     },
     "dada_db_params":
     {
-        "args": "-n 16 -b 671088640 -p -l",
+        "args": "-n 8 -b 671088640 -p -l",
         "key": "dada"
     },
     "dada_header_params":
@@ -375,8 +375,11 @@ class Mkrecv2Db2Dspsr(object):
         header = self._config["dada_header_params"]
         header["ra"] = self._source_config["ra"]
         header["dec"] = self._source_config["dec"]
+        #header["sync_time"] = self._source_config["sync_time"]
+        #header["sync_time"] = self._source_config["sample_clock"]
         source_name = self._source_config["source-name"]
-        log.debug("config recevied {} {} {}".format(source_name, header["ra"], header["dec"]))
+        log.debug("config recevied {} {} {}".format(
+            source_name, header["ra"], header["dec"]))
         try:
             source_name = source_name.split("_")[0]
         except Exception as error:
@@ -407,6 +410,15 @@ class Mkrecv2Db2Dspsr(object):
             self._decode_capture_stdout)
         self._create_workdir_out_path._process.wait()
         os.chdir(in_path)
+        # Create predictor output = t2pred.dat
+        cmd = "psrcat -E {source_name} > {source_name}.par > {source_name}.par".format(
+            source_name=source_name)
+        log.debug("Command to run: {}".format(cmd))
+        self.psrcat = ExecuteCommand(cmd, outpath=None, resident=False)
+        cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} 1400 1420 8 2 3599.999999999"'.format(
+            source_name, mjd - 0.5, mjd + 0.5)
+        log.debug("Command to run: {}".format(cmd))
+        self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
         log.debug("Change to workdir: {}".format(os.getcwd()))
         log.debug("Current working directory: {}".format(os.getcwd()))
         dada_header_file = tempfile.NamedTemporaryFile(
@@ -432,9 +444,12 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-        cmd = "dspsr {args} -N {source_name} {keyfile}".format(
+
+#-P /home/psr/software/mpikat/t2pred.dat -E /home/psr/software/mpikat/J1012+5307.par
+        cmd = "dspsr {args} -P {predictor} -E {parfile} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
-            source_name=source_name,
+            predictor="{}/t2pred.dat".format(in_path),
+            parfile="{}/{}.par".format(in_path, source_name),
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring DSPSR")

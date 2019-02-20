@@ -51,8 +51,8 @@ DSB
 DADA_KEY     dada                    # The dada key to write to
 DADA_MODE    4                       # The mode, 4=full dada functionality
 ORDER        T                       # Here we are only capturing one polarisation, so data is time only
-SYNC_TIME    1550678410.000000000
-SAMPLE_CLOCK 2600000000
+SYNC_TIME    {{sync_time}}
+SAMPLE_CLOCK {{sample_clock}}
 PACKET_SIZE 8400
 NTHREADS 32
 NHEAPS 256
@@ -87,6 +87,8 @@ DADA_DEFAULTS = {
     "obs_id": "unset",
     "filesize": 320000000000,
     "mjd": 57000,
+    "sync_time" :1550678891.0,
+    "sample_clock": 2600000000,
     "source": "B1937+21",
     "ra": "00:00:00.00",
     "dec": "00:00:00.00",
