@@ -42,7 +42,7 @@ PIPELINES = {}
 PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
                    "deconfiguring", "error"]
-
+#        "args": "-n 64 -b 67108864 -p -l",
 CONFIG = {
     "base_output_dir": os.getcwd(),
     "dspsr_params":
@@ -51,7 +51,7 @@ CONFIG = {
     },
     "dada_db_params":
     {
-        "args": "-n 64 -b 67108864 -p -l",
+        "args": "-n 16 -b 671088640 -p -l",
         "key": "dada"
     },
     "dada_header_params":
