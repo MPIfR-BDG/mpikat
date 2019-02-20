@@ -51,8 +51,8 @@ DSB
 DADA_KEY     dada                    # The dada key to write to
 DADA_MODE    4                       # The mode, 4=full dada functionality
 ORDER        T                       # Here we are only capturing one polarisation, so data is time only
-SYNC_TIME    unset
-SAMPLE_CLOCK unset
+SYNC_TIME    1550678410.000000000
+SAMPLE_CLOCK 2600000000
 PACKET_SIZE 8400
 NTHREADS 32
 NHEAPS 256
