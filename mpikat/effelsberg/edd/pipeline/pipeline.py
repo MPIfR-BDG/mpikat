@@ -260,7 +260,7 @@ class ExecuteCommand(object):
 
     def _png_monitor(self):
         if RUN:
-            time.sleep(20)
+            time.sleep(30)
             while self._process.poll() == None:
                 try:
                     with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
