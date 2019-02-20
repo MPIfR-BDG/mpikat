@@ -260,7 +260,7 @@ class ExecuteCommand(object):
 
     def _png_monitor(self):
         if RUN:
-            # time.sleep(30)
+            time.sleep(20)
             while self._process.poll() == None:
                 try:
                     with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
@@ -272,7 +272,7 @@ class ExecuteCommand(object):
                         self.tscrunch = base64.b64encode(imageFile.read())
                 except Exception as error:
                     raise PulsarPipelineError(str(error))
-                time.sleep(2)
+                time.sleep(5)
 
 
 @register_pipeline("DspsrPipelineSrxdev")
