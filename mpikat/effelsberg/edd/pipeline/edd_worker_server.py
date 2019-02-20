@@ -1,9 +1,29 @@
+"""
+Copyright (c) 2019 Jason Wu <jwu@mpifr-bonn.mpg.de>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
 import logging
 import tornado
 import coloredlogs
 import signal
 import json
-import os
 import time
 from optparse import OptionParser
 from tornado.gen import Return, coroutine
@@ -120,7 +140,7 @@ class EddWorkerServer(AsyncDeviceServer):
 
     @request(Str())
     @return_reply()
-    def request_configure(self, req, pipeline_name):
+    def request_configure(self, req, config_json):
         """
         @brief      Configure pipeline
 
@@ -129,7 +149,7 @@ class EddWorkerServer(AsyncDeviceServer):
         @coroutine
         def configure_wrapper():
             try:
-                yield self.configure_pipeline(pipeline_name)
+                yield self.configure_pipeline(config_json)
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
@@ -139,7 +159,14 @@ class EddWorkerServer(AsyncDeviceServer):
         raise AsyncReply
 
     @coroutine
-    def configure_pipeline(self, pipeline_name):
+    def configure_pipeline(self, config_json):
+        try:
+            config_dict = json.loads(config_json)
+            pipeline_name = config_dict["mode"]
+        except KeyError as error:
+            msg = "Error getting the pipeline name from config_json: {}".format(str(error))
+            log.error(msg)
+            raise EddPipelineKeyError(msg)
         self._pipeline_sensor_name.set_value(pipeline_name)
         log.info("Configuring pipeline {}".format(
             self._pipeline_sensor_name.value()))
@@ -148,8 +175,8 @@ class EddWorkerServer(AsyncDeviceServer):
         except KeyError as error:
             msg = "No pipeline called '{}', available pipeline are: \n{}".format(
                 self._pipeline_sensor_name.value(), "\n".join(PIPELINES.keys()))
-            log.err(msg)
             self._pipeline_sensor_name.set_value("")
+            log.err(msg)
             raise EddPipelineKeyError(msg)
         try:
             log.debug(
@@ -157,6 +184,8 @@ class EddWorkerServer(AsyncDeviceServer):
             self._pipeline_instance = _pipeline_type()
             self.add_pipeline_sensors()
             self._pipeline_instance.callbacks.add(self.state_change)
+            config = json.loads(config_json)
+            log.debug("Unpacked config: {}".format(config))
             self._pipeline_instance.configure()
         except Exception as error:
             self._pipeline_sensor_name.set_value("")
@@ -168,9 +197,9 @@ class EddWorkerServer(AsyncDeviceServer):
             log.info("Pipeline instance {} configured".format(
                 self._pipeline_sensor_name.value()))
 
-    @request()
+    @request(Str())
     @return_reply(Str())
-    def request_start(self, req):
+    def request_start(self, req, config_json):
         """
         @brief      Start pipeline
 
@@ -178,7 +207,7 @@ class EddWorkerServer(AsyncDeviceServer):
         @coroutine
         def start_wrapper():
             try:
-                yield self.start_pipeline()
+                yield self.start_pipeline(config_json)
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
@@ -188,16 +217,17 @@ class EddWorkerServer(AsyncDeviceServer):
         raise AsyncReply
 
     @coroutine
-    def start_pipeline(self):
+    def start_pipeline(self, config_json):
         try:
-            #config = json.loads(config_json)
+            config = json.loads(config_json)
             #utc_start_process = Time.now()
-            #source_name = config["source-name"]
-            #ra = config["ra"]
-            #dec = config["dec"]
+            source_name = config["source-name"]
+            ra = config["ra"]
+            dec = config["dec"]
+            log.info("staring pipeline for {} at {}, {}".format(source_name, ra, dec))
             # self._pipeline_instance.start(
             #    utc_start_process, source_name, ra, dec)
-            self._pipeline_instance.start()
+            self._pipeline_instance.start(config_json)
         except Exception as error:
             msg = "Couldn't start pipeline server {}".format(str(error))
             log.error(msg)
