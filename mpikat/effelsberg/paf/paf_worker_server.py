@@ -277,7 +277,7 @@ class PafWorkerServer(AsyncDeviceServer):
     def start_pipeline(self, config_json):
         try:
             config = json.loads(config_json)
-            utc_start_process = Time.now()
+            utc_start_process = Time.now()+ 30.0
             source_name = config["source-name"]
             ra = config["ra"]
             dec = config["dec"]
