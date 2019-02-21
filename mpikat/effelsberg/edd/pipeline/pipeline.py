@@ -380,12 +380,15 @@ class Mkrecv2Db2Dspsr(object):
         header = self._config["dada_header_params"]
         header["ra"] = self._source_config["ra"]
         header["dec"] = self._source_config["dec"]
-        #header["sync_time"] = self._source_config["sync_time"]
-        #header["sync_time"] = self._source_config["sample_clock"]
+        header["mc_source"] = self._source_config["mc_source"]
+        self.frequency_mhz = self._source_config["central_freq"]
+        header["frequency_mhz"] = self.frequency_mhz
         source_name = self._source_config["source-name"]
-        frequency_mhz = self._config["dada_header_params"]["frequency_mhz"]
-        log.debug("config recevied {} {} {}".format(
-            source_name, header["ra"], header["dec"]))
+        #header["sync_time"] = self._source_config["sync_time"]
+        #header["sync_time"] = self._source_config["sample_clock"]        
+        #frequency_mhz = self._config["dada_header_params"]["frequency_mhz"]        
+        log.debug("config recevied {} {} {} {} {}".format(
+            source_name, header["ra"], header["dec"], self.frequency_mhz, header["mc_source"]))
         try:
             source_name = source_name.split("_")[0]
         except Exception as error:
@@ -394,11 +397,10 @@ class Mkrecv2Db2Dspsr(object):
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
         tstr = Time.now().isot.replace(":", "-")
-        print self._config["dada_header_params"]["frequency_mhz"]
         in_path = os.path.join("/data/jason/", source_name,
-                               str(frequency_mhz), tstr, "raw_data")
+                               str(self.frequency_mhz), tstr, "raw_data")
         out_path = os.path.join(
-            "/data/jason/", source_name, str(frequency_mhz), tstr, "combined_data")
+            "/data/jason/", source_name, str(self.frequency_mhz), tstr, "combined_data")
         self.out_path = out_path
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(in_path)
