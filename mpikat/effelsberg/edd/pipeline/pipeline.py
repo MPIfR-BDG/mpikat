@@ -415,8 +415,9 @@ class Mkrecv2Db2Dspsr(object):
 #        os.sleep(5)
         # Create predictor output = t2pred.dat
 
-        cmd = "psrcat -E {source_name} >> {}/{source_name}.par".format(
-            out_path, source_name=source_name)
+        cmd = "psrcat -E {source_name} >> {source_name}.par".format(
+            source_name=source_name)
+        log.debug("Command to run: {}".format(cmd))
         """
         psrcat_script = tempfile.NamedTemporaryFile(
             mode="w",
