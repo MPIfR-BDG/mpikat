@@ -33,6 +33,7 @@ from math import floor
 # 10. add lock to counter to protect it
 # 11. Remove NVPROF, SOD
 log = logging.getLogger('mpikat.effelsberg.pafmpikat.effelsberg.paf.pipeline')
+log.setLevel('DEBUG')
 EXECUTE = True
 #EXECUTE        = False
 
