@@ -456,6 +456,7 @@ class Mkrecv2Db2Dspsr(object):
         dada_header_file.close()
         dada_key_file.close()
 #-P /home/psr/software/mpikat/t2pred.dat -E /home/psr/software/mpikat/J1012+5307.par
+        """
         cmd = "dspsr {args} -P {predictor} -E {parfile} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             predictor="{}/t2pred.dat".format(in_path),
@@ -488,6 +489,7 @@ class Mkrecv2Db2Dspsr(object):
             self._add_fscrunch_to_sensor)
         self._archive_directory_monitor.tscrunch_callbacks.add(
             self._add_tscrunch_to_sensor)
+        """    
         self.state = "running"
 
     @gen.coroutine
