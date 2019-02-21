@@ -436,6 +436,8 @@ class Mkrecv2Db2Dspsr(object):
             self._decode_capture_stdout)
         self.psrcat.stderr_callbacks.add(
            self._handle_execution_stderr)
+        print psrcat._process.stdout
+
         yield time.sleep(3)
         """
         cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} 1400 1420 8 2 3599.999999999"'.format(
