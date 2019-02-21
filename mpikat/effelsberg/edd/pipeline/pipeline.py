@@ -426,7 +426,7 @@ class Mkrecv2Db2Dspsr(object):
         psrcat_script.write(cmd)
         psrcat_script.close()
         log.debug("Command to run: {}".format(cmd))
-        cmd = "source {}.script".format(source_name)
+        cmd = "source {}".format(psrcat_script.name)
         self.psrcat = ExecuteCommand(cmd, outpath=None, resident=False)
         self.psrcat.stdout_callbacks.add(
             self._decode_capture_stdout)
