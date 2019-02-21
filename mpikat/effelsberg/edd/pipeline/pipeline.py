@@ -437,6 +437,7 @@ class Mkrecv2Db2Dspsr(object):
         self.psrcat.stderr_callbacks.add(
            self._handle_execution_stderr)
         yield time.sleep(3)
+        """
         cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} 1400 1420 8 2 3599.999999999"'.format(
             source_name, Time.now().mjd - 0.2, Time.now().mjd + 0.2)
         log.debug("Command to run: {}".format(cmd))
@@ -469,6 +470,7 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
+        """
 #-P /home/psr/software/mpikat/t2pred.dat -E /home/psr/software/mpikat/J1012+5307.par
         """
         cmd = "dspsr {args} -P {predictor} -E {parfile} {keyfile}".format(
