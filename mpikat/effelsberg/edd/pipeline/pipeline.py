@@ -392,9 +392,9 @@ class Mkrecv2Db2Dspsr(object):
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
         tstr = Time.now().isot.replace(":", "-")
-        in_path = os.path.join("/data/jason/",self._config["dada_db_params"]["frequency_mhz"],"/", source_name, tstr, "raw_data")
+        in_path = os.path.join("/data/jason/","/", source_name, tstr, "raw_data")
         out_path = os.path.join(
-            "/data/jason/",self._config["dada_db_params"]["frequency_mhz"],"/", source_name, tstr, "combined_data")
+            "/data/jason/","/", source_name, tstr, "combined_data")
         self.out_path = out_path
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(in_path)
