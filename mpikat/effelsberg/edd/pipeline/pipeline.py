@@ -435,12 +435,12 @@ class Mkrecv2Db2Dspsr(object):
             self._handle_execution_stderr)
         yield time.sleep(3)
         cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
-            source_name, Time.now().mjd - 0.2, Time.now().mjd + 0.2, self.frequency_mhz - (162.5 / 2), self.frequency_mhz + (162.5 / 2))
+            source_name, Time.now().mjd - 0.2, Time.now().mjd + 0.2, 1400, 1420)
         log.debug("Command to run: {}".format(cmd))
         self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
         self.tempo2.stdout_callbacks.add(
             self._decode_capture_stdout)
-        self.tempo2.stderr_callbacks.add(
+        self.tempo2.stderr_callbacks.add( 
             self._handle_execution_stderr)
 
         dada_header_file = tempfile.NamedTemporaryFile(
