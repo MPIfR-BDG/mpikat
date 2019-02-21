@@ -61,6 +61,7 @@ CONFIG = {
         "instrument": "asterix",
         "frequency_mhz": 1370,
         "receiver_name": "P200-3",
+        "mc_source": "239.2.1.154",
         "bandwidth": 162.5,
         "tsamp": 0.04923076923076923,
         "nbit": 8,
