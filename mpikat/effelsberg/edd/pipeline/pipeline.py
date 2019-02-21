@@ -414,15 +414,25 @@ class Mkrecv2Db2Dspsr(object):
         log.debug("Current working directory: {}".format(os.getcwd()))
 #        os.sleep(5)
         # Create predictor output = t2pred.dat
+
         cmd = "psrcat -E {source_name} > {source_name}.par".format(
             source_name=source_name)
+        psrcat_script = tempfile.NamedTemporaryFile(
+            mode="w",
+            prefix="{}.par".format(source_name),
+            suffix=".script",
+            dir=os.getcwd(),
+            delete=False) 
+        psrcat_script.write(cmd)
+        psrcat_script.close()
         log.debug("Command to run: {}".format(cmd))
+        cmd = "source {}.script".format(source_name)
         self.psrcat = ExecuteCommand(cmd, outpath=None, resident=False)
         self.psrcat.stdout_callbacks.add(
             self._decode_capture_stdout)
         self.psrcat.stderr_callbacks.add(
             self._handle_execution_stderr)
-        
+        time.sleep(2)
         cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} 1400 1420 8 2 3599.999999999"'.format(
             source_name, Time.now().mjd - 0.2, Time.now().mjd + 0.2)
         log.debug("Command to run: {}".format(cmd))
