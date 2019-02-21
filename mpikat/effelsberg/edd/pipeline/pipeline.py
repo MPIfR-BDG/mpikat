@@ -382,6 +382,7 @@ class Mkrecv2Db2Dspsr(object):
         #header["sync_time"] = self._source_config["sync_time"]
         #header["sync_time"] = self._source_config["sample_clock"]
         source_name = self._source_config["source-name"]
+        frequency_mhz = self._config["dada_header_params"]["frequency_mhz"]
         log.debug("config recevied {} {} {}".format(
             source_name, header["ra"], header["dec"]))
         try:
@@ -393,9 +394,10 @@ class Mkrecv2Db2Dspsr(object):
             sensors["scannum"], sensors["subscannum"])
         tstr = Time.now().isot.replace(":", "-")
         print self._config["dada_header_params"]["frequency_mhz"]
-        in_path = os.path.join("/data/jason/",str(self._config["dada_header_params"]["frequency_mhz"]) , source_name, tstr, "raw_data")
+        in_path = os.path.join("/data/jason/", source_name,
+                               str(frequency_mhz), tstr, "raw_data")
         out_path = os.path.join(
-            "/data/jason/",str(self._config["dada_header_params"]["frequency_mhz"]), source_name, tstr, "combined_data")
+            "/data/jason/", source_name, str(frequency_mhz), tstr, "combined_data")
         self.out_path = out_path
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(in_path)
@@ -425,7 +427,7 @@ class Mkrecv2Db2Dspsr(object):
         self.psrcat.stdout_callbacks.add(
             self._save_capture_stdout)
         self.psrcat.stderr_callbacks.add(
-           self._handle_execution_stderr)
+            self._handle_execution_stderr)
         yield time.sleep(3)
         cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} 1400 1420 8 2 3599.999999999"'.format(
             source_name, Time.now().mjd - 0.2, Time.now().mjd + 0.2)
