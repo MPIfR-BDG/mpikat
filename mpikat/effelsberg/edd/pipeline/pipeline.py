@@ -392,6 +392,7 @@ class Mkrecv2Db2Dspsr(object):
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
         tstr = Time.now().isot.replace(":", "-")
+        print self._config["dada_header_params"]["frequency_mhz"]
         in_path = os.path.join("/data/jason/",self._config["dada_header_params"]["frequency_mhz"] , source_name, tstr, "raw_data")
         out_path = os.path.join(
             "/data/jason/",self._config["dada_header_params"]["frequency_mhz"], source_name, tstr, "combined_data")
