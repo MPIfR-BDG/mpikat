@@ -186,7 +186,7 @@ class EddWorkerServer(AsyncDeviceServer):
             self._pipeline_instance.callbacks.add(self.state_change)
             config = json.loads(config_json)
             log.debug("Unpacked config: {}".format(config))
-            self._pipeline_instance.configure()
+            self._pipeline_instance.configure(config_json)
         except Exception as error:
             self._pipeline_sensor_name.set_value("")
             msg = "Couldn't start configure pipeline instance {}".format(
