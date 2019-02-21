@@ -410,7 +410,9 @@ class Mkrecv2Db2Dspsr(object):
             self._decode_capture_stdout)
         self._create_workdir_out_path._process.wait()
         os.chdir(in_path)
-        os.sleep(5)
+        log.debug("Change to workdir: {}".format(os.getcwd()))
+        log.debug("Current working directory: {}".format(os.getcwd()))
+#        os.sleep(5)
         # Create predictor output = t2pred.dat
         cmd = "psrcat -E {source_name} > {source_name}.par".format(
             source_name=source_name)
@@ -429,8 +431,7 @@ class Mkrecv2Db2Dspsr(object):
             self._decode_capture_stdout)
         self.tempo2.stderr_callbacks.add(
             self._handle_execution_stderr)
-        log.debug("Change to workdir: {}".format(os.getcwd()))
-        log.debug("Current working directory: {}".format(os.getcwd()))
+
         dada_header_file = tempfile.NamedTemporaryFile(
             mode="w",
             prefix="edd_dada_header_",
