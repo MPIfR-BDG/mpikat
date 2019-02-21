@@ -83,8 +83,10 @@ IDX3_MASK   0xffffffffffff   # Mask used to extract the frequency
 IDX3_LIST   {{frequency_partition_ids_csv}}
 """
 
+
 class MkrecvHeaderException(Exception):
     pass
+
 
 def make_mkrecv_header(params, outfile=None):
     template = jinja2.Template(HEADER_TEMPLATE)

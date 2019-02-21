@@ -34,11 +34,16 @@ from mpikat.core.utils import LoggingSensor, parse_csv_antennas
 from mpikat.meerkat.fbfuse import DelayBufferController
 from mpikat.meerkat.fbfuse.fbfuse_mkrecv_config import make_mkrecv_header
 from mpikat.meerkat.fbfuse.fbfuse_mksend_config import make_mksend_header
+from mpikar.meerkat.fbfuse.fbfuse_psrdada_cpp_wrapper import compile_psrdada_cpp
 
 log = logging.getLogger("mpikat.fbfuse_worker_server")
 
 PACKET_PAYLOAD_SIZE = 1024  # bytes
 AVAILABLE_CAPTURE_MEMORY = 137438953472  # bytes
+
+MKRECV_CONFIG_FILENAME = "mkrecv_feng.cfg"
+MKSEND_COHERENT_CONFIG_FILENAME = "mksend_coherent.cfg"
+MKSEND_INCOHERENT_CONFIG_FILENAME = "mksend_incoherent.cfg"
 
 
 class FbfWorkerServer(AsyncDeviceServer):
@@ -389,7 +394,8 @@ class FbfWorkerServer(AsyncDeviceServer):
                 'ngroups_data': ngroups_data,
                 'ngroups_temp': ngroups_temp
             }
-            mkrecv_header = make_mkrecv_header(mkrecv_config)
+            mkrecv_header = make_mkrecv_header(
+                mkrecv_config, outfile=MKRECV_CONFIG_FILENAME)
             self._mkrecv_header_sensor.set_value(mkrecv_header)
             log.info("Determined MKRECV configuration:\n{}".format(mkrecv_header))
 
@@ -445,7 +451,8 @@ class FbfWorkerServer(AsyncDeviceServer):
                 'subband_idx': chan0_idx,
                 'heap_group': len(group_to_coherent_beam_map[first_coh_group])
             }
-            mksend_coh_header = make_mksend_header(mksend_coh_config)
+            mksend_coh_header = make_mksend_header(
+                mksend_coh_config, outfile=MKSEND_COHERENT_CONFIG_FILENAME)
             self._mksend_coh_header_sensor.set_value(mksend_coh_header)
 
             log.debug("Determining MKSEND configuration for incoherent beams")
@@ -464,7 +471,8 @@ class FbfWorkerServer(AsyncDeviceServer):
                 'subband_idx': chan0_idx,
                 'heap_group': 1
             }
-            mksend_incoh_header = make_mksend_header(mksend_incoh_config)
+            mksend_incoh_header = make_mksend_header(
+                mksend_incoh_config, outfile=MKSEND_INCOHERENT_CONFIG_FILENAME)
             self._mksend_incoh_header_sensor.set_value(mksend_incoh_header)
 
             """
@@ -472,8 +480,22 @@ class FbfWorkerServer(AsyncDeviceServer):
                 - compile kernels
                 - create shared memory banks
             """
-            # Compile beamformer
-            # TBD
+            # Here we create a future object for the psrdada_cpp compilation
+            # this is the longest running setup task and so intermediate steps
+            # such as dada buffer generation
+            fbfuse_pipeline_params = {
+                'total_nantennas': len(feng_capture_order_info['order']),
+                'fbfuse_nchans': partition_nchans,
+                'total_nchans': feng_config['nchans'],
+                'coherent_tscrunch': coherent_beam_config['tscrunch'],
+                'coherent_fscrunch': coherent_beam_config['fscrunch'],
+                'coherent_nantennas': len(coherent_beam_config['antennas'].split(",")),
+                'coherent_antenna_offset': 0,
+                'coherent_nbeams': nbeams,
+                'incoherent_tscrunch': incoherent_beam_config['tscrunch'] ,
+                'incoherent_fscrunch': incoherent_beam_config['fscrunch']
+            }
+            psrdada_compilation_future = compile_psrdada_cpp(fbfuse_pipeline_params)
 
             # Create capture data DADA buffer
             capture_block_size = ngroups_data * heap_group_size
@@ -544,6 +566,13 @@ class FbfWorkerServer(AsyncDeviceServer):
                     coherent_beam_to_group_map.keys(),
                     coherent_beam_antenna_capture_order, 1)
                 yield self._delay_buffer_controller.start()
+
+
+            # By this point we require psrdada_cpp to have been compiled
+            # as such we can yield on the future we created earlier
+            yield psrdada_compilation_future
+
+
             # Start beamformer instance
             # TBD
 
