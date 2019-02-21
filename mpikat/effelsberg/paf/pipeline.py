@@ -32,7 +32,7 @@ from math import floor
 # 9. utc_start_process, to put the dada_dbregister into capture does not help, now synced, more test;
 # 10. add lock to counter to protect it
 # 11. Remove NVPROF, SOD
-
+log = logging.getLogger('mpikat.effelsberg.pafmpikat.effelsberg.paf.pipeline')
 EXECUTE = True
 #EXECUTE        = False
 
