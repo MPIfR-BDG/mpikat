@@ -415,7 +415,7 @@ class Mkrecv2Db2Dspsr(object):
 #        os.sleep(5)
         # Create predictor output = t2pred.dat
 
-        cmd = "psrcat -E {source_name} >> {source_name}.par".format(
+        cmd = "psrcat -E {source_name}".format(
             source_name=source_name)
         log.debug("Command to run: {}".format(cmd))
         """
