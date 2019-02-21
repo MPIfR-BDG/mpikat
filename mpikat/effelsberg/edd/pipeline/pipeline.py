@@ -47,7 +47,7 @@ CONFIG = {
     "base_output_dir": os.getcwd(),
     "dspsr_params":
     {
-        "args": "-cpu 2,3 -L 10 -r -F 256:D -x 16384 -cuda 0,0 -minram 1024"
+        "args": "-L 10 -r -F 256:D -x 16384 -cuda 0,0 -minram 1024"
     },
     "dada_db_params":
     {
@@ -384,9 +384,11 @@ class Mkrecv2Db2Dspsr(object):
         self.frequency_mhz = self._source_config["central_freq"]
         header["frequency_mhz"] = self.frequency_mhz
         source_name = self._source_config["source-name"]
+        cpu_numbers = self._source_config["cpus"]
+        cuda_numbers = self._source_config["cuda"]
         #header["sync_time"] = self._source_config["sync_time"]
-        #header["sync_time"] = self._source_config["sample_clock"]        
-        #frequency_mhz = self._config["dada_header_params"]["frequency_mhz"]        
+        #header["sync_time"] = self._source_config["sample_clock"]
+        #frequency_mhz = self._config["dada_header_params"]["frequency_mhz"]
         log.debug("config recevied {} {} {} {} {}".format(
             source_name, header["ra"], header["dec"], self.frequency_mhz, header["mc_source"]))
         try:
@@ -432,8 +434,8 @@ class Mkrecv2Db2Dspsr(object):
         self.psrcat.stderr_callbacks.add(
             self._handle_execution_stderr)
         yield time.sleep(3)
-        cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} 1400 1420 8 2 3599.999999999"'.format(
-            source_name, Time.now().mjd - 0.2, Time.now().mjd + 0.2)
+        cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
+            source_name, Time.now().mjd - 0.2, Time.now().mjd + 0.2, self.frequency_mhz - (162.5 / 2), self.frequency_mhz + (162.5 / 2))
         log.debug("Command to run: {}".format(cmd))
         self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
         self.tempo2.stdout_callbacks.add(
@@ -465,10 +467,12 @@ class Mkrecv2Db2Dspsr(object):
         dada_header_file.close()
         dada_key_file.close()
         yield time.sleep(3)
-        cmd = "dspsr {args} -P {predictor} -E {parfile} {keyfile}".format(
+        cmd = "dspsr {args} -cpu {cpus} -cuda {} -P {predictor} -E {parfile} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             predictor="{}/t2pred.dat".format(in_path),
             parfile="{}/{}.par".format(in_path, source_name),
+            cpus=cpu_numbers,
+            cuda_numbers=cuda_numbers,
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring DSPSR")
