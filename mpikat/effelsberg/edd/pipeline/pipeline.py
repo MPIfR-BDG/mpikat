@@ -363,8 +363,10 @@ class Mkrecv2Db2Dspsr(object):
             self.deconfigure()
         except Exception as error:
             raise PulsarPipelineError(str(error))
-        cmd = "dada_db -k {key} {args}".format(**
-                                               self._config["dada_db_params"])
+        cmd = "dada_db -k {key} {args}".format(key=self._dada_key,
+                                               args=self._config["dada_db_params"]["args"])
+        #cmd = "dada_db -k {key} {args}".format(**
+        #                                       self._config["dada_db_params"])
         log.debug("Running command: {0}".format(cmd))
         self._create_ring_buffer = ExecuteCommand(
             cmd, outpath=None, resident=False)
