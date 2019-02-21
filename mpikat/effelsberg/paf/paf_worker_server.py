@@ -163,7 +163,7 @@ class PafWorkerServer(AsyncDeviceServer):
         @coroutine
         def configure_wrapper():
             try:
-                yield self.configure(config_json)
+                self.configure(config_json)
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
@@ -185,6 +185,7 @@ class PafWorkerServer(AsyncDeviceServer):
         log.info("Configuring pipeline {}".format(
             self._pipeline_sensor_name.value()))
         try:
+            #log.info("Configuring pipeline {}".format()
             _pipeline_type = PIPELINES[self._pipeline_sensor_name.value()]
         except KeyError as error:
             msg = "No pipeline called '{}', available pipeline are: {}".format(
@@ -192,6 +193,7 @@ class PafWorkerServer(AsyncDeviceServer):
             self._pipeline_sensor_name.set_value("")
             log.error(msg)
             raise PafPipelineKeyError(msg)
+        log.info("Configuring pipeline continute")    
         try:
             log.debug(
                 "Trying to create pipeline instance: {}".format(pipeline_name))
