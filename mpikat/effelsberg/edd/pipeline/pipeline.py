@@ -467,7 +467,7 @@ class Mkrecv2Db2Dspsr(object):
         dada_header_file.close()
         dada_key_file.close()
         yield time.sleep(3)
-        cmd = "dspsr {args} -cpu {cpus} -cuda {} -P {predictor} -E {parfile} {keyfile}".format(
+        cmd = "dspsr {args} -cpu {cpus} -cuda {cuda_numbers} -P {predictor} -E {parfile} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             predictor="{}/t2pred.dat".format(in_path),
             parfile="{}/{}.par".format(in_path, source_name),
