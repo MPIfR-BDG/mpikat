@@ -427,10 +427,10 @@ class Mkrecv2Db2Dspsr(object):
         psrcat_script.close()
         log.debug("Command to run: {}".format(cmd))
         cmd = "source {}".format(psrcat_script.name)
-        Popen(shlex.split(cmd),stdout=PIPE,stdedd=PIPE)
-        #self.psrcat = ExecuteCommand(cmd, outpath=None, resident=False)
-        #self.psrcat.stdout_callbacks.add(
-        ##    self._decode_capture_stdout)
+        #Popen(shlex.split(cmd),stdout=PIPE,stdedd=PIPE)
+        self.psrcat = ExecuteCommand(cmd, outpath=None, resident=False)
+        self.psrcat.stdout_callbacks.add(
+            self._decode_capture_stdout)
         ##self.psrcat.stderr_callbacks.add(
         #   self._handle_execution_stderr)
         time.sleep(2)
