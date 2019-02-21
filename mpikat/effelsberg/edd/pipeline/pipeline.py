@@ -392,9 +392,10 @@ class Mkrecv2Db2Dspsr(object):
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
         tstr = Time.now().isot.replace(":", "-")
-        in_path = os.path.join("/data/jason/", source_name, tstr, "raw_data")
+        in_path = os.path.join(
+            "/data/jason/", header["frequency_mhz"], "/", source_name, tstr, "raw_data")
         out_path = os.path.join(
-            "/data/jason/", source_name, tstr, "combined_data")
+            "/data/jason/", header["frequency_mhz"], "/", source_name, tstr, "scrunch_data")
         self.out_path = out_path
         log.debug("Creating directories")
         cmd = "mkdir -p {}".format(in_path)
@@ -416,9 +417,6 @@ class Mkrecv2Db2Dspsr(object):
         os.chdir(in_path)
         log.debug("Change to workdir: {}".format(os.getcwd()))
         log.debug("Current working directory: {}".format(os.getcwd()))
-#        os.sleep(5)
-        # Create predictor output = t2pred.dat
-
         cmd = "psrcat -E {source_name}".format(
             source_name=source_name)
         log.debug("Command to run: {}".format(cmd))
@@ -426,7 +424,7 @@ class Mkrecv2Db2Dspsr(object):
         self.psrcat.stdout_callbacks.add(
             self._save_capture_stdout)
         self.psrcat.stderr_callbacks.add(
-           self._handle_execution_stderr)
+            self._handle_execution_stderr)
         yield time.sleep(3)
         cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} 1400 1420 8 2 3599.999999999"'.format(
             source_name, Time.now().mjd - 0.2, Time.now().mjd + 0.2)
@@ -461,8 +459,6 @@ class Mkrecv2Db2Dspsr(object):
         dada_header_file.close()
         dada_key_file.close()
         yield time.sleep(3)
-#-P /home/psr/software/mpikat/t2pred.dat -E /home/psr/software/mpikat/J1012+5307.par
-        
         cmd = "dspsr {args} -P {predictor} -E {parfile} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             predictor="{}/t2pred.dat".format(in_path),
@@ -495,7 +491,6 @@ class Mkrecv2Db2Dspsr(object):
             self._add_fscrunch_to_sensor)
         self._archive_directory_monitor.tscrunch_callbacks.add(
             self._add_tscrunch_to_sensor)
-            
         self.state = "running"
 
     @gen.coroutine
