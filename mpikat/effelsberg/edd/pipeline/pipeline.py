@@ -353,11 +353,12 @@ class Mkrecv2Db2Dspsr(object):
         self._fscrunch.set_value(png_blob)
 
     @gen.coroutine
-    def configure(self, dada_key):
+    def configure(self, config_json):
         """@brief destroy any ring buffer and create new ring buffer."""
         self.state = "configuring"
+        self._pipeline_config = json.loads(config_json)
         self._config = CONFIG
-        self._dada_key = dada_key
+        self._dada_key = self._source_config["key"]
         try:
             self.deconfigure()
         except Exception as error:
