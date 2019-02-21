@@ -48,7 +48,7 @@ RESOLUTION        {{dsb}}
 DSB
 
 #MeerKAT specifics
-DADA_KEY     dada                    # The dada key to write to
+DADA_KEY     {{key}}                    # The dada key to write to
 DADA_MODE    4                       # The mode, 4=full dada functionality
 ORDER        T                       # Here we are only capturing one polarisation, so data is time only
 SYNC_TIME    {{sync_time}}
@@ -104,7 +104,8 @@ DADA_DEFAULTS = {
     "npol": 2,
     "nchan": 8,
     "resolution": 1,
-    "dsb": 0
+    "dsb": 0,
+    "key": "dada"
 }
 
 

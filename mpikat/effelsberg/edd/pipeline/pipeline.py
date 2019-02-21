@@ -384,6 +384,7 @@ class Mkrecv2Db2Dspsr(object):
         header["ra"] = self._source_config["ra"]
         header["dec"] = self._source_config["dec"]
         header["mc_source"] = self._source_config["mc_source"]
+        header["key"] = self._dada_key
         self.frequency_mhz = self._source_config["central_freq"]
         header["frequency_mhz"] = self.frequency_mhz
         source_name = self._source_config["source-name"]
