@@ -415,7 +415,7 @@ class Mkrecv2Db2Dspsr(object):
 #        os.sleep(5)
         # Create predictor output = t2pred.dat
 
-        cmd = "psrcat -E {source_name} > {}/{source_name}.par".format(
+        cmd = "psrcat -E {source_name} >> {}/{source_name}.par".format(
             out_path, source_name=source_name)
         """
         psrcat_script = tempfile.NamedTemporaryFile(
@@ -435,7 +435,7 @@ class Mkrecv2Db2Dspsr(object):
             self._decode_capture_stdout)
         self.psrcat.stderr_callbacks.add(
            self._handle_execution_stderr)
-        time.sleep(2)
+        yield time.sleep(3)
         cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} 1400 1420 8 2 3599.999999999"'.format(
             source_name, Time.now().mjd - 0.2, Time.now().mjd + 0.2)
         log.debug("Command to run: {}".format(cmd))
