@@ -335,6 +335,10 @@ class Mkrecv2Db2Dspsr(object):
     def _decode_capture_stdout(self, stdout, callback):
         log.debug('{}'.format(str(stdout)))
 
+    def _save_capture_stdout(self, stdout, callback):
+        with open("{}.par".format(self._source_config["source-name"]), "a") as myfile:
+            myfile.write('{}'.format(str(stdout)))
+
     def _handle_execution_returncode(self, returncode, callback):
         log.debug(returncode)
 
@@ -433,10 +437,9 @@ class Mkrecv2Db2Dspsr(object):
         """
         self.psrcat = ExecuteCommand(cmd, outpath=None, resident=False)
         self.psrcat.stdout_callbacks.add(
-            self._decode_capture_stdout)
+            self._save_capture_stdout)
         self.psrcat.stderr_callbacks.add(
            self._handle_execution_stderr)
-        print psrcat._process.stdout
 
         yield time.sleep(3)
         """
