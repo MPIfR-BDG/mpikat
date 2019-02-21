@@ -337,7 +337,7 @@ class Mkrecv2Db2Dspsr(object):
 
     def _save_capture_stdout(self, stdout, callback):
         with open("{}.par".format(self._source_config["source-name"]), "a") as myfile:
-            myfile.write('{}'.format(str(stdout)))
+            myfile.write('{}\n'.format(str(stdout)))
 
     def _handle_execution_returncode(self, returncode, callback):
         log.debug(returncode)
