@@ -59,7 +59,7 @@ NHEAPS 256
 NGROUPS_DATA  4096
 NGROUPS_TEMP  2048
 NHEAPS_SWITCH 1024
-MCAST_SOURCES 239.2.1.150   # 239.2.1.150 (+7)
+MCAST_SOURCES {{mc_source}}   # 239.2.1.150 (+7)
 PORT         60001
 UDP_IF       unset
 IBV_IF       10.10.1.10  # This is the ethernet interface on which to capture
@@ -87,8 +87,9 @@ DADA_DEFAULTS = {
     "obs_id": "unset",
     "filesize": 320000000000,
     "mjd": 57000,
-    "sync_time" :1550678891.0,
+    "sync_time": 1550678891.0,
     "sample_clock": 2600000000,
+    "mc_source": "239.2.1.150",
     "source": "B1937+21",
     "ra": "00:00:00.00",
     "dec": "00:00:00.00",
@@ -102,8 +103,8 @@ DADA_DEFAULTS = {
     "ndim": 2,
     "npol": 2,
     "nchan": 8,
-    "resolution":1,
-    "dsb":0
+    "resolution": 1,
+    "dsb": 0
 }
 
 
