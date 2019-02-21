@@ -19,6 +19,8 @@ import threading
 import inspect
 import os
 from math import floor
+from fcntl import fcntl, F_GETFL, F_SETFL
+from os import O_NONBLOCK
 
 # Updates:
 # 1. Check the directory exist or not, create it if not;
@@ -203,7 +205,9 @@ class ExecuteCommand(object):
         self._stdout = None
         self._stderr = None
         self._returncode = None
-
+        self._event = threading.Event()
+        self._event.clear()
+        
         log.debug(self._command)
         self._executable_command = shlex.split(self._command)
 
@@ -214,6 +218,11 @@ class ExecuteCommand(object):
                                       stderr=PIPE,
                                       bufsize=1,
                                       universal_newlines=True)
+                flags = fcntl(self._process.stdout, F_GETFL)  # Noblock 
+                fcntl(self._process.stdout, F_SETFL, flags | O_NONBLOCK)
+                flags = fcntl(self._process.stderr, F_GETFL) 
+                fcntl(self._process.stderr, F_SETFL, flags | O_NONBLOCK)
+                
             except Exception as error:
                 log.exception("Error while launching command: {} with error {}".format(
                     self._command, error))
@@ -234,6 +243,13 @@ class ExecuteCommand(object):
     def __del__(self):
         class_name = self.__class__.__name__
 
+    def terminate(self):
+        if EXECUTE:
+            self._event.set()
+            for thread in self._monitor_threads:
+                thread.join()
+            self._process.kill()
+            
     def finish(self):
         if EXECUTE:
             for thread in self._monitor_threads:
@@ -280,28 +296,38 @@ class ExecuteCommand(object):
 
     def _stdout_monitor(self):
         if EXECUTE:
-            while self._process.poll() == None:
-                stdout = self._process.stdout.readline().rstrip("\n\r")
-                if stdout != b"":
-                    if self._process_index != None:
-                        self.stdout = stdout + "; PROCESS_INDEX is " + str(self._process_index)
-                    else:
-                        self.stdout = stdout
-                   
+            while (self._process.poll() == None) and (not self._event.is_set()):
+                try:
+                    stdout = self._process.stdout.readline().rstrip("\n\r")
+                    #log.info("IN the while loop in STDOUT MONITOR " + self._command) 
+                    if stdout != b"":
+                        if self._process_index != None:
+                            self.stdout = stdout + "; PROCESS_INDEX is " + str(self._process_index)
+                        else:
+                            self.stdout = stdout
+                except:
+                    pass
+                
+            log.error("PASS the while loop in STDOUT MONITOR " + self._command) 
             if self._process.returncode:
                 self.returncode = self._command + \
                     "; RETURNCODE is: " + str(self._process.returncode)
 
     def _stderr_monitor(self):
         if EXECUTE:
-            while self._process.poll() == None:
-                stderr = self._process.stderr.readline().rstrip("\n\r")
-                if stderr != b"":
-                    if self._process_index != None:
-                        self.stderr = self._command + "; STDERR is: " + stderr + "; PROCESS_INDEX is " + str(self._process_index)
-                    else:
-                        self.stderr = self._command + "; STDERR is: " + stderr
-                                        
+            while (self._process.poll() == None) and (not self._event.is_set()):
+                try:
+                    stderr = self._process.stderr.readline().rstrip("\n\r")
+                    log.info("IN the while loop in STDERR MONITOR " + self._command) 
+                    if stderr != b"":
+                        if self._process_index != None:
+                            self.stderr = self._command + "; STDERR is: " + stderr + "; PROCESS_INDEX is " + str(self._process_index)
+                        else:
+                            self.stderr = self._command + "; STDERR is: " + stderr
+                except:
+                    pass
+            
+            log.error("PASS the while loop in STDERR MONITOR " + self._command) 
             if self._process.returncode:
                 self.returncode = self._command + \
                     "; RETURNCODE is: " + str(self._process.returncode)
@@ -617,7 +643,6 @@ class Pipeline(object):
 
     def _handle_execution_returncode(self, returncode, callback):
         if EXECUTE:
-            log.debug(returncode)
             if returncode:
                 self.state = "error"
                 log.error(returncode)
@@ -625,7 +650,11 @@ class Pipeline(object):
         
     def _handle_execution_stderr(self, stderr, callback):
         if EXECUTE:
-            log.error(stderr)
+            process_index = int(stderr.split(" ")[-1])
+            log.debug("process_index {}\n\n\n\n".format(process_index))
+            self._capture_execution_instances[i].terminate()
+            #time.sleep(10)
+            
             self.state = "error"
             log.error(stderr)
             raise PipelineError(stderr)
