@@ -143,8 +143,15 @@ class EddWorkerServer(AsyncDeviceServer):
     def request_configure(self, req, config_json):
         """
         @brief      Configure pipeline
-
-        @param      pipeline    name of the pipeline
+        @param      config_json     A dictionary containing configuration information.
+                                    The dictionary should have a form similar to:
+                                    @code
+                                    {
+                                    "mode":"DspsrPipelineSrxdev",
+                                    "mc_source":"239.2.1.154",
+                                    "central_freq":"1400.4"
+                                    }
+                                    @endcode
         """
         @coroutine
         def configure_wrapper():
@@ -202,7 +209,15 @@ class EddWorkerServer(AsyncDeviceServer):
     def request_start(self, req, config_json):
         """
         @brief      Start pipeline
-
+        @param      config_json     A dictionary containing configuration information.
+                                    The dictionary should have a form similar to:
+                                    @code
+                                    {
+                                    "source-name":"J1022+1001",
+                                    "ra":"123.4",
+                                    "dec":"-20.1"
+                                    }
+                                    @endcode
         """
         @coroutine
         def start_wrapper():
@@ -220,13 +235,11 @@ class EddWorkerServer(AsyncDeviceServer):
     def start_pipeline(self, config_json):
         try:
             config = json.loads(config_json)
-            #utc_start_process = Time.now()
             source_name = config["source-name"]
             ra = config["ra"]
             dec = config["dec"]
+            log.debug("Unpacked config: {}".format(config))
             log.info("staring pipeline for {} at {}, {}".format(source_name, ra, dec))
-            # self._pipeline_instance.start(
-            #    utc_start_process, source_name, ra, dec)
             self._pipeline_instance.start(config_json)
         except Exception as error:
             msg = "Couldn't start pipeline server {}".format(str(error))
