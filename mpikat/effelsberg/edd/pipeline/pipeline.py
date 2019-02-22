@@ -383,7 +383,7 @@ class Mkrecv2Db2Dspsr(object):
     @gen.coroutine
     def start(self, config_json):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
-        if self.state == "ready"
+        if self.state == "ready":
             self.state = "starting"
             self._source_config = json.loads(config_json)
             header = self._config["dada_header_params"]
@@ -521,7 +521,7 @@ class Mkrecv2Db2Dspsr(object):
     @gen.coroutine
     def stop(self):
         """@brief stop the dada_junkdb and dspsr instances."""
-        if self.state == 'running'
+        if self.state == 'running':
             log.debug("Stopping")
             self._timeout = 10
             process = [self._mkrecv_ingest_proc,
@@ -550,7 +550,7 @@ class Mkrecv2Db2Dspsr(object):
 
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
-        if self.state != "running"
+        if self.state != "running":
             self.state = "deconfiguring"
             log.debug("Destroying dada buffer")
             cmd = "dada_db -d -k {0}".format(self._dada_key)
