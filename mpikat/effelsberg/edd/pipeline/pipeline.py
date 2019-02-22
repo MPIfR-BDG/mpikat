@@ -439,7 +439,7 @@ class Mkrecv2Db2Dspsr(object):
             self._handle_execution_stderr)
         yield time.sleep(3)
         cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
-            source_name, Time.now().mjd - 0.2, Time.now().mjd + 0.2, float(self._source_config["central_freq"])-(162.5/2), float(self._source_config["central_freq"])+(162.5/2))
+            source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._source_config["central_freq"])-(162.5/2), float(self._source_config["central_freq"])+(162.5/2))
         log.debug("Command to run: {}".format(cmd))
         self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
         self.tempo2.stdout_callbacks.add(
