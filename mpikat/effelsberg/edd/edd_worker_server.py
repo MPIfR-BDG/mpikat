@@ -262,7 +262,7 @@ class EddWorkerServer(AsyncDeviceServer):
         try:
             self.remove_pipeline_sensors()
             self._pipeline_instance.deconfigure()
-            del self._pipeline_instance
+            #del self._pipeline_instance
         except Exception as error:
             msg = "Couldn't deconfigure pipeline {}".format(str(error))
             log.error(msg)
