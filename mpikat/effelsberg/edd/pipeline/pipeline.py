@@ -62,7 +62,7 @@ CONFIG = {
         "frequency_mhz": 1370,
         "receiver_name": "P200-3",
         "mc_source": "239.2.1.154",
-        "bandwidth": 162.5,
+        "bandwidth": -162.5,
         "tsamp": 0.04923076923076923,
         "nbit": 8,
         "ndim": 2,
@@ -401,14 +401,14 @@ class Mkrecv2Db2Dspsr(object):
             header = self._config["dada_header_params"]
             header["ra"] = self._source_config["ra"]
             header["dec"] = self._source_config["dec"]
-            header["mc_source"] = self._source_config["mc_source"]
             header["key"] = self._dada_key
-            self.frequency_mhz = self._source_config["central_freq"]
+            self.frequency_mhz = self._pipeline_config["central_freq"]
+            header["mc_source"] = self._pipeline_config["mc_source"]
             header["frequency_mhz"] = self.frequency_mhz
             source_name = self._source_config["source-name"]
             cpu_numbers = "2,3"
-            #cpu_numbers = self._source_config["cpus"]
-            #cuda_number = self._source_config["cuda"]
+            #cpu_numbers = self._pipeline_config["cpus"]
+            #cuda_number = self._pipeline_config["cuda"]
             cuda_number = "0"
             try:
                 header["sync_time"] = self._source_config["sync_time"]
