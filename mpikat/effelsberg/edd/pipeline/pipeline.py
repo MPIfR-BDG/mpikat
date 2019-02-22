@@ -398,8 +398,12 @@ class Mkrecv2Db2Dspsr(object):
             #cpu_numbers = self._source_config["cpus"]
             #cuda_number = self._source_config["cuda"]
             cuda_number = "0"
-            #header["sync_time"] = self._source_config["sync_time"]
-            #header["sync_time"] = self._source_config["sample_clock"]
+            try:
+                header["sync_time"] = self._source_config["sync_time"]
+                header["sample_clock"] = self._source_config["sample_clock"]
+            except:
+                pass
+                
             #frequency_mhz = self._config["dada_header_params"]["frequency_mhz"]
             log.debug("config recevied {} {} {} {} {}".format(
                 source_name, header["ra"], header["dec"], self.frequency_mhz, header["mc_source"]))
