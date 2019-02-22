@@ -29,11 +29,14 @@ from mpikat.core.utils import LoggingSensor
 
 log = logging.getLogger("mpikat.product_controller")
 
+
 class ProductStateError(Exception):
+
     def __init__(self, expected_states, current_state):
         message = "Possible states for this operation are '{}', but current state is '{}'".format(
             expected_states, current_state)
         super(ProductStateError, self).__init__(message)
+
 
 def state_change(initial_states, final_state, intermediate_state=None):
     def wrapper(func):
@@ -43,7 +46,8 @@ def state_change(initial_states, final_state, intermediate_state=None):
                 if intermediate_state:
                     product_controller.state = intermediate_state
             else:
-                raise ProductStateError(initial_states, product_controller.state)
+                raise ProductStateError(
+                    initial_states, product_controller.state)
             try:
                 retval = yield func(product_controller, *args, **kwargs)
             except Exception as error:
@@ -55,11 +59,13 @@ def state_change(initial_states, final_state, intermediate_state=None):
         return wrapped
     return wrapper
 
+
 class ProductController(object):
     """
     Base class for product controller instances
     """
-    STATES = ["idle", "preparing", "ready", "starting", "capturing", "stopping", "error"]
+    STATES = ["idle", "preparing", "ready",
+              "starting", "capturing", "stopping", "error"]
     IDLE, PREPARING, READY, STARTING, CAPTURING, STOPPING, ERROR = STATES
 
     def __init__(self, parent, product_id):
@@ -68,7 +74,8 @@ class ProductController(object):
 
         @param      parent            The parent MasterController instance
         """
-        self.log = logging.getLogger("mpikat.{}.{}".format(self.__class__.__name__, product_id))
+        self.log = logging.getLogger("mpikat.{}.{}".format(
+            self.__class__.__name__, product_id))
         self._parent = parent
         self._product_id = product_id
         self._managed_sensors = []
@@ -83,7 +90,7 @@ class ProductController(object):
         @brief    Return a metadata dictionary describing this product controller
         """
         out = {
-            "state":self.state,
+            "state": self.state,
         }
         return out
 
@@ -117,18 +124,19 @@ class ProductController(object):
         """
         self._state_sensor = LoggingSensor.discrete(
             "state",
-            description = "Denotes the state of this PAF instance",
-            params = self.STATES,
-            default = self.IDLE,
-            initial_status = Sensor.NOMINAL)
+            description="Denotes the state of this PAF instance",
+            params=self.STATES,
+            default=self.IDLE,
+            initial_status=Sensor.NOMINAL)
         self._state_sensor.set_logger(self.log)
         self.add_sensor(self._state_sensor)
 
         self._servers_sensor = Sensor.string(
             "servers",
-            description = "The worker server instances currently allocated to this product",
-            default = ",".join(["{s.hostname}:{s.port}".format(s=server) for server in self._servers]),
-            initial_status = Sensor.UNKNOWN)
+            description="The worker server instances currently allocated to this product",
+            default=",".join(["{s.hostname}:{s.port}".format(
+                s=server) for server in self._servers]),
+            initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._servers_sensor)
         self._parent.mass_inform(Message.inform('interface-changed'))
         self._state_sensor.set_value(self.IDLE)
