@@ -532,7 +532,7 @@ class Mkrecv2Db2Dspsr(object):
             log.error(
                 "pipleine state is not in state = ready, cannot start the pipeline")
 
-    @gen.coroutine
+    #@gen.coroutine
     def stop(self):
         """@brief stop the dada_junkdb and dspsr instances."""
         if self.state == 'running':
@@ -542,7 +542,7 @@ class Mkrecv2Db2Dspsr(object):
                        self._dspsr, self._archive_directory_monitor]
             for proc in process:
                 proc.set_finish_event()
-                yield proc.finish()
+                proc.finish()
                 log.debug(
                     "Waiting {} seconds for proc to terminate...".format(self._timeout))
                 now = time.time()
@@ -553,7 +553,7 @@ class Mkrecv2Db2Dspsr(object):
                             "Returned a return value of {}".format(retval))
                         break
                     else:
-                        yield time.sleep(0.5)
+                        time.sleep(0.5)
                 else:
                     log.warning(
                         "Failed to terminate proc in alloted time")
