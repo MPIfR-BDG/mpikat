@@ -346,7 +346,7 @@ class Mkrecv2Db2Dspsr(object):
         return self._sensors
 
     def _decode_capture_stdout(self, stdout, callback):
-        log.debug('{}'.format(str(stdout)))
+        log.info('{}'.format(str(stdout)))
 
     def _save_capture_stdout(self, stdout, callback):
         with open("{}.par".format(self._source_config["source-name"]), "a") as file:
