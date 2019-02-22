@@ -355,7 +355,7 @@ class Mkrecv2Db2Dspsr(object):
     @gen.coroutine
     def configure(self, config_json):
         """@brief destroy any ring buffer and create new ring buffer."""
-        if self.state = "idle":
+        if self.state == "idle":
             self.state = "configuring"
             self._pipeline_config = json.loads(config_json)
             self._config = CONFIG
@@ -384,7 +384,6 @@ class Mkrecv2Db2Dspsr(object):
     def start(self, config_json):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
         if self.state == "ready"
-
             self.state = "starting"
             self._source_config = json.loads(config_json)
             header = self._config["dada_header_params"]
