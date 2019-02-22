@@ -553,16 +553,16 @@ class Mkrecv2Db2Dspsr(object):
 
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
-            self.state = "deconfiguring"
-            log.debug("Destroying dada buffer")
-            cmd = "dada_db -d -k {0}".format(self._dada_key)
-            log.debug("Running command: {0}".format(cmd))
-            self._destory_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._destory_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._destory_ring_buffer._process.wait()
-            self.state = "idle"
+        self.state = "deconfiguring"
+        log.debug("Destroying dada buffer")
+        cmd = "dada_db -d -k {0}".format(self._dada_key)
+        log.debug("Running command: {0}".format(cmd))
+        self._destory_ring_buffer = ExecuteCommand(
+            cmd, outpath=None, resident=False)
+        self._destory_ring_buffer.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._destory_ring_buffer._process.wait()
+        self.state = "idle"
 
 def main():
     logging.info("Starting pipeline instance")
