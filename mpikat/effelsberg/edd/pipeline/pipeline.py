@@ -398,12 +398,12 @@ class Mkrecv2Db2Dspsr(object):
         if self.state == "ready":
             self.state = "starting"
             self._source_config = json.loads(config_json)
+            self.frequency_mhz = self._pipeline_config["central_freq"]
             header = self._config["dada_header_params"]
             header["ra"], header["dec"], header["key"] = self._source_config[
                 "ra"], self._source_config["dec"], self._dada_key
-            self.frequency_mhz = self._pipeline_config["central_freq"]
-            header["mc_source"] = self._pipeline_config["mc_source"]
-            header["frequency_mhz"] = self.frequency_mhz
+            header["mc_source"], header["frequency_mhz"] = self._pipeline_config[
+                "mc_source"], self.frequency_mhz
             source_name = self._source_config["source-name"]
             cpu_numbers = "2,3"
             #cpu_numbers = self._pipeline_config["cpus"]
@@ -416,17 +416,20 @@ class Mkrecv2Db2Dspsr(object):
                 pass
             log.debug("Unpacked config: {}".format(self._source_config))
             try:
-                source_name = source_name.split("_")[0]
+                self.source_name = source_name.split("_")[0]
             except Exception as error:
                 raise PulsarPipelineError(str(error))
-            header["source_name"] = source_name
+            header["source_name"] = self.source_name
             header["obs_id"] = "{0}_{1}".format(
                 sensors["scannum"], sensors["subscannum"])
             tstr = Time.now().isot.replace(":", "-")
-            in_path = os.path.join("/data/jason/", source_name,
+            ####################################################
+            #SETTING UP THE INPUT AND SCRUNCH DATA DIRECTORIES #
+            ####################################################
+            in_path = os.path.join("/data/jason/", self.source_name,
                                    str(self.frequency_mhz), tstr, "raw_data")
             out_path = os.path.join(
-                "/data/jason/", source_name, str(self.frequency_mhz), tstr, "combined_data")
+                "/data/jason/", self.source_name, str(self.frequency_mhz), tstr, "combined_data")
             self.out_path = out_path
             log.debug("Creating directories")
             cmd = "mkdir -p {}".format(in_path)
@@ -448,9 +451,11 @@ class Mkrecv2Db2Dspsr(object):
             os.chdir(in_path)
             log.debug("Change to workdir: {}".format(os.getcwd()))
             log.debug("Current working directory: {}".format(os.getcwd()))
-
+            ####################################################
+            #CREATING THE PARFILE WITH PSRCAT                  #
+            ####################################################
             cmd = "psrcat -E {source_name}".format(
-                source_name=source_name)
+                source_name=self.source_name)
             log.debug("Command to run: {}".format(cmd))
             self.psrcat = ExecuteCommand(cmd, outpath=None, resident=False)
             self.psrcat.stdout_callbacks.add(
@@ -458,14 +463,20 @@ class Mkrecv2Db2Dspsr(object):
             self.psrcat.stderr_callbacks.add(
                 self._handle_execution_stderr)
             time.sleep(3)
+            ####################################################
+            #CREATING THE PREDICTOR WITH TEMPO2                #
+            ####################################################
             cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
-                source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - (162.5 / 2), float(self._pipeline_config["central_freq"]) + (162.5 / 2))
+                self.source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - (162.5 / 2), float(self._pipeline_config["central_freq"]) + (162.5 / 2))
             log.debug("Command to run: {}".format(cmd))
             self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
             self.tempo2.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self.tempo2.stderr_callbacks.add(
                 self._handle_execution_stderr)
+            ####################################################
+            #CREATING THE DADA HEADERFILE                      #
+            ####################################################
             dada_header_file = tempfile.NamedTemporaryFile(
                 mode="w",
                 prefix="edd_dada_header_",
@@ -491,10 +502,13 @@ class Mkrecv2Db2Dspsr(object):
             dada_header_file.close()
             dada_key_file.close()
             time.sleep(3)
+            ####################################################
+            #STARTING DSPSR                                    #
+            ####################################################
             cmd = "dspsr {args} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
                 args=self._config["dspsr_params"]["args"],
                 predictor="{}/t2pred.dat".format(in_path),
-                parfile="{}/{}.par".format(in_path, source_name),
+                parfile="{}/{}.par".format(in_path, self.source_name),
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
@@ -505,6 +519,9 @@ class Mkrecv2Db2Dspsr(object):
                 self._decode_capture_stdout)
             self._dspsr.stderr_callbacks.add(
                 self._handle_execution_stderr)
+            ####################################################
+            #STARTING MKRECV                                   #
+            ####################################################
             cmd = "mkrecv_nt --header {} --dada-mode 4".format(
                 dada_header_file.name)
             log.debug("Running command: {0}".format(cmd))
@@ -513,6 +530,9 @@ class Mkrecv2Db2Dspsr(object):
                 cmd, outpath=None, resident=True)
             self._mkrecv_ingest_proc.stdout_callbacks.add(
                 self._decode_capture_stdout)
+            ####################################################
+            #STARTING ARCHIVE MONITOR                          #
+            ####################################################
             cmd = "python /home/psr/software/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
                 in_path, out_path)
             log.debug("Running command: {0}".format(cmd))
