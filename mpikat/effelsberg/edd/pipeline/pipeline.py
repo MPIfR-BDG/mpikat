@@ -358,7 +358,8 @@ class Mkrecv2Db2Dspsr(object):
         self.state = "configuring"
         self._pipeline_config = json.loads(config_json)
         self._config = CONFIG
-        self._dada_key = self._pipeline_config["key"]
+        #self._dada_key = self._pipeline_config["key"]
+        self._dada_key = "dada"
         try:
             self.deconfigure()
         except Exception as error:
