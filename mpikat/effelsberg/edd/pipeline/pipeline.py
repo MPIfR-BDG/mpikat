@@ -355,200 +355,215 @@ class Mkrecv2Db2Dspsr(object):
     @gen.coroutine
     def configure(self, config_json):
         """@brief destroy any ring buffer and create new ring buffer."""
-        self.state = "configuring"
-        self._pipeline_config = json.loads(config_json)
-        self._config = CONFIG
-        #self._dada_key = self._pipeline_config["key"]
-        self._dada_key = "dada"
-        try:
-            self.deconfigure()
-        except Exception as error:
-            raise PulsarPipelineError(str(error))
-        cmd = "dada_db -k {key} {args}".format(key=self._dada_key,
-                                               args=self._config["dada_db_params"]["args"])
-        #cmd = "dada_db -k {key} {args}".format(**
-        #                                       self._config["dada_db_params"])
-        log.debug("Running command: {0}".format(cmd))
-        self._create_ring_buffer = ExecuteCommand(
-            cmd, outpath=None, resident=False)
-        self._create_ring_buffer.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._create_ring_buffer._process.wait()
-        self.state = "ready"
+        if self.state = "idle":
+            self.state = "configuring"
+            self._pipeline_config = json.loads(config_json)
+            self._config = CONFIG
+            #self._dada_key = self._pipeline_config["key"]
+            self._dada_key = "dada"
+            try:
+                self.deconfigure()
+            except Exception as error:
+                raise PulsarPipelineError(str(error))
+            cmd = "dada_db -k {key} {args}".format(key=self._dada_key,
+                                                   args=self._config["dada_db_params"]["args"])
+            #cmd = "dada_db -k {key} {args}".format(**
+            #                                       self._config["dada_db_params"])
+            log.debug("Running command: {0}".format(cmd))
+            self._create_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_ring_buffer._process.wait()
+            self.state = "ready"
+        else:
+            log.error("pipleine state is not in state = ready, cannot start the pipeline")
+
 
     @gen.coroutine
     def start(self, config_json):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
-        self.state = "starting"
-        self._source_config = json.loads(config_json)
-        header = self._config["dada_header_params"]
-        header["ra"] = self._source_config["ra"]
-        header["dec"] = self._source_config["dec"]
-        header["mc_source"] = self._source_config["mc_source"]
-        header["key"] = self._dada_key
-        self.frequency_mhz = self._source_config["central_freq"]
-        header["frequency_mhz"] = self.frequency_mhz
-        source_name = self._source_config["source-name"]
-        cpu_numbers = "2,3"
-        #cpu_numbers = self._source_config["cpus"]
-        #cuda_number = self._source_config["cuda"]
-        cuda_number = "0"
-        #header["sync_time"] = self._source_config["sync_time"]
-        #header["sync_time"] = self._source_config["sample_clock"]
-        #frequency_mhz = self._config["dada_header_params"]["frequency_mhz"]
-        log.debug("config recevied {} {} {} {} {}".format(
-            source_name, header["ra"], header["dec"], self.frequency_mhz, header["mc_source"]))
-        try:
-            source_name = source_name.split("_")[0]
-        except Exception as error:
-            raise PulsarPipelineError(str(error))
-        header["source_name"] = source_name
-        header["obs_id"] = "{0}_{1}".format(
-            sensors["scannum"], sensors["subscannum"])
-        tstr = Time.now().isot.replace(":", "-")
-        in_path = os.path.join("/data/jason/", source_name,
-                               str(self.frequency_mhz), tstr, "raw_data")
-        out_path = os.path.join(
-            "/data/jason/", source_name, str(self.frequency_mhz), tstr, "combined_data")
-        self.out_path = out_path
-        log.debug("Creating directories")
-        cmd = "mkdir -p {}".format(in_path)
-        log.debug("Command to run: {}".format(cmd))
-        log.debug("Current working directory: {}".format(os.getcwd()))
-        self._create_workdir_in_path = ExecuteCommand(
-            cmd, outpath=None, resident=False)
-        self._create_workdir_in_path.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._create_workdir_in_path._process.wait()
-        cmd = "mkdir -p {}".format(out_path)
-        log.debug("Command to run: {}".format(cmd))
-        log.info("Createing data directory {}".format(self.out_path))
-        self._create_workdir_out_path = ExecuteCommand(
-            cmd, outpath=None, resident=False)
-        self._create_workdir_out_path.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._create_workdir_out_path._process.wait()
-        os.chdir(in_path)
-        log.debug("Change to workdir: {}".format(os.getcwd()))
-        log.debug("Current working directory: {}".format(os.getcwd()))
+        if self.state == "ready"
 
-        cmd = "psrcat -E {source_name}".format(
-            source_name=source_name)
-        log.debug("Command to run: {}".format(cmd))
-        self.psrcat = ExecuteCommand(cmd, outpath=None, resident=False)
-        self.psrcat.stdout_callbacks.add(
-            self._save_capture_stdout)
-        self.psrcat.stderr_callbacks.add(
-            self._handle_execution_stderr)
-        yield time.sleep(3)
-        cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
-            source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._source_config["central_freq"])-(162.5/2), float(self._source_config["central_freq"])+(162.5/2))
-        log.debug("Command to run: {}".format(cmd))
-        self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
-        self.tempo2.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self.tempo2.stderr_callbacks.add( 
-            self._handle_execution_stderr)
+            self.state = "starting"
+            self._source_config = json.loads(config_json)
+            header = self._config["dada_header_params"]
+            header["ra"] = self._source_config["ra"]
+            header["dec"] = self._source_config["dec"]
+            header["mc_source"] = self._source_config["mc_source"]
+            header["key"] = self._dada_key
+            self.frequency_mhz = self._source_config["central_freq"]
+            header["frequency_mhz"] = self.frequency_mhz
+            source_name = self._source_config["source-name"]
+            cpu_numbers = "2,3"
+            #cpu_numbers = self._source_config["cpus"]
+            #cuda_number = self._source_config["cuda"]
+            cuda_number = "0"
+            #header["sync_time"] = self._source_config["sync_time"]
+            #header["sync_time"] = self._source_config["sample_clock"]
+            #frequency_mhz = self._config["dada_header_params"]["frequency_mhz"]
+            log.debug("config recevied {} {} {} {} {}".format(
+                source_name, header["ra"], header["dec"], self.frequency_mhz, header["mc_source"]))
+            try:
+                source_name = source_name.split("_")[0]
+            except Exception as error:
+                raise PulsarPipelineError(str(error))
+            header["source_name"] = source_name
+            header["obs_id"] = "{0}_{1}".format(
+                sensors["scannum"], sensors["subscannum"])
+            tstr = Time.now().isot.replace(":", "-")
+            in_path = os.path.join("/data/jason/", source_name,
+                                   str(self.frequency_mhz), tstr, "raw_data")
+            out_path = os.path.join(
+                "/data/jason/", source_name, str(self.frequency_mhz), tstr, "combined_data")
+            self.out_path = out_path
+            log.debug("Creating directories")
+            cmd = "mkdir -p {}".format(in_path)
+            log.debug("Command to run: {}".format(cmd))
+            log.debug("Current working directory: {}".format(os.getcwd()))
+            self._create_workdir_in_path = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_workdir_in_path.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_workdir_in_path._process.wait()
+            cmd = "mkdir -p {}".format(out_path)
+            log.debug("Command to run: {}".format(cmd))
+            log.info("Createing data directory {}".format(self.out_path))
+            self._create_workdir_out_path = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_workdir_out_path.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_workdir_out_path._process.wait()
+            os.chdir(in_path)
+            log.debug("Change to workdir: {}".format(os.getcwd()))
+            log.debug("Current working directory: {}".format(os.getcwd()))
 
-        dada_header_file = tempfile.NamedTemporaryFile(
-            mode="w",
-            prefix="edd_dada_header_",
-            suffix=".txt",
-            dir=os.getcwd(),
-            delete=False)
-        log.debug(
-            "Writing dada header file to {0}".format(
-                dada_header_file.name))
-        header_string = render_dada_header(header)
-        dada_header_file.write(header_string)
-        dada_key_file = tempfile.NamedTemporaryFile(
-            mode="w",
-            prefix="dada_keyfile_",
-            suffix=".key",
-            dir=os.getcwd(),
-            delete=False)
-        log.debug("Writing dada key file to {0}".format(dada_key_file.name))
-        key_string = make_dada_key_string(self._dada_key)
-        dada_key_file.write(make_dada_key_string(self._dada_key))
-        log.debug("Dada key file contains:\n{0}".format(key_string))
-        dada_header_file.close()
-        dada_key_file.close()
-        yield time.sleep(3)
-        cmd = "dspsr {args} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
-            args=self._config["dspsr_params"]["args"],
-            predictor="{}/t2pred.dat".format(in_path),
-            parfile="{}/{}.par".format(in_path, source_name),
-            cpus=cpu_numbers,
-            cuda_number=cuda_number,
-            keyfile=dada_key_file.name)
-        log.debug("Running command: {0}".format(cmd))
-        log.info("Staring DSPSR")
-        self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
-        self._dspsr.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._dspsr.stderr_callbacks.add(
-            self._handle_execution_stderr)
-        cmd = "mkrecv_nt --header {} --dada-mode 4".format(
-            dada_header_file.name)
-        log.debug("Running command: {0}".format(cmd))
-        log.info("Staring MKRECV")
-        self._mkrecv_ingest_proc = ExecuteCommand(
-            cmd,  outpath=None, resident=True)
-        self._mkrecv_ingest_proc.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        cmd = "python /home/psr/software/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
-            in_path, out_path)
-        log.debug("Running command: {0}".format(cmd))
-        log.info("Staring archive monitor")
-        self._archive_directory_monitor = ExecuteCommand(
-            cmd, outpath=out_path, resident=True)
-        self._archive_directory_monitor.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._archive_directory_monitor.fscrunch_callbacks.add(
-            self._add_fscrunch_to_sensor)
-        self._archive_directory_monitor.tscrunch_callbacks.add(
-            self._add_tscrunch_to_sensor)
-        self.state = "running"
+            cmd = "psrcat -E {source_name}".format(
+                source_name=source_name)
+            log.debug("Command to run: {}".format(cmd))
+            self.psrcat = ExecuteCommand(cmd, outpath=None, resident=False)
+            self.psrcat.stdout_callbacks.add(
+                self._save_capture_stdout)
+            self.psrcat.stderr_callbacks.add(
+                self._handle_execution_stderr)
+            yield time.sleep(3)
+            cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
+                source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._source_config["central_freq"])-(162.5/2), float(self._source_config["central_freq"])+(162.5/2))
+            log.debug("Command to run: {}".format(cmd))
+            self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
+            self.tempo2.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self.tempo2.stderr_callbacks.add( 
+                self._handle_execution_stderr)
+
+            dada_header_file = tempfile.NamedTemporaryFile(
+                mode="w",
+                prefix="edd_dada_header_",
+                suffix=".txt",
+                dir=os.getcwd(),
+                delete=False)
+            log.debug(
+                "Writing dada header file to {0}".format(
+                    dada_header_file.name))
+            header_string = render_dada_header(header)
+            dada_header_file.write(header_string)
+            dada_key_file = tempfile.NamedTemporaryFile(
+                mode="w",
+                prefix="dada_keyfile_",
+                suffix=".key",
+                dir=os.getcwd(),
+                delete=False)
+            log.debug("Writing dada key file to {0}".format(dada_key_file.name))
+            key_string = make_dada_key_string(self._dada_key)
+            dada_key_file.write(make_dada_key_string(self._dada_key))
+            log.debug("Dada key file contains:\n{0}".format(key_string))
+            dada_header_file.close()
+            dada_key_file.close()
+            yield time.sleep(3)
+            cmd = "dspsr {args} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
+                args=self._config["dspsr_params"]["args"],
+                predictor="{}/t2pred.dat".format(in_path),
+                parfile="{}/{}.par".format(in_path, source_name),
+                cpus=cpu_numbers,
+                cuda_number=cuda_number,
+                keyfile=dada_key_file.name)
+            log.debug("Running command: {0}".format(cmd))
+            log.info("Staring DSPSR")
+            self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
+            self._dspsr.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._dspsr.stderr_callbacks.add(
+                self._handle_execution_stderr)
+            cmd = "mkrecv_nt --header {} --dada-mode 4".format(
+                dada_header_file.name)
+            log.debug("Running command: {0}".format(cmd))
+            log.info("Staring MKRECV")
+            self._mkrecv_ingest_proc = ExecuteCommand(
+                cmd,  outpath=None, resident=True)
+            self._mkrecv_ingest_proc.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            cmd = "python /home/psr/software/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
+                in_path, out_path)
+            log.debug("Running command: {0}".format(cmd))
+            log.info("Staring archive monitor")
+            self._archive_directory_monitor = ExecuteCommand(
+                cmd, outpath=out_path, resident=True)
+            self._archive_directory_monitor.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._archive_directory_monitor.fscrunch_callbacks.add(
+                self._add_fscrunch_to_sensor)
+            self._archive_directory_monitor.tscrunch_callbacks.add(
+                self._add_tscrunch_to_sensor)
+            self.state = "running"
+        else:
+            log.error("pipleine state is not in state = ready, cannot start the pipeline")
+
 
     @gen.coroutine
     def stop(self):
         """@brief stop the dada_junkdb and dspsr instances."""
-        log.debug("Stopping")
-        self._timeout = 10
-        process = [self._mkrecv_ingest_proc,
-                   self._dspsr, self._archive_directory_monitor]
-        for proc in process:
-            proc.set_finish_event()
-            yield proc.finish()
-            log.debug(
-                "Waiting {} seconds for proc {} to terminate...".format(self._timeout, proc.command))
-            now = time.time()
-            while time.time() - now < self._timeout:
-                retval = proc._process.poll()
-                if retval is not None:
-                    log.debug("Returned a return value of {}".format(retval))
-                    break
+        if self.state == 'running'
+            log.debug("Stopping")
+            self._timeout = 10
+            process = [self._mkrecv_ingest_proc,
+                       self._dspsr, self._archive_directory_monitor]
+            for proc in process:
+                proc.set_finish_event()
+                yield proc.finish()
+                log.debug(
+                    "Waiting {} seconds for proc to terminate...".format(self._timeout))
+                now = time.time()
+                while time.time() - now < self._timeout:
+                    retval = proc._process.poll()
+                    if retval is not None:
+                        log.debug("Returned a return value of {}".format(retval))
+                        break
+                    else:
+                        yield time.sleep(0.5)
                 else:
-                    yield time.sleep(0.5)
-            else:
-                log.warning(
-                    "Failed to terminate proc in alloted time")
-                log.info("Killing process")
-                proc._process.kill()
-        self.state = "ready"
+                    log.warning(
+                        "Failed to terminate proc in alloted time")
+                    log.info("Killing process")
+                    proc._process.kill()
+            self.state = "ready"
+        else:
+            log.error("pipleine state is not in state = running, nothing to stop")
 
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
-        self.state = "deconfiguring"
-        log.debug("Destroying dada buffer")
-        cmd = "dada_db -d -k {0}".format(self._dada_key)
-        log.debug("Running command: {0}".format(cmd))
-        self._destory_ring_buffer = ExecuteCommand(
-            cmd, outpath=None, resident=False)
-        self._destory_ring_buffer.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._destory_ring_buffer._process.wait()
-        self.state = "idle"
+        if self.state != "running"
+            self.state = "deconfiguring"
+            log.debug("Destroying dada buffer")
+            cmd = "dada_db -d -k {0}".format(self._dada_key)
+            log.debug("Running command: {0}".format(cmd))
+            self._destory_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._destory_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._destory_ring_buffer._process.wait()
+            self.state = "idle"
+        else:
+            log.error("pipleine state is still running, please stop first")
 
 
 def main():
