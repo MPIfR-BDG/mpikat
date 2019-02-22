@@ -399,9 +399,8 @@ class Mkrecv2Db2Dspsr(object):
             self.state = "starting"
             self._source_config = json.loads(config_json)
             header = self._config["dada_header_params"]
-            header["ra"] = self._source_config["ra"]
-            header["dec"] = self._source_config["dec"]
-            header["key"] = self._dada_key
+            header["ra"], header["dec"], header["key"] = self._source_config[
+                "ra"], self._source_config["dec"], self._dada_key
             self.frequency_mhz = self._pipeline_config["central_freq"]
             header["mc_source"] = self._pipeline_config["mc_source"]
             header["frequency_mhz"] = self.frequency_mhz
@@ -415,8 +414,7 @@ class Mkrecv2Db2Dspsr(object):
                 header["sample_clock"] = self._source_config["sample_clock"]
             except:
                 pass
-            log.debug("config recevied {} {} {} {} {}".format(
-                source_name, header["ra"], header["dec"], self.frequency_mhz, header["mc_source"]))
+            log.debug("Unpacked config: {}".format(self._source_config))
             try:
                 source_name = source_name.split("_")[0]
             except Exception as error:
@@ -575,6 +573,7 @@ class Mkrecv2Db2Dspsr(object):
             self._decode_capture_stdout)
         self._destory_ring_buffer._process.wait()
         self.state = "idle"
+
 
 def main():
     logging.info("Starting pipeline instance")
