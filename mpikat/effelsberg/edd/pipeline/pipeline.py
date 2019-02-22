@@ -388,8 +388,10 @@ class Mkrecv2Db2Dspsr(object):
         self.frequency_mhz = self._source_config["central_freq"]
         header["frequency_mhz"] = self.frequency_mhz
         source_name = self._source_config["source-name"]
-        cpu_numbers = self._source_config["cpus"]
-        cuda_numbers = self._source_config["cuda"]
+        cpu_numbers = "2,3"
+        #cpu_numbers = self._source_config["cpus"]
+        #cuda_number = self._source_config["cuda"]
+        cuda_number = "0"
         #header["sync_time"] = self._source_config["sync_time"]
         #header["sync_time"] = self._source_config["sample_clock"]
         #frequency_mhz = self._config["dada_header_params"]["frequency_mhz"]
@@ -471,12 +473,12 @@ class Mkrecv2Db2Dspsr(object):
         dada_header_file.close()
         dada_key_file.close()
         yield time.sleep(3)
-        cmd = "dspsr {args} -cpu {cpus} -cuda {cuda_numbers} -P {predictor} -E {parfile} {keyfile}".format(
+        cmd = "dspsr {args} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             predictor="{}/t2pred.dat".format(in_path),
             parfile="{}/{}.par".format(in_path, source_name),
             cpus=cpu_numbers,
-            cuda_numbers=cuda_numbers,
+            cuda_number=cuda_number,
             keyfile=dada_key_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring DSPSR")
