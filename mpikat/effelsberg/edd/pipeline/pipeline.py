@@ -367,7 +367,7 @@ class Mkrecv2Db2Dspsr(object):
                 raise PulsarPipelineError(str(error))
             cmd = "dada_db -k {key} {args}".format(key=self._dada_key,
                                                    args=self._config["dada_db_params"]["args"])
-            #cmd = "dada_db -k {key} {args}".format(**
+            # cmd = "dada_db -k {key} {args}".format(**
             #                                       self._config["dada_db_params"])
             log.debug("Running command: {0}".format(cmd))
             self._create_ring_buffer = ExecuteCommand(
@@ -377,8 +377,8 @@ class Mkrecv2Db2Dspsr(object):
             self._create_ring_buffer._process.wait()
             self.state = "ready"
         else:
-            log.error("pipleine state is not in state = ready, cannot start the pipeline")
-
+            log.error(
+                "pipleine state is not in state = ready, cannot start the pipeline")
 
     @gen.coroutine
     def start(self, config_json):
@@ -403,8 +403,6 @@ class Mkrecv2Db2Dspsr(object):
                 header["sample_clock"] = self._source_config["sample_clock"]
             except:
                 pass
-                
-            #frequency_mhz = self._config["dada_header_params"]["frequency_mhz"]
             log.debug("config recevied {} {} {} {} {}".format(
                 source_name, header["ra"], header["dec"], self.frequency_mhz, header["mc_source"]))
             try:
@@ -451,14 +449,13 @@ class Mkrecv2Db2Dspsr(object):
                 self._handle_execution_stderr)
             yield time.sleep(3)
             cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
-                source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._source_config["central_freq"])-(162.5/2), float(self._source_config["central_freq"])+(162.5/2))
+                source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._source_config["central_freq"]) - (162.5 / 2), float(self._source_config["central_freq"]) + (162.5 / 2))
             log.debug("Command to run: {}".format(cmd))
             self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
             self.tempo2.stdout_callbacks.add(
                 self._decode_capture_stdout)
-            self.tempo2.stderr_callbacks.add( 
+            self.tempo2.stderr_callbacks.add(
                 self._handle_execution_stderr)
-
             dada_header_file = tempfile.NamedTemporaryFile(
                 mode="w",
                 prefix="edd_dada_header_",
@@ -476,7 +473,8 @@ class Mkrecv2Db2Dspsr(object):
                 suffix=".key",
                 dir=os.getcwd(),
                 delete=False)
-            log.debug("Writing dada key file to {0}".format(dada_key_file.name))
+            log.debug("Writing dada key file to {0}".format(
+                dada_key_file.name))
             key_string = make_dada_key_string(self._dada_key)
             dada_key_file.write(make_dada_key_string(self._dada_key))
             log.debug("Dada key file contains:\n{0}".format(key_string))
@@ -502,7 +500,7 @@ class Mkrecv2Db2Dspsr(object):
             log.debug("Running command: {0}".format(cmd))
             log.info("Staring MKRECV")
             self._mkrecv_ingest_proc = ExecuteCommand(
-                cmd,  outpath=None, resident=True)
+                cmd, outpath=None, resident=True)
             self._mkrecv_ingest_proc.stdout_callbacks.add(
                 self._decode_capture_stdout)
             cmd = "python /home/psr/software/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
@@ -519,8 +517,8 @@ class Mkrecv2Db2Dspsr(object):
                 self._add_tscrunch_to_sensor)
             self.state = "running"
         else:
-            log.error("pipleine state is not in state = ready, cannot start the pipeline")
-
+            log.error(
+                "pipleine state is not in state = ready, cannot start the pipeline")
 
     @gen.coroutine
     def stop(self):
@@ -539,7 +537,8 @@ class Mkrecv2Db2Dspsr(object):
                 while time.time() - now < self._timeout:
                     retval = proc._process.poll()
                     if retval is not None:
-                        log.debug("Returned a return value of {}".format(retval))
+                        log.debug(
+                            "Returned a return value of {}".format(retval))
                         break
                     else:
                         yield time.sleep(0.5)
@@ -554,7 +553,6 @@ class Mkrecv2Db2Dspsr(object):
 
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
-        if self.state != "running":
             self.state = "deconfiguring"
             log.debug("Destroying dada buffer")
             cmd = "dada_db -d -k {0}".format(self._dada_key)
@@ -565,9 +563,6 @@ class Mkrecv2Db2Dspsr(object):
                 self._decode_capture_stdout)
             self._destory_ring_buffer._process.wait()
             self.state = "idle"
-        else:
-            log.error("pipleine state is still running, please stop first")
-
 
 def main():
     logging.info("Starting pipeline instance")
