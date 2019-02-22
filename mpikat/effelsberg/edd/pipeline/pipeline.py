@@ -346,7 +346,7 @@ class Mkrecv2Db2Dspsr(object):
         return self._sensors
 
     def _decode_capture_stdout(self, stdout, callback):
-        log.info('{}'.format(str(stdout)))
+        log.debug('{}'.format(str(stdout)))
 
     def _save_capture_stdout(self, stdout, callback):
         with open("{}.par".format(self._source_config["source-name"]), "a") as file:
@@ -356,7 +356,7 @@ class Mkrecv2Db2Dspsr(object):
         log.debug(returncode)
 
     def _handle_execution_stderr(self, stderr, callback):
-        log.debug(stderr)
+        log.info(stderr)
 
     def _add_tscrunch_to_sensor(self, png_blob, callback):
         self._tscrunch.set_value(png_blob)
