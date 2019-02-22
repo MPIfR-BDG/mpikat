@@ -532,7 +532,7 @@ class Mkrecv2Db2Dspsr(object):
             log.error(
                 "pipleine state is not in state = ready, cannot start the pipeline")
 
-    #@gen.coroutine
+    @gen.coroutine
     def stop(self):
         """@brief stop the dada_junkdb and dspsr instances."""
         if self.state == 'running':
