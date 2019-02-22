@@ -21,30 +21,33 @@ SOFTWARE.
 """
 
 import logging
-import json
-import time
-from tornado.gen import coroutine, Return
+from tornado.gen import coroutine
 from katcp import Sensor, Message, KATCPClientResource
-from mpikat.core.utils import LoggingSensor
 from mpikat.core.product_controller import ProductController, state_change
 
 log = logging.getLogger("mpikat.edd_roach2_product_controller")
 
 EDD_R2RM_USER = "EDD_control_system"
 
+
 class EddRoach2ProductStateError(Exception):
+
     def __init__(self, expected_states, current_state):
-        message = "Possible states for this operation are '{}', but current state is '{}'".format(
+        message = ("Possible states for this operation are '{}'"
+                   ", but current state is '{}'").format(
             expected_states, current_state)
         super(EddRoach2ProductStateError, self).__init__(message)
 
+
 class EddRoach2ProductError(Exception):
     pass
+
 
 class EddRoach2ProductController(ProductController):
     """
     Wrapper class for an EDD ROACH2 product.
     """
+
     def __init__(self, parent, product_id, r2rm_addr):
         """
         @brief      Construct new instance
@@ -75,9 +78,9 @@ class EddRoach2ProductController(ProductController):
         super(EddRoach2ProductController, self).setup_sensors()
         self._firmware_server_sensor = Sensor.string(
             "firmware-server",
-            description = "The address of the firmware server started by this product",
-            default = "",
-            initial_status = Sensor.UNKNOWN)
+            description="The address of the firmware server started by this product",
+            default="",
+            initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._firmware_server_sensor)
         self._parent.mass_inform(Message.inform('interface-changed'))
 
@@ -93,7 +96,8 @@ class EddRoach2ProductController(ProductController):
         yield self._r2rm_client.until_synced(2)
         response = yield self._r2rm_client.req.force_deconfigure_board(self._icom_id)
         if not response.reply.reply_ok():
-            self.log.error("Error on deconfigure request: {}".format(response.reply.arguments[1]))
+            self.log.error("Error on deconfigure request: {}".format(
+                response.reply.arguments[1]))
             raise EddRoach2ProductError(response.reply.arguments[1])
         self.teardown_sensors()
         self._firmware = None
@@ -132,13 +136,20 @@ class EddRoach2ProductController(ProductController):
         yield self._r2rm_client.until_synced(2)
         self._icom_id = config["icom_id"]
         self._firmware = config["firmware"]
+        log.debug("Trying to force deconfiguring board")
+        response = yield self._r2rm_client.req.force_deconfigure_board(self._icom_id)
+        if not response.reply.reply_ok():
+            self.log.warning("Unable to deconfigure ROACH2 board: {}".format(
+                response.reply.arguments[1]))
         log.debug("Sending configure request to R2RM server")
         response = yield self._r2rm_client.req.configure_board(self._icom_id, EDD_R2RM_USER, self._firmware, timeout=20)
         if not response.reply.reply_ok():
-            self.log.error("Error on configure request: {}".format(response.reply.arguments[1]))
+            self.log.error("Error on configure request: {}".format(
+                response.reply.arguments[1]))
             raise EddRoach2ProductError(response.reply.arguments[1])
         _, firmware_ip, firmware_port = response.reply.arguments
-        log.debug("Connecting client to activated firmware server @ {}:{}".format(firmware_ip, firmware_port))
+        log.debug("Connecting client to activated firmware server @ {}:{}".format(
+            firmware_ip, firmware_port))
         firmware_client = KATCPClientResource(dict(
             name="firmware-client",
             address=(firmware_ip, firmware_port),
@@ -147,10 +158,12 @@ class EddRoach2ProductController(ProductController):
         log.debug("Syncing with firmware client")
         yield firmware_client.until_synced(2)
         for command, args in config["commands"]:
-            log.debug("Sending firmware server request '{}' with args '{}'".format(command, args))
+            log.debug(
+                "Sending firmware server request '{}' with args '{}'".format(command, args))
             response = yield firmware_client.req[command](*args, timeout=20)
             if not response.reply.reply_ok():
-                self.log.error("Error on {}->{} request: {}".format(command, args, response.reply.arguments[1]))
+                self.log.error(
+                    "Error on {}->{} request: {}".format(command, args, response.reply.arguments[1]))
                 raise EddRoach2ProductError(response.reply.arguments[1])
         log.debug("Stopping client connection to firmware server")
         firmware_client.stop()
@@ -168,5 +181,3 @@ class EddRoach2ProductController(ProductController):
         @brief      A no-op method for supporting the product controller interface.
         """
         pass
-
-

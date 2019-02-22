@@ -1,11 +1,15 @@
 import logging
 import time
 from tornado.gen import coroutine, sleep, Return
+from tornado.ioloop import IOLoop
 from katcp import KATCPClientResource
 
 log = logging.getLogger("mpikat.edd_digpack_client")
 
-class DigitiserPacketiserError(object):
+class DigitiserPacketiserError(Exception):
+    pass
+
+class PacketiserInterfaceError(Exception):
     pass
 
 class DigitiserPacketiserClient(object):
@@ -24,20 +28,40 @@ class DigitiserPacketiserClient(object):
             controlled=True))
         self._client.start()
 
+    def stop(self):
+        self._client.stop()
+
     @coroutine
     def _safe_request(self, request_name, *args):
         log.info("Sending packetiser request '{}' with arguments {}".format(request_name, args))
         yield self._client.until_synced()
         response = yield self._client.req[request_name](*args)
         if not response.reply.reply_ok():
-            log.error("'{}' request failed with error: {}".format(response.reply.arguments[1]))
+            log.error("'{}' request failed with error: {}".format(request_name, response.reply.arguments[1]))
             raise DigitiserPacketiserError(response.reply.arguments[1])
         else:
             log.debug("'{}' request successful".format(request_name))
             raise Return(response)
 
     @coroutine
-    def set_sampling_rate(self, rate):
+    def _check_interfaces(self):
+        log.debug("Checking status of 40 GbE interfaces")
+        yield self._client.until_synced()
+        @coroutine
+        def _check_interface(name):
+            log.debug("Checking status of '{}'".format(name))
+            sensor = self._client.sensor['rxs_packetizer_40g_{}_am_lock_status'.format(name)]
+            status = yield sensor.get_value()
+            if not status == 0x0f:
+                log.warning("Interface '{}' in error state".format(name))
+                raise PacketiserInterfaceError("40-GbE interface '{}' did not boot".format(name))
+            else:
+                log.debug("Interface '{}' is healthy".format(name))
+        yield _check_interface('iface00')
+        yield _check_interface('iface01')
+
+    @coroutine
+    def set_sampling_rate(self, rate, retries=3):
         """
         @brief      Sets the sampling rate.
 
@@ -56,8 +80,22 @@ class DigitiserPacketiserClient(object):
             msg = "Invalid sampling rate, valid sampling rates are: {}".format(valid_modes.keys())
             log.error(msg)
             raise DigitiserPacketiserError(msg)
-        response = yield self._safe_request("rxs_packetizer_system_reinit", *args)
-        yield sleep(10)
+
+        attempts = 0
+        while True:
+            response = yield self._safe_request("rxs_packetizer_system_reinit", *args)
+            yield sleep(10)
+            try:
+                yield self._check_interfaces()
+            except PacketiserInterfaceError as error:
+                if attempts >= retries:
+                    raise error
+                else:
+                    log.warning("Retrying system initalisation")
+                    attempts += 1
+                    continue
+            else:
+                break
 
     @coroutine
     def set_bit_width(self, nbits):
@@ -97,7 +135,12 @@ class DigitiserPacketiserClient(object):
 
     @coroutine
     def set_interface_address(self, intf, ip):
-        """blah"""
+        """
+        @brief      Set the interface address for a packetiser qsfp interface
+
+        @param      intf   The interface specified as a string integer, e.g. '0' or '1'
+        @param      ip     The IP address to assign to the interface
+        """
         yield self._safe_request("rxs_packetizer_40g_source_ip_set", intf, ip)
 
     @coroutine
@@ -171,7 +214,7 @@ if __name__ == "__main__":
     parser.add_option('', '--sampling_rate', dest='sampling_rate', type=float,
         help='The digitiser sampling rate (Hz)', default=2600000000.0)
     parser.add_option('', '--v-destinations', dest='v_destinations', type=str,
-        help='V polarisation destinations', default="225.0.0.156+3:7148")
+        help='V polarisation destinations', default="225.0.0.152+3:7148")
     parser.add_option('', '--h-destinations', dest='h_destinations', type=str,
         help='H polarisation destinations', default="225.0.0.156+3:7148")
     parser.add_option('', '--log-level',dest='log_level',type=str,
@@ -183,7 +226,7 @@ if __name__ == "__main__":
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
         level=opts.log_level.upper(),
         logger=logger)
-    ioloop = tornado.ioloop.IOLoop.current()
+    ioloop = IOLoop.current()
     client = DigitiserPacketiserClient(opts.host, port=opts.port)
     @coroutine
     def configure():
@@ -194,7 +237,7 @@ if __name__ == "__main__":
             yield client.synchronize()
             yield client.capture_start()
         except Exception as error:
-            log.error("Error during packetiser configuration: {}".format(str(error)))
+            log.exception("Error during packetiser configuration: {}".format(str(error)))
             raise error
     ioloop.run_sync(configure)
 

@@ -21,21 +21,29 @@ SOFTWARE.
 """
 import logging
 from threading import Lock
+from tornado.gen import coroutine, Return
 from katcp import KATCPClientResource
 
 log = logging.getLogger('mpikat.worker_pool')
 lock = Lock()
 
+
 class WorkerAllocationError(Exception):
     pass
 
+
 class WorkerDeallocationError(Exception):
+    pass
+
+
+class WorkerRequestError(Exception):
     pass
 
 class WorkerPool(object):
     """Wrapper class for managing server
     allocation and deallocation to subarray/products
     """
+
     def __init__(self):
         """
         @brief   Construct a new instance
@@ -54,7 +62,7 @@ class WorkerPool(object):
         @params port     The port number that the worker server serves on
         """
         log.debug("Adding {}:{} to worker pool".format(hostname, port))
-        wrapper = self.make_wrapper(hostname,port)
+        wrapper = self.make_wrapper(hostname, port)
         if not wrapper in self._servers:
             wrapper.start()
             log.debug("Adding {} to server set".format(wrapper))
@@ -71,13 +79,15 @@ class WorkerPool(object):
         @params port     The port number that the worker server serves on
         """
         log.debug("Removing {}:{} from worker pool".format(hostname, port))
-        wrapper = self.make_wrapper(hostname,port)
+        wrapper = self.make_wrapper(hostname, port)
         if wrapper in self._allocated:
-            raise WorkerDeallocationError("Cannot remove allocated server from pool")
+            raise WorkerDeallocationError(
+                "Cannot remove allocated server from pool")
         try:
             self._servers.remove(wrapper)
         except KeyError:
-            log.warning("Could not find {}:{} in server pool".format(hostname, port))
+            log.warning(
+                "Could not find {}:{} in server pool".format(hostname, port))
         else:
             log.debug("Removed {}:{} from worker pool".format(hostname, port))
 
@@ -94,7 +104,8 @@ class WorkerPool(object):
             log.debug("Request to allocate {} servers".format(count))
             available_servers = list(self._servers.difference(self._allocated))
             log.debug("{} servers available".format(len(available_servers)))
-            available_servers.sort(key=lambda server: server.priority, reverse=True)
+            available_servers.sort(
+                key=lambda server: server.priority, reverse=True)
             if len(available_servers) < count:
                 raise WorkerAllocationError("Cannot allocate {0} servers, only {1} available".format(
                     count, len(available_servers)))
@@ -146,6 +157,7 @@ class WorkerWrapper(object):
     """Wrapper around a client to an FbfWorkerServer
     instance.
     """
+
     def __init__(self, hostname, port):
         """
         @brief  Create a new wrapper around a client to a worker server
@@ -153,21 +165,34 @@ class WorkerWrapper(object):
         @params hostname The hostname for the worker server
         @params port     The port number that the worker server serves on
         """
-        log.debug("Creating worker client to worker at {}:{}".format(hostname, port))
+        log.debug(
+            "Creating worker client to worker at {}:{}".format(hostname, port))
         self._client = KATCPClientResource(dict(
             name="worker-server-client",
             address=(hostname, port),
             controlled=True))
         self.hostname = hostname
         self.port = port
-        self.priority = 0 # Currently no priority mechanism is implemented
+        self.priority = 0  # Currently no priority mechanism is implemented
         self._started = False
+
+    @coroutine
+    def get_sensor_value(self, sensor_name):
+        """
+        @brief  Retrieve a sensor value from the worker
+        """
+        yield self._client.until_synced()
+        response = yield self._client.req.sensor_value(sensor_name)
+        if not response.reply.reply_ok():
+            raise WorkerRequestError(response.reply.arguments[1])
+        raise Return(response.informs[0].arguments[-1])
 
     def start(self):
         """
         @brief  Start the client to the worker server
         """
-        log.debug("Starting client to worker at {}:{}".format(self.hostname, self.port))
+        log.debug("Starting client to worker at {}:{}".format(
+            self.hostname, self.port))
         self._client.start()
         self._started = True
 
@@ -192,4 +217,3 @@ class WorkerWrapper(object):
                 self._client.stop()
             except Exception as error:
                 log.exception(str(error))
-

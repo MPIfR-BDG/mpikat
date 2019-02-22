@@ -127,7 +127,7 @@ class ScpiAsyncDeviceServer(object):
             request = None
             try:
                 message, addr = self._socket.recvfrom(self._buffer_size)
-                log.info("Message received from {}: {}".format(addr, message))
+                log.info("Message received from {}: {}".format(addr, message.strip()))
             except socket.error as error:
                 error_id = error.args[0]
                 if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:

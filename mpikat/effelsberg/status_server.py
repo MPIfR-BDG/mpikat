@@ -32,7 +32,9 @@ STATUS_MAP = {
     "warn": 2  # Sensor.STATUSES 'warn'
 }
 
+
 class StatusCatcherThread(Thread):
+
     def __init__(
             self,
             mcast_group=JSON_STATUS_MCAST_GROUP,
@@ -204,10 +206,14 @@ class JsonStatusServer(AsyncDeviceServer):
     @return_reply(Str())
     def request_json(self, req):
         """request an JSON version of the status message"""
+        return ("ok", self.as_json())
+
+    def as_json(self):
+        """Convert status sensors to JSON object"""
         out = {}
         for name, sensor in self._sensors.items():
-            out[name] = sensor.value()
-        return ("ok", pack_dict(out))
+            out[name] = str(sensor.value())
+        return json.dumps(out)
 
     @request(Str())
     @return_reply(Str())
@@ -316,15 +322,16 @@ def on_shutdown(ioloop, server):
     yield server.stop()
     ioloop.stop()
 
+
 def main():
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('-H', '--host', dest='host', type=str,
-        help='Host interface to bind to')
+                      help='Host interface to bind to')
     parser.add_option('-p', '--port', dest='port', type=long,
-        help='Port number to bind to')
-    parser.add_option('', '--log-level',dest='log_level',type=str,
-        help='Port number of status server instance',default="INFO")
+                      help='Port number to bind to')
+    parser.add_option('', '--log-level', dest='log_level', type=str,
+                      help='Port number of status server instance', default="INFO")
     (opts, args) = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
@@ -338,9 +345,12 @@ def main():
     server = JsonStatusServer(opts.host, opts.port)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
+
     def start_and_display():
         server.start()
-        log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
+        log.info(
+            "Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
+
     ioloop.add_callback(start_and_display)
     ioloop.start()
 
