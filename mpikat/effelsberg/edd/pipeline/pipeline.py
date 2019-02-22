@@ -521,7 +521,7 @@ class Mkrecv2Db2Dspsr(object):
             proc.set_finish_event()
             yield proc.finish()
             log.debug(
-                "Waiting {} seconds for proc {} to terminate...".format(self._timeout, proc))
+                "Waiting {} seconds for proc {} to terminate...".format(self._timeout, proc.command))
             now = time.time()
             while time.time() - now < self._timeout:
                 retval = proc._process.poll()
