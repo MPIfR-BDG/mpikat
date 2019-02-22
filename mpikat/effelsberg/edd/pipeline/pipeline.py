@@ -364,7 +364,7 @@ class Mkrecv2Db2Dspsr(object):
     def _add_fscrunch_to_sensor(self, png_blob, callback):
         self._fscrunch.set_value(png_blob)
 
-    @gen.coroutine
+    #@gen.coroutine
     def configure(self, config_json):
         """@brief destroy any ring buffer and create new ring buffer."""
         if self.state == "idle":
@@ -392,7 +392,7 @@ class Mkrecv2Db2Dspsr(object):
             log.error(
                 "pipleine state is not in state = ready, cannot start the pipeline")
 
-    @gen.coroutine
+    #@gen.coroutine
     def start(self, config_json):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
         if self.state == "ready":
@@ -459,7 +459,7 @@ class Mkrecv2Db2Dspsr(object):
                 self._save_capture_stdout)
             self.psrcat.stderr_callbacks.add(
                 self._handle_execution_stderr)
-            yield time.sleep(3)
+            time.sleep(3)
             cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
                 source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._source_config["central_freq"]) - (162.5 / 2), float(self._source_config["central_freq"]) + (162.5 / 2))
             log.debug("Command to run: {}".format(cmd))
@@ -492,7 +492,7 @@ class Mkrecv2Db2Dspsr(object):
             log.debug("Dada key file contains:\n{0}".format(key_string))
             dada_header_file.close()
             dada_key_file.close()
-            yield time.sleep(3)
+            time.sleep(3)
             cmd = "dspsr {args} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
                 args=self._config["dspsr_params"]["args"],
                 predictor="{}/t2pred.dat".format(in_path),
