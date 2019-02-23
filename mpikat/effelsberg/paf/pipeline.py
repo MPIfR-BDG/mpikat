@@ -21,6 +21,7 @@ import os
 from math import floor
 from fcntl import fcntl, F_GETFL, F_SETFL
 from os import O_NONBLOCK
+import sys
 
 # Updates:
 # 1. Check the directory exist or not, create it if not;
@@ -34,6 +35,10 @@ from os import O_NONBLOCK
 # 9. utc_start_process, to put the dada_dbregister into capture does not help, now synced, more test;
 # 10. add lock to counter to protect it
 # 11. Remove NVPROF, SOD
+# 12. Unblock the stdout and stderr
+# 13. Lock to pretect the handle
+# 14. Use the same header template for different configurations
+# 15. capture software also updated to use the same header
 
 EXECUTE = True
 #EXECUTE        = False
@@ -44,12 +49,15 @@ HEIMDALL = False   # To run heimdall on filterbank file or not
 DBDISK = True   # To run dbdisk on filterbank file or not
 #DBDISK         = False   # To run dbdisk on filterbank file or not
 
+FITSWRITER = True
+#FITSWRITER = False
+
 PAF_ROOT = "/home/pulsar/xinping/phased-array-feed/"
 DATA_ROOT = "/beegfs/DENG/"
 DADA_ROOT = "{}/AUG/baseband/".format(DATA_ROOT)
 SOURCE_DEFAULT = "UNKNOW_00:00:00.00_00:00:00.00"
 
-PAF_CONFIG = {"instrument_name":    "PAF-BMF",
+PAF_CONFIG = {"dada_hdr_fname":      "{}/config/dada_header_template_PAF.txt".format(PAF_ROOT),
               "nchan_chk":    	     7,        # MHz
               "over_samp_rate":      (32.0 / 27.0),
               "prd":                 27,       # Seconds
@@ -98,8 +106,7 @@ SEARCH_CONFIG_GENERAL = {"rbuf_baseband_ndf_chk":   16384,
                          "zap_chans":               [],
 }
 
-SEARCH_CONFIG_1BEAM = {"dada_hdr_fname":         "{}/config/header_1beam.txt".format(PAF_ROOT),
-                       "rbuf_baseband_key":      ["dada"],
+SEARCH_CONFIG_1BEAM = {"rbuf_baseband_key":      ["dada"],
                        "rbuf_filterbank_key":    ["dade"],
                        "nchan_keep_band":        32768,
                        "nbeam":                  1,
@@ -107,8 +114,7 @@ SEARCH_CONFIG_1BEAM = {"dada_hdr_fname":         "{}/config/header_1beam.txt".fo
                        "nchk_port":              16,
 }
 
-SEARCH_CONFIG_2BEAMS = {"dada_hdr_fname":         "{}/config/header_2beams.txt".format(PAF_ROOT),
-                        "rbuf_baseband_key":       ["dada", "dadc"],
+SEARCH_CONFIG_2BEAMS = {"rbuf_baseband_key":       ["dada", "dadc"],
                         "rbuf_filterbank_key":     ["dade", "dadg"],
                         "nchan_keep_band":         24576,
                         "nbeam":                   2,
@@ -134,18 +140,18 @@ SPECTRAL_CONFIG_GENERAL = {"rbuf_baseband_ndf_chk":   16384,
                            "bind":                    1,
                            "pad":                     0,
                            "ndf_check_chk":           1024,
+                           "ip":                      '134.104.70.90',
+                           "port":                    17106,
 }
 
-SPECTRAL_CONFIG_1BEAM = {"dada_hdr_fname":         "{}/config/header_1beam.txt".format(PAF_ROOT),
-                         "rbuf_baseband_key":      ["dada"],
+SPECTRAL_CONFIG_1BEAM = {"rbuf_baseband_key":      ["dada"],
                          "rbuf_spectral_key":      ["dade"],
                          "nbeam":                  1,
                          "nport_beam":             3,
                          "nchk_port":              16,
 }
 
-SPECTRAL_CONFIG_2BEAMS = {"dada_hdr_fname":         "{}/config/header_1beam.txt".format(PAF_ROOT),
-                          "rbuf_baseband_key":       ["dada", "dadc"],
+SPECTRAL_CONFIG_2BEAMS = {"rbuf_baseband_key":       ["dada", "dadc"],
                           "rbuf_spectral_key":       ["dade", "dadg"],
                           "nbeam":                   2,
                           "nport_beam":              3,
@@ -207,6 +213,7 @@ class ExecuteCommand(object):
         self._returncode = None
         self._event = threading.Event()
         self._event.clear()
+        self._stderr_status = 0
         
         log.debug(self._command)
         self._executable_command = shlex.split(self._command)
@@ -232,12 +239,9 @@ class ExecuteCommand(object):
 
             # Start monitors
             self._monitor_threads.append(
-                threading.Thread(target=self._stdout_monitor))
-            self._monitor_threads.append(
-                threading.Thread(target=self._stderr_monitor))
-
+                threading.Thread(target=self._process_monitor))
+            
             for thread in self._monitor_threads:
-                thread.daemon = True
                 thread.start()
 
     def __del__(self):
@@ -293,52 +297,45 @@ class ExecuteCommand(object):
     def stderr(self, value):
         self._stderr = value
         self.stderr_notify()
-
-    def _stdout_monitor(self):
+        
+    def _process_monitor(self):
         if EXECUTE:
             while (self._process.poll() == None) and (not self._event.is_set()):
                 try:
                     stdout = self._process.stdout.readline().rstrip("\n\r")
-                    #log.info("IN the while loop in STDOUT MONITOR " + self._command) 
                     if stdout != b"":
                         if self._process_index != None:
                             self.stdout = stdout + "; PROCESS_INDEX is " + str(self._process_index)
                         else:
                             self.stdout = stdout
+                        log.info("IN the while loop in process MONITOR, STDOUT " + self._command) 
                 except:
                     pass
                 
-            log.error("PASS the while loop in STDOUT MONITOR " + self._command) 
-            if self._process.returncode:
-                self.returncode = self._command + \
-                    "; RETURNCODE is: " + str(self._process.returncode)
-
-    def _stderr_monitor(self):
-        if EXECUTE:
-            while (self._process.poll() == None) and (not self._event.is_set()):
                 try:
                     stderr = self._process.stderr.readline().rstrip("\n\r")
-                    log.info("IN the while loop in STDERR MONITOR " + self._command) 
                     if stderr != b"":
                         if self._process_index != None:
-                            self.stderr = self._command + "; STDERR is: " + stderr + "; PROCESS_INDEX is " + str(self._process_index)
+                            self._stderr_status = 1
+                            self.stderr = stderr + "; PROCESS_INDEX is " + str(self._process_index)
                         else:
-                            self.stderr = self._command + "; STDERR is: " + stderr
-                except:
+                            self.stderr = stderr
+                        log.info("IN the while loop in process MONITOR, STDERR " + self._command)
+                except Exception as error:
                     pass
-            
-            log.error("PASS the while loop in STDERR MONITOR " + self._command) 
-            if self._process.returncode:
+            #log.info("OUTSIDE the while loop in process MONITOR " + self._command)
+            if self._process.returncode and (not self._stderr_status) and (not self._event.is_set()):
                 self.returncode = self._command + \
-                    "; RETURNCODE is: " + str(self._process.returncode)
-
-
+                                  "; RETURNCODE is: " + str(self._process.returncode)
+            log.error("OUTSIDE the while loop in process MONITOR " + self._command)
+            
 class Pipeline(object):
 
     def __init__(self):
         self._sensors = []
         self.callbacks = set()
         self._ready_counter = 0
+        self._aberrant_counter = 0
         self.setup_sensors()
 
         self._prd = PAF_CONFIG["prd"]
@@ -354,8 +351,10 @@ class Pipeline(object):
         self._npol_samp_baseband = PAF_CONFIG["npol_samp_baseband"]
         self._mem_node = PAF_CONFIG["mem_node"]
         self._over_samp_rate     = PAF_CONFIG["over_samp_rate"]
+        self._dada_hdr_fname = PAF_CONFIG["dada_hdr_fname"]
         self._cleanup_commands = []
-        self._ready_counter_lock = threading.Lock()
+        self._ready_lock    = threading.Lock()
+        self._aberrant_lock = threading.Lock()
         
     def __del__(self):
         class_name = self.__class__.__name__
@@ -650,22 +649,28 @@ class Pipeline(object):
         
     def _handle_execution_stderr(self, stderr, callback):
         if EXECUTE:
-            process_index = int(stderr.split(" ")[-1])
-            log.debug("process_index {}\n\n\n\n".format(process_index))
-            self._capture_execution_instances[i].terminate()
-            #time.sleep(10)
-            
-            self.state = "error"
-            log.error(stderr)
-            raise PipelineError(stderr)
+            self._aberrant_lock.acquire()
+            if self._aberrant_counter == 0:
+                log.error(stderr)            
+                for execution_instance in self._capture_execution_instances:
+                    execution_instance.terminate()            
+            else:
+                pass
+            self._aberrant_counter += 1
+            self._aberrant_lock.release()
+
+            if self._aberrant_counter == 1:
+                log.error("JUST BEFORE RAISE ERROR")
+                self.state = "error"
+                raise PipelineError(stderr)
 
     def _ready_counter_callback(self, stdout, callback):
         if EXECUTE:
             log.debug(stdout)
             if stdout.find("READY") != -1:
-                self._ready_counter_lock.acquire()
+                self._ready_lock.acquire()
                 self._ready_counter += 1
-                self._ready_counter_lock.release()
+                self._ready_lock.release()
                 
     def _capture_status_callback(self, stdout, callback):
         if EXECUTE:
@@ -780,7 +785,6 @@ class Search(Pipeline):
         self._rbuf_baseband_key = self._pipeline_config["rbuf_baseband_key"]
         self._rbuf_filterbank_key = self._pipeline_config[
             "rbuf_filterbank_key"]
-        self._dada_hdr_fname = self._pipeline_config["dada_hdr_fname"]
         self._blk_res = self._df_res * self._rbuf_baseband_ndf_chk
         self._nchk_beam = self._nchk_port * self._nport_beam
         self._nchan_baseband = self._nchan_chk * self._nchk_beam
@@ -905,11 +909,11 @@ class Search(Pipeline):
 
             # capture command
             command = ("{} -a {} -b {} -c {} -e {} -f {} -g {} -i {} -j {} "
-                       "-k {} -l {} -m {} -n {} -o {} -p {} -q {} -r {}").format(
+                       "-k {} -l {} -m {} -n {} -o {} -p {} -q {}").format(
                            capture, self._rbuf_baseband_key[i], self._df_hdrsz, " -c ".join(alive_info),
                            self._freq, refinfo, runtime_directory, buf_control_cpu, capture_control, 
                            self._bind, self._rbuf_baseband_ndf_chk, self._tbuf_baseband_ndf_chk,
-                           self._dada_hdr_fname, PAF_CONFIG["instrument_name"], SOURCE_DEFAULT, self._pad, beam_index)
+                           self._dada_hdr_fname, SOURCE_DEFAULT, self._pad, beam_index)
             self._capture_commands.append(command)
 
             # baseband2filterbank command
@@ -1081,8 +1085,11 @@ class Search(Pipeline):
         if EXECUTE:
             self._ready_counter = 0
             while True:
+            #while self.state != "error":
                 if self._ready_counter == self._nbeam:
                     break
+            #if self.state == "error":
+            #    raise PipelineError("DONE")
             process_index = 0
             start_buf = self._synced_startbuf(utc_start_process, self._utc_start_capture)
             log.debug("START BUF index is {}".format(start_buf))
@@ -1215,6 +1222,8 @@ class Spectral(Pipeline):
         self._baseband2spectral_execution_instances = []
         self._heimdall_execution_instances = []
 
+        self._ip_out   = SPECTRAL_CONFIG_GENERAL["ip"]
+        self._port_out = SPECTRAL_CONFIG_GENERAL["port"]
         self._pad = SPECTRAL_CONFIG_GENERAL["pad"]
         self._bind = SPECTRAL_CONFIG_GENERAL["bind"]
         self._nstream = SPECTRAL_CONFIG_GENERAL["nstream"]
@@ -1266,7 +1275,6 @@ class Spectral(Pipeline):
         self._nport_beam = self._pipeline_config["nport_beam"]
         self._rbuf_baseband_key = self._pipeline_config["rbuf_baseband_key"]
         self._rbuf_spectral_key = self._pipeline_config["rbuf_spectral_key"]
-        self._dada_hdr_fname = self._pipeline_config["dada_hdr_fname"]
         self._blk_res = self._df_res * self._rbuf_baseband_ndf_chk
         self._nchk_beam = self._nchk_port * self._nport_beam
         self._nchan_baseband = self._nchan_chk * self._nchk_beam
@@ -1388,21 +1396,29 @@ class Spectral(Pipeline):
 
             # capture command
             command = ("{} -a {} -b {} -c {} -e {} -f {} -g {} -i {} -j {} "
-                       "-k {} -l {} -m {} -n {} -o {} -p {} -q {} -r {}").format(
+                       "-k {} -l {} -m {} -n {} -o {} -p {} -q {}").format(
                            capture, self._rbuf_baseband_key[i], self._df_hdrsz, " -c ".join(alive_info),
                            self._freq, refinfo, runtime_directory, buf_control_cpu, capture_control, self._bind,
                            self._rbuf_baseband_ndf_chk, self._tbuf_baseband_ndf_chk,
-                           self._dada_hdr_fname, PAF_CONFIG["instrument_name"], SOURCE_DEFAULT, self._pad, beam_index)
+                           self._dada_hdr_fname, SOURCE_DEFAULT, self._pad, beam_index)
             self._capture_commands.append(command)
 
             # baseband2spectral command
             baseband2spectral_cpu = self._numa * self._ncpu_numa + i * self._ncpu_pipeline + 1
-            command = ("taskset -c {} {} -a {} -b k_{}_1 -c {} "
-                       "-d {} -e {} -f {} -g {} -i {} -j {} ").format(
-                           baseband2spectral_cpu, baseband2spectral,
-                           self._rbuf_baseband_key[i], self._rbuf_spectral_key[i],
-                           self._rbuf_spectral_ndf_chk, self._nstream, self._ndf_stream,
-                           self._runtime_directory[i], self._nchk_beam, self._cufft_nx, self._ptype)
+            if not FITSWRITER:
+                command = ("taskset -c {} {} -a {} -b k_{}_1 -c {} "
+                           "-d {} -e {} -f {} -g {} -i {} -j {} ").format(
+                               baseband2spectral_cpu, baseband2spectral,
+                               self._rbuf_baseband_key[i], self._rbuf_spectral_key[i],
+                               self._rbuf_spectral_ndf_chk, self._nstream, self._ndf_stream,
+                               self._runtime_directory[i], self._nchk_beam, self._cufft_nx, self._ptype)
+            else:                
+                command = ("taskset -c {} {} -a {} -b n_{}_{} -c {} "
+                           "-d {} -e {} -f {} -g {} -i {} -j {} ").format(
+                               baseband2spectral_cpu, baseband2spectral,
+                               self._rbuf_baseband_key[i], self._ip_out, self._port_out,
+                               self._rbuf_spectral_ndf_chk, self._nstream, self._ndf_stream,
+                               self._runtime_directory[i], self._nchk_beam, self._cufft_nx, self._ptype)
             self._baseband2spectral_commands.append(command)
 
             # Command to create spectral ring buffer
@@ -1517,15 +1533,16 @@ class Spectral(Pipeline):
                 execution_instance)
             process_index += 1
                 
-        # Run dbdisk 
-        process_index = 0
-        self._dbdisk_execution_instances = []
-        for command in self._dbdisk_commands:
-            execution_instance = ExecuteCommand(command, process_index)
-            execution_instance.returncode_callbacks.add(
-                self._handle_execution_returncode)
-            self._dbdisk_execution_instances.append(
-                execution_instance)
+        # Run dbdisk
+        if not FITSWRITER:
+            process_index = 0
+            self._dbdisk_execution_instances = []
+            for command in self._dbdisk_commands:
+                execution_instance = ExecuteCommand(command, process_index)
+                execution_instance.returncode_callbacks.add(
+                    self._handle_execution_returncode)
+                self._dbdisk_execution_instances.append(
+                    execution_instance)
             process_index += 1
 
         # Enable the SOD of baseband ring buffer with given time and then
@@ -1545,9 +1562,9 @@ class Spectral(Pipeline):
                                       self._socket_address[process_index])
                 process_index += 1
 
-        # We do not need to monitor the stdout anymore
-        for execution_instance in self._baseband2spectral_execution_instances:
-            execution_instance.stdout_callbacks.remove(self._ready_counter_callback)
+        ## We do not need to monitor the stdout anymore
+        #for execution_instance in self._baseband2spectral_execution_instances:
+        #    execution_instance.stdout_callbacks.remove(self._ready_counter_callback)
             
         self.state = "running"
         log.info("Running")
@@ -1568,8 +1585,9 @@ class Spectral(Pipeline):
                                       "END-OF-DATA",
                                       self._socket_address[process_index])
                 process_index += 1
-        for execution_instance in self._dbdisk_execution_instances:
-            execution_instance.finish()
+        if not FITSWRITER:
+            for execution_instance in self._dbdisk_execution_instances:
+                execution_instance.finish()
         for execution_instance in self._baseband2spectral_execution_instances:
             execution_instance.finish()
 
@@ -1692,54 +1710,54 @@ if __name__ == "__main__":
     beam = args.beam[0]
     ip = "10.17.{}.{}".format(host_id, numa + 1)
         
-    for i in range(1):
-        log.info("Create pipeline ...")
-        if beam == 1:
-            freq = 1340.5
-            search_mode = Search1Beam()
-        if beam == 2:
-            freq = 1337.0
-            search_mode = Search2Beams()
-    
-        log.info("Configure it ...")
-        utc_start_capture = Time.now()  
-        search_mode.configure(utc_start_capture, freq, ip)
-    
-        for j in range(1):
-            log.info("Start it ...")
-            utc_start_process = Time.now() + 10 * units.second
-            search_mode.start(utc_start_process, source_name, ra, dec)
-            time.sleep(10)
-            log.info("Stop it ...")
-            search_mode.stop()
-    
-        log.info("Deconfigure it ...")
-        search_mode.deconfigure()
-    
     #for i in range(1):
     #    log.info("Create pipeline ...")
     #    if beam == 1:
     #        freq = 1340.5
-    #        spectral_mode = Spectral1Beam1Pol()
-    #        spectral_mode = Spectral1Beam2Pols()
-    #        spectral_mode = Spectral1Beam4Pols()
+    #        search_mode = Search1Beam()
     #    if beam == 2:
     #        freq = 1337.0
-    #        spectral_mode = Spectral2Beams1Pol()
-    #        spectral_mode = Spectral2Beams2Pols()
-    #        spectral_mode = Spectral2Beams4Pols()
+    #        search_mode = Search2Beams()
     #
     #    log.info("Configure it ...")
     #    utc_start_capture = Time.now()  
-    #    spectral_mode.configure(utc_start_capture, freq, ip)
+    #    search_mode.configure(utc_start_capture, freq, ip)
     #
     #    for j in range(1):
     #        log.info("Start it ...")
-    #        utc_start_process = Time.now() + 15 * units.second
-    #        spectral_mode.start(utc_start_process, source_name, ra, dec)
+    #        utc_start_process = Time.now() + 10 * units.second
+    #        search_mode.start(utc_start_process, source_name, ra, dec)
     #        time.sleep(10)
     #        log.info("Stop it ...")
-    #        spectral_mode.stop()
+    #        search_mode.stop()
     #
     #    log.info("Deconfigure it ...")
-    #    spectral_mode.deconfigure()
+    #    search_mode.deconfigure()
+    #
+    for i in range(1):
+        log.info("Create pipeline ...")
+        if beam == 1:
+            freq = 1340.5
+            spectral_mode = Spectral1Beam1Pol()
+            spectral_mode = Spectral1Beam2Pols()
+            spectral_mode = Spectral1Beam4Pols()
+        if beam == 2:
+            freq = 1337.0
+            spectral_mode = Spectral2Beams1Pol()
+            spectral_mode = Spectral2Beams2Pols()
+            spectral_mode = Spectral2Beams4Pols()
+    
+        log.info("Configure it ...")
+        utc_start_capture = Time.now()  
+        spectral_mode.configure(utc_start_capture, freq, ip)
+    
+        for j in range(1):
+            log.info("Start it ...")
+            utc_start_process = Time.now() + 15 * units.second
+            spectral_mode.start(utc_start_process, source_name, ra, dec)
+            time.sleep(10)
+            log.info("Stop it ...")
+            spectral_mode.stop()
+    
+        log.info("Deconfigure it ...")
+        spectral_mode.deconfigure()
