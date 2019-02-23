@@ -40,6 +40,9 @@ import sys
 # 14. Use the same header template for different configurations
 # 15. capture software also updated to use the same header
 
+log = logging.getLogger('mpikat.effelsberg.paf.pipeline')
+log.setLevel('DEBUG')
+
 EXECUTE = True
 #EXECUTE        = False
 
