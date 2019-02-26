@@ -323,14 +323,14 @@ class ExecuteCommand(object):
                             self.stderr = stderr + "; PROCESS_INDEX is " + str(self._process_index)
                         else:
                             self.stderr = stderr
-                        log.info("IN the while loop in process MONITOR, STDERR " + self._command)
+                        #log.info("IN the while loop in process MONITOR, STDERR " + self._command)
                 except Exception as error:
                     pass
             #log.info("OUTSIDE the while loop in process MONITOR " + self._command)
             if self._process.returncode and (not self._stderr_status) and (not self._event.is_set()):
                 self.returncode = self._command + \
                                   "; RETURNCODE is: " + str(self._process.returncode)
-            log.error("OUTSIDE the while loop in process MONITOR " + self._command)
+            #log.error("OUTSIDE the while loop in process MONITOR " + self._command)
             
 class Pipeline(object):
 
@@ -637,6 +637,7 @@ class Pipeline(object):
         if EXECUTE:
             try:
                 ctrl_socket.sendto(command, socket_address)
+                log.error(command)
             except Exception as error:
                 log.exception(error)
                 self.state = "error"
@@ -667,6 +668,10 @@ class Pipeline(object):
                 self.state = "error"
                 raise PipelineError(stderr)
 
+    def _handle_execution_stdout(self, stdout, callback):
+        if EXECUTE:
+            log.error(stdout)
+            
     def _ready_counter_callback(self, stdout, callback):
         if EXECUTE:
             log.debug(stdout)
@@ -763,6 +768,8 @@ class Search(Pipeline):
                                   "pkill -9 -f baseband2filter",
                                   "pkill -9 -f heimdall",
                                   "pkill -9 -f dada_dbdisk",
+                                  #"pkill -9 -f nvprof",
+                                  #"pkill -9 -f cuda-memcheck",
                                   "ipcrm -a"]
 
     def configure(self, utc_start_capture, freq, ip, pipeline_config):
@@ -1053,10 +1060,10 @@ class Search(Pipeline):
             execution_instance = ExecuteCommand(command, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
-            execution_instance.stderr_callbacks.add(
-                self._handle_execution_stderr)
-            execution_instance.returncode_callbacks.add(
-                self._handle_execution_returncode)
+            #execution_instance.stderr_callbacks.add(
+            #    self._handle_execution_stderr)
+            #execution_instance.returncode_callbacks.add(
+            #    self._handle_execution_returncode)
             self._baseband2filterbank_execution_instances.append(
                 execution_instance)
             process_index += 1
@@ -1106,6 +1113,7 @@ class Search(Pipeline):
         # Remove ready_counter_callback 
         for execution_instance in self._baseband2filterbank_execution_instances:
             execution_instance.stdout_callbacks.remove(self._ready_counter_callback)
+            execution_instance.stdout_callbacks.add(self._handle_execution_stdout)
             
         self.state = "running"
         log.info("Running")
@@ -1254,6 +1262,8 @@ class Spectral(Pipeline):
                                   # visiable)
                                   "pkill -9 -f baseband2spectr",
                                   "pkill -9 -f dada_dbdisk",
+                                  #"pkill -9 -f nvprof",
+                                  #"pkill -9 -f cuda-memcheck",
                                   "ipcrm -a"]
 
     def configure(self, utc_start_capture, freq, ip, ptype, pipeline_config):
@@ -1536,7 +1546,7 @@ class Spectral(Pipeline):
                 execution_instance)
             process_index += 1
                 
-        # Run dbdisk
+        # Send data to FITSweiter interface
         if not FITSWRITER:
             process_index = 0
             self._dbdisk_execution_instances = []
@@ -1565,9 +1575,10 @@ class Spectral(Pipeline):
                                       self._socket_address[process_index])
                 process_index += 1
 
-        ## We do not need to monitor the stdout anymore
-        #for execution_instance in self._baseband2spectral_execution_instances:
-        #    execution_instance.stdout_callbacks.remove(self._ready_counter_callback)
+        # We do not need to monitor the stdout anymore
+        for execution_instance in self._baseband2spectral_execution_instances:
+            execution_instance.stdout_callbacks.remove(self._ready_counter_callback)
+            execution_instance.stdout_callbacks.add(self._handle_execution_stdout)
             
         self.state = "running"
         log.info("Running")
@@ -1683,11 +1694,13 @@ class Spectral2Beams4Pols(Spectral):
 
 @register_pipeline("Spectral1Beam4Pols")
 class Spectral1Beam4Pols(Spectral):
-
     def configure(self, utc_start_capture, freq, ip):
         super(Spectral1Beam4Pols, self).configure(
             utc_start_capture, freq, ip, 4, SPECTRAL_CONFIG_1BEAM)
 
+# ./pipeline.py -a 0 -b 2 -c search -d 1 -e 1 -f 100
+# nvprof -f --profile-child-processes -o profile.nvprof%p ./pipeline.py -a 0 -b 2 -c search -d 1 -e 1 -f 10
+# nvprof -f --profile-child-processes -o profile.nvprof%p --unified-memory-profiling off ./pipeline.py -a 0 -b 2 -c search -d 1 -e 1 -f 10
 if __name__ == "__main__":
     logging.getLogger().addHandler(logging.NullHandler())
     log = logging.getLogger('mpikat')
@@ -1707,60 +1720,75 @@ if __name__ == "__main__":
                         help='The ID of numa node')
     parser.add_argument('-b', '--beam', type=int, nargs='+',
                         help='The number of beams')
-
+    parser.add_argument('-c', '--pipeline', type=str, nargs='+',
+                        help='The pipeline to run')
+    parser.add_argument('-d', '--nconfigure', type=int, nargs='+',
+                        help='How many times to repeat the configure')
+    parser.add_argument('-e', '--nstart', type=int, nargs='+',
+                        help='How many times to repeat the start')    
+    parser.add_argument('-f', '--length', type=int, nargs='+',
+                        help='Length in seconds of observations')
+    
     args = parser.parse_args()
     numa = args.numa[0]
     beam = args.beam[0]
+    pipeline = args.pipeline[0]
+    nconfigure = args.nconfigure[0]
+    nstart = args.nstart[0]
+    length = args.length[0]
+    
     ip = "10.17.{}.{}".format(host_id, numa + 1)
-        
-    #for i in range(1):
-    #    log.info("Create pipeline ...")
-    #    if beam == 1:
-    #        freq = 1340.5
-    #        search_mode = Search1Beam()
-    #    if beam == 2:
-    #        freq = 1337.0
-    #        search_mode = Search2Beams()
-    #
-    #    log.info("Configure it ...")
-    #    utc_start_capture = Time.now()  
-    #    search_mode.configure(utc_start_capture, freq, ip)
-    #
-    #    for j in range(1):
-    #        log.info("Start it ...")
-    #        utc_start_process = Time.now() + 10 * units.second
-    #        search_mode.start(utc_start_process, source_name, ra, dec)
-    #        time.sleep(10)
-    #        log.info("Stop it ...")
-    #        search_mode.stop()
-    #
-    #    log.info("Deconfigure it ...")
-    #    search_mode.deconfigure()
-    #
-    for i in range(1):
-        log.info("Create pipeline ...")
-        if beam == 1:
-            freq = 1340.5
-            spectral_mode = Spectral1Beam1Pol()
-            spectral_mode = Spectral1Beam2Pols()
-            spectral_mode = Spectral1Beam4Pols()
-        if beam == 2:
-            freq = 1337.0
-            spectral_mode = Spectral2Beams1Pol()
-            spectral_mode = Spectral2Beams2Pols()
-            spectral_mode = Spectral2Beams4Pols()
+
+    if pipeline == "search":
+        for i in range(nconfigure):
+            log.info("Create pipeline ...")
+            if beam == 1:
+                freq = 1340.5
+                search_mode = Search1Beam()
+            if beam == 2:
+                freq = 1337.0
+                search_mode = Search2Beams()
     
-        log.info("Configure it ...")
-        utc_start_capture = Time.now()  
-        spectral_mode.configure(utc_start_capture, freq, ip)
+            log.info("Configure it ...")
+            utc_start_capture = Time.now()  
+            search_mode.configure(utc_start_capture, freq, ip)
     
-        for j in range(1):
-            log.info("Start it ...")
-            utc_start_process = Time.now() + 15 * units.second
-            spectral_mode.start(utc_start_process, source_name, ra, dec)
-            time.sleep(10)
-            log.info("Stop it ...")
-            spectral_mode.stop()
+            for j in range(nstart):
+                log.info("Start it ...")
+                utc_start_process = Time.now() + 10 * units.second
+                search_mode.start(utc_start_process, source_name, ra, dec)
+                time.sleep(length)
+                log.info("Stop it ...")
+                search_mode.stop()
     
-        log.info("Deconfigure it ...")
-        spectral_mode.deconfigure()
+            log.info("Deconfigure it ...")
+            search_mode.deconfigure()
+            
+    if pipeline == "spectral":
+        for i in range(nconfigure):
+            log.info("Create pipeline ...")
+            if beam == 1:
+                freq = 1340.5
+                spectral_mode = Spectral1Beam1Pol()
+                spectral_mode = Spectral1Beam2Pols()
+                spectral_mode = Spectral1Beam4Pols()
+            if beam == 2:
+                freq = 1337.0
+                spectral_mode = Spectral2Beams1Pol()
+                spectral_mode = Spectral2Beams2Pols()
+                spectral_mode = Spectral2Beams4Pols()
+    
+            log.info("Configure it ...")
+            utc_start_capture = Time.now()  
+            spectral_mode.configure(utc_start_capture, freq, ip)
+    
+            for j in range(nstart):
+                log.info("Start it ...")
+                utc_start_process = Time.now() + 15 * units.second
+                spectral_mode.start(utc_start_process, source_name, ra, dec)
+                time.sleep(length)
+                log.info("Stop it ...")
+                spectral_mode.stop()
+    
+            log.info("Deconfigure it ...")
+            spectral_mode.deconfigure()
