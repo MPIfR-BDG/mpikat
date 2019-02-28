@@ -107,6 +107,10 @@ SEARCH_CONFIG_GENERAL = {"rbuf_baseband_ndf_chk":   16384,
                          "detect_thresh":           10,
                          "dm":                      [1, 1000],
                          "zap_chans":               [],
+                         
+                         "ip":                      '134.104.70.90',
+                         "port":                    17106,
+                         "ptype":                   2,
 }
 
 SEARCH_CONFIG_1BEAM = {"rbuf_baseband_key":      ["dada"],
@@ -734,7 +738,10 @@ class Search(Pipeline):
 
         self._dm = SEARCH_CONFIG_GENERAL["dm"],
         self._pad = SEARCH_CONFIG_GENERAL["pad"]
+        self._ip_udp = SEARCH_CONFIG_GENERAL["ip"]
         self._bind = SEARCH_CONFIG_GENERAL["bind"]
+        self._ptype = SEARCH_CONFIG_GENERAL["ptype"]
+        self._port_udp = SEARCH_CONFIG_GENERAL["port"]
         self._nstream = SEARCH_CONFIG_GENERAL["nstream"]
         self._cufft_nx = SEARCH_CONFIG_GENERAL["cufft_nx"]
         self._zap_chans = SEARCH_CONFIG_GENERAL["zap_chans"]
@@ -930,12 +937,13 @@ class Search(Pipeline):
             baseband2filterbank_cpu = self._numa * self._ncpu_numa +\
                                       (i + 1) * self._ncpu_pipeline - 1
             command = ("taskset -c {} {} -a {} -b {} -c {} -d {} -e {} "
-                       "-f {} -i {} -j {} -k {} -l {} -g 1").format(
+                       "-f {} -i {} -j {} -k {} -l {} -g 1 -m {} -n {}_{}").format(
                            baseband2filterbank_cpu, baseband2filterbank, self._rbuf_baseband_key[i],
                            self._rbuf_filterbank_key[i], self._rbuf_filterbank_ndf_chk,
                            self._nstream, self._ndf_stream, self._runtime_directory[i],
                            self._nchk_beam, self._cufft_nx,
-                           self._nchan_filterbank, self._nchan_keep_band)
+                           self._nchan_filterbank, self._nchan_keep_band,
+                           self._ptype, self._ip_udp, self._port_udp)
             self._baseband2filterbank_commands.append(command)
 
             # Command to create filterbank ring buffer
@@ -1194,7 +1202,7 @@ class Search(Pipeline):
 
 @register_pipeline("Search2Beams")
 class Search2Beams(Search):
-
+    
     def configure(self, utc_start_capture, freq, ip):
         super(Search2Beams, self).configure(
             utc_start_capture, freq, ip, SEARCH_CONFIG_2BEAMS)
