@@ -30,11 +30,18 @@
         {
             "id": "dspsr_pipeline",
             "type": "server",
-            "pipeline": "DspsrPipelineSrxdev"
-        },
-        {
-            "mc_source":"239.2.1.150",
-            "central_freq":"1400"
+            "pipeline": "DspsrPipelineSrxdev",
+            "mc_sources":"239.2.1.150",
+            "central_freq":"1400",
+            "servers":
+            [
+                {
+                    "sources": "spead://239.2.1.150:7147",
+                },
+                {
+                    "sources": "spead://239.2.1.150:7147",
+                }
+            ]
         }
     ],
     "fits_interfaces":
