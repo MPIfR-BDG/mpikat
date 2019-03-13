@@ -197,6 +197,7 @@ class EddWorkerServer(AsyncDeviceServer):
             self.capture_start_time.format = 'isot'
             self.capture_start_time = self.capture_start_time + 27.0 * units.s
             config_dict['capture_start_time'] = self.capture_start_time.value
+            config_dict['interger'] = 12
             config_json = json.dumps(config_dict)
             log.debug("Unpacked config: {}".format(json.loads(config_json)))
             self._pipeline_instance.configure(config_json)
