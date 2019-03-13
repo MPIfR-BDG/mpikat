@@ -25,6 +25,7 @@ import coloredlogs
 import signal
 import json
 import time
+import astropy.units as units
 from astropy.time import Time
 from optparse import OptionParser
 from tornado.gen import Return, coroutine
