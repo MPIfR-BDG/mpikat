@@ -193,6 +193,7 @@ class EddWorkerServer(AsyncDeviceServer):
             self._pipeline_instance = _pipeline_type()
             self.add_pipeline_sensors()
             self._pipeline_instance.callbacks.add(self.state_change)
+            log.debug("Unpacked config: {}".format(config_dict))
             t = Time.now()
             t.format = 'isot'
             t_start = t + 27.0 * units.s
