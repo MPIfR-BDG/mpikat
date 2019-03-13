@@ -22,6 +22,8 @@ SOFTWARE.
 
 import logging
 import json
+import astropy.units as units
+from astropy.time import Time
 from paramiko import PasswordRequiredException
 from tornado.gen import coroutine
 from mpikat.core.product_controller import ProductController, state_change
@@ -115,6 +117,11 @@ class PafProductController(ProductController):
                @endcode
         """
         config_dict = json.loads(config_json)
+        capture_start_time = Time.now()
+        capture_start_time.format = 'isot'
+        capture_start_time = capture_start_time + 27.0 * units.s
+        config_dict['capture_start_time'] = capture_start_time.value
+        config_json = json.dumps(config_dict)
         nservers = self._parent._server_pool.navailable()
         log.info("PAF servers available: {}".format(nservers))
         if nservers == 0:
