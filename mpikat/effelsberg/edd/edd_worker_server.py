@@ -193,10 +193,10 @@ class EddWorkerServer(AsyncDeviceServer):
             self._pipeline_instance = _pipeline_type()
             self.add_pipeline_sensors()
             self._pipeline_instance.callbacks.add(self.state_change)
-            t= Time.now()
+            t = Time.now()
             t.format = 'isot'
             t_start = t + 27.0 * units.s
-            config_dict['capture_start_time'] = t_start
+            config_dict['capture_start_time'] = t_start.value
             config_json = json.dumps(config_dict)
             #config_json[0] = Time.now() + 27.0 * units.s
             #config_json.append({'capture_start_time':Time.now() + 27.0 * units.s})
