@@ -193,8 +193,8 @@ class EddWorkerServer(AsyncDeviceServer):
             self._pipeline_instance = _pipeline_type()
             self.add_pipeline_sensors()
             self._pipeline_instance.callbacks.add(self.state_change)
-            config_json['capture_start_time'] = Time.now() + 27.0 * units.s
-            config = json.loads(config_json)
+            #config_json['capture_start_time'] = Time.now() + 27.0 * units.s
+            #config = json.loads(config_json)
             log.debug("Unpacked config: {}".format(config))
             self._pipeline_instance.configure(config_json)
         except Exception as error:
