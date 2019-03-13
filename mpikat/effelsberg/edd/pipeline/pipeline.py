@@ -369,6 +369,8 @@ class Mkrecv2Db2Dspsr(object):
         """@brief destroy any ring buffer and create new ring buffer."""
         if self.state == "idle":
             self.state = "configuring"
+            config = json.loads(config_json)
+            log.debug("Unpacked config: {}".format(config))
             self._pipeline_config = json.loads(config_json)
             self._config = CONFIG
             #self._dada_key = self._pipeline_config["key"]
