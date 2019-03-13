@@ -7,6 +7,7 @@ import ipaddress
 import time
 import tempfile
 import socket
+import numpy as np
 from os.path import join
 
 log = logging.getLogger("mpikat.paf_routingtable")
@@ -84,6 +85,22 @@ class RemoteAccess(object):
         self.sftp_client.put(src, dst)
         log.debug("Close scp channel")
         self.sftp_client.close()
+
+    def readbeamfile(self, src):
+        log.debug("Create SCP connection with {}... ".format(self.ip))
+        self.sftp_client = self.ssh_client.open_sftp()
+        log.debug("Reading {}".format(src))
+        beamfile = self.sftp_client.open(src)
+        beamlist = []
+        beam_alt_d = []
+        beam_az_d = []
+        for line in beamfile:
+            beamlist.append(np.fromstring(line, dtype=np.float32, sep=' '))
+        for i in range(1, len(beamlist)):
+            beam_alt_d.append(beamlist[i][0]), beam_az_d.append(beamlist[i][1])
+        log.debug("Close scp channel")
+        self.sftp_client.close()
+        return beam_alt_d, beam_az_d
 
     def disconnect(self):
         log.debug("Disconnect from {} ...".format(self.ip))

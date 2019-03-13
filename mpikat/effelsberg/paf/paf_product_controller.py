@@ -27,12 +27,11 @@ from astropy.time import Time
 from paramiko import PasswordRequiredException
 from tornado.gen import coroutine
 from mpikat.core.product_controller import ProductController, state_change
-from mpikat.effelsberg.paf.routingtable import RoutingTable
+from mpikat.effelsberg.paf.routingtable import RoutingTable, RemoteAccess
 
 log = logging.getLogger("mpikat.paf_product_controller")
 
 PAF_WORKER_QUORUM = 0.6
-
 
 class PafProductStateError(Exception):
 
@@ -45,6 +44,9 @@ class PafProductStateError(Exception):
 
 class PafProductError(Exception):
     pass
+
+class PafBeamFileError(Exception):
+    pass    
 
 
 class PafProductController(ProductController):
@@ -117,15 +119,9 @@ class PafProductController(ProductController):
                @endcode
         """
         config_dict = json.loads(config_json)
-        capture_start_time = Time.now()
-        capture_start_time.format = 'isot'
-        capture_start_time = capture_start_time + 27.0 * units.s
-        config_dict['capture_start_time'] = capture_start_time.value
-        config_json = json.dumps(config_dict)
         nservers = self._parent._server_pool.navailable()
         log.info("PAF servers available: {}".format(nservers))
         if nservers == 0:
-            raise PafProductError("No servers available for processing")
             raise PafProductError("No servers available for processing")
         log.info("Allocating PAF servers")
         servers = self._parent._server_pool.allocate(nservers)
@@ -153,6 +149,25 @@ class PafProductController(ProductController):
                          "(this warning should not exist in production mode)"))
         else:
             log.info("Routing table upload complete")
+        be4 = RemoteAccess()
+        try:
+            be4.connect("134.104.64.134", "obseff")
+        except PasswordRequiredException:
+            log.warning(("Unable to upload routing table due to encrypted key "
+                         "(this warning should not exist in production mode)"))
+        try:
+            beam_alt_d, beam_az_d = be4.readfile(config_dict['beamfile'])
+        except PafBeamFileError:
+            log.warning("Unable to read beamfile")
+        else:
+            log.info("Routing table upload complete")
+        start_time = Time.now()
+        start_time.format = 'isot'
+        start_time = start_time + 27.0 * units.s
+        config_dict['utc_start_capture'] = start_time.value
+        config_dict['beam_alt_d'] = beam_alt_d
+        config_dict['beam_az_d'] = beam_az_d
+        config_json = json.dumps(config_dict)
         quorum = PAF_WORKER_QUORUM
         failures = 0
         configure_futures = []
@@ -194,6 +209,12 @@ class PafProductController(ProductController):
                                  status information in JSON format
         """
         log.info("Starting product processing")
+        status_dict = json.loads(status_json)
+        utc_start_process = Time.now()
+        utc_start_process.format = 'isot'
+        utc_start_process = utc_start_process + 15.0 * units.s
+        status_dict['utc_start_process'] = utc_start_process.value
+        status_json = json.dumps(status_dict)
         start_futures = []
         for server in self._servers:
             log.debug("Sending start request to server {}".format(server))
