@@ -199,10 +199,7 @@ class EddWorkerServer(AsyncDeviceServer):
             t_start = t + 27.0 * units.s
             config_dict['capture_start_time'] = t_start.value
             config_json = json.dumps(config_dict)
-            #config_json[0] = Time.now() + 27.0 * units.s
-            #config_json.append({'capture_start_time':Time.now() + 27.0 * units.s})
-            config = json.loads(config_json)
-            log.debug("Unpacked config: {}".format(config))
+            log.debug("Unpacked config: {}".format(json.loads(config_json)))
             self._pipeline_instance.configure(config_json)
         except Exception as error:
             self._pipeline_sensor_name.set_value("")
