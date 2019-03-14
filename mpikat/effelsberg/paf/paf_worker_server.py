@@ -178,14 +178,14 @@ class PafWorkerServer(AsyncDeviceServer):
             config_dict = json.loads(config_json)
             pipeline_name = config_dict["mode"]
         except KeyError as error:
-            msg = "Error getting the pipeline name from config_json: {}".format(str(error))
+            msg = "Error getting the pipeline name from config_json: {}".format(
+                str(error))
             log.error(msg)
             raise PafPipelineKeyError(msg)
         self._pipeline_sensor_name.set_value(pipeline_name)
         log.info("Configuring pipeline {}".format(
             self._pipeline_sensor_name.value()))
         try:
-            #log.info("Configuring pipeline {}".format()
             _pipeline_type = PIPELINES[self._pipeline_sensor_name.value()]
         except KeyError as error:
             msg = "No pipeline called '{}', available pipeline are: {}".format(
@@ -193,21 +193,20 @@ class PafWorkerServer(AsyncDeviceServer):
             self._pipeline_sensor_name.set_value("")
             log.error(msg)
             raise PafPipelineKeyError(msg)
-        log.info("Configuring pipeline continute")    
+        log.info("Configuring pipeline continute")
         try:
             log.debug(
                 "Trying to create pipeline instance: {}".format(pipeline_name))
             self._pipeline_instance = _pipeline_type()
             self.add_pipeline_sensors()
             self._pipeline_instance.callbacks.add(self.state_change)
-            config = json.loads(config_json)
-            log.debug("Unpacked config: {}".format(config))
-            capture_start_time = Time.now() + 27.0 * units.s
-            frequency = config["frequency"]
-            self._pipeline_instance.configure(
-                capture_start_time,
-                frequency,
-                self._ip_address.value())
+            log.debug("Unpacked config: {}".format(config_dict))
+            log.debug("Adding ip address {} of the node to config_json".format(
+                self._ip_address.value()))
+            config_dict['ip_address'] = self._ip_address.value()
+            config_json = json.dumps(config_dict)
+            log.debug("Repacked config: {}".format(json.loads(config_json)))
+            self._pipeline_instance.configure(config_json)
         except Exception as error:
             self._pipeline_sensor_name.set_value("")
             msg = "Couldn't start configure pipeline instance {}".format(
@@ -274,15 +273,9 @@ class PafWorkerServer(AsyncDeviceServer):
         raise AsyncReply
 
     @coroutine
-    def start_pipeline(self, config_json):
+    def start_pipeline(self, status_json):
         try:
-            config = json.loads(config_json)
-            utc_start_process = Time.now() +15 * units.second
-            source_name = config["source-name"]
-            ra = config["ra"]
-            dec = config["dec"]
-            self._pipeline_instance.start(
-                utc_start_process, source_name, ra, dec)
+            self._pipeline_instance.start(status_json)
         except Exception as error:
             msg = "Couldn't start pipeline server {}".format(str(error))
             log.error(msg)
