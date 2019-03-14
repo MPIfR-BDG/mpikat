@@ -23,6 +23,8 @@ from fcntl import fcntl, F_GETFL, F_SETFL
 from os import O_NONBLOCK
 import sys
 
+EXECUTE = True
+
 # Updates:
 # 1. Check the directory exist or not, create it if not;
 # 2. Check the header template exist or not, raise error if not;
@@ -43,126 +45,113 @@ import sys
 log = logging.getLogger('mpikat.effelsberg.paf.pipeline')
 log.setLevel('DEBUG')
 
-EXECUTE = True
-#EXECUTE        = False
-
-HEIMDALL = False   # To run heimdall on filterbank file or not
-# HEIMDALL       = True   # To run heimdall on filterbank file or not
-
-DBDISK = True   # To run dbdisk on filterbank file or not
-#DBDISK         = False   # To run dbdisk on filterbank file or not
-
-FITSWRITER = True
-#FITSWRITER = False
-
-PAF_ROOT = "/home/pulsar/xinping/phased-array-feed/"
-DATA_ROOT = "/beegfs/DENG/"
-DADA_ROOT = "{}/AUG/baseband/".format(DATA_ROOT)
-SOURCE_DEFAULT = "UNKNOW_00:00:00.00_00:00:00.00"
-
-PAF_CONFIG = {"dada_hdr_fname":      "{}/config/dada_header_template_PAF.txt".format(PAF_ROOT),
-              "nchan_chk":    	     7,        # MHz
-              "over_samp_rate":      (32.0 / 27.0),
-              "prd":                 27,       # Seconds
-              "df_res":              1.08E-4,  # Seconds
-              "ndf_prd":             250000,
-
-              "df_dtsz":      	     7168,
-              "df_pktsz":     	     7232,
-              "df_hdrsz":     	     64,
-
-              "nbyte_baseband":      2,
-              "npol_samp_baseband":  2,
-              "ndim_pol_baseband":   2,
-
-              "ncpu_numa":           10,
-              "mem_node":            60791751475,  # has 10% spare
-              "first_port":          17100,
+# Configuration of input for different number of beams 
+INPUT_1BEAM = {"input_nbeam":                  1,
+               "input_nchunk_per_port":        16,
+               "input_ports":                   [[17100, 17101, 17102]]
 }
 
-SEARCH_CONFIG_GENERAL = {"rbuf_baseband_ndf_chk":   16384,
-                         "rbuf_baseband_nblk":      5,
-                         "rbuf_baseband_nread":     1,
-                         "tbuf_baseband_ndf_chk":   128,
-
-                         "rbuf_filterbank_ndf_chk": 16384,
-                         "rbuf_filterbank_nblk":    2,
-                         "rbuf_filterbank_nread":   (HEIMDALL + DBDISK) if (HEIMDALL + DBDISK) else 1,
-
-                         "nchan_filterbank":        512,
-                         "cufft_nx":                128,
-
-                         "nbyte_filterbank":        1,
-                         "npol_samp_filterbank":    1,
-                         "ndim_pol_filterbank":     1,
-
-                         "ndf_stream":      	    1024,
-                         "nstream":                 2,
-
-                         "bind":                    1,
-
-                         "pad":                     0,
-                         "ndf_check_chk":           1024,
-
-                         "detect_thresh":           10,
-                         "dm":                      [1, 1000],
-                         "zap_chans":               [],
-                         
-                         "ip":                      '134.104.70.90',
-                         "port":                    17106,
-                         "ptype":                   2,
+INPUT_2BEAMS = {"input_nbeam":                  2,
+                "input_nchunk_per_port":        11,
+                "input_ports":                   [[17100, 17101, 17102], [17103, 17104, 17105]]
 }
 
-SEARCH_CONFIG_1BEAM = {"rbuf_baseband_key":      ["dada"],
-                       "rbuf_filterbank_key":    ["dade"],
-                       "nchan_keep_band":        32768,
-                       "nbeam":                  1,
-                       "nport_beam":             3,
-                       "nchk_port":              16,
+# We can turn the configuratio directory here to json in future
+# Configuration of PAF system, including GPU servers
+SYSTEM_CONFIG = {"paf_nchan_per_chunk":    	     7,        # MHz
+                 "paf_over_samp_rate":               (32.0/27.0),
+                 "paf_period":                       27,       # Seconds
+                 "paf_ndf_per_chunk_per_period":     250000,
+                 "paf_nsamp_per_df":                 128,
+                 
+                 "paf_df_res":                       1.08E-4,  # Seconds
+                 "paf_df_dtsz":      	             7168,     # Bytes
+                 "paf_df_pktsz":     	             7232,
+                 "paf_df_hdrsz":     	             64,
+                 
+                 "pacifix_ncpu_per_numa_node":       10,  
+                 "pacifix_memory_limit_per_numa_node":  60791751475, # has 10% spare
 }
 
-SEARCH_CONFIG_2BEAMS = {"rbuf_baseband_key":       ["dada", "dadc"],
-                        "rbuf_filterbank_key":     ["dade", "dadg"],
-                        "nchan_keep_band":         24576,
-                        "nbeam":                   2,
-                        "nport_beam":              3,
-                        "nchk_port":               11,
-}
-
-
-SPECTRAL_CONFIG_GENERAL = {"rbuf_baseband_ndf_chk":   16384,                 
-                           "rbuf_baseband_nblk":      5,
-                           "rbuf_baseband_nread":     1,                 
-                           "tbuf_baseband_ndf_chk":   128,
-                           
-                           "rbuf_spectral_ndf_chk":   16384,
-                           "rbuf_spectral_nblk":      2,
-                           "rbuf_spectral_nread":     1,
-                           
-                           "cufft_nx":                1024,
-                           "nbyte_spectral":          4,
-                           "ndf_stream":      	      1024,
-                           "nstream":                 2,
-                           
-                           "bind":                    1,
-                           "pad":                     0,
-                           "ndf_check_chk":           1024,
-                           "ip":                      '134.104.70.90',
-                           "port":                    17106,
-}
-
-SPECTRAL_CONFIG_1BEAM = {"rbuf_baseband_key":      ["dada"],
-                         "rbuf_spectral_key":      ["dade"],
-                         "nbeam":                  1,
-                         "nport_beam":             3,
-                         "nchk_port":              16,
-}
-
-SPECTRAL_CONFIG_2BEAMS = {"rbuf_baseband_key":       ["dada", "dadc"],
-                          "rbuf_spectral_key":       ["dade", "dadg"],
-                          "nbeam":                   2,
-                          "nport_beam":              3,
-                          "nchk_port":               11,
+# Configuration for pipelines
+PIPELINE_CONFIG = {"execution":                    1,
+                   "root_software":                "/home/pulsar/xinping/phased-array-feed/",
+                   "root_runtime":                 "/beegfs/DENG/",
+                   "rbuf_ndf_per_chunk_per_block": 16384,# For all ring buffers
+                   "tbuf_ndf_per_chunk_per_block": 128,  # Only need for capture
+                   
+                   # Configuration of input
+                   "input_source_default":       "UNKNOW_00:00:00.00_00:00:00.00",
+                   "input_dada_hdr_fname":       "dada_header_template_PAF.txt",
+                   "input_keys":                 ["dada", "dadc"], # To put baseband data from file
+                   "input_nblk":                 5,
+                   "input_nreader":              1,
+                   "input_nbyte":                2,
+                   "input_npol":                 2,
+                   "input_ndim":                 2,
+                   "input_software_name":        "capture_main",
+                   "input_cpu_bind":             1,
+                   "input_pad":                  0,
+                   "input_check_ndf_per_chunk":  1024,
+                   
+                   # Configuration of GPU kernels
+                   "gpu_ndf_per_chunk_per_stream": 1024,
+                   "gpu_nstream":                  2,
+                   
+                   "search_keys":         ["dbda", "dbdc"], # To put filterbank data 
+                   "search_nblk":         2,
+                   "search_nchan":        1024,
+                   "search_nchan":        512,
+                   "search_cufft_nx":     128,
+                   "search_cufft_nx":     256,                   
+                   "search_nbyte":        1,
+                   "search_npol":         1,
+                   "search_ndim":         1,
+                   "search_heimdall":     0,
+                   "search_dbdisk":       0,
+                   "search_monitor":      1,
+                   "search_spectrometer": 1,
+                   "search_detect_thresh":10,
+                   "search_dm":           [1, 3000],
+                   "search_zap_chans":    [],
+                   "search_software_name":"baseband2filterbank_main",
+                   
+                   "spectrometer_keys":           ["dcda", "dcdc"], # To put independent or commensal spectral data
+                   "spectrometer_nblk":           2,
+                   "spectrometer_nreader":        1,
+                   "spectrometer_cufft_nx":       1024,
+                   "spectrometer_nbyte":          4,
+                   "spectrometer_ndata_per_samp": 4,
+                   "spectrometer_ptype":          1,
+                   "spectrometer_ip":    	  '134.104.70.90',
+                   "spectrometer_port":    	  17108,
+                   "spectrometer_dbdisk":         1,
+                   "spectrometer_monitor":        1,
+                   "spectrometer_accumulate_nblk": 1,
+                   "spectrometer_software_name":  "baseband2spectral_main",
+                   
+                   # Spectral parameters for the simultaneous spectral output from fold and search mode
+                   # The rest configuration of this output is the same as the normal spectrometer mode
+                   "simultaneous_spectrometer_start_chunk":    35,
+                   "simultaneous_spectrometer_nchunk":         2,
+                   
+                   "fold_keys":           ["ddda", "dddc"], # To put processed baseband data 
+                   "fold_nblk":           2,
+                   "fold_cufft_nx":       64,
+                   "fold_nbyte":          1,
+                   "fold_npol":           2,
+                   "fold_ndim":           2,
+                   "fold_dspsr":          1,
+                   "fold_dbdisk":         0,
+                   "fold_monitor":        1,
+                   "fold_spectrometer":   1,
+                   "fold_subint":         10,
+                   "fold_software_name":  "baseband2baseband_main",
+                   
+                   "monitor_keys":            ["deda", "dedc"], # To put monitor data
+                   "monitor_ip":      	      '134.104.70.90',
+                   "monitor_port":     	      17109,
+                   "monitor_ptype":           1,
 }
 
 PIPELINE_STATES = ["idle", "configuring", "ready",
@@ -315,7 +304,7 @@ class ExecuteCommand(object):
                             self.stdout = stdout + "; PROCESS_INDEX is " + str(self._process_index)
                         else:
                             self.stdout = stdout
-                        log.info("IN the while loop in process MONITOR, STDOUT " + self._command) 
+                        #log.info("IN the while loop in process MONITOR, STDOUT " + self._command) 
                 except:
                     pass
                 
@@ -343,25 +332,180 @@ class Pipeline(object):
         self.callbacks = set()
         self._ready_counter = 0
         self._aberrant_counter = 0
-        self.setup_sensors()
-
-        self._prd = PAF_CONFIG["prd"]
-        self._first_port = PAF_CONFIG["first_port"]
-        self._df_res = PAF_CONFIG["df_res"]
-        self._df_dtsz = PAF_CONFIG["df_dtsz"]
-        self._df_pktsz = PAF_CONFIG["df_pktsz"]
-        self._df_hdrsz = PAF_CONFIG["df_hdrsz"]
-        self._ncpu_numa = PAF_CONFIG["ncpu_numa"]
-        self._nchan_chk = PAF_CONFIG["nchan_chk"]
-        self._nbyte_baseband = PAF_CONFIG["nbyte_baseband"]
-        self._ndim_pol_baseband = PAF_CONFIG["ndim_pol_baseband"]
-        self._npol_samp_baseband = PAF_CONFIG["npol_samp_baseband"]
-        self._mem_node = PAF_CONFIG["mem_node"]
-        self._over_samp_rate     = PAF_CONFIG["over_samp_rate"]
-        self._dada_hdr_fname = PAF_CONFIG["dada_hdr_fname"]
-        self._cleanup_commands = []
         self._ready_lock    = threading.Lock()
         self._aberrant_lock = threading.Lock()
+        self.setup_sensors()
+
+        self._paf_period                     	 = SYSTEM_CONFIG["paf_period"]
+        self._paf_df_res                     	 = SYSTEM_CONFIG["paf_df_res"]
+        self._paf_df_dtsz                    	 = SYSTEM_CONFIG["paf_df_dtsz"]
+        self._paf_df_pktsz                   	 = SYSTEM_CONFIG["paf_df_pktsz"]
+        self._paf_df_hdrsz                   	 = SYSTEM_CONFIG["paf_df_hdrsz"]
+        self._paf_over_samp_rate             	 = SYSTEM_CONFIG["paf_over_samp_rate"]
+        self._paf_nsamp_per_df             	 = SYSTEM_CONFIG["paf_nsamp_per_df"]
+        self._paf_nchan_per_chunk            	 = SYSTEM_CONFIG["paf_nchan_per_chunk"]
+        self._paf_ndf_per_chunk_per_period       = SYSTEM_CONFIG["paf_ndf_per_chunk_per_period"]
+        self._pacifix_ncpu_per_numa_node         = SYSTEM_CONFIG["pacifix_ncpu_per_numa_node"]
+        self._pacifix_memory_limit_per_numa_node = SYSTEM_CONFIG["pacifix_memory_limit_per_numa_node"]
+
+        self._execution                    = PIPELINE_CONFIG["execution"]
+        self._root_software                = PIPELINE_CONFIG["root_software"]
+        self._root_runtime                 = PIPELINE_CONFIG["root_runtime"]
+        self._rbuf_ndf_per_chunk_per_block = PIPELINE_CONFIG["rbuf_ndf_per_chunk_per_block"]
+        self._tbuf_ndf_per_chunk_per_block = PIPELINE_CONFIG["tbuf_ndf_per_chunk_per_block"]
+        self._rbuf_blk_res                 = self._paf_df_res * self._rbuf_ndf_per_chunk_per_block
+        self._rbuf_nsamp_per_chan_per_block = self._rbuf_ndf_per_chunk_per_block * self._paf_nsamp_per_df
+
+        self._input_dada_hdr_fname         =  PIPELINE_CONFIG["input_dada_hdr_fname"]
+        self._input_dada_hdr_fname         = "{}/config/{}".format(self._root_software, self._input_dada_hdr_fname)
+        self._input_source_default         = PIPELINE_CONFIG["input_source_default"]                
+        self._input_keys                   = PIPELINE_CONFIG["input_keys"]                
+        self._input_nblk                   = PIPELINE_CONFIG["input_nblk"]                 
+        self._input_nreader                = PIPELINE_CONFIG["input_nreader"]
+        self._input_nbyte                  = PIPELINE_CONFIG["input_nbyte"]
+        self._input_npol                   = PIPELINE_CONFIG["input_npol"]
+        self._input_ndim                   = PIPELINE_CONFIG["input_ndim"]
+        self._gpu_ndf_per_chunk_per_stream = PIPELINE_CONFIG["gpu_ndf_per_chunk_per_stream"]
+        self._gpu_nstream                  = PIPELINE_CONFIG["gpu_nstream"]                    
+        self._input_check_ndf_per_chunk    = PIPELINE_CONFIG["input_check_ndf_per_chunk"]
+        
+        self._input_software_name = PIPELINE_CONFIG["input_software_name"]
+        self._input_main          = "{}/src/{}".format(self._root_software, self._input_software_name)
+        self._input_cpu_bind      = PIPELINE_CONFIG["input_cpu_bind"]
+        self._input_pad           = PIPELINE_CONFIG["input_pad"]
+        
+        self._input_beam_index = []
+        self._input_socket_address = []
+        self._input_control_socket = []
+
+        self._monitor_keys  = PIPELINE_CONFIG["monitor_keys"]
+        self._monitor_ip    = PIPELINE_CONFIG["monitor_ip"]
+        self._monitor_port  = PIPELINE_CONFIG["monitor_port"]
+        self._monitor_ptype = PIPELINE_CONFIG["monitor_ptype"]      
+        
+        self._spectrometer_keys     = PIPELINE_CONFIG["spectrometer_keys"]
+        self._spectrometer_nblk     = PIPELINE_CONFIG["spectrometer_nblk"]
+        self._spectrometer_nreader  = PIPELINE_CONFIG["spectrometer_nreader"]
+        self._spectrometer_cufft_nx = PIPELINE_CONFIG["spectrometer_cufft_nx"]
+        self._spectrometer_nbyte    = PIPELINE_CONFIG["spectrometer_nbyte"]
+        self._spectrometer_ptype    = PIPELINE_CONFIG["spectrometer_ptype"]
+        self._spectrometer_ndata_per_samp = PIPELINE_CONFIG["spectrometer_ndata_per_samp"]
+        self._spectrometer_ip       = PIPELINE_CONFIG["spectrometer_ip"]
+        self._spectrometer_port     = PIPELINE_CONFIG["spectrometer_port"]
+        self._spectrometer_dbdisk   = PIPELINE_CONFIG["spectrometer_dbdisk"]
+        self._spectrometer_monitor  = PIPELINE_CONFIG["spectrometer_monitor"]
+        self._spectrometer_accumulate_nblk = PIPELINE_CONFIG["spectrometer_accumulate_nblk"]
+        self._spectrometer_nchan_keep_per_chan = self._spectrometer_cufft_nx / self._paf_over_samp_rate;
+        if self._spectrometer_dbdisk:
+            self._spectrometer_sod = 1
+            self._spectrometer_dbdisk_commands = []
+            self._spectrometer_create_rbuf_commands = []
+            self._spectrometer_delete_rbuf_commands = []
+            self._spectrometer_dbdisk_execution_instances = []
+        
+        self._spectrometer_software_name = PIPELINE_CONFIG["spectrometer_software_name"]
+        self._spectrometer_main       = "{}/src/{}".format(self._root_software, self._spectrometer_software_name)
+
+        self._simultaneous_spectrometer_start_chunk  = PIPELINE_CONFIG["simultaneous_spectrometer_start_chunk"]
+        self._simultaneous_spectrometer_nchunk       = PIPELINE_CONFIG["simultaneous_spectrometer_nchunk"]
+        self._simultaneous_spectrometer_nchan        = self._simultaneous_spectrometer_nchunk *\
+                                                       self._paf_nchan_per_chunk
+        
+        self._search_keys          = PIPELINE_CONFIG["search_keys"]        
+        self._search_nblk          = PIPELINE_CONFIG["search_nblk"]         
+        self._search_nchan         = PIPELINE_CONFIG["search_nchan"]        
+        self._search_cufft_nx      = PIPELINE_CONFIG["search_cufft_nx"]                       
+        self._search_nbyte         = PIPELINE_CONFIG["search_nbyte"]        
+        self._search_npol          = PIPELINE_CONFIG["search_npol"]         
+        self._search_ndim          = PIPELINE_CONFIG["search_ndim"] 
+        self._search_heimdall      = PIPELINE_CONFIG["search_heimdall"]
+        self._search_dbdisk        = PIPELINE_CONFIG["search_dbdisk"]
+        self._search_monitor       = PIPELINE_CONFIG["search_monitor"]
+        self._search_spectrometer  = PIPELINE_CONFIG["search_spectrometer"]
+        self._search_sod           = self._search_heimdall or self._search_dbdisk
+        self._search_nreader       = (self._search_heimdall + self._search_dbdisk) \
+                                     if (self._search_heimdall + self._search_dbdisk) else 1             
+        self._search_detect_thresh = PIPELINE_CONFIG["search_detect_thresh"]    
+        self._search_dm            = PIPELINE_CONFIG["search_dm"]
+        self._search_zap_chans     = PIPELINE_CONFIG["search_zap_chans"]
+        self._search_nchan_keep_per_chan = self._search_cufft_nx / self._paf_over_samp_rate;
+        if self._search_heimdall:
+            self._search_heimdall_commands = []
+            self._search_heimdall_execution_instances = []
+        if self._search_dbdisk:
+            self._search_dbdisk_commands = []
+            self._search_dbdisk_execution_instances = []
+            
+        self._search_software_name = PIPELINE_CONFIG["search_software_name"]
+        self._search_main       = "{}/src/{}".format(self._root_software, self._search_software_name)
+        
+        self._fold_keys       = PIPELINE_CONFIG["fold_keys"]
+        self._fold_nblk       = PIPELINE_CONFIG["fold_nblk"]
+        self._fold_cufft_nx   = PIPELINE_CONFIG["fold_cufft_nx"]
+        self._fold_nbyte      = PIPELINE_CONFIG["fold_nbyte"]
+        self._fold_npol       = PIPELINE_CONFIG["fold_npol"]
+        self._fold_ndim       = PIPELINE_CONFIG["fold_ndim"]
+        self._fold_dspsr      = PIPELINE_CONFIG["fold_dspsr"]
+        self._fold_dbdisk     = PIPELINE_CONFIG["fold_dbdisk"]
+        self._fold_monitor    = PIPELINE_CONFIG["fold_monitor"]
+        self._fold_spectrometer = PIPELINE_CONFIG["fold_spectrometer"]
+        self._fold_subint     = PIPELINE_CONFIG["fold_subint"]
+        self._fold_nchan_keep_per_chan = self._fold_cufft_nx / self._paf_over_samp_rate;
+        self._fold_sod       = self._fold_dspsr or self._dolf_dbdisk
+        self._fold_nreader   = (self._fold_dspsr + self._fold_dbdisk) \
+                               if (self._fold_dspsr + self._fold_dbdisk) else 1 
+        if self._fold_dspsr:
+            self._fold_dspsr_commands = []
+            self._fold_dspsr_execution_instances = []
+        if self._fold_dbdisk:
+            self._fold_dbdisk_commands = []
+            self._fold_dbdisk_execution_instances = []
+        self._fold_software_name = PIPELINE_CONFIG["fold_software_name"]
+        self._fold_main       = "{}/src/{}".format(self._root_software, self._fold_software_name)
+
+        self._pipeline_runtime_directory = []
+
+        self._input_create_rbuf_commands = []
+        self._fold_create_rbuf_commands = []
+        self._search_create_rbuf_commands = []
+        self._input_delete_rbuf_commands = []
+        self._fold_delete_rbuf_commands = []
+        self._search_delete_rbuf_commands = []
+
+        self._input_commands = []        
+        self._fold_commands = []
+        self._search_commands = []
+        self._spectrometer_commands = []
+
+        self._fold_execution_instances = []
+        self._search_execution_instances = []
+        self._spectrometer_execution_instances = []
+        self._input_execution_instances = []
+
+        # To see if we can process input data with integer repeats
+        if self._rbuf_ndf_per_chunk_per_block % \
+           (self._gpu_ndf_per_chunk_per_stream * self._gpu_nstream):
+            raise PipelineError("data in input ring buffer block can only "
+                                "be processed by baseband2baseband with integer repeats")
+
+        # To see if the dada header template file is there
+        if not os.path.isfile(self._input_dada_hdr_fname):
+            self.state = "error"
+            log.error("{} is not there".format(self._input_dada_hdr_fname))
+            raise PipelineError("{} is not there".format(self._input_dada_hdr_fname))
+        
+        # Cleanup at very beginning
+        self._cleanup_commands = ["pkill -9 -f dspsr",
+                                  "pkill -9 -f dada_db",
+                                  "pkill -9 -f heimdall",
+                                  "pkill -9 -f dada_diskdb",
+                                  "pkill -9 -f dada_dbdisk",
+                                  "pkill -9 -f baseband2filter", # process name, maximum 16 bytes (15 bytes visiable)
+                                  "pkill -9 -f baseband2spectr", # process name, maximum 16 bytes (15 bytes visiable)
+                                  "pkill -9 -f baseband2baseba", # process name, maximum 16 bytes (15 bytes visiable)                                  
+                                  "ipcrm -a"]
+        self._cleanup()
+        
         
     def __del__(self):
         class_name = self.__class__.__name__
@@ -459,18 +603,18 @@ class Pipeline(object):
         """
         To get the beam ID
         """
-        data = bytearray(self._df_pktsz)
+        data = bytearray(self._paf_df_pktsz)
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         # Force to timeout after one data frame period
-        socket.setdefaulttimeout(self._prd)
+        socket.setdefaulttimeout(self._paf_period)
         server_address = (ip, port)
         sock.bind(server_address)
 
         try:
             beam_index = []
             for i in range(ndf_check_chk):
-                nbyte, address = sock.recvfrom_into(data, self._df_pktsz)
+                nbyte, address = sock.recvfrom_into(data, self._paf_df_pktsz)
                 data_uint64 = np.fromstring(str(data), 'uint64')
                 hdr_uint64 = np.uint64(struct.unpack(
                     "<Q", struct.pack(">Q", data_uint64[2]))[0])
@@ -497,7 +641,7 @@ class Pipeline(object):
             raise PipelineError("utc_start_process should be later than utc_start_capture")
             
         delta_time = utc_start_process.unix - utc_start_capture.unix
-        start_buf = int(floor(delta_time / self._blk_res)) - 1   # The start buf, to be safe -1; 
+        start_buf = int(floor(delta_time / self._rbuf_blk_res)) - 1   # The start buf, to be safe -1; 
 
         sleep_time = utc_start_process.unix - Time.now().unix
         log.debug("SLEEP TIME to wait for START BUF block is {} seconds".format(sleep_time))
@@ -516,13 +660,13 @@ class Pipeline(object):
         # estimated value
         epoch_ref, sec_ref, idf_ref = self._refinfo(ip, port)
         
-        while utc_start_capture.unix > (epoch_ref * 86400.0 + sec_ref + PAF_CONFIG["prd"]):
-            sec_ref = sec_ref + PAF_CONFIG["prd"]
+        while utc_start_capture.unix > (epoch_ref * 86400.0 + sec_ref + self._paf_period):
+            sec_ref = sec_ref + self._paf_period
         while utc_start_capture.unix < (epoch_ref * 86400.0 + sec_ref):
-            sec_ref = sec_ref - PAF_CONFIG["prd"]
+            sec_ref = sec_ref - self._paf_period
 
         idf_ref = (utc_start_capture.unix - epoch_ref *
-                   86400.0 - sec_ref) / self._df_res
+                   86400.0 - sec_ref) / self._paf_df_res
 
         return epoch_ref, sec_ref, int(idf_ref)
 
@@ -530,17 +674,17 @@ class Pipeline(object):
         """
         To get reference information for capture
         """
-        data = bytearray(self._df_pktsz)
+        data = bytearray(self._paf_df_pktsz)
         sock = socket.socket(socket.AF_INET,
                              socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         # Force to timeout after one data frame period
-        socket.setdefaulttimeout(self._prd)
+        socket.setdefaulttimeout(self._paf_period)
         server_address = (ip, port)
         sock.bind(server_address)
 
         try:
-            nbyte, address = sock.recvfrom_into(data, self._df_pktsz)
+            nbyte, address = sock.recvfrom_into(data, self._paf_df_pktsz)
             data = np.fromstring(str(data), 'uint64')
 
             hdr_part = np.uint64(struct.unpack(
@@ -569,7 +713,7 @@ class Pipeline(object):
             log.error("{} fail".format(inspect.stack()[0][3]))
             raise PipelineError("{} fail".format(inspect.stack()[0][3]))
 
-    def _check_connection_beam(self, destination, ndf_check_chk):
+    def _check_beam_connection(self, destination, ndf_check_chk):
         """
         To check the connection of one beam with given ip and port numbers
         """
@@ -582,7 +726,7 @@ class Pipeline(object):
         for i in range(nport):
             ip = destination[i].split("_")[0]
             port = int(destination[i].split("_")[1])
-            alive, nchk_alive = self._check_connection_port(
+            alive, nchk_alive = self._check_port_connection(
                 ip, port, ndf_check_chk)
 
             if alive == 1:
@@ -598,30 +742,30 @@ class Pipeline(object):
 
         return destination_alive, destination_dead
 
-    def _check_connection_port(self, ip, port, ndf_check_chk):
+    def _check_port_connection(self, ip, port, ndf_check_chk):
         """
         To check the connection of single port
         """
         alive = 1
         nchk_alive = 0
-        data = bytearray(self._df_pktsz)
+        data = bytearray(self._paf_df_pktsz)
         sock = socket.socket(socket.AF_INET,
                              socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         # Force to timeout after one data frame period
-        socket.setdefaulttimeout(self._prd)
+        socket.setdefaulttimeout(self._paf_period)
         server_address = (ip, port)
         sock.bind(server_address)
 
         try:
-            nbyte, address = sock.recvfrom_into(data, self._df_pktsz)
-            if (nbyte != self._df_pktsz):
+            nbyte, address = sock.recvfrom_into(data, self._paf_df_pktsz)
+            if (nbyte != self._paf_df_pktsz):
                 alive = 0
             else:
                 source = []
                 alive = 1
                 for i in range(ndf_check_chk):
-                    buf, address = sock.recvfrom(self._df_pktsz)
+                    buf, address = sock.recvfrom(self._paf_df_pktsz)
 
                     data_uint64 = np.fromstring(str(buf), 'uint64')
                     hdr_uint64 = np.uint64(struct.unpack(
@@ -680,6 +824,7 @@ class Pipeline(object):
         if EXECUTE:
             log.debug(stdout)
             if stdout.find("READY") != -1:
+                #log.error(self._ready_counter)
                 self._ready_lock.acquire()
                 self._ready_counter += 1
                 self._ready_lock.release()
@@ -702,12 +847,11 @@ class Pipeline(object):
                     self._instant_sensor1.set_value(float(capture_status[3]))
                     
     def _cleanup(self):
-        if EXECUTE:
-            execution_instances = []
-            for command in self._cleanup_commands:
-                execution_instances.append(ExecuteCommand(command))
-            for execution_instance in execution_instances:         # Wait until the cleanup is done
-                execution_instance.finish()
+        execution_instances = []
+        for command in self._cleanup_commands:
+            execution_instances.append(ExecuteCommand(command))
+        for execution_instance in execution_instances:         # Wait until the cleanup is done
+            execution_instance.finish()
 
 @register_pipeline("Search")
 class Search(Pipeline):
@@ -716,70 +860,7 @@ class Search(Pipeline):
         super(Search, self).__init__()
         self.state = "idle"
 
-        self._beam_index = []
-
-        self._socket_address = []
-        self._control_socket = []
-        self._runtime_directory = []
-
-        self._dbdisk_commands = []
-        self._capture_commands = []
-        self._heimdall_commands = []
-        self._baseband2filterbank_commands = []
-        self._baseband_create_buffer_commands = []
-        self._baseband_delete_buffer_commands = []
-        self._filterbank_create_buffer_commands = []
-        self._filterbank_delete_buffer_commands = []
-
-        self._dbdisk_execution_instances = []
-        self._capture_execution_instances = []
-        self._baseband2filterbank_execution_instances = []
-        self._heimdall_execution_instances = []
-
-        self._dm = SEARCH_CONFIG_GENERAL["dm"],
-        self._pad = SEARCH_CONFIG_GENERAL["pad"]
-        self._ip_udp = SEARCH_CONFIG_GENERAL["ip"]
-        self._bind = SEARCH_CONFIG_GENERAL["bind"]
-        self._ptype = SEARCH_CONFIG_GENERAL["ptype"]
-        self._port_udp = SEARCH_CONFIG_GENERAL["port"]
-        self._nstream = SEARCH_CONFIG_GENERAL["nstream"]
-        self._cufft_nx = SEARCH_CONFIG_GENERAL["cufft_nx"]
-        self._zap_chans = SEARCH_CONFIG_GENERAL["zap_chans"]
-        self._ndf_stream = SEARCH_CONFIG_GENERAL["ndf_stream"]
-        self._detect_thresh = SEARCH_CONFIG_GENERAL["detect_thresh"]
-        self._ndf_check_chk = SEARCH_CONFIG_GENERAL["ndf_check_chk"]
-        self._nchan_filterbank = SEARCH_CONFIG_GENERAL["nchan_filterbank"]
-        self._nbyte_filterbank = SEARCH_CONFIG_GENERAL["nbyte_filterbank"]
-        self._rbuf_baseband_nblk = SEARCH_CONFIG_GENERAL["rbuf_baseband_nblk"]
-        self._ndim_pol_filterbank = SEARCH_CONFIG_GENERAL[
-            "ndim_pol_filterbank"]
-        self._rbuf_baseband_nread = SEARCH_CONFIG_GENERAL[
-            "rbuf_baseband_nread"]
-        self._npol_samp_filterbank = SEARCH_CONFIG_GENERAL[
-            "npol_samp_filterbank"]
-        self._rbuf_filterbank_nblk = SEARCH_CONFIG_GENERAL[
-            "rbuf_filterbank_nblk"]
-        self._rbuf_baseband_ndf_chk = SEARCH_CONFIG_GENERAL[
-            "rbuf_baseband_ndf_chk"]
-        self._rbuf_filterbank_nread = SEARCH_CONFIG_GENERAL[
-            "rbuf_filterbank_nread"]
-        self._tbuf_baseband_ndf_chk = SEARCH_CONFIG_GENERAL[
-            "tbuf_baseband_ndf_chk"]
-        self._rbuf_filterbank_ndf_chk = SEARCH_CONFIG_GENERAL[
-            "rbuf_filterbank_ndf_chk"]
-
-        self._cleanup_commands = ["pkill -9 -f capture_main",
-                                  "pkill -9 -f dada_db",
-                                  # process name, maximum 16 bytes (15 bytes
-                                  # visiable)
-                                  "pkill -9 -f baseband2filter",
-                                  "pkill -9 -f heimdall",
-                                  "pkill -9 -f dada_dbdisk",
-                                  #"pkill -9 -f nvprof",
-                                  #"pkill -9 -f cuda-memcheck",
-                                  "ipcrm -a"]
-
-    def configure(self, utc_start_capture, freq, ip, pipeline_config):
+    def configure(self, utc_start_capture, freq, input_ip, input_source):
         log.info("Received 'configure' command")
         if (self.state != "idle"):
             self.state = "error"
@@ -788,109 +869,92 @@ class Search(Pipeline):
         log.info("Configuring")
         
         # Setup parameters of the pipeline
-        self.state = "configuring"
-        self._pipeline_config = pipeline_config
-        self._ip = ip
-        self._numa = int(ip.split(".")[3]) - 1
-        self._freq = freq
+        self.state         = "configuring"
+        self._freq         = freq
+        self._input_ip     = input_ip
+        self._input_source = input_source
+        self._pacifix_numa         = int(ip.split(".")[3]) - 1
         self._utc_start_capture = Time(utc_start_capture, format='isot', scale='utc')
         
-        self._nbeam = self._pipeline_config["nbeam"]
-        self._nchk_port = self._pipeline_config["nchk_port"]
-        self._nport_beam = self._pipeline_config["nport_beam"]
-        self._nchan_keep_band = self._pipeline_config["nchan_keep_band"]
-        self._rbuf_baseband_key = self._pipeline_config["rbuf_baseband_key"]
-        self._rbuf_filterbank_key = self._pipeline_config[
-            "rbuf_filterbank_key"]
-        self._blk_res = self._df_res * self._rbuf_baseband_ndf_chk
-        self._nchk_beam = self._nchk_port * self._nport_beam
-        self._nchan_baseband = self._nchan_chk * self._nchk_beam
-        self._ncpu_pipeline = self._ncpu_numa / self._nbeam
-        self._rbuf_baseband_blksz = self._nchk_port * \
-            self._nport_beam * self._df_dtsz * self._rbuf_baseband_ndf_chk
-        self._rbuf_filterbank_blksz = int(self._nchan_filterbank * self._rbuf_baseband_blksz *
-                                          self._nbyte_filterbank * self._npol_samp_filterbank *
-                                          self._ndim_pol_filterbank / float(self._nbyte_baseband *
-                                                                            self._npol_samp_baseband *
-                                                                            self._ndim_pol_baseband *
-                                                                            self._nchan_baseband *
-                                                                            self._cufft_nx))
-
-        # To see if we can process baseband data with integer repeats
-        if self._rbuf_baseband_ndf_chk % (self._ndf_stream * self._nstream):
-            self.state = "error"
-            log.error("data in baseband ring buffer block can only "
-                      "be processed by baseband2filterbank with integer repeats")
-            raise PipelineError("data in baseband ring buffer block can only "
-                                "be processed by baseband2filterbank with integer repeats")
-
-        # To see if we have enough memory
-        if self._nbeam * (self._rbuf_filterbank_blksz + self._rbuf_baseband_blksz) > self._mem_node:
-            self.state = "error"
-            log.error("We do not have enough shared memory for the setup "
-                      "Try to reduce the ring buffer block number "
-                      "or reduce the number of packets in each ring buffer block")
+        self._input_nbeam       = self._input_source["input_nbeam"]
+        self._input_nchunk_per_port = self._input_source["input_nchunk_per_port"]
+        self._input_ports       = self._input_source["input_ports"]
+        self._input_nport       = len(self._input_ports[0])
+        self._input_nchunk      = self._input_nport * self._input_nchunk_per_port
+        self._input_nchan       = self._input_nchunk * self._paf_nchan_per_chunk
+ 
+        self._input_blksz = self._input_nchunk * \
+                                 self._paf_df_dtsz * \
+                                 self._rbuf_ndf_per_chunk_per_block  
+        self._search_blksz = int(self._input_blksz * self._search_nchan *
+                                 self._search_nbyte * self._search_npol *
+                                 self._search_ndim / float(self._input_nbyte *
+                                                           self._input_npol *
+                                                           self._input_ndim *
+                                                           self._input_nchan *
+                                                           self._search_cufft_nx))
+         # To see if we have enough memory        
+        self._simultaneous_spectrometer_blksz = self._simultaneous_spectrometer_nchan * \
+                                                self._spectrometer_nchan_keep_per_chan * \
+                                                self._spectrometer_ndata_per_samp * \
+                                                self._spectrometer_nbyte * \
+                                                (self._spectrometer_dbdisk and self._search_spectrometer)
+        #log.error(self._simultaneous_spectrometer_blksz)
+        if self._input_nbeam*(self._input_blksz * self._input_nblk +\
+                              self._input_nchunk * \
+                              self._paf_df_dtsz * \
+                              self._tbuf_ndf_per_chunk_per_block +\
+                              self._search_blksz * self._search_nblk +\
+                              self._simultaneous_spectrometer_blksz * self._spectrometer_nblk) >\
+                              self._pacifix_memory_limit_per_numa_node:
             raise PipelineError("We do not have enough shared memory for the setup "
-                                "Try to reduce the ring buffer block number "
-                                "or reduce the number of packets in each ring buffer block")
+                                "Try to reduce the ring buffer block number, or  "
+                                "reduce the number of packets in each ring buffer block, or "
+                                "reduce the number of frequency chunks for spectral (if there is any)")
 
-        # To be safe, kill all related softwares and free shared memory if there is any
-        self._cleanup()
+        # To check existing of files
+        if not os.path.isfile(self._search_main):
+            self.state = "error"
+            log.error("{} is not exist".format(self._search_main))
+            raise PipelineError("{} is not exist".format(self._search_main))
         
         # To setup commands for each process
-        capture = "{}/src/capture_main".format(PAF_ROOT)
-        baseband2filterbank = "{}/src/baseband2filterbank_main".format(
-            PAF_ROOT)
-        if not os.path.isfile(capture):
-            self.state = "error"
-            log.error("{} is not exist".format(capture))
-            raise PipelineError("{} is not exist".format(capture))
-        if not os.path.isfile(baseband2filterbank):
-            self.state = "error"
-            log.error("{} is not exist".format(baseband2filterbank))
-            raise PipelineError("{} is not exist".format(baseband2filterbank))
-        if not os.path.isfile(self._dada_hdr_fname):
-            self.state = "error"
-            log.error("{} is not exist".format(self._dada_hdr_fname))
-            raise PipelineError("{} is not exist".format(self._dada_hdr_fname))
-
-        for i in range(self._nbeam):
+        for i in range(self._input_nbeam):
             if EXECUTE:
                 # To setup address
                 destination = []
-                for j in range(self._nport_beam):
-                    port = self._first_port + i * self._nport_beam + j
+                for port in self._input_ports[i]:
                     destination.append("{}_{}_{}".format(
-                        self._ip, port, self._nchk_port))
+                        self._input_ip, port, self._input_nchunk_per_port))
 
-                destination_alive, dead_info = self._check_connection_beam(
-                    destination, self._ndf_check_chk)
+                destination_alive, dead_info = self._check_beam_connection(
+                    destination, self._input_check_ndf_per_chunk)
                 first_alive_ip = destination_alive[0].split("_")[0]
                 first_alive_port = int(destination_alive[0].split("_")[1])
 
                 beam_index = self._acquire_beam_index(
-                    first_alive_ip, first_alive_port, self._ndf_check_chk)
+                    first_alive_ip, first_alive_port, self._input_check_ndf_per_chunk)
                 refinfo = self._synced_refinfo(
                     self._utc_start_capture, first_alive_ip, first_alive_port)
                 beam_index = self._acquire_beam_index(
-                    first_alive_ip, first_alive_port, self._ndf_check_chk)
+                    first_alive_ip, first_alive_port, self._input_check_ndf_per_chunk)
                 refinfo = self._synced_refinfo(
                     self._utc_start_capture, first_alive_ip, first_alive_port)
 
                 # To get directory for data and socket for control
-                runtime_directory = "{}/beam{:02}".format(
-                    DATA_ROOT, beam_index)
-                if not os.path.isdir(runtime_directory):
+                pipeline_runtime_directory = "{}/beam{:02}".format(
+                    self._root_runtime, beam_index)
+                if not os.path.isdir(pipeline_runtime_directory):
                     try:
-                        os.makedirs(directory)
+                        os.makedirs(pipeline_runtime_directory)
                     except Exception as error:
                         log.exception(error)
                         self.state = "error"
-                        log.error("Fail to create {}".format(runtime_directory))
+                        log.error("Fail to create {}".format(pipeline_runtime_directory))
                         raise PipelineError(
-                            "Fail to create {}".format(runtime_directory))
+                            "Fail to create {}".format(pipeline_runtime_directory))
 
-                socket_address = "{}/capture.socket".format(runtime_directory)
+                socket_address = "{}/capture.socket".format(pipeline_runtime_directory)
                 control_socket = socket.socket(
                     socket.AF_UNIX, socket.SOCK_DGRAM)
                 control_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -905,106 +969,116 @@ class Search(Pipeline):
                 control_socket = None
                 runtime_directory = None
 
-            self._beam_index.append(beam_index)
-            self._runtime_directory.append(runtime_directory)
-            self._socket_address.append(socket_address)
-            self._control_socket.append(control_socket)
+            self._input_beam_index.append(beam_index)
+            self._pipeline_runtime_directory.append(pipeline_runtime_directory)
+            self._input_socket_address.append(socket_address)
+            self._input_control_socket.append(control_socket)
 
             # To setup CPU bind information and dead_info
-            cpu = self._numa * self._ncpu_numa + i * self._ncpu_pipeline
+            self._pacifix_ncpu_per_instance = self._pacifix_ncpu_per_numa_node / self._input_nbeam
+            cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node + i * self._pacifix_ncpu_per_instance
             alive_info = []
             for info in destination_alive:
                 alive_info.append("{}_{}".format(info, cpu))
                 cpu += 1
 
-            buf_control_cpu = self._numa * self._ncpu_numa + \
-                i * self._ncpu_pipeline + self._nport_beam
-            capture_control_cpu = self._numa * self._ncpu_numa + \
-                i * self._ncpu_pipeline + self._nport_beam
+            buf_control_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node + \
+                i * self._pacifix_ncpu_per_instance + self._input_nport
+            capture_control_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node + \
+                i * self._pacifix_ncpu_per_instance + self._input_nport
             capture_control = "1_{}".format(capture_control_cpu)
             refinfo = "{}_{}_{}".format(refinfo[0], refinfo[1], refinfo[2])
 
             # capture command
             command = ("{} -a {} -b {} -c {} -e {} -f {} -g {} -i {} -j {} "
                        "-k {} -l {} -m {} -n {} -o {} -p {} -q {}").format(
-                           capture, self._rbuf_baseband_key[i], self._df_hdrsz, " -c ".join(alive_info),
-                           self._freq, refinfo, runtime_directory, buf_control_cpu, capture_control, 
-                           self._bind, self._rbuf_baseband_ndf_chk, self._tbuf_baseband_ndf_chk,
-                           self._dada_hdr_fname, SOURCE_DEFAULT, self._pad, beam_index)
-            self._capture_commands.append(command)
+                           self._input_main, self._input_keys[i], self._paf_df_hdrsz, " -c ".join(alive_info),
+                           self._freq, refinfo, pipeline_runtime_directory, buf_control_cpu, capture_control, 
+                           self._input_cpu_bind, self._rbuf_ndf_per_chunk_per_block, self._tbuf_ndf_per_chunk_per_block,
+                           self._input_dada_hdr_fname, self._input_source_default, self._input_pad, beam_index)
+            self._input_commands.append(command)
 
-            # baseband2filterbank command
-            baseband2filterbank_cpu = self._numa * self._ncpu_numa +\
-                                      (i + 1) * self._ncpu_pipeline - 1
+            # search command
+            search_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
+                         (i + 1) * self._pacifix_ncpu_per_instance - 1
             command = ("taskset -c {} {} -a {} -b {} -c {} -d {} -e {} "
-                       "-f {} -i {} -j {} -k {} -l {} -g 1 -m {} -n {}_{}").format(
-                           baseband2filterbank_cpu, baseband2filterbank, self._rbuf_baseband_key[i],
-                           self._rbuf_filterbank_key[i], self._rbuf_filterbank_ndf_chk,
-                           self._nstream, self._ndf_stream, self._runtime_directory[i],
-                           self._nchk_beam, self._cufft_nx,
-                           self._nchan_filterbank, self._nchan_keep_band,
-                           self._ptype, self._ip_udp, self._port_udp)
-            self._baseband2filterbank_commands.append(command)
+                       "-f {} -i {} -j {} -k {} ").format(
+                           search_cpu, self._search_main, self._input_keys[i],
+                           self._search_keys[i], self._rbuf_ndf_per_chunk_per_block,
+                           self._gpu_nstream, self._gpu_ndf_per_chunk_per_stream, self._pipeline_runtime_directory[i],
+                           self._input_nchunk, self._search_cufft_nx, self._search_nchan)
+            if self._search_sod:
+                command += "-g 1 "
+            else:
+                command += "-g 0 "
 
-            # Command to create filterbank ring buffer
-            dadadb_cpu = self._numa * self._ncpu_numa +\
-                (i + 1) * self._ncpu_pipeline - 1
+            if self._search_monitor:
+                command += "-l Y_{}_{}_{} ".format(self._monitor_ip, self._monitor_port, self._monitor_ptype)
+            else:
+                command += "-l N"
+            self._search_commands.append(command)
+
+            # Command to create search ring buffer
+            dadadb_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
+                         (i + 1) * self._pacifix_ncpu_per_instance - 1
             command = ("taskset -c {} dada_db -p -l -k {} "
                        "-b {} -n {} -r {}").format(
-                           dadadb_cpu, self._rbuf_filterbank_key[i],
-                           self._rbuf_filterbank_blksz,
-                           self._rbuf_filterbank_nblk,
-                           self._rbuf_filterbank_nread)
-            self._filterbank_create_buffer_commands.append(command)
+                           dadadb_cpu, self._search_keys[i],
+                           self._search_blksz,
+                           self._search_nblk,
+                           self._search_nreader)
+            self._search_create_rbuf_commands.append(command)
 
-            # command to create baseband ring buffer
+            # command to create input ring buffer
             command = ("taskset -c {} dada_db -p -l -k {} "
                        "-b {} -n {} -r {}").format(
-                           dadadb_cpu, self._rbuf_baseband_key[i],
-                           self._rbuf_baseband_blksz,
-                           self._rbuf_baseband_nblk,
-                           self._rbuf_baseband_nread)
-            self._baseband_create_buffer_commands.append(command)
+                           dadadb_cpu, self._input_keys[i],
+                           self._input_blksz,
+                           self._input_nblk,
+                           self._input_nreader)
+            self._input_create_rbuf_commands.append(command)
 
             # command to delete filterbank ring buffer
-            command = "taskset -c {} dada_db -d -k {}".format(dadadb_cpu, self._rbuf_filterbank_key[i])
-            self._filterbank_delete_buffer_commands.append(command)
+            command = "taskset -c {} dada_db -d -k {}".format(dadadb_cpu, self._search_keys[i])
+            self._search_delete_rbuf_commands.append(command)
 
             # command to delete baseband ring buffer
-            command = "taskset -c {} dada_db -d -k {}".format(dadadb_cpu, self._rbuf_baseband_key[i])
-            self._baseband_delete_buffer_commands.append(command)
+            command = "taskset -c {} dada_db -d -k {}".format(dadadb_cpu, self._input_keys[i])
+            self._input_delete_rbuf_commands.append(command)
 
             # Command to run heimdall
-            heimdall_cpu = self._numa * self._ncpu_numa +\
-                (i + 1) * self._ncpu_pipeline - 1
-            command = ("taskset -c {} heimdall -k {} "
-                       "-detect_thresh {} -output_dir {} ").format(
-                           heimdall_cpu, self._rbuf_filterbank_key[i],
-                           self._detect_thresh, runtime_directory)
-            if self._zap_chans:
-                zap = ""
-                for zap_chan in self._zap_chans:
-                    zap += " -zap_chans {} {}".format(
-                        self._zap_chan[0], self._zap_chan[1])
-                command += zap
-                if self._dm:
-                    command += "-dm {} {}".format(self._dm[0], self._dm[1])
-            self._heimdall_commands.append(command)
+            if self._search_heimdall:
+                heimdall_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
+                               (i + 1) * self._pacifix_ncpu_per_instance - 1
+                command = ("taskset -c {} heimdall -k {} "
+                           "-detect_thresh {} -output_dir {} ").format(
+                               heimdall_cpu, self._search_keys[i],
+                               self._search_detect_thresh, pipeline_runtime_directory)
+                if self._search_zap_chans:
+                    zap = ""
+                    for search_zap_chan in self._search_zap_chans:
+                        zap += " -zap_chans {} {}".format(
+                            self._search_zap_chan[0], self._search_zap_chan[1])
+                    command += zap
+                if self._search_dm:
+                    command += "-dm {} {}".format(self._search_dm[0], self._search_dm[1])
+                self._search_heimdall_commands.append(command)
 
             # Command to run dbdisk
-            dbdisk_cpu = self._numa * self._ncpu_numa +\
-                (i + 1) * self._ncpu_pipeline - 1
-            command = ("dada_dbdisk -b {} -k {} "
-                       "-D {} -o -s -z").format(
-                           dbdisk_cpu,
-                           self._rbuf_filterbank_key[i],
-                           self._runtime_directory[i])
-            self._dbdisk_commands.append(command)
-
+            if self._search_dbdisk:
+                dbdisk_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
+                             (i + 1) * self._pacifix_ncpu_per_instance - 1
+                command = ("dada_dbdisk -b {} -k {} "
+                           "-D {} -o -s -z").format(
+                               dbdisk_cpu,
+                               self._search_keys[i],
+                               pipeline_runtime_directory)
+                self._search_dbdisk_commands.append(command)
+                
         # Create baseband ring buffer
         process_index = 0
         execution_instances = []
-        for command in self._baseband_create_buffer_commands:
+        for command in self._input_create_rbuf_commands:
             execution_instances.append(ExecuteCommand(command, process_index))
             process_index += 1
         for execution_instance in execution_instances:
@@ -1012,8 +1086,8 @@ class Search(Pipeline):
 
         # Execute the capture
         process_index = 0
-        self._capture_execution_instances = []
-        for command in self._capture_commands:
+        self._ready_counter = 0
+        for command in self._input_commands:
             execution_instance = ExecuteCommand(command, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
@@ -1021,17 +1095,16 @@ class Search(Pipeline):
                 self._handle_execution_stderr)
             execution_instance.returncode_callbacks.add(
                 self._handle_execution_returncode)
-            self._capture_execution_instances.append(execution_instance)
+            self._input_execution_instances.append(execution_instance)
             process_index += 1
             
         if EXECUTE:  # Ready when all capture threads and the capture control thread of all capture instances are ready
-            self._ready_counter = 0
             while True:
-                if self._ready_counter == (self._nport_beam + 1) * self._nbeam:
+                if self._ready_counter == (self._input_nport + 1) * self._input_nbeam:
                     break
-
+        
         # Remove ready_counter_callback and add capture_status_callback
-        for execution_instance in self._capture_execution_instances:
+        for execution_instance in self._input_execution_instances:
             execution_instance.stdout_callbacks.remove(
                 self._ready_counter_callback)            
             execution_instance.stdout_callbacks.add(
@@ -1055,7 +1128,7 @@ class Search(Pipeline):
         # Create ring buffer for filterbank data
         process_index = 0
         execution_instances = []
-        for command in self._filterbank_create_buffer_commands:
+        for command in self._search_create_rbuf_commands:
             execution_instances.append(ExecuteCommand(command, process_index))
             process_index += 1
         for execution_instance in execution_instances:         # Wait until the buffer creation is done
@@ -1063,63 +1136,61 @@ class Search(Pipeline):
                 
         # Run baseband2filterbank
         process_index = 0
-        self._baseband2filterbank_execution_instances = []
-        for command in self._baseband2filterbank_commands:
+        self._ready_counter = 0
+        for command in self._search_commands:
+            log.error(command)
             execution_instance = ExecuteCommand(command, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
-            #execution_instance.stderr_callbacks.add(
-            #    self._handle_execution_stderr)
-            #execution_instance.returncode_callbacks.add(
-            #    self._handle_execution_returncode)
-            self._baseband2filterbank_execution_instances.append(
+            execution_instance.stderr_callbacks.add(
+                self._handle_execution_stderr)
+            execution_instance.returncode_callbacks.add(
+                self._handle_execution_returncode)
+            self._search_execution_instances.append(
                 execution_instance)
             process_index += 1
 
-        if HEIMDALL:  # run heimdall if required
+        if self._search_heimdall:  # run heimdall if required
             process_index = 0
-            self._heimdall_execution_instances = []
-            for command in self._heimdall_commands:
+            for command in self._search_heimdall_commands:
                 execution_instance = ExecuteCommand(command, process_index)
                 execution_instance.returncode_callbacks.add(
                     self._handle_execution_returncode)
-                self._heimdall_execution_instances.append(
+                self._search_heimdall_execution_instances.append(
                     execution_instance)
                 process_index += 1
                 
-        if DBDISK:   # Run dbdisk if required
+        if self._search_dbdisk:   # Run dbdisk if required
             process_index = 0
-            self._dbdisk_execution_instances = []
-            for command in self._dbdisk_commands:
+            for command in self._search_dbdisk_commands:
                 execution_instance = ExecuteCommand(command, process_index)
                 execution_instance.returncode_callbacks.add(
                     self._handle_execution_returncode)
-                self._dbdisk_execution_instances.append(
+                self._search_dbdisk_execution_instances.append(
                     execution_instance)
                 process_index += 1
 
         # Enable the SOD of baseband ring buffer with given time and then
         # "running"
         if EXECUTE:
-            self._ready_counter = 0
             while True:
             #while self.state != "error":
-                if self._ready_counter == self._nbeam:
+                if self._ready_counter == self._input_nbeam:
                     break
             #if self.state == "error":
             #    raise PipelineError("DONE")
             process_index = 0
             start_buf = self._synced_startbuf(utc_start_process, self._utc_start_capture)
             log.debug("START BUF index is {}".format(start_buf))
-            for control_socket in self._control_socket:
+            for control_socket in self._input_control_socket:
                 self._capture_control(control_socket,
                                       "START-OF-DATA_{}_{}_{}_{}".format(
                                           source_name, ra, dec, start_buf),
-                                      self._socket_address[process_index])
+                                      self._input_socket_address[process_index])
                 process_index += 1
 
         # Remove ready_counter_callback 
-        for execution_instance in self._baseband2filterbank_execution_instances:
+        for execution_instance in self._search_execution_instances:
             execution_instance.stdout_callbacks.remove(self._ready_counter_callback)
             execution_instance.stdout_callbacks.add(self._handle_execution_stdout)
             
@@ -1137,24 +1208,24 @@ class Search(Pipeline):
         
         if EXECUTE:
             process_index = 0
-            for control_socket in self._control_socket:  # Stop data
+            for control_socket in self._input_control_socket:  # Stop data
                 self._capture_control(control_socket,
                                       "END-OF-DATA",
-                                      self._socket_address[process_index])
+                                      self._input_socket_address[process_index])
                 process_index += 1
-        if DBDISK:
-            for execution_instance in self._dbdisk_execution_instances:
+        if self._search_dbdisk:
+            for execution_instance in self._search_dbdisk_execution_instances:
                 execution_instance.finish()
-        if HEIMDALL:
-            for execution_instance in self._heimdall_execution_instances:
+        if self._search_heimdall:
+            for execution_instance in self._search_heimdall_execution_instances:
                 execution_instance.finish()
-        for execution_instance in self._baseband2filterbank_execution_instances:
+        for execution_instance in self._search_execution_instances:
             execution_instance.finish()
 
         # To delete filterbank ring buffer
         process_index = 0
         execution_instances = []
-        for command in self._filterbank_delete_buffer_commands:
+        for command in self._search_delete_rbuf_commands:
             execution_instances.append(ExecuteCommand(command, process_index))
             process_index += 1
         for execution_instance in execution_instances:
@@ -1178,17 +1249,17 @@ class Search(Pipeline):
             # To stop the capture
             if EXECUTE:
                 process_index = 0
-                for control_socket in self._control_socket:
+                for control_socket in self._input_control_socket:
                     self._capture_control(
-                        control_socket, "END-OF-CAPTURE", self._socket_address[process_index])
+                        control_socket, "END-OF-CAPTURE", self._input_socket_address[process_index])
                     process_index += 1
-            for execution_instance in self._capture_execution_instances:
+            for execution_instance in self._input_execution_instances:
                 execution_instance.finish()
             
             # To delete baseband ring buffer
             process_index = 0
             execution_instances = []
-            for command in self._baseband_delete_buffer_commands:
+            for command in self._input_delete_rbuf_commands:
                 execution_instances.append(ExecuteCommand(command, process_index))
                 process_index += 1
             for execution_instance in execution_instances:
@@ -1203,78 +1274,26 @@ class Search(Pipeline):
 @register_pipeline("Search2Beams")
 class Search2Beams(Search):
     
-    def configure(self, utc_start_capture, freq, ip):
+    def configure(self, utc_start_capture, freq, input_ip):
         super(Search2Beams, self).configure(
-            utc_start_capture, freq, ip, SEARCH_CONFIG_2BEAMS)
+            utc_start_capture, freq, input_ip, INPUT_2BEAMS)
 
 
 @register_pipeline("Search1Beam")
 class Search1Beam(Search):
 
-    def configure(self, utc_start_capture, freq, ip):
+    def configure(self, utc_start_capture, freq, input_ip):
         super(Search1Beam, self).configure(
-            utc_start_capture, freq, ip, SEARCH_CONFIG_1BEAM)
+            utc_start_capture, freq, input_ip, INPUT_1BEAM)
 
-@register_pipeline("Spectral")
-class Spectral(Pipeline):
+@register_pipeline("Spectrometer")
+class Spectrometer(Pipeline):
 
     def __init__(self):
-        super(Spectral, self).__init__()
+        super(Spectrometer, self).__init__()
         self.state = "idle"
 
-        self._beam_index = []
-
-        self._socket_address = []
-        self._control_socket = []
-        self._runtime_directory = []
-
-        self._dbdisk_commands = []
-        self._capture_commands = []
-        self._baseband2spectral_commands = []
-        self._baseband_create_buffer_commands = []
-        self._baseband_delete_buffer_commands = []
-        self._spectral_create_buffer_commands = []
-        self._spectral_delete_buffer_commands = []
-
-        self._dbdisk_execution_instances = []
-        self._capture_execution_instances = []
-        self._baseband2spectral_execution_instances = []
-        self._heimdall_execution_instances = []
-
-        self._ip_out   = SPECTRAL_CONFIG_GENERAL["ip"]
-        self._port_out = SPECTRAL_CONFIG_GENERAL["port"]
-        self._pad = SPECTRAL_CONFIG_GENERAL["pad"]
-        self._bind = SPECTRAL_CONFIG_GENERAL["bind"]
-        self._nstream = SPECTRAL_CONFIG_GENERAL["nstream"]
-        self._cufft_nx = SPECTRAL_CONFIG_GENERAL["cufft_nx"]
-        self._ndf_stream = SPECTRAL_CONFIG_GENERAL["ndf_stream"]
-        self._ndf_check_chk = SPECTRAL_CONFIG_GENERAL["ndf_check_chk"]
-        self._nbyte_spectral = SPECTRAL_CONFIG_GENERAL["nbyte_spectral"]
-        self._rbuf_baseband_nblk = SPECTRAL_CONFIG_GENERAL["rbuf_baseband_nblk"]
-        self._rbuf_baseband_nread = SPECTRAL_CONFIG_GENERAL[
-            "rbuf_baseband_nread"]
-        self._rbuf_spectral_nblk = SPECTRAL_CONFIG_GENERAL[
-            "rbuf_spectral_nblk"]
-        self._rbuf_baseband_ndf_chk = SPECTRAL_CONFIG_GENERAL[
-            "rbuf_baseband_ndf_chk"]
-        self._rbuf_spectral_nread = SPECTRAL_CONFIG_GENERAL[
-            "rbuf_spectral_nread"]
-        self._tbuf_baseband_ndf_chk = SPECTRAL_CONFIG_GENERAL[
-            "tbuf_baseband_ndf_chk"]
-        self._rbuf_spectral_ndf_chk = SPECTRAL_CONFIG_GENERAL[
-            "rbuf_spectral_ndf_chk"]
-
-        self._cleanup_commands = ["pkill -9 -f capture_main",
-                                  "pkill -9 -f dada_db",
-                                  # process name, maximum 16 bytes (15 bytes
-                                  # visiable)
-                                  "pkill -9 -f baseband2spectr",
-                                  "pkill -9 -f dada_dbdisk",
-                                  #"pkill -9 -f nvprof",
-                                  #"pkill -9 -f cuda-memcheck",
-                                  "ipcrm -a"]
-
-    def configure(self, utc_start_capture, freq, ip, ptype, pipeline_config):
+    def configure(self, utc_start_capture, freq, input_ip, ptype, input_source):
         log.info("Received 'configure' command")
         if (self.state != "idle"):
             self.state = "error"
@@ -1283,105 +1302,89 @@ class Spectral(Pipeline):
         log.info("Configuring")
         
         # Setup parameters of the pipeline
-        self.state = "configuring"
-        self._pipeline_config = pipeline_config
-        self._ip = ip
-        self._numa = int(ip.split(".")[3]) - 1
-        self._freq = freq
+        self.state         = "configuring"
+        self._freq         = freq
+        self._input_ip     = input_ip
+        self._input_source = input_source
+        self._pacifix_numa         = int(ip.split(".")[3]) - 1
         self._utc_start_capture = Time(utc_start_capture, format='isot', scale='utc')
-        self._ptype = ptype
         
-        self._nbeam = self._pipeline_config["nbeam"]
-        self._nchk_port = self._pipeline_config["nchk_port"]
-        self._nport_beam = self._pipeline_config["nport_beam"]
-        self._rbuf_baseband_key = self._pipeline_config["rbuf_baseband_key"]
-        self._rbuf_spectral_key = self._pipeline_config["rbuf_spectral_key"]
-        self._blk_res = self._df_res * self._rbuf_baseband_ndf_chk
-        self._nchk_beam = self._nchk_port * self._nport_beam
-        self._nchan_baseband = self._nchan_chk * self._nchk_beam
-        self._ncpu_pipeline = self._ncpu_numa / self._nbeam
-        self._rbuf_baseband_blksz = self._nchk_port * \
-            self._nport_beam * self._df_dtsz * self._rbuf_baseband_ndf_chk
-        self._rbuf_spectral_blksz = int(4 * self._nchan_baseband * # Replace 4 with true pol numbers if we do not pad 0
-                                        self._cufft_nx /
-                                        self._over_samp_rate *
-                                        self._nbyte_spectral)
+        self._input_nbeam       = self._input_source["input_nbeam"]
+        self._input_nchunk_per_port = self._input_source["input_nchunk_per_port"]
+        self._input_ports       = self._input_source["input_ports"]
+        self._input_nport       = len(self._input_ports[0])
+        self._input_nchunk      = self._input_nport * self._input_nchunk_per_port
+        self._input_nchan       = self._input_nchunk * self._paf_nchan_per_chunk
+ 
+        self._input_blksz = self._input_nchunk * \
+                                 self._paf_df_dtsz * \
+                                 self._rbuf_ndf_per_chunk_per_block 
+        self._spectrometer_blksz = int(self._spectrometer_ndata_per_samp * self._input_nchan * 
+                                       self._spectrometer_cufft_nx /
+                                       self._paf_over_samp_rate *
+                                       self._spectrometer_nbyte *
+                                       self._spectrometer_dbdisk)
         
-        # To see if we can process baseband data with integer repeats
-        if self._rbuf_baseband_ndf_chk % (self._ndf_stream * self._nstream):
-            self.state = "error"
-            log.error("data in baseband ring buffer block can only "
-                      "be processed by baseband2spectral with integer repeats")
-            raise PipelineError("data in baseband ring buffer block can only "
-                                "be processed by baseband2spectral with integer repeats")
-
+        # To check pol type
+        if self._spectrometer_ptype not in [1, 2, 4]:  # We can only have three possibilities
+            log.error("Spectrometer pol type should be 1, 2 or 4, but it is {}".format(self._spectrometer_ptype))
+            raise PipelineError("Spectrometer pol type should be 1, 2 or 4, but it is {}".format(self._spectrometer_ptype))
+        if self._spectrometer_monitor and (self._monitor_ptype not in [1, 2, 4]):
+            log.error("Monitor pol type should be 1, 2 or 4, but it is {}".format(self._monitor_ptype))
+            raise PipelineError("monitor pol type should be 1, 2 or 4, but it is {}".format(self._monitor_ptype))
+        
         # To see if we have enough memory
-        if self._nbeam * (self._rbuf_spectral_blksz + self._rbuf_baseband_blksz) > self._mem_node:
+        if self._input_nbeam*(self._input_blksz * self._input_nblk + \
+                        self._spectrometer_blksz * self._spectrometer_nblk) > \
+                        self._pacifix_memory_limit_per_numa_node:
             self.state = "error"
-            log.error("We do not have enough shared memory for the setup "
-                       "Try to reduce the ring buffer block number "
-                       "or reduce the number of packets in each ring buffer block")
             raise PipelineError("We do not have enough shared memory for the setup "
                                 "Try to reduce the ring buffer block number "
                                 "or reduce the number of packets in each ring buffer block")
 
-        # To be safe, kill all related softwares and free shared memory if there is any
-        self._cleanup()
+        # To check the existing of file
+        if not os.path.isfile(self._spectrometer_main):
+            self.state = "error"
+            log.error("{} is not exist".format(self._spectrometer_main))
+            raise PipelineError("{} is not exist".format(self._spectrometer_main))
         
-        # To setup commands for each process
-        capture = "{}/src/capture_main".format(PAF_ROOT)
-        baseband2spectral = "{}/src/baseband2spectral_main".format(
-            PAF_ROOT)
-        if not os.path.isfile(capture):
-            self.state = "error"
-            log.error("{} is not exist".format(capture))
-            raise PipelineError("{} is not exist".format(capture))
-        if not os.path.isfile(baseband2spectral):
-            self.state = "error"
-            log.error("{} is not exist".format(baseband2spectral))
-            raise PipelineError("{} is not exist".format(baseband2spectral))
-        if not os.path.isfile(self._dada_hdr_fname):
-            self.state = "error"
-            log.error("{} is not exist".format(self._dada_hdr_fname))
-            raise PipelineError("{} is not exist".format(self._dada_hdr_fname))
-
-        for i in range(self._nbeam):
+        # To setup commands for each process                
+        for i in range(self._input_nbeam):
             if EXECUTE:
                 # To setup address
                 destination = []
-                for j in range(self._nport_beam):
-                    port = self._first_port + i * self._nport_beam + j
+                for port in self._input_ports[i]:
                     destination.append("{}_{}_{}".format(
-                        self._ip, port, self._nchk_port))
+                        self._input_ip, port, self._input_nchunk_per_port))
 
-                destination_alive, dead_info = self._check_connection_beam(
-                    destination, self._ndf_check_chk)
+                destination_alive, dead_info = self._check_beam_connection(
+                    destination, self._input_check_ndf_per_chunk)
                 first_alive_ip = destination_alive[0].split("_")[0]
                 first_alive_port = int(destination_alive[0].split("_")[1])
 
                 beam_index = self._acquire_beam_index(
-                    first_alive_ip, first_alive_port, self._ndf_check_chk)
+                    first_alive_ip, first_alive_port, self._input_check_ndf_per_chunk)
                 refinfo = self._synced_refinfo(
                     self._utc_start_capture, first_alive_ip, first_alive_port)
                 beam_index = self._acquire_beam_index(
-                    first_alive_ip, first_alive_port, self._ndf_check_chk)
+                    first_alive_ip, first_alive_port, self._input_check_ndf_per_chunk)
                 refinfo = self._synced_refinfo(
                     self._utc_start_capture, first_alive_ip, first_alive_port)
 
                 # To get directory for data and socket for control
-                runtime_directory = "{}/beam{:02}".format(
-                    DATA_ROOT, beam_index)
-                if not os.path.isdir(runtime_directory):
+                pipeline_runtime_directory = "{}/beam{:02}".format(
+                    self._root_runtime, beam_index)
+                if not os.path.isdir(pipeline_runtime_directory):
                     try:
-                        os.makedirs(directory)
+                        os.makedirs(pipeline_runtime_directory)
                     except Exception as error:
                         log.exception(error)
                         self.state = "error"
-                        log.error("Fail to create {}".format(runtime_directory))
+                        log.error("Fail to create {}".format(pipeline_runtime_directory))
                         raise PipelineError(
-                            "Fail to create {}".format(runtime_directory))
+                            "Fail to create {}".format(pipeline_runtime_directory))
 
-                socket_address = "{}/capture.socket".format(runtime_directory)
+                socket_address = "{}/capture.socket".format(pipeline_runtime_directory)
                 control_socket = socket.socket(
                     socket.AF_UNIX, socket.SOCK_DGRAM)
                 control_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -1396,94 +1399,96 @@ class Spectral(Pipeline):
                 control_socket = None
                 runtime_directory = None
 
-            self._beam_index.append(beam_index)
-            self._runtime_directory.append(runtime_directory)
-            self._socket_address.append(socket_address)
-            self._control_socket.append(control_socket)
+            self._input_beam_index.append(beam_index)
+            self._pipeline_runtime_directory.append(pipeline_runtime_directory)
+            self._input_socket_address.append(socket_address)
+            self._input_control_socket.append(control_socket)
 
             # To setup CPU bind information and dead_info
-            cpu = self._numa * self._ncpu_numa + i * self._ncpu_pipeline
+            self._pacifix_ncpu_per_instance = self._pacifix_ncpu_per_numa_node / self._input_nbeam
+            cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node + i * self._pacifix_ncpu_per_instance
             alive_info = []
             for info in destination_alive:
                 alive_info.append("{}_{}".format(info, cpu))
                 cpu += 1
 
-            buf_control_cpu = self._numa * self._ncpu_numa + \
-                i * self._ncpu_pipeline + self._nport_beam
-            capture_control_cpu = self._numa * self._ncpu_numa + \
-                i * self._ncpu_pipeline + self._nport_beam
+            buf_control_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node + \
+                i * self._pacifix_ncpu_per_instance + self._input_nport
+            capture_control_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node + \
+                i * self._pacifix_ncpu_per_instance + self._input_nport
             capture_control = "1_{}".format(capture_control_cpu)
             refinfo = "{}_{}_{}".format(refinfo[0], refinfo[1], refinfo[2])
 
             # capture command
             command = ("{} -a {} -b {} -c {} -e {} -f {} -g {} -i {} -j {} "
                        "-k {} -l {} -m {} -n {} -o {} -p {} -q {}").format(
-                           capture, self._rbuf_baseband_key[i], self._df_hdrsz, " -c ".join(alive_info),
-                           self._freq, refinfo, runtime_directory, buf_control_cpu, capture_control, self._bind,
-                           self._rbuf_baseband_ndf_chk, self._tbuf_baseband_ndf_chk,
-                           self._dada_hdr_fname, SOURCE_DEFAULT, self._pad, beam_index)
-            self._capture_commands.append(command)
+                           self._input_main, self._input_keys[i], self._paf_df_hdrsz, " -c ".join(alive_info),
+                           self._freq, refinfo, pipeline_runtime_directory, buf_control_cpu, capture_control, 
+                           self._input_cpu_bind, self._rbuf_ndf_per_chunk_per_block, self._tbuf_ndf_per_chunk_per_block,
+                           self._input_dada_hdr_fname, self._input_source_default, self._input_pad, beam_index)
+            self._input_commands.append(command)
 
-            # baseband2spectral command
-            baseband2spectral_cpu = self._numa * self._ncpu_numa + i * self._ncpu_pipeline + 1
-            if not FITSWRITER:
-                command = ("taskset -c {} {} -a {} -b k_{}_1 -c {} "
-                           "-d {} -e {} -f {} -g {} -i {} -j {} ").format(
-                               baseband2spectral_cpu, baseband2spectral,
-                               self._rbuf_baseband_key[i], self._rbuf_spectral_key[i],
-                               self._rbuf_spectral_ndf_chk, self._nstream, self._ndf_stream,
-                               self._runtime_directory[i], self._nchk_beam, self._cufft_nx, self._ptype)
-            else:                
-                command = ("taskset -c {} {} -a {} -b n_{}_{} -c {} "
-                           "-d {} -e {} -f {} -g {} -i {} -j {} ").format(
-                               baseband2spectral_cpu, baseband2spectral,
-                               self._rbuf_baseband_key[i], self._ip_out, self._port_out,
-                               self._rbuf_spectral_ndf_chk, self._nstream, self._ndf_stream,
-                               self._runtime_directory[i], self._nchk_beam, self._cufft_nx, self._ptype)
-            self._baseband2spectral_commands.append(command)
+            # spectrometer command
+            spectrometer_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
+                               (i + 1) * self._pacifix_ncpu_per_instance - 1
+            command = "taskset -c {} {} -a {} -c {} -d {} -e {} -f {} -g {} -i {} -j {} -k {} ".format(
+                spectrometer_cpu,
+                self._spectrometer_main,
+                self._input_keys[i],self._rbuf_ndf_per_chunk_per_block,
+                self._gpu_nstream, self._gpu_ndf_per_chunk_per_stream,
+                self._pipeline_runtime_directory[i], self._input_nchunk,
+                self._spectrometer_cufft_nx, self._spectrometer_ptype, self._spectrometer_accumulate_nblk)
+            if self._spectrometer_dbdisk:
+                command += "-b k_{}_{}".format(self._spectrometer_keys[i], self._spectrometer_sod)
+            else:
+                command += "-b n_{}_{}".format(self._spectrometer_ip, self._spectrometer_port)
+            self._spectrometer_commands.append(command)
 
-            # Command to create spectral ring buffer
-            dadadb_cpu = self._numa * self._ncpu_numa +\
-                (i + 1) * self._ncpu_pipeline - 1
+            # Command to create spectrometer ring buffer
+            dadadb_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
+                         (i + 1) * self._pacifix_ncpu_per_instance - 1
+            if self._spectrometer_dbdisk:
+                command = ("taskset -c {} dada_db -l -p -k {} "
+                           "-b {} -n {} -r {}").format(
+                               dadadb_cpu, self._spectrometer_keys[i],
+                               self._spectrometer_blksz,
+                               self._spectrometer_nblk,
+                               self._spectrometer_nreader)
+                self._spectrometer_create_rbuf_commands.append(command)
+
+            # command to create input ring buffer
             command = ("taskset -c {} dada_db -l -p -k {} "
                        "-b {} -n {} -r {}").format(
-                           dadadb_cpu, self._rbuf_spectral_key[i],
-                           self._rbuf_spectral_blksz,
-                           self._rbuf_spectral_nblk,
-                           self._rbuf_spectral_nread)
-            self._spectral_create_buffer_commands.append(command)
+                           dadadb_cpu, self._input_keys[i],
+                           self._input_blksz,
+                           self._input_nblk,
+                           self._input_nreader)
+            self._input_create_rbuf_commands.append(command)
 
-            # command to create baseband ring buffer
-            command = ("taskset -c {} dada_db -l -p -k {} "
-                       "-b {} -n {} -r {}").format(
-                           dadadb_cpu, self._rbuf_baseband_key[i],
-                           self._rbuf_baseband_blksz,
-                           self._rbuf_baseband_nblk,
-                           self._rbuf_baseband_nread)
-            self._baseband_create_buffer_commands.append(command)
+            # command to delete spectrometer ring buffer
+            if self._spectrometer_dbdisk:
+                command = "taskset -c {} dada_db -d -k {}".format(dadadb_cpu, self._spectrometer_keys[i])
+                self._spectrometer_delete_rbuf_commands.append(command)
 
-            # command to delete spectral ring buffer
-            command = "taskset -c {} dada_db -d -k {}".format(dadadb_cpu, self._rbuf_spectral_key[i])
-            self._spectral_delete_buffer_commands.append(command)
-
-            # command to delete baseband ring buffer
-            command = "taskset -c {} dada_db -d -k {}".format(dadadb_cpu, self._rbuf_baseband_key[i])
-            self._baseband_delete_buffer_commands.append(command)
+            # command to delete input ring buffer
+            command = "taskset -c {} dada_db -d -k {}".format(dadadb_cpu, self._input_keys[i])
+            self._input_delete_rbuf_commands.append(command)
 
             # Command to run dbdisk
-            dbdisk_cpu = self._numa * self._ncpu_numa +\
-                (i + 1) * self._ncpu_pipeline - 1
-            command = ("dada_dbdisk -b {} -k {} "
-                       "-D {} -o -s -z").format(
-                           dbdisk_cpu,
-                           self._rbuf_spectral_key[i],
-                           self._runtime_directory[i])
-            self._dbdisk_commands.append(command)
+            if self._spectrometer_dbdisk:
+                dbdisk_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
+                             (i + 1) * self._pacifix_ncpu_per_instance - 1
+                command = ("dada_dbdisk -b {} -k {} "
+                           "-D {} -o -s -z").format(
+                               dbdisk_cpu,
+                               self._spectrometer_keys[i],
+                               self._pipeline_runtime_directory[i])
+                self._spectrometer_dbdisk_commands.append(command)
 
         # Create baseband ring buffer
         process_index = 0
         execution_instances = []
-        for command in self._baseband_create_buffer_commands:
+        for command in self._input_create_rbuf_commands:
             execution_instances.append(ExecuteCommand(command, process_index))
             process_index += 1
         for execution_instance in execution_instances:
@@ -1491,8 +1496,9 @@ class Spectral(Pipeline):
 
         # Execute the capture
         process_index = 0
+        self._ready_counter = 0
         self._capture_execution_instances = []
-        for command in self._capture_commands:
+        for command in self._input_commands:
             execution_instance = ExecuteCommand(command, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
@@ -1500,16 +1506,15 @@ class Spectral(Pipeline):
                 self._handle_execution_stderr)
             execution_instance.returncode_callbacks.add(
                 self._handle_execution_returncode)
-            self._capture_execution_instances.append(execution_instance)
+            self._input_execution_instances.append(execution_instance)
             process_index += 1
             
         if EXECUTE:  # Ready when all capture threads and the capture control thread of all capture instances are ready
-            self._ready_counter = 0
             while True:
-                if self._ready_counter == (self._nport_beam + 1) * self._nbeam:
+                if self._ready_counter == (self._input_nport + 1) * self._input_nbeam:
                     break
 
-        for execution_instance in self._capture_execution_instances:            
+        for execution_instance in self._input_execution_instances:            
             execution_instance.stdout_callbacks.remove(
                 self._ready_counter_callback)
             execution_instance.stdout_callbacks.add(
@@ -1530,19 +1535,21 @@ class Spectral(Pipeline):
         
         utc_start_process = Time(utc_start_process, format='isot', scale='utc')
 
-        # Create ring buffer for spectral data
-        process_index = 0
-        execution_instances = []
-        for command in self._spectral_create_buffer_commands:
-            execution_instances.append(ExecuteCommand(command, process_index))
-            process_index += 1
-        for execution_instance in execution_instances:         # Wait until the buffer creation is done
-            execution_instance.finish()
+        # Create ring buffer for spectrometer data
+        if self._spectrometer_dbdisk:
+            process_index = 0
+            execution_instances = []
+            for command in self._spectrometer_create_rbuf_commands:
+                execution_instances.append(ExecuteCommand(command, process_index))
+                process_index += 1
+            for execution_instance in execution_instances:         # Wait until the buffer creation is done
+                execution_instance.finish()
                 
-        # Run baseband2spectral
+        # Run spectrometer
         process_index = 0
-        self._baseband2spectral_execution_instances = []
-        for command in self._baseband2spectral_commands:
+        self._ready_counter = 0
+        self._spectrometer_execution_instances = []
+        for command in self._spectrometer_commands:
             execution_instance = ExecuteCommand(command, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
@@ -1550,41 +1557,40 @@ class Spectral(Pipeline):
                 self._handle_execution_stderr)
             execution_instance.returncode_callbacks.add(
                 self._handle_execution_returncode)
-            self._baseband2spectral_execution_instances.append(
+            self._spectrometer_execution_instances.append(
                 execution_instance)
             process_index += 1
                 
         # Send data to FITSweiter interface
-        if not FITSWRITER:
+        if self._spectrometer_dbdisk:
             process_index = 0
-            self._dbdisk_execution_instances = []
-            for command in self._dbdisk_commands:
+            self._spectrometer_dbdisk_execution_instances = []
+            for command in self._spectrometer_dbdisk_commands:
                 execution_instance = ExecuteCommand(command, process_index)
                 execution_instance.returncode_callbacks.add(
                     self._handle_execution_returncode)
-                self._dbdisk_execution_instances.append(
+                self._spectrometer_dbdisk_execution_instances.append(
                     execution_instance)
             process_index += 1
 
         # Enable the SOD of baseband ring buffer with given time and then
         # "running"
         if EXECUTE:
-            self._ready_counter = 0
             while True:
-                if self._ready_counter == self._nbeam:
+                if self._ready_counter == self._input_nbeam:
                     break
             process_index = 0
             start_buf = self._synced_startbuf(utc_start_process, self._utc_start_capture)
             log.debug("START BUF index is {}".format(start_buf))
-            for control_socket in self._control_socket:
+            for control_socket in self._input_control_socket:
                 self._capture_control(control_socket,
                                       "START-OF-DATA_{}_{}_{}_{}".format(
                                           source_name, ra, dec, start_buf),
-                                      self._socket_address[process_index])
+                                      self._input_socket_address[process_index])
                 process_index += 1
 
         # We do not need to monitor the stdout anymore
-        for execution_instance in self._baseband2spectral_execution_instances:
+        for execution_instance in self._spectrometer_execution_instances:
             execution_instance.stdout_callbacks.remove(self._ready_counter_callback)
             execution_instance.stdout_callbacks.add(self._handle_execution_stdout)
             
@@ -1602,25 +1608,26 @@ class Spectral(Pipeline):
         
         if EXECUTE:
             process_index = 0
-            for control_socket in self._control_socket:  # Stop data
+            for control_socket in self._input_control_socket:  # Stop data
                 self._capture_control(control_socket,
                                       "END-OF-DATA",
-                                      self._socket_address[process_index])
+                                      self._input_socket_address[process_index])
                 process_index += 1
-        if not FITSWRITER:
-            for execution_instance in self._dbdisk_execution_instances:
+        if self._spectrometer_dbdisk:
+            for execution_instance in self._spectrometer_dbdisk_execution_instances:
                 execution_instance.finish()
-        for execution_instance in self._baseband2spectral_execution_instances:
+        for execution_instance in self._spectrometer_execution_instances:
             execution_instance.finish()
 
-        # To delete spectral ring buffer
-        process_index = 0
-        execution_instances = []
-        for command in self._spectral_delete_buffer_commands:
-            execution_instances.append(ExecuteCommand(command, process_index))
-            process_index += 1
-        for execution_instance in execution_instances:
-            execution_instance.finish()
+        # To delete spectrometer ring buffer
+        if self._spectrometer_dbdisk:
+            process_index = 0
+            execution_instances = []
+            for command in self._spectrometer_delete_rbuf_commands:
+                execution_instances.append(ExecuteCommand(command, process_index))
+                process_index += 1
+            for execution_instance in execution_instances:
+                execution_instance.finish()
 
         self.state = "ready"
         log.info("Ready")
@@ -1640,17 +1647,17 @@ class Spectral(Pipeline):
             # To stop the capture
             if EXECUTE:
                 process_index = 0
-                for control_socket in self._control_socket:
+                for control_socket in self._input_control_socket:
                     self._capture_control(
-                        control_socket, "END-OF-CAPTURE", self._socket_address[process_index])
+                        control_socket, "END-OF-CAPTURE", self._input_socket_address[process_index])
                     process_index += 1
-            for execution_instance in self._capture_execution_instances:
+            for execution_instance in self._input_execution_instances:
                 execution_instance.finish()
             
-            # To delete baseband ring buffer
+            # To delete input ring buffer
             process_index = 0
             execution_instances = []
-            for command in self._baseband_delete_buffer_commands:
+            for command in self._input_delete_rbuf_commands:
                 execution_instances.append(ExecuteCommand(command, process_index))
                 process_index += 1
             for execution_instance in execution_instances:
@@ -1662,53 +1669,25 @@ class Spectral(Pipeline):
         self.state = "idle"
         log.info("Idle")
 
-@register_pipeline("Spectral2Beams1Pol")
-class Spectral2Beams1Pol(Spectral):
-
-    def configure(self, utc_start_capture, freq, ip):
-        super(Spectral2Beams1Pol, self).configure(
-            utc_start_capture, freq, ip, 1, SPECTRAL_CONFIG_2BEAMS)
-
-
-@register_pipeline("Spectral1Beam1Pol")
-class Spectral1Beam1Pol(Spectral):
-
-    def configure(self, utc_start_capture, freq, ip):
-        super(Spectral1Beam1Pol, self).configure(
-            utc_start_capture, freq, ip, 1, SPECTRAL_CONFIG_1BEAM)
-
-@register_pipeline("Spectral2Beams2Pols")
-class Spectral2Beams2Pols(Spectral):
-
-    def configure(self, utc_start_capture, freq, ip):
-        super(Spectral2Beams2Pols, self).configure(
-            utc_start_capture, freq, ip, 2, SPECTRAL_CONFIG_2BEAMS)
+@register_pipeline("Spectrometer2Beams")
+class Spectrometer2Beams(Spectrometer):
+    def configure(self, utc_start_capture, freq, input_ip):
+        super(Spectrometer2Beams, self).configure(
+            utc_start_capture, freq, input_ip, 1, INPUT_2BEAMS)
 
 
-@register_pipeline("Spectral1Beam2Pols")
-class Spectral1Beam2Pols(Spectral):
+@register_pipeline("Spectrometer1Beam1Pol")
+class Spectrometer1Beam(Spectrometer):
 
-    def configure(self, utc_start_capture, freq, ip):
-        super(Spectral1Beam2Pols, self).configure(
-            utc_start_capture, freq, ip, 2, SPECTRAL_CONFIG_1BEAM)
+    def configure(self, utc_start_capture, freq, input_ip):
+        super(Spectrometer1Beam, self).configure(
+            utc_start_capture, freq, input_ip, 1, INPUT_2BEAMS)
 
-@register_pipeline("Spectral2Beams4Pols")
-class Spectral2Beams4Pols(Spectral):
-
-    def configure(self, utc_start_capture, freq, ip):
-        super(Spectral2Beams4Pols, self).configure(
-            utc_start_capture, freq, ip, 4, SPECTRAL_CONFIG_2BEAMS)
-
-
-@register_pipeline("Spectral1Beam4Pols")
-class Spectral1Beam4Pols(Spectral):
-    def configure(self, utc_start_capture, freq, ip):
-        super(Spectral1Beam4Pols, self).configure(
-            utc_start_capture, freq, ip, 4, SPECTRAL_CONFIG_1BEAM)
-
+# ./pipeline.py -a 0 -b 1 -c search -d 1 -e 1 -f 100
 # ./pipeline.py -a 0 -b 2 -c search -d 1 -e 1 -f 100
-# nvprof -f --profile-child-processes -o profile.nvprof%p ./pipeline.py -a 0 -b 2 -c search -d 1 -e 1 -f 10
-# nvprof -f --profile-child-processes -o profile.nvprof%p --unified-memory-profiling off ./pipeline.py -a 0 -b 2 -c search -d 1 -e 1 -f 10
+# ./pipeline.py -a 1 -b 1 -c search -d 1 -e 1 -f 100
+# ./pipeline.py -a 1 -b 2 -c search -d 1 -e 1 -f 100
+
 if __name__ == "__main__":
     logging.getLogger().addHandler(logging.NullHandler())
     log = logging.getLogger('mpikat')
@@ -1763,7 +1742,7 @@ if __name__ == "__main__":
     
             for j in range(nstart):
                 log.info("Start it ...")
-                utc_start_process = Time.now() + 10 * units.second
+                utc_start_process = Time.now() + 15 * units.second
                 search_mode.start(utc_start_process, source_name, ra, dec)
                 time.sleep(length)
                 log.info("Stop it ...")
@@ -1772,31 +1751,29 @@ if __name__ == "__main__":
             log.info("Deconfigure it ...")
             search_mode.deconfigure()
             
-    if pipeline == "spectral":
+    if pipeline == "spectrometer":
         for i in range(nconfigure):
             log.info("Create pipeline ...")
             if beam == 1:
                 freq = 1340.5
-                spectral_mode = Spectral1Beam1Pol()
-                spectral_mode = Spectral1Beam2Pols()
-                spectral_mode = Spectral1Beam4Pols()
+                spectrometer_mode = Spectrometer1Beam()
             if beam == 2:
                 freq = 1337.0
-                spectral_mode = Spectral2Beams1Pol()
-                spectral_mode = Spectral2Beams2Pols()
-                spectral_mode = Spectral2Beams4Pols()
+                spectrometer_mode = Spectrometer2Beams()
     
             log.info("Configure it ...")
-            utc_start_capture = Time.now()  
-            spectral_mode.configure(utc_start_capture, freq, ip)
+            utc_start_capture = Time.now()
+            #start_time = "2019-03-07T09:12:00.0"
+            #utc_start_capture = Time(start_time, format='isot', scale='utc')
+            spectrometer_mode.configure(utc_start_capture, freq, ip)
     
             for j in range(nstart):
                 log.info("Start it ...")
-                utc_start_process = Time.now() + 15 * units.second
-                spectral_mode.start(utc_start_process, source_name, ra, dec)
+                utc_start_process = Time.now() + 20 * units.second
+                spectrometer_mode.start(utc_start_process, source_name, ra, dec)
                 time.sleep(length)
                 log.info("Stop it ...")
-                spectral_mode.stop()
+                spectrometer_mode.stop()
     
             log.info("Deconfigure it ...")
-            spectral_mode.deconfigure()
+            spectrometer_mode.deconfigure()

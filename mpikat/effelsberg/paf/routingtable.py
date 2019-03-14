@@ -8,6 +8,7 @@ import time
 import tempfile
 import socket
 from os.path import join
+import argparse
 
 log = logging.getLogger("mpikat.paf_routingtable")
 
@@ -289,12 +290,20 @@ if __name__ == "__main__":
                     ['0x248a07e1ac50',	'10.17.8.2']]
 
     center_freq = 1340.5
-    nchunk = 48
-    nbeam = 18
-
-    nchunk = 33
-    nbeam = 36
+    
+    parser = argparse.ArgumentParser(
+        description='To run the pipeline for my test')
+    parser.add_argument('-a', '--nbeam', type=int, nargs='+',
+                        help='The number of beams on each GPU')
+    args = parser.parse_args()
+    nbeam = args.nbeam[0]
     nchunk_offset = 0
+    if nbeam == 1:
+        nchunk = 48
+        nbeam = 18
+    if nbeam == 2:
+        nchunk = 33
+        nbeam = 36
 
     routing_table = RoutingTable(
         destinations, nbeam, nchunk, nchunk_offset, center_freq)
