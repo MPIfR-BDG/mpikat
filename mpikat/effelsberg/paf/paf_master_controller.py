@@ -181,13 +181,32 @@ class PafMasterController(MasterController):
 
         @note  The JSON configuration object should be of the form:
                @code
-               {
-                   "mode": "Search1Beam",
-                   "nbands": 48,
-                   "frequency": 1340.5,
-                   "nbeams": 18,
-                   "band_offset": 0,
-                   "write_filterbank": 0
+                {
+                "products":
+                [  
+                    {
+                       "mode": "Search1Beam",
+                       "nbands": 48,
+                       "frequency": 1340.5,
+                       "nbeams": 18,
+                       "band_offset": 0,
+                       "write_filterbank": 0
+                    }
+                ],
+                "fits_interfaces":
+                     [
+                         {
+                             "id": "fits_interface_01",
+                             "name": "FitsInterface",
+                             "address": ["134.104.73.132", 6000]
+                         },
+                         {
+                             "id": "fits_interface_02",
+                             "name": "FitsInterface",
+                             "address": ["134.104.73.132", 6000]
+                         }
+                     ]
+
                }
                @endcode
 
@@ -217,18 +236,23 @@ class PafMasterController(MasterController):
             log.error("PAF already has a configured data product")
             raise PafConfigurationError(
                 "PAF already has a configured data product")
-        config_dict = json.loads(config_json)
+        self._fits_interfaces = []
+        try:
+            config_dict = json.loads(config_json)
+        except Exception as error:
+            log.error("Unable to parse configuration dictionary")
+            raise error
         for key in PAF_REQUIRED_KEYS:
             if key not in config_dict:
                 message = "No value set for required configuration parameter '{}'".format(
                     key)
                 log.error(message)
                 raise PafConfigurationError(message)
-        self._paf_config_sensor.set_value(config_json)
+        
         log.debug("Building product controller for PAF processing")
         self._products[PAF_PRODUCT_ID] = PafProductController(
             self, PAF_PRODUCT_ID)
-        self._update_products_sensor()
+
         log.debug("Configuring product controller")
         try:
             yield self._products[PAF_PRODUCT_ID].configure(config_json)
@@ -239,6 +263,14 @@ class PafMasterController(MasterController):
         else:
             log.debug(
                 "Configured product controller with ID: {}".format(PAF_PRODUCT_ID))
+
+        log.info("Configuring FITS interfaces")
+        for fi_config in config_dict["fits_interfaces"]:
+            fi = EddFitsInterfaceClient(fi_config["id"], fi_config["address"])
+            yield fi.configure(fi_config)
+            self._fits_interfaces.append(fi)
+        self._paf_config_sensor.set_value(config_json)
+        self._update_products_sensor()
         log.info("PAF backend configured")
 
     @request()
