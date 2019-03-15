@@ -210,17 +210,17 @@ class ExecuteCommand(object):
         self._command = command
         self._process_index = process_index
         self.stdout_callbacks = set()
-        self.stderr_callbacks = set()
+        #self.stderr_callbacks = set()
         self.returncode_callbacks = set()
         self._monitor_threads = []
         self._process = None
         self._executable_command = None
         self._stdout = None
-        self._stderr = None
+        #self._stderr = None
         self._returncode = None
         self._event = threading.Event()
         self._event.clear()
-        self._stderr_status = 0
+        #self._stderr_status = 0
         
         log.debug(self._command)
         self._executable_command = shlex.split(self._command)
@@ -292,22 +292,23 @@ class ExecuteCommand(object):
         self._returncode = value
         self.returncode_notify()
 
-    def stderr_notify(self):
-        for callback in self.stderr_callbacks:
-            callback(self._stderr, self)
+    #def stderr_notify(self):
+    #    for callback in self.stderr_callbacks:
+    #        callback(self._stderr, self)
 
-    @property
-    def stderr(self):
-        return self._stderr
-
-    @stderr.setter
-    def stderr(self, value):
-        self._stderr = value
-        self.stderr_notify()
+    #@property
+    #def stderr(self):
+    #    return self._stderr
+    #
+    #@stderr.setter
+    #def stderr(self, value):
+    #    self._stderr = value
+    #    self.stderr_notify()
         
     def _process_monitor(self):
         if EXECUTE:
-            while (self._process.poll() == None) and (not self._event.is_set()):
+            #while (self._process.poll() == None) and (not self._event.is_set()):
+            while self._process.poll() == None:
                 try:
                     stdout = self._process.stdout.readline().rstrip("\n\r")
                     if stdout != b"":
@@ -321,17 +322,19 @@ class ExecuteCommand(object):
                 
                 try:
                     stderr = self._process.stderr.readline().rstrip("\n\r")
-                    if stderr != b"":
-                        if self._process_index != None:
-                            self._stderr_status = 1
-                            self.stderr = stderr + "; PROCESS_INDEX is " + str(self._process_index)
-                        else:
-                            self.stderr = stderr
-                        #log.info("IN the while loop in process MONITOR, STDERR " + self._command)
+                #    if stderr != b"":
+                #        if self._process_index != None:
+                #            self._stderr_status = 1
+                #            self.stderr = stderr + "; PROCESS_INDEX is " + str(self._process_index)
+                #        else:
+                #            self.stderr = stderr
+                #        #log.info("IN the while loop in process MONITOR, STDERR " + self._command)
                 except Exception as error:
                     pass
             #log.info("OUTSIDE the while loop in process MONITOR " + self._command)
-            if self._process.returncode and (not self._stderr_status) and (not self._event.is_set()):
+            #if self._process.returncode and (not self._stderr_status) and (not self._event.is_set()):
+            #if self._process.returncode and (not self._event.is_set()):
+            if self._process.returncode:
                 self.returncode = self._command + \
                                   "; RETURNCODE is: " + str(self._process.returncode)
             #log.error("OUTSIDE the while loop in process MONITOR " + self._command)
@@ -859,25 +862,26 @@ class Pipeline(object):
             if returncode:
                 self.state = "error"
                 log.error(returncode)
+                self._cleanup(self._cleanup_commands_at_config)
                 raise PipelineError(returncode)
         
-    def _handle_execution_stderr(self, stderr, callback):
-        if EXECUTE:
-            self._aberrant_lock.acquire()
-            if self._aberrant_counter == 0:
-                log.error(stderr)            
-                #for execution_instance in self._capture_execution_instances:
-                #execution_instance.terminate()
-                self._cleanup(self._cleanup_commands_at_config)
-            else:
-                pass
-            self._aberrant_counter += 1
-            self._aberrant_lock.release()
-
-            if self._aberrant_counter == 1:
-                log.error("JUST BEFORE RAISE ERROR")
-                self.state = "error"
-                raise PipelineError(stderr)
+    #def _handle_execution_stderr(self, stderr, callback):
+    #    if EXECUTE:
+    #        self._aberrant_lock.acquire()
+    #        if self._aberrant_counter == 0:
+    #            log.error(stderr)            
+    #            #for execution_instance in self._capture_execution_instances:
+    #            #execution_instance.terminate()
+    #            self._cleanup(self._cleanup_commands_at_config)
+    #        else:
+    #            pass
+    #        self._aberrant_counter += 1
+    #        self._aberrant_lock.release()
+    #
+    #        if self._aberrant_counter == 1:
+    #            log.error("JUST BEFORE RAISE ERROR")
+    #            self.state = "error"
+    #            raise PipelineError(stderr)
 
     def _handle_execution_stdout(self, stdout, callback):
         if EXECUTE:
@@ -924,7 +928,7 @@ class Fold(Pipeline):
         self.state = "idle"
 
     def configure(self, config_json, input_config):
-        log.info("Received 'configure' command")
+        log.info("Received 'CONFIGURE' command")
         if (self.state != "idle"):
             self.state = "error"
             log.error("Can only configure pipeline in idle state")
@@ -1192,15 +1196,15 @@ class Fold(Pipeline):
             execution_instance = ExecuteCommand(command, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
-            execution_instance.stderr_callbacks.add(
-                self._handle_execution_stderr)
+            #execution_instance.stderr_callbacks.add(
+            #    self._handle_execution_stderr)
             execution_instance.returncode_callbacks.add(
                 self._handle_execution_returncode)
             self._input_execution_instances.append(execution_instance)
             process_index += 1
             
         if EXECUTE:  # Ready when all capture threads and the capture control thread of all capture instances are ready
-            while True:
+            while self.state != "error":
                 if self._ready_counter == (self._input_nport + 1) * self._input_nbeam:
                     break
         
@@ -1215,7 +1219,7 @@ class Fold(Pipeline):
         log.info("Ready")
         
     def start(self, status_json):
-        log.info("Received 'start' command")
+        log.info("Received 'START' command")
         if self.state != "ready":
             self.state = "error"
             log.error("Pipeline can only be started from ready state")
@@ -1287,8 +1291,8 @@ class Fold(Pipeline):
             execution_instance = ExecuteCommand(command, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
-            execution_instance.stderr_callbacks.add(
-                self._handle_execution_stderr)
+            #execution_instance.stderr_callbacks.add(
+            #    self._handle_execution_stderr)
             execution_instance.returncode_callbacks.add(
                 self._handle_execution_returncode)
             self._fold_execution_instances.append(
@@ -1315,7 +1319,7 @@ class Fold(Pipeline):
                 if self._input_beam_index[process_index] == 0:
                     execution_instance = ExecuteCommand(command, process_index)
                     #execution_instance.stderr_callbacks.add(self._handle_execution_stderr)
-                    #execution_instance.returncode_callbacks.add(self._handle_execution_returncode)
+                    execution_instance.returncode_callbacks.add(self._handle_execution_returncode)
                     #execution_instance.stdout_callbacks.add(self._handle_execution_stdout)
                     self._fold_dspsr_execution_instances.append(execution_instance)
                 process_index += 1 
@@ -1337,7 +1341,7 @@ class Fold(Pipeline):
         # Enable the SOD of baseband ring buffer with given time and then
         # "running"
         if EXECUTE:
-            while True:
+            while self.state != "error":
                 if self._ready_counter == self._input_nbeam:
                     break
             process_index = 0
@@ -1364,7 +1368,7 @@ class Fold(Pipeline):
         log.info("Running")
 
     def stop(self):
-        log.info("Received 'stop' command")
+        log.info("Received 'STOP' command")
         if self.state != "running":
             self.state = "error"
             log.error("Can only stop a running pipeline")
@@ -1416,7 +1420,7 @@ class Fold(Pipeline):
         log.info("Ready")
 
     def deconfigure(self):
-        log.info("Receive 'deconfigure' command")
+        log.info("Receive 'DECONFIGURE' command")
         if self.state not in ["ready", "error"]:
             self.state = "error"
             log.error("Pipeline can only be deconfigured from ready or error state")
@@ -1461,7 +1465,7 @@ class Search(Pipeline):
         self.state = "idle"
 
     def configure(self, config_json, input_config):
-        log.info("Received 'configure' command")
+        log.info("Received 'CONFIGURE' command")
         if (self.state != "idle"):
             self.state = "error"
             log.error("Can only configure pipeline in idle state")
@@ -1630,11 +1634,17 @@ class Search(Pipeline):
 
             # capture command
             command = ("{} -a {} -b {} -c {} -e {} -f {} -g {} -i {} -j {} "
-                       "-k {} -l {} -m {} -n {} -o {} -p {} -q {} ").format(
+                       "-k {} -l {} -m {} -n {} -o {} -p {} -q ").format(
                            self._input_main, self._input_keys[i], self._paf_df_hdrsz, " -c ".join(alive_info),
                            self._freq, refinfo, pipeline_runtime_directory, buf_control_cpu, capture_control, 
                            self._input_cpu_bind, self._rbuf_ndf_per_chunk_per_block, self._tbuf_ndf_per_chunk_per_block,
-                           self._input_dada_hdr_fname, self._input_source_default, self._input_pad, beam_index)
+                           self._input_dada_hdr_fname, self._input_source_default, self._input_pad)
+            #command = ("{} -a {} -b {} -c {} -e {} -f {} -g {} -i {} -j {} "
+            #           "-k {} -l {} -m {} -n {} -o {} -p {} -q {} ").format(
+            #               self._input_main, self._input_keys[i], self._paf_df_hdrsz, " -c ".join(alive_info),
+            #               self._freq, refinfo, pipeline_runtime_directory, buf_control_cpu, capture_control, 
+            #               self._input_cpu_bind, self._rbuf_ndf_per_chunk_per_block, self._tbuf_ndf_per_chunk_per_block,
+            #               self._input_dada_hdr_fname, self._input_source_default, self._input_pad, beam_index)
             self._input_commands.append(command)
 
             # search command
@@ -1773,15 +1783,15 @@ class Search(Pipeline):
             execution_instance = ExecuteCommand(command, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
-            execution_instance.stderr_callbacks.add(
-                self._handle_execution_stderr)
+            #execution_instance.stderr_callbacks.add(
+            #    self._handle_execution_stderr)
             execution_instance.returncode_callbacks.add(
                 self._handle_execution_returncode)
             self._input_execution_instances.append(execution_instance)
             process_index += 1
 
         if EXECUTE:  # Ready when all capture threads and the capture control thread of all capture instances are ready
-            while True:
+            while self.state != "error":
                 if self._ready_counter == (self._input_nport + 1) * self._input_nbeam:
                     break
         
@@ -1796,7 +1806,7 @@ class Search(Pipeline):
         log.info("Ready")
         
     def start(self, status_json):
-        log.info("Received 'start' command")
+        log.info("Received 'START' command")
         if self.state != "ready":
             self.state = "error"
             log.error("Pipeline can only be started from ready state")
@@ -1850,8 +1860,8 @@ class Search(Pipeline):
             execution_instance = ExecuteCommand(command, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
-            execution_instance.stderr_callbacks.add(
-                self._handle_execution_stderr)
+            #execution_instance.stderr_callbacks.add(
+            #    self._handle_execution_stderr)
             execution_instance.returncode_callbacks.add(
                 self._handle_execution_returncode)
             self._search_execution_instances.append(
@@ -1898,7 +1908,7 @@ class Search(Pipeline):
         # Enable the SOD of baseband ring buffer with given time and then
         # "running"
         if EXECUTE:
-            while True:
+            while self.state != "error":
                 if self._ready_counter == self._input_nbeam:
                     break
             process_index = 0
@@ -1925,7 +1935,7 @@ class Search(Pipeline):
         log.info("Running")
         
     def stop(self):
-        log.info("Received 'stop' command")
+        log.info("Received 'STOP' command")
         if self.state != "running":
             self.state = "error"
             log.error("Can only stop a running pipeline")
@@ -1975,7 +1985,7 @@ class Search(Pipeline):
         log.info("Ready")
 
     def deconfigure(self):
-        log.info("Receive 'deconfigure' command")
+        log.info("Receive 'DECONFIGURE' command")
         if self.state not in ["ready", "error"]:
             self.state = "error"
             log.error("Pipeline can only be deconfigured from ready or error state")
@@ -2020,7 +2030,7 @@ class Spectrometer(Pipeline):
         self.state = "idle"
 
     def configure(self, config_json, input_config):
-        log.info("Received 'configure' command")
+        log.info("Received 'CONFIGURE' command")
         if (self.state != "idle"):
             self.state = "error"
             log.error("Can only configure pipeline in idle state")
@@ -2240,15 +2250,15 @@ class Spectrometer(Pipeline):
             execution_instance = ExecuteCommand(command, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
-            execution_instance.stderr_callbacks.add(
-                self._handle_execution_stderr)
+            #execution_instance.stderr_callbacks.add(
+            #    self._handle_execution_stderr)
             execution_instance.returncode_callbacks.add(
                 self._handle_execution_returncode)
             self._input_execution_instances.append(execution_instance)
             process_index += 1
             
         if EXECUTE:  # Ready when all capture threads and the capture control thread of all capture instances are ready
-            while True:
+            while self.state != "error":
                 if self._ready_counter == (self._input_nport + 1) * self._input_nbeam:
                     break
 
@@ -2262,7 +2272,7 @@ class Spectrometer(Pipeline):
         log.info("Ready")
         
     def start(self, status_json):
-        log.info("Received 'start' command")
+        log.info("Received 'START' command")
         if self.state != "ready":
             self.state = "error"
             log.error("Pipeline can only be started from ready state")
@@ -2304,8 +2314,8 @@ class Spectrometer(Pipeline):
             execution_instance = ExecuteCommand(command, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
-            execution_instance.stderr_callbacks.add(
-                self._handle_execution_stderr)
+            #execution_instance.stderr_callbacks.add(
+            #    self._handle_execution_stderr)
             execution_instance.returncode_callbacks.add(
                 self._handle_execution_returncode)
             self._spectrometer_execution_instances.append(
@@ -2330,7 +2340,7 @@ class Spectrometer(Pipeline):
         # Enable the SOD of baseband ring buffer with given time and then
         # "running"
         if EXECUTE:
-            while True:
+            while self.state != "error":
                 if self._ready_counter == self._input_nbeam:
                     break
             process_index = 0
@@ -2357,7 +2367,7 @@ class Spectrometer(Pipeline):
         log.info("Running")
         
     def stop(self):
-        log.info("Received 'stop' command")
+        log.info("Received 'STOP' command")
         if self.state != "running":
             self.state = "error"
             log.error("Can only stop a running pipeline")
@@ -2392,7 +2402,7 @@ class Spectrometer(Pipeline):
         log.info("Ready")
 
     def deconfigure(self):
-        log.info("Receive 'deconfigure' command")
+        log.info("Receive 'DECONFIGURE' command")
         if self.state not in ["ready", "error"]:
             self.state = "error"
             log.error("Pipeline can only be deconfigured from ready or error state")
