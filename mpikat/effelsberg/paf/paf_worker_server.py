@@ -255,7 +255,7 @@ class PafWorkerServer(AsyncDeviceServer):
 
     @request(Str())
     @return_reply(Str())
-    def request_start(self, req, config_json):
+    def request_start(self, req, status_json):
         """
         @brief      Start pipeline
 
