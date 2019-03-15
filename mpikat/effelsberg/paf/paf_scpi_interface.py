@@ -138,6 +138,26 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
         self._ioloop.add_callback(self._make_coroutine_wrapper(req,
             self._mc.capture_stop))
 
+    @scpi_request(int)
+    @raise_or_ok
+    def request_pafbe_cmdzoomband0(self, req, number):
+        """
+        @brief      Set the top of the zoomband 
 
+        @param      req        An ScpiRequest object
+        @param      number     The first band in the zoomband
+        """
+        self._config['cmdzoomband0'] = number
 
+    @scpi_request(int)
+    @raise_or_ok
+    def request_pafbe_cmdzoomnbands(self, req, number):
+        """
+        @brief      Set the number of band in the zoomband
+
+        @param      req        An ScpiRequest object
+        @param      number     The number of band in the zoomband
+
+        """
+        self._config['cmdzoomnbands'] = number
 
