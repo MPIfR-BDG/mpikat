@@ -114,7 +114,7 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "search_npol":         1,
                    "search_ndim":         1,
                    "search_heimdall":     0,
-                   "search_dbdisk":       0,
+                   "search_dbdisk":       1,
                    "search_monitor":      1,
                    "search_spectrometer": 1,
                    "search_detect_thresh":10,
@@ -131,7 +131,7 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "spectrometer_ptype":          1,
                    "spectrometer_ip":    	  '134.104.70.90',
                    "spectrometer_port":    	  17108,
-                   "spectrometer_dbdisk":         1,
+                   "spectrometer_dbdisk":         0,
                    "spectrometer_monitor":        1,
                    "spectrometer_accumulate_nblk": 1,
                    "spectrometer_software_name":  "baseband2spectral_main",
@@ -210,17 +210,12 @@ class ExecuteCommand(object):
         self._command = command
         self._process_index = process_index
         self.stdout_callbacks = set()
-        #self.stderr_callbacks = set()
         self.returncode_callbacks = set()
         self._monitor_threads = []
         self._process = None
         self._executable_command = None
         self._stdout = None
-        #self._stderr = None
         self._returncode = None
-        self._event = threading.Event()
-        self._event.clear()
-        #self._stderr_status = 0
         
         log.debug(self._command)
         self._executable_command = shlex.split(self._command)
@@ -254,13 +249,6 @@ class ExecuteCommand(object):
     def __del__(self):
         class_name = self.__class__.__name__
 
-    def terminate(self):
-        if EXECUTE:
-            self._event.set()
-            for thread in self._monitor_threads:
-                thread.join()
-            self._process.kill()
-            
     def finish(self):
         if EXECUTE:
             for thread in self._monitor_threads:
@@ -292,52 +280,37 @@ class ExecuteCommand(object):
         self._returncode = value
         self.returncode_notify()
 
-    #def stderr_notify(self):
-    #    for callback in self.stderr_callbacks:
-    #        callback(self._stderr, self)
-
-    #@property
-    #def stderr(self):
-    #    return self._stderr
-    #
-    #@stderr.setter
-    #def stderr(self, value):
-    #    self._stderr = value
-    #    self.stderr_notify()
-        
     def _process_monitor(self):
         if EXECUTE:
-            #while (self._process.poll() == None) and (not self._event.is_set()):
             while self._process.poll() == None:
                 try:
                     stdout = self._process.stdout.readline().rstrip("\n\r")
                     if stdout != b"":
                         if self._process_index != None:
-                            self.stdout = stdout + "; PROCESS_INDEX is " + str(self._process_index)
+                            self.stdout = stdout + \
+                                          "; PROCESS_INDEX is " + \
+                                          str(self._process_index)
                         else:
                             self.stdout = stdout
-                        #log.info("IN the while loop in process MONITOR, STDOUT " + self._command) 
                 except:
                     pass
                 
                 try:
                     stderr = self._process.stderr.readline().rstrip("\n\r")
-                #    if stderr != b"":
-                #        if self._process_index != None:
-                #            self._stderr_status = 1
-                #            self.stderr = stderr + "; PROCESS_INDEX is " + str(self._process_index)
-                #        else:
-                #            self.stderr = stderr
-                #        #log.info("IN the while loop in process MONITOR, STDERR " + self._command)
-                except Exception as error:
+                    if stderr != b"":
+                        log.error(stderr)
+                except:
                     pass
-            #log.info("OUTSIDE the while loop in process MONITOR " + self._command)
-            #if self._process.returncode and (not self._stderr_status) and (not self._event.is_set()):
-            #if self._process.returncode and (not self._event.is_set()):
+
             if self._process.returncode:
                 self.returncode = self._command + \
-                                  "; RETURNCODE is: " + str(self._process.returncode)
-            #log.error("OUTSIDE the while loop in process MONITOR " + self._command)
+                                  "; RETURNCODE is: " +\
+                                  str(self._process.returncode)
+                log.error("Finish execution {} with {}".format(self._command, self.returncode))
+                
+            if not self._process.returncode:
+                log.error("Successfully finish execution {}".format(self._command))
+            
             
 class Pipeline(object):
 
@@ -595,12 +568,13 @@ class Pipeline(object):
     def _coord_convertion_thread(self):
         # This takes couple fo seconds, put it here while we are wait for the "ready_counter"
         for i in range(self._input_nbeam):
+            #log.error(Time.now())
             # Beam coordinate
             beam_ra, beam_dec = self._coord_convertion(self._utc_start_process, self._source_ra, self._source_dec,
                                                        self._beam_alt_d, self._beam_az_d, self._input_beam_index[i])
             self._beam_ra.append(beam_ra)
             self._beam_dec.append(beam_dec)
-
+            #log.error(Time.now())
 
     def _rotation_matrix(self, angle, d):
         directions = {
@@ -621,33 +595,52 @@ class Pipeline(object):
         return R
 
     def _coord_convertion(self, time, ra, dec, beam_alt_d, beam_az_d, beam_id):
+        #log.error(Time.now())
         site = EarthLocation(lat=self._tel_lat*units.deg,
                              lon=self._tel_lon*units.deg,
                              height=self._tel_alt*units.m)
-        sc = SkyCoord(float(ra), float(dec), unit='deg',frame='icrs',equinox="J2000")
-        beamzero_altaz = sc.transform_to(AltAz(obstime = time, location=site))
+        #log.error(Time.now())
+        #sc = SkyCoord(float(ra), float(dec), unit='deg', frame='icrs',equinox="J2000")
+        sc = SkyCoord(np.array(float(ra)), np.array(float(dec)), unit='deg',frame='icrs',equinox="J2000")
+        #log.error(Time.now())
+        aa_frame = AltAz(obstime = time, location=site)
+        #log.error(Time.now())
+        beamzero_altaz = sc.transform_to(aa_frame)
+        #log.error(Time.now())
+        
         daz,delv = sym.symbols('Azd Elvd')
+        #log.error(Time.now())
         azel_vec = self._position_vector(daz,delv)
+        #log.error(Time.now())
         az, elv = sym.symbols('Az Elv')
+        #log.error(Time.now())
         R = self._rotation_matrix(az,"z")*self._rotation_matrix(elv,"y")
+        #log.error(Time.now())
         dp = R*azel_vec
+        #log.error(Time.now())
         
         final_azelv = dp.subs({az:beamzero_altaz.az.radian,
                                elv:beamzero_altaz.alt.radian,
                                daz:(beam_az_d[beam_id]/180.0)*np.pi,
                                delv:(beam_alt_d[beam_id]/180.0)*np.pi})
+        #log.error(Time.now())
         a, b, c = np.array(final_azelv).astype("float64")
+        #log.error(Time.now())
         final_elv = np.arcsin(c)
-        final_az =(np.arctan2(b,a))                         
+        #log.error(Time.now())
+        final_az =(np.arctan2(b,a))
+        #log.error(Time.now())
         beam_pos = SkyCoord(final_az,
                             np.abs(final_elv),
                             unit='radian',
                             frame='altaz',
                             location=site,
                             obstime=time)
+        #log.error(Time.now())
         beam_ra, beam_dec = beam_pos.icrs.ra.to_string(unit=units.hourangle, sep=":"), \
                             beam_pos.icrs.dec.to_string(unit=units.degree, sep=":")
-
+        #log.error(Time.now())
+        
         return beam_ra[0], beam_dec[0]
 
     def _position_vector(self,a,b):
@@ -862,27 +855,9 @@ class Pipeline(object):
             if returncode:
                 self.state = "error"
                 log.error(returncode)
-                self._cleanup(self._cleanup_commands_at_config)
+                #self._cleanup(self._cleanup_commands_at_config)
                 raise PipelineError(returncode)
         
-    #def _handle_execution_stderr(self, stderr, callback):
-    #    if EXECUTE:
-    #        self._aberrant_lock.acquire()
-    #        if self._aberrant_counter == 0:
-    #            log.error(stderr)            
-    #            #for execution_instance in self._capture_execution_instances:
-    #            #execution_instance.terminate()
-    #            self._cleanup(self._cleanup_commands_at_config)
-    #        else:
-    #            pass
-    #        self._aberrant_counter += 1
-    #        self._aberrant_lock.release()
-    #
-    #        if self._aberrant_counter == 1:
-    #            log.error("JUST BEFORE RAISE ERROR")
-    #            self.state = "error"
-    #            raise PipelineError(stderr)
-
     def _handle_execution_stdout(self, stdout, callback):
         if EXECUTE:
             log.error(stdout)
@@ -891,7 +866,6 @@ class Pipeline(object):
         if EXECUTE:
             log.debug(stdout)
             if stdout.find("READY") != -1:
-                #log.error(self._ready_counter)
                 self._ready_lock.acquire()
                 self._ready_counter += 1
                 self._ready_lock.release()
@@ -1553,6 +1527,7 @@ class Search(Pipeline):
         self._spectrometer_create_rbuf_commands = []
         self._spectrometer_delete_rbuf_commands = []
         self._spectrometer_dbdisk_commands = []
+        self._search_dbdisk_commands = []
         for i in range(self._input_nbeam):
             if EXECUTE:
                 # To setup address
@@ -1633,18 +1608,18 @@ class Search(Pipeline):
             refinfo = "{}_{}_{}".format(refinfo[0], refinfo[1], refinfo[2])
 
             # capture command
-            command = ("{} -a {} -b {} -c {} -e {} -f {} -g {} -i {} -j {} "
-                       "-k {} -l {} -m {} -n {} -o {} -p {} -q ").format(
-                           self._input_main, self._input_keys[i], self._paf_df_hdrsz, " -c ".join(alive_info),
-                           self._freq, refinfo, pipeline_runtime_directory, buf_control_cpu, capture_control, 
-                           self._input_cpu_bind, self._rbuf_ndf_per_chunk_per_block, self._tbuf_ndf_per_chunk_per_block,
-                           self._input_dada_hdr_fname, self._input_source_default, self._input_pad)
             #command = ("{} -a {} -b {} -c {} -e {} -f {} -g {} -i {} -j {} "
-            #           "-k {} -l {} -m {} -n {} -o {} -p {} -q {} ").format(
+            #           "-k {} -l {} -m {} -n {} -o {} -p {} -q ").format(
             #               self._input_main, self._input_keys[i], self._paf_df_hdrsz, " -c ".join(alive_info),
             #               self._freq, refinfo, pipeline_runtime_directory, buf_control_cpu, capture_control, 
             #               self._input_cpu_bind, self._rbuf_ndf_per_chunk_per_block, self._tbuf_ndf_per_chunk_per_block,
-            #               self._input_dada_hdr_fname, self._input_source_default, self._input_pad, beam_index)
+            #               self._input_dada_hdr_fname, self._input_source_default, self._input_pad)
+            command = ("{} -a {} -b {} -c {} -e {} -f {} -g {} -i {} -j {} "
+                       "-k {} -l {} -m {} -n {} -o {} -p {} -q {} ").format(
+                           self._input_main, self._input_keys[i], self._paf_df_hdrsz, " -c ".join(alive_info),
+                           self._freq, refinfo, pipeline_runtime_directory, buf_control_cpu, capture_control, 
+                           self._input_cpu_bind, self._rbuf_ndf_per_chunk_per_block, self._tbuf_ndf_per_chunk_per_block,
+                           self._input_dada_hdr_fname, self._input_source_default, self._input_pad, beam_index)
             self._input_commands.append(command)
 
             # search command
@@ -1806,6 +1781,7 @@ class Search(Pipeline):
         log.info("Ready")
         
     def start(self, status_json):
+        #log.error(Time.now())
         log.info("Received 'START' command")
         if self.state != "ready":
             self.state = "error"
@@ -1830,8 +1806,10 @@ class Search(Pipeline):
         self._search_coord_convertion = threading.Thread(target=self._coord_convertion_thread)
         self._search_coord_convertion.start()
         
+        #log.error(Time.now())
+
         # Create ring buffer for filterbank data
-        print Time.now()
+        #log.error(Time.now())
         process_index = 0
         execution_instances = []
         for command in self._search_create_rbuf_commands:
@@ -1839,7 +1817,7 @@ class Search(Pipeline):
             process_index += 1
         for execution_instance in execution_instances:         # Wait until the buffer creation is done
             execution_instance.finish()
-        print Time.now()
+        #log.error(Time.now())
         
         # Create ring buffer for simultaneous spectrometer output
         if self._search_spectrometer and self._spectrometer_dbdisk:
@@ -1850,6 +1828,9 @@ class Search(Pipeline):
                 process_index += 1
             for execution_instance in execution_instances:
                 execution_instance.finish()
+
+        # Has to get position here
+        self._search_coord_convertion.join()
 
         # Run baseband2filterbank
         process_index = 0
@@ -1901,9 +1882,11 @@ class Search(Pipeline):
                 self._search_dbdisk_execution_instances.append(
                     execution_instance)
                 process_index += 1
-
+        #log.error(Time.now())
+        
         # Have to get right coord here
-        self._search_coord_convertion.join()
+        #self._search_coord_convertion.join()
+        ##log.error(Time.now())
         
         # Enable the SOD of baseband ring buffer with given time and then
         # "running"
@@ -1925,7 +1908,8 @@ class Search(Pipeline):
                                           start_buf),
                                       self._input_socket_address[process_index])
                 process_index += 1
-
+        #log.error(Time.now())
+        
         # Remove ready_counter_callback 
         for execution_instance in self._search_execution_instances:
             execution_instance.stdout_callbacks.remove(self._ready_counter_callback)
@@ -1953,15 +1937,20 @@ class Search(Pipeline):
         if self._search_dbdisk:
             for execution_instance in self._search_dbdisk_execution_instances:
                 execution_instance.finish()
+            log.error("Finish the search_dbdisk execution")
+            
         if self._search_heimdall:
             for execution_instance in self._search_heimdall_execution_instances:
                 execution_instance.finish()
+                log.error("Finish the heimdall execution")
         if self._search_spectrometer and self._spectrometer_dbdisk:
             for execution_instance in self._spectrometer_dbdisk_execution_instances:
                 execution_instance.finish()
+            log.error("Finish the search_spectrometer execution")
         for execution_instance in self._search_execution_instances:
             execution_instance.finish()
-
+        log.error("Finish the search execution")
+        
         # To delete simultaneous spectral output buffer
         if self._search_spectrometer and self._spectrometer_dbdisk:
             process_index = 0
@@ -1971,7 +1960,8 @@ class Search(Pipeline):
                 process_index += 1
             for execution_instance in execution_instances:
                 execution_instance.finish()
-
+            log.error("Deleted the search_spectrometer buffer")
+            
         # To delete filterbank ring buffer
         process_index = 0
         execution_instances = []
@@ -1980,7 +1970,8 @@ class Search(Pipeline):
             process_index += 1
         for execution_instance in execution_instances:
             execution_instance.finish()
-
+        log.error("Delete the search buffer")
+        
         self.state = "ready"
         log.info("Ready")
 
@@ -2385,9 +2376,12 @@ class Spectrometer(Pipeline):
         if self._spectrometer_dbdisk:
             for execution_instance in self._spectrometer_dbdisk_execution_instances:
                 execution_instance.finish()
+        log.error("Finish the spectrometer_dbdisk execution")
+        
         for execution_instance in self._spectrometer_execution_instances:
             execution_instance.finish()
-
+        log.error("Finish the spectrometer execution")
+        
         # To delete spectrometer ring buffer
         if self._spectrometer_dbdisk:
             process_index = 0
@@ -2397,6 +2391,8 @@ class Spectrometer(Pipeline):
                 process_index += 1
             for execution_instance in execution_instances:
                 execution_instance.finish()
+
+        log.error("Finish the spectrometer_delete_rbuf execution")
 
         self.state = "ready"
         log.info("Ready")
