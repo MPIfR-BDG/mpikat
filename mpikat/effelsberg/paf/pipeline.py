@@ -28,7 +28,6 @@ from sympy.physics.vector import vlatex
 from sympy.printing import latex
 from astropy.coordinates import ICRS, Galactic, FK4, FK5
 
-
 EXECUTE = True
 
 # Updates:
@@ -216,6 +215,8 @@ class ExecuteCommand(object):
         self._executable_command = None
         self._stdout = None
         self._returncode = None
+        self._terminate_event = threading.Event()
+        self._terminate_event.clear()
         
         log.debug(self._command)
         self._executable_command = shlex.split(self._command)
@@ -254,6 +255,12 @@ class ExecuteCommand(object):
             for thread in self._monitor_threads:
                 thread.join()
 
+    def terminate(self):
+        if EXECUTE:
+            if self._process.poll() == None:
+                self._terminate_event.set()
+                self._process.terminate()
+
     def stdout_notify(self):
         for callback in self.stdout_callbacks:
             callback(self._stdout, self)
@@ -282,7 +289,7 @@ class ExecuteCommand(object):
 
     def _process_monitor(self):
         if EXECUTE:
-            while self._process.poll() == None:
+            while self._process.poll() == None and (not self._terminate_event.is_set()):
                 try:
                     stdout = self._process.stdout.readline().rstrip("\n\r")
                     if stdout != b"":
@@ -302,13 +309,13 @@ class ExecuteCommand(object):
                 except:
                     pass
 
-            if self._process.returncode:
+            if self._process.returncode and (not self._terminate_event.is_set()):
                 self.returncode = self._command + \
                                   "; RETURNCODE is: " +\
                                   str(self._process.returncode)
                 log.error("Finish execution {} with {}".format(self._command, self.returncode))
                 
-            if not self._process.returncode:
+            if not self._process.returncode and (not self._terminate_event.is_set()):
                 log.error("Successfully finish execution {}".format(self._command))
             
             
@@ -322,7 +329,7 @@ class Pipeline(object):
         self._ready_lock    = threading.Lock()
         self._aberrant_lock = threading.Lock()
         self.setup_sensors()
-
+        
         self._paf_period                     	 = SYSTEM_CONFIG["paf_period"]
         self._paf_df_res                     	 = SYSTEM_CONFIG["paf_df_res"]
         self._paf_df_dtsz                    	 = SYSTEM_CONFIG["paf_df_dtsz"]
@@ -361,10 +368,6 @@ class Pipeline(object):
         self._input_cpu_bind      = PIPELINE_CONFIG["input_cpu_bind"]
         self._input_pad           = PIPELINE_CONFIG["input_pad"]
         
-        self._input_beam_index = []
-        self._input_socket_address = []
-        self._input_control_socket = []
-
         self._monitor_keys  = PIPELINE_CONFIG["monitor_keys"]
         self._monitor_ip    = PIPELINE_CONFIG["monitor_ip"]
         self._monitor_port  = PIPELINE_CONFIG["monitor_port"]
@@ -446,8 +449,9 @@ class Pipeline(object):
 
         # To see if the dada header template file is there
         if not os.path.isfile(self._input_dada_hdr_fname):
-            self.state = "error"
+            self._terminate_execution_instances()
             log.error("{} is not there".format(self._input_dada_hdr_fname))
+            self.state = "error"
             raise PipelineError("{} is not there".format(self._input_dada_hdr_fname))
         
         self._cleanup_commands_at_config = ["pkill -9 -f capture",
@@ -565,6 +569,22 @@ class Pipeline(object):
     def sensors(self):
         return self._sensors
 
+    def _terminate_execution_instances(self):
+        for execution_instance in self._execution_instances_start:
+            execution_instance.terminate()
+        for execution_instance in self._execution_instances_config:
+            execution_instance.terminate()
+
+    def _refresh_iers(self):
+        '''
+        The IERS data are managed via a instances of the IERS_Auto class. 
+        These instances are created internally within the relevant time and coordinate objects during transformations.
+        If the astropy data cache does not have the required IERS data file then astropy will request the file from the IERS service.
+        This will occur the first time such a transform is done for a new setup or on a new machine. 
+        '''
+        t = Time('2016:001')
+        t.ut1
+        
     def _coord_convertion_thread(self):
         # This takes couple fo seconds, put it here while we are wait for the "ready_counter"
         for i in range(self._input_nbeam):
@@ -679,8 +699,9 @@ class Pipeline(object):
                 beam_index.append(hdr_uint64 & np.uint64(0x000000000000ffff))
 
             if (len(list(set(beam_index))) > 1):
-                self.state = "error"
                 log.error("Beams are mixed up, please check the routing table")
+                self._terminate_execution_instances()
+                self.state = "error"
                 raise PipelineError(
                     "Beams are mixed up, please check the routing table")
             sock.close()
@@ -688,14 +709,16 @@ class Pipeline(object):
         except Exception as error:
             log.exception(error)
             sock.close()
-            self.state = "error"
             log.error("{} fail".format(inspect.stack()[0][3]))
+            self._terminate_execution_instances()
+            self.state = "error"
             raise PipelineError("{} fail".format(inspect.stack()[0][3]))
 
     def _synced_startbuf(self, utc_start_process, utc_start_capture):
         if(utc_start_process < utc_start_capture):
-            self.state = "error"
+            self._terminate_execution_instances()
             log.error("utc_start_process should be later than utc_start_capture")
+            self.state = "error"
             raise PipelineError("utc_start_process should be later than utc_start_capture")
             
         delta_time = utc_start_process.unix - utc_start_capture.unix
@@ -705,8 +728,9 @@ class Pipeline(object):
         log.debug("SLEEP TIME to wait for START BUF block is {} seconds".format(sleep_time))
         
         if(sleep_time<0):
-            self.state = "error"
+            self._terminate_execution_instances()
             log.error("Too late to start process")
+            self.state = "error"
             raise PipelineError("Too late to start process")
             
         time.sleep(sleep_time)  # Sleep until we are ready to go
@@ -767,8 +791,9 @@ class Pipeline(object):
         except Exception as error:
             log.exception(error)
             sock.close()
-            self.state = "error"
             log.error("{} fail".format(inspect.stack()[0][3]))
+            self._terminate_execution_instances()
+            self.state = "error"
             raise PipelineError("{} fail".format(inspect.stack()[0][3]))
 
     def _check_beam_connection(self, destination, ndf_check_chk):
@@ -794,8 +819,9 @@ class Pipeline(object):
                 destination_dead.append(destination[i])
 
         if (len(destination_alive) == 0):  # No alive ports, error
-            self.state = "error"
             log.error("The stream is not alive")
+            self._terminate_execution_instances()
+            self.state = "error"
             raise PipelineError("The stream is not alive")
 
         return destination_alive, destination_dead
@@ -834,8 +860,9 @@ class Pipeline(object):
             sock.close()
         except Exception as error:
             log.exception(error)
-            self.state = "error"
+            self._terminate_execution_instances()
             log.error("{} fail".format(inspect.stack()[0][3]))
+            self.state = "error"
             raise PipelineError("{} fail".format(inspect.stack()[0][3]))
         return alive, nchk_alive
 
@@ -846,8 +873,9 @@ class Pipeline(object):
                 log.error(command)
             except Exception as error:
                 log.exception(error)
-                self.state = "error"
                 log.error("{} fail".format(inspect.stack()[0][3]))
+                self._terminate_execution_instances()
+                self.state = "error"
                 raise PipelineError("{} fail".format(inspect.stack()[0][3]))
 
     def _handle_execution_returncode(self, returncode, callback):
@@ -855,7 +883,8 @@ class Pipeline(object):
             if returncode:
                 self.state = "error"
                 log.error(returncode)
-                #self._cleanup(self._cleanup_commands_at_config)
+                self._terminate_execution_instances()
+                self._cleanup(self._cleanup_commands_at_config)
                 raise PipelineError(returncode)
         
     def _handle_execution_stdout(self, stdout, callback):
@@ -904,10 +933,13 @@ class Fold(Pipeline):
     def configure(self, config_json, input_config):
         log.info("Received 'CONFIGURE' command")
         if (self.state != "idle"):
-            self.state = "error"
             log.error("Can only configure pipeline in idle state")
+            self.state = "error"
             raise PipelineError("Can only configure pipeline in idle state")
         log.info("Configuring")
+
+        # Refresh IERS database to save the time on "start" for coordinate conversion
+        self._refresh_iers()
         
         # Setup parameters of the pipeline
         self.state         = "configuring"
@@ -970,11 +1002,15 @@ class Fold(Pipeline):
 
         # To check existing of files
         if not os.path.isfile(self._fold_main):
-            self.state = "error"
+            self._terminate_execution_instances()
             log.error("{} is not exist".format(self._fold_main))
+            self.state = "error"
             raise PipelineError("{} is not exist".format(self._fold_main))
         
         # To setup commands for each process
+        self._input_beam_index = []
+        self._input_socket_address = []
+        self._input_control_socket = []
         self._spectrometer_delete_rbuf_commands = []
         self._pipeline_runtime_directory = []
         self._input_commands = []
@@ -987,7 +1023,6 @@ class Fold(Pipeline):
         self._fold_dbdisk_commands = []
         self._spectrometer_dbdisk_commands = []
         self._spectrometer_delete_rbuf_commands = []
-        self._fold_dspsr_commands = []
         for i in range(self._input_nbeam):
             if EXECUTE:
                 # To setup address
@@ -1018,8 +1053,9 @@ class Fold(Pipeline):
                         os.makedirs(pipeline_runtime_directory)
                     except Exception as error:
                         log.exception(error)
-                        self.state = "error"
+                        self._terminate_execution_instances()
                         log.error("Fail to create {}".format(pipeline_runtime_directory))
+                        self.state = "error"
                         raise PipelineError(
                             "Fail to create {}".format(pipeline_runtime_directory))
 
@@ -1030,8 +1066,9 @@ class Fold(Pipeline):
                         os.remove(socket_address)
                     except Exception as error:
                         log.exception(error)
-                        self.state = "error"                        
                         log.error("Fail to remove {} before create a new one".format(socket_address))
+                        self._terminate_execution_instances()
+                        self.state = "error"                        
                         raise PipelineError(
                             "Fail to remove {} before create a new one".format(socket_address))
                 control_socket = socket.socket(
@@ -1195,15 +1232,17 @@ class Fold(Pipeline):
     def start(self, status_json):
         log.info("Received 'START' command")
         if self.state != "ready":
-            self.state = "error"
             log.error("Pipeline can only be started from ready state")
+            self._terminate_execution_instances()
+            self.state = "error"
             raise PipelineError(
                 "Pipeline can only be started from ready state")
         
         self.state = "starting"
         log.info("Starting")
-
+        
         self._cleanup(self._cleanup_commands_at_start)
+        
         self._status_info = json.loads(status_json)
         self._scan_num = self._status_info["scannum"]
         self._sub_scan_num = self._status_info["subscannum"]
@@ -1216,7 +1255,8 @@ class Fold(Pipeline):
         self._beam_dec = []
         self._fold_coord_convertion = threading.Thread(target=self._coord_convertion_thread)
         self._fold_coord_convertion.start()
-        
+
+        self._fold_dspsr_commands = []
         for i in range(self._input_nbeam):                
             # Command to run dspsr, has to setup in start because we need pulsar name
             if self._fold_dspsr:
@@ -1344,8 +1384,9 @@ class Fold(Pipeline):
     def stop(self):
         log.info("Received 'STOP' command")
         if self.state != "running":
-            self.state = "error"
             log.error("Can only stop a running pipeline")
+            self._terminate_execution_instances()
+            self.state = "error"
             raise PipelineError("Can only stop a running pipeline")
         self.state = "stopping"
         log.info("Stopping")
@@ -1396,8 +1437,9 @@ class Fold(Pipeline):
     def deconfigure(self):
         log.info("Receive 'DECONFIGURE' command")
         if self.state not in ["ready", "error"]:
-            self.state = "error"
             log.error("Pipeline can only be deconfigured from ready or error state")
+            self._terminate_execution_instances()
+            self.state = "error"
             raise PipelineError(
                 "Pipeline can only be deconfigured from ready or error state")
         log.info("Deconfiguring")
@@ -1441,11 +1483,15 @@ class Search(Pipeline):
     def configure(self, config_json, input_config):
         log.info("Received 'CONFIGURE' command")
         if (self.state != "idle"):
-            self.state = "error"
             log.error("Can only configure pipeline in idle state")
+            self._terminate_execution_instances()
+            self.state = "error"
             raise PipelineError("Can only configure pipeline in idle state")
         log.info("Configuring")
-        
+
+        # Refresh IERS database to save the time on "start" for coordinate conversion
+        self._refresh_iers()
+
         # Setup parameters of the pipeline
         self.state         = "configuring"
         self._input_config = input_config
@@ -1512,11 +1558,16 @@ class Search(Pipeline):
 
         # To check existing of files
         if not os.path.isfile(self._search_main):
-            self.state = "error"
             log.error("{} is not exist".format(self._search_main))
+            self._terminate_execution_instances()
+            self.state = "error"
             raise PipelineError("{} is not exist".format(self._search_main))
         
         # To setup commands for each process
+        self._execution_instances_config = []
+        self._input_beam_index = []
+        self._input_socket_address = []
+        self._input_control_socket = []
         self._pipeline_runtime_directory = []
         self._input_commands = []
         self._input_create_rbuf_commands = []
@@ -1558,8 +1609,9 @@ class Search(Pipeline):
                         os.makedirs(pipeline_runtime_directory)
                     except Exception as error:
                         log.exception(error)
-                        self.state = "error"
                         log.error("Fail to create {}".format(pipeline_runtime_directory))
+                        self._terminate_execution_instances()
+                        self.state = "error"
                         raise PipelineError(
                             "Fail to create {}".format(pipeline_runtime_directory))
 
@@ -1570,8 +1622,9 @@ class Search(Pipeline):
                         os.remove(socket_address)
                     except Exception as error:
                         log.exception(error)
-                        self.state = "error"                        
+                        self._terminate_execution_instances()
                         log.error("Fail to remove {} before create a new one".format(socket_address))
+                        self.state = "error"                 
                         raise PipelineError(
                             "Fail to remove {} before create a new one".format(socket_address))
                 control_socket = socket.socket(
@@ -1745,7 +1798,9 @@ class Search(Pipeline):
         process_index = 0
         execution_instances = []
         for command in self._input_create_rbuf_commands:
-            execution_instances.append(ExecuteCommand(command, process_index))
+            execution_instance = ExecuteCommand(command, process_index)
+            execution_instances.append(execution_instance)
+            #self._execution_instances_config.append(execution_instance)
             process_index += 1
         for execution_instance in execution_instances:
             execution_instance.finish()
@@ -1763,6 +1818,7 @@ class Search(Pipeline):
             execution_instance.returncode_callbacks.add(
                 self._handle_execution_returncode)
             self._input_execution_instances.append(execution_instance)
+            self._execution_instances_config.append(execution_instance)
             process_index += 1
 
         if EXECUTE:  # Ready when all capture threads and the capture control thread of all capture instances are ready
@@ -1784,14 +1840,17 @@ class Search(Pipeline):
         #log.error(Time.now())
         log.info("Received 'START' command")
         if self.state != "ready":
-            self.state = "error"
             log.error("Pipeline can only be started from ready state")
+            self._terminate_execution_instances()
+            self.state = "error"
             raise PipelineError(
                 "Pipeline can only be started from ready state")
         
         self.state = "starting"
         log.info("Starting")
 
+        self._execution_instances_start = []
+        
         self._cleanup(self._cleanup_commands_at_start)
         self._status_info = json.loads(status_json)
         self._scan_num = self._status_info["scannum"]
@@ -1813,7 +1872,9 @@ class Search(Pipeline):
         process_index = 0
         execution_instances = []
         for command in self._search_create_rbuf_commands:
-            execution_instances.append(ExecuteCommand(command, process_index))
+            execution_instance = ExecuteCommand(command, process_index)
+            execution_instances.append(execution_instance)
+            #self._execution_instances_start.append(execution_instance)
             process_index += 1
         for execution_instance in execution_instances:         # Wait until the buffer creation is done
             execution_instance.finish()
@@ -1824,7 +1885,9 @@ class Search(Pipeline):
             process_index = 0
             execution_instances = []
             for command in self._spectrometer_create_rbuf_commands:
-                execution_instances.append(ExecuteCommand(command, process_index))
+                execution_instance = ExecuteCommand(command, process_index)
+                execution_instances.append(execution_instance)
+                #self._execution_instances_start.append(execution_instance)
                 process_index += 1
             for execution_instance in execution_instances:
                 execution_instance.finish()
@@ -1847,6 +1910,7 @@ class Search(Pipeline):
                 self._handle_execution_returncode)
             self._search_execution_instances.append(
                 execution_instance)
+            self._execution_instances_start.append(execution_instance)
             process_index += 1
 
         # run dbdisk for spectrometer as required
@@ -1859,6 +1923,7 @@ class Search(Pipeline):
                 execution_instance.returncode_callbacks.add(
                     self._handle_execution_returncode)
                 self._spectrometer_dbdisk_execution_instances.append(execution_instance)
+                self._execution_instances_start.append(execution_instance)
                 process_index += 1
                 
         if self._search_heimdall:  # run heimdall if required
@@ -1870,6 +1935,7 @@ class Search(Pipeline):
                     self._handle_execution_returncode)
                 self._search_heimdall_execution_instances.append(
                     execution_instance)
+                self._execution_instances_start.append(execution_instance)
                 process_index += 1
                 
         if self._search_dbdisk:   # Run dbdisk if required
@@ -1881,6 +1947,7 @@ class Search(Pipeline):
                     self._handle_execution_returncode)
                 self._search_dbdisk_execution_instances.append(
                     execution_instance)
+                self._execution_instances_start.append(execution_instance)
                 process_index += 1
         #log.error(Time.now())
         
@@ -1921,8 +1988,9 @@ class Search(Pipeline):
     def stop(self):
         log.info("Received 'STOP' command")
         if self.state != "running":
-            self.state = "error"
+            self._terminate_execution_instances()
             log.error("Can only stop a running pipeline")
+            self.state = "error"
             raise PipelineError("Can only stop a running pipeline")
         self.state = "stopping"
         log.info("Stopping")
@@ -1978,8 +2046,9 @@ class Search(Pipeline):
     def deconfigure(self):
         log.info("Receive 'DECONFIGURE' command")
         if self.state not in ["ready", "error"]:
-            self.state = "error"
             log.error("Pipeline can only be deconfigured from ready or error state")
+            self._terminate_execution_instances()
+            self.state = "error"
             raise PipelineError(
                 "Pipeline can only be deconfigured from ready or error state")
         log.info("Deconfiguring")
@@ -2023,13 +2092,19 @@ class Spectrometer(Pipeline):
     def configure(self, config_json, input_config):
         log.info("Received 'CONFIGURE' command")
         if (self.state != "idle"):
-            self.state = "error"
             log.error("Can only configure pipeline in idle state")
+            self._terminate_execution_instances()
+            self.state = "error"
             raise PipelineError("Can only configure pipeline in idle state")
         log.info("Configuring")
-        
+
+        # Refresh IERS database to save the time on "start" for coordinate conversion
+        self._refresh_iers()
+
         # Setup parameters of the pipeline
         self.state         = "configuring"
+        self._execution_instances_config = []
+        
         self._input_config = input_config
         self._config_info  = json.loads(config_json)
         self._freq         = self._config_info["frequency"]
@@ -2068,6 +2143,7 @@ class Spectrometer(Pipeline):
         if self._input_nbeam*(self._input_blksz * self._input_nblk + \
                         self._spectrometer_blksz * self._spectrometer_nblk) > \
                         self._pacifix_memory_limit_per_numa_node:
+            self._terminate_execution_instances()
             self.state = "error"
             raise PipelineError("We do not have enough shared memory for the setup "
                                 "Try to reduce the ring buffer block number "
@@ -2075,11 +2151,15 @@ class Spectrometer(Pipeline):
 
         # To check the existing of file
         if not os.path.isfile(self._spectrometer_main):
-            self.state = "error"
             log.error("{} is not exist".format(self._spectrometer_main))
+            self._terminate_execution_instances()
+            self.state = "error"
             raise PipelineError("{} is not exist".format(self._spectrometer_main))
         
         # To setup commands for each process
+        self._input_beam_index = []
+        self._input_socket_address = []
+        self._input_control_socket = []
         self._pipeline_runtime_directory = []
         self._input_commands = []
         self._input_create_rbuf_commands = []
@@ -2118,8 +2198,9 @@ class Spectrometer(Pipeline):
                         os.makedirs(pipeline_runtime_directory)
                     except Exception as error:
                         log.exception(error)
-                        self.state = "error"
                         log.error("Fail to create {}".format(pipeline_runtime_directory))
+                        self._terminate_execution_instances()
+                        self.state = "error"
                         raise PipelineError(
                             "Fail to create {}".format(pipeline_runtime_directory))
 
@@ -2178,9 +2259,15 @@ class Spectrometer(Pipeline):
                 self._pipeline_runtime_directory[i], self._input_nchunk,
                 self._spectrometer_cufft_nx, self._spectrometer_ptype, self._spectrometer_accumulate_nblk)
             if self._spectrometer_dbdisk:
-                command += "-b k_{}_{}".format(self._spectrometer_keys[i], self._spectrometer_sod)
+                command += "-b k_{}_{} ".format(self._spectrometer_keys[i], self._spectrometer_sod)
             else:
-                command += "-b n_{}_{}".format(self._spectrometer_ip, self._spectrometer_port)
+                command += "-b n_{}_{} ".format(self._spectrometer_ip, self._spectrometer_port)
+            if self._spectrometer_monitor:
+                command += "-l Y_{}_{}_{} ".format(self._monitor_ip,
+                                                   self._monitor_port,
+                                                   self._monitor_ptype)
+            else:
+                command += "-l N "    
             self._spectrometer_commands.append(command)
 
             # Command to create spectrometer ring buffer
@@ -2246,6 +2333,7 @@ class Spectrometer(Pipeline):
             execution_instance.returncode_callbacks.add(
                 self._handle_execution_returncode)
             self._input_execution_instances.append(execution_instance)
+            self._execution_instances_config.append(execution_instance)
             process_index += 1
             
         if EXECUTE:  # Ready when all capture threads and the capture control thread of all capture instances are ready
@@ -2265,8 +2353,9 @@ class Spectrometer(Pipeline):
     def start(self, status_json):
         log.info("Received 'START' command")
         if self.state != "ready":
-            self.state = "error"
+            self._terminate_execution_instances()
             log.error("Pipeline can only be started from ready state")
+            self.state = "error"
             raise PipelineError(
                 "Pipeline can only be started from ready state")
 
@@ -2274,6 +2363,7 @@ class Spectrometer(Pipeline):
         log.info("Starting")
         self._cleanup(self._cleanup_commands_at_start)        
 
+        self._execution_instances_start = []
         self._status_info = json.loads(status_json)
         self._scan_num = self._status_info["scannum"]
         self._sub_scan_num = self._status_info["subscannum"]
@@ -2311,9 +2401,10 @@ class Spectrometer(Pipeline):
                 self._handle_execution_returncode)
             self._spectrometer_execution_instances.append(
                 execution_instance)
+            self._execution_instances_start.append(execution_instance)
             process_index += 1
                 
-        # Send data to FITSweiter interface
+        # Send data to disk
         if self._spectrometer_dbdisk:
             process_index = 0
             self._spectrometer_dbdisk_execution_instances = []
@@ -2323,6 +2414,7 @@ class Spectrometer(Pipeline):
                     self._handle_execution_returncode)
                 self._spectrometer_dbdisk_execution_instances.append(
                     execution_instance)
+                self._execution_instances_start.append(execution_instance)
             process_index += 1
 
         # Has to get coord at this point
@@ -2360,8 +2452,9 @@ class Spectrometer(Pipeline):
     def stop(self):
         log.info("Received 'STOP' command")
         if self.state != "running":
-            self.state = "error"
+            self._terminate_execution_instances()
             log.error("Can only stop a running pipeline")
+            self.state = "error"
             raise PipelineError("Can only stop a running pipeline")
         self.state = "stopping"
         log.info("Stopping")
@@ -2400,8 +2493,9 @@ class Spectrometer(Pipeline):
     def deconfigure(self):
         log.info("Receive 'DECONFIGURE' command")
         if self.state not in ["ready", "error"]:
-            self.state = "error"
             log.error("Pipeline can only be deconfigured from ready or error state")
+            self._terminate_execution_instances()
+            self.state = "error"
             raise PipelineError(
                 "Pipeline can only be deconfigured from ready or error state")
         log.info("Deconfiguring")
