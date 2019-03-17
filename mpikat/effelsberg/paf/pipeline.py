@@ -27,8 +27,7 @@ import sympy as sym
 from sympy.physics.vector import vlatex
 from sympy.printing import latex
 from astropy.coordinates import ICRS, Galactic, FK4, FK5
-
-EXECUTE = True
+import math
 
 # Updates:
 # 1. Check the directory exist or not, create it if not;
@@ -46,6 +45,10 @@ EXECUTE = True
 # 13. Lock to pretect the handle
 # 14. Use the same header template for different configurations
 # 15. capture software also updated to use the same header
+# 16. Force to error clean
+# 17. Read from json and check the parameters there
+# 18. Created modes for March run
+# 19. Fresh iers data base at configure
 
 log = logging.getLogger('mpikat.effelsberg.paf.pipeline')
 log.setLevel('DEBUG')
@@ -56,9 +59,9 @@ INPUT_1BEAM = {"input_nbeam":                  1,
                "input_ports":                  [[17100, 17101, 17102]]
 }
 
-INPUT_2BEAMS = {"input_nbeam":                  2,
-                "input_nchunk_per_port":        11,
-                "input_ports":                  [[17100, 17101, 17102], [17103, 17104, 17105]]
+INPUT_2BEAM = {"input_nbeam":                  2,
+                "input_nchunk_per_port":       11,
+                "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]]
 }
 
 # We can turn the configuratio directory here to json in future
@@ -68,11 +71,13 @@ SYSTEM_CONFIG = {"paf_nchan_per_chunk":    	     7,        # MHz
                  "paf_period":                       27,       # Seconds
                  "paf_ndf_per_chunk_per_period":     250000,
                  "paf_nsamp_per_df":                 128,
+                 "paf_nchunk_per_beam":              48,
                  
                  "paf_df_res":                       1.08E-4,  # Seconds
                  "paf_df_dtsz":      	             7168,     # Bytes
                  "paf_df_pktsz":     	             7232,
                  "paf_df_hdrsz":     	             64,
+                 "paf_freq":                         [950.5, 1340.5, 1550.5],
                  
                  "pacifix_ncpu_per_numa_node":       10,  
                  "pacifix_memory_limit_per_numa_node":  60791751475, # has 10% spare
@@ -127,7 +132,7 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "spectrometer_cufft_nx":       1024,
                    "spectrometer_nbyte":          4,
                    "spectrometer_ndata_per_samp": 4,
-                   "spectrometer_ptype":          1,
+                   "spectrometer_ptype":          4,
                    "spectrometer_ip":    	  '134.104.70.90',
                    "spectrometer_port":    	  17108,
                    "spectrometer_dbdisk":         0,
@@ -156,7 +161,7 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "monitor_keys":            ["deda", "dedc"], # To put monitor data
                    "monitor_ip":      	      '134.104.70.90',
                    "monitor_port":     	      17109,
-                   "monitor_ptype":           1,
+                   "monitor_ptype":           2,
 
                    "tel_lat":                 50.524722,
                    "tel_lon":                 6.883611,
@@ -205,8 +210,9 @@ def register_pipeline(name):
 
 class ExecuteCommand(object):
 
-    def __init__(self, command, process_index = None):
+    def __init__(self, command, execution = True, process_index = None):
         self._command = command
+        self._execution = execution
         self._process_index = process_index
         self.stdout_callbacks = set()
         self.returncode_callbacks = set()
@@ -221,7 +227,7 @@ class ExecuteCommand(object):
         log.debug(self._command)
         self._executable_command = shlex.split(self._command)
 
-        if EXECUTE:
+        if self._execution:
             try:
                 self._process = Popen(self._executable_command,
                                       stdout=PIPE,
@@ -251,12 +257,12 @@ class ExecuteCommand(object):
         class_name = self.__class__.__name__
 
     def finish(self):
-        if EXECUTE:
+        if self._execution:
             for thread in self._monitor_threads:
                 thread.join()
 
     def terminate(self):
-        if EXECUTE:
+        if self._execution:
             if self._process.poll() == None:
                 self._terminate_event.set()
                 self._process.terminate()
@@ -288,7 +294,7 @@ class ExecuteCommand(object):
         self.returncode_notify()
 
     def _process_monitor(self):
-        if EXECUTE:
+        if self._execution:
             while self._process.poll() == None and (not self._terminate_event.is_set()):
                 try:
                     stdout = self._process.stdout.readline().rstrip("\n\r")
@@ -332,12 +338,14 @@ class Pipeline(object):
         
         self._paf_period                     	 = SYSTEM_CONFIG["paf_period"]
         self._paf_df_res                     	 = SYSTEM_CONFIG["paf_df_res"]
+        self._paf_freq                           = SYSTEM_CONFIG["paf_freq"]
         self._paf_df_dtsz                    	 = SYSTEM_CONFIG["paf_df_dtsz"]
         self._paf_df_pktsz                   	 = SYSTEM_CONFIG["paf_df_pktsz"]
         self._paf_df_hdrsz                   	 = SYSTEM_CONFIG["paf_df_hdrsz"]
         self._paf_over_samp_rate             	 = SYSTEM_CONFIG["paf_over_samp_rate"]
         self._paf_nsamp_per_df             	 = SYSTEM_CONFIG["paf_nsamp_per_df"]
         self._paf_nchan_per_chunk            	 = SYSTEM_CONFIG["paf_nchan_per_chunk"]
+        self._paf_nchunk_per_beam            	 = SYSTEM_CONFIG["paf_nchunk_per_beam"]
         self._paf_ndf_per_chunk_per_period       = SYSTEM_CONFIG["paf_ndf_per_chunk_per_period"]
         self._pacifix_ncpu_per_numa_node         = SYSTEM_CONFIG["pacifix_ncpu_per_numa_node"]
         self._pacifix_memory_limit_per_numa_node = SYSTEM_CONFIG["pacifix_memory_limit_per_numa_node"]
@@ -867,7 +875,7 @@ class Pipeline(object):
         return alive, nchk_alive
 
     def _capture_control(self, ctrl_socket, command, socket_address):
-        if EXECUTE:
+        if self._execution:
             try:
                 ctrl_socket.sendto(command, socket_address)
                 log.error(command)
@@ -879,7 +887,7 @@ class Pipeline(object):
                 raise PipelineError("{} fail".format(inspect.stack()[0][3]))
 
     def _handle_execution_returncode(self, returncode, callback):
-        if EXECUTE:
+        if self._execution:
             if returncode:
                 self.state = "error"
                 log.error(returncode)
@@ -888,11 +896,11 @@ class Pipeline(object):
                 raise PipelineError(returncode)
         
     def _handle_execution_stdout(self, stdout, callback):
-        if EXECUTE:
+        if self._execution:
             log.error(stdout)
             
     def _ready_counter_callback(self, stdout, callback):
-        if EXECUTE:
+        if self._execution:
             log.debug(stdout)
             if stdout.find("READY") != -1:
                 self._ready_lock.acquire()
@@ -900,7 +908,7 @@ class Pipeline(object):
                 self._ready_lock.release()
                 
     def _capture_status_callback(self, stdout, callback):
-        if EXECUTE:
+        if self._execution:
             log.debug(stdout)
             if stdout.find("CAPTURE_STATUS") != -1:
                 process_index = int(stdout.split(" ")[-1])
@@ -919,7 +927,7 @@ class Pipeline(object):
     def _cleanup(self, cleanup_commands):
         execution_instances = []
         for command in cleanup_commands:
-            execution_instances.append(ExecuteCommand(command))
+            execution_instances.append(ExecuteCommand(command, self._execution))
         for execution_instance in execution_instances:         # Wait until the cleanup is done
             execution_instance.finish()
 
@@ -945,12 +953,14 @@ class Fold(Pipeline):
         self.state         = "configuring"
         self._input_config = input_config
         self._config_info  = json.loads(config_json)
-        self._freq         = self._config_info["frequency"]
-        self._input_ip     = self._config_info['ip_address']
-        self._beam_alt_d   = self._reverse_offsets(self._config_info['beam_alt_d'])
-        self._beam_az_d    = self._reverse_offsets(self._config_info['beam_az_d'])
-        
-        self._pacifix_numa = int(self._input_ip.split(".")[3]) - 1
+        self._config_ip            = self._config_info["ip_address"]
+        self._config_nchunk_offset = self._config_info["bandoffset"]
+        self._config_freq          = self._config_info["frequency"]
+        self._config_nchunk = self._config_info['nbands']
+        self._beam_alt_d    = self._reverse_offsets(self._config_info["beam_alt_d"])
+        self._beam_az_d     = self._reverse_offsets(self._config_info["beam_az_d"])
+
+        self._pacifix_numa = int(self._config_ip.split(".")[3]) - 1
         self._utc_start_capture = Time(self._config_info["utc_start_capture"], format='isot', scale='utc')
         
         self._input_nbeam       = self._input_config["input_nbeam"]
@@ -959,7 +969,31 @@ class Fold(Pipeline):
         self._input_nport       = len(self._input_ports[0])
         self._input_nchunk      = self._input_nport * self._input_nchunk_per_port
         self._input_nchan       = self._input_nchunk * self._paf_nchan_per_chunk
- 
+
+        # Check the frequency information in the configuration
+        if self._config_freq not in self._paf_freq:
+            log.error("The config frequency should be {}, but it is {}".format(self._paf_freq, self._config_freq))
+            self.state = "error"
+            self._cleanup(self._cleanup_commands_at_config)
+            raise PipelineError("The config frequency should be {}, but it is {}".format(self._paf_freq, self._config_freq))            
+        if self._input_nchunk != self._config_nchunk:
+            self.state = "error"
+            self._cleanup(self._cleanup_commands_at_config)
+            log.error("The config band number is not right, it should be {}, but it is {}".format(self._input_nchunk, self._config_nchunk))
+            raise PipelineError("The config band number is not right, it should be {}, but it is {}".format(self._input_nchunk, self._config_nchunk))        
+        self._start_chunk = int(math.floor((self._paf_nchunk_per_beam - self._input_nchunk) / 2.0))
+        self._first_chunk = self._start_chunk + self._config_nchunk_offset
+        self._last_chunk  = self._start_chunk + self._input_nchunk + self._config_nchunk_offset
+        if ((self._first_chunk < 0) or (self._last_chunk) > self._paf_nchunk_per_beam):
+            self.state = "error"
+            self._cleanup(self._cleanup_commands_at_config)
+            log.error("Required frequency chunks are out of range")
+            raise PipelineError("Required frequency chunks are out of range")        
+        self._freq         = self._config_freq +  \
+                             0.5 * (self._last_chunk + self._first_chunk - self._paf_nchunk_per_beam) *\
+                             self._paf_nchan_per_chunk
+
+        # Buffer size 
         self._input_blksz = self._input_nchunk * \
                                  self._paf_df_dtsz * \
                                  self._rbuf_ndf_per_chunk_per_block  
@@ -1024,12 +1058,12 @@ class Fold(Pipeline):
         self._spectrometer_dbdisk_commands = []
         self._spectrometer_delete_rbuf_commands = []
         for i in range(self._input_nbeam):
-            if EXECUTE:
+            if self._execution:
                 # To setup address
                 destination = []
                 for port in self._input_ports[i]:
                     destination.append("{}_{}_{}".format(
-                        self._input_ip, port, self._input_nchunk_per_port))
+                        self._config_ip, port, self._input_nchunk_per_port))
 
                 destination_alive, dead_info = self._check_beam_connection(
                     destination, self._input_check_ndf_per_chunk)
@@ -1194,7 +1228,7 @@ class Fold(Pipeline):
         process_index = 0
         execution_instances = []
         for command in self._input_create_rbuf_commands:
-            execution_instances.append(ExecuteCommand(command, process_index))
+            execution_instances.append(ExecuteCommand(command, self._execution, process_index))
             process_index += 1
         for execution_instance in execution_instances:
             execution_instance.finish()
@@ -1204,7 +1238,7 @@ class Fold(Pipeline):
         self._ready_counter = 0
         self._input_execution_instances = []
         for command in self._input_commands:
-            execution_instance = ExecuteCommand(command, process_index)
+            execution_instance = ExecuteCommand(command, self._execution, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
             #execution_instance.stderr_callbacks.add(
@@ -1214,7 +1248,7 @@ class Fold(Pipeline):
             self._input_execution_instances.append(execution_instance)
             process_index += 1
             
-        if EXECUTE:  # Ready when all capture threads and the capture control thread of all capture instances are ready
+        if self._execution:  # Ready when all capture threads and the capture control thread of all capture instances are ready
             while self.state != "error":
                 if self._ready_counter == (self._input_nport + 1) * self._input_nbeam:
                     break
@@ -1281,7 +1315,7 @@ class Fold(Pipeline):
         process_index = 0
         execution_instances = []
         for command in self._fold_create_rbuf_commands:
-            execution_instances.append(ExecuteCommand(command, process_index))
+            execution_instances.append(ExecuteCommand(command, self._execution, process_index))
             process_index += 1
         for execution_instance in execution_instances:         # Wait until the buffer creation is done
             execution_instance.finish()
@@ -1291,7 +1325,7 @@ class Fold(Pipeline):
             process_index = 0
             execution_instances = []
             for command in self._spectrometer_create_rbuf_commands:
-                execution_instances.append(ExecuteCommand(command, process_index))
+                execution_instances.append(ExecuteCommand(command, self._execution, process_index))
                 process_index += 1
             for execution_instance in execution_instances:
                 execution_instance.finish()
@@ -1302,7 +1336,7 @@ class Fold(Pipeline):
         self._fold_execution_instances = []
         for command in self._fold_commands:
             log.error(command)
-            execution_instance = ExecuteCommand(command, process_index)
+            execution_instance = ExecuteCommand(command, self._execution, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
             #execution_instance.stderr_callbacks.add(
@@ -1318,7 +1352,7 @@ class Fold(Pipeline):
             process_index = 0
             self._spectrometer_dbdisk_execution_instances = []
             for command in self._spectrometer_dbdisk_commands:
-                execution_instance = ExecuteCommand(command, process_index)
+                execution_instance = ExecuteCommand(command, self._execution, process_index)
                 execution_instance.stdout_callbacks.add(self._handle_execution_stdout)
                 execution_instance.returncode_callbacks.add(
                     self._handle_execution_returncode)
@@ -1331,7 +1365,7 @@ class Fold(Pipeline):
             self._fold_dspsr_execution_instances = []
             for command in self._fold_dspsr_commands:
                 if self._input_beam_index[process_index] == 0:
-                    execution_instance = ExecuteCommand(command, process_index)
+                    execution_instance = ExecuteCommand(command, self._execution, process_index)
                     #execution_instance.stderr_callbacks.add(self._handle_execution_stderr)
                     execution_instance.returncode_callbacks.add(self._handle_execution_returncode)
                     #execution_instance.stdout_callbacks.add(self._handle_execution_stdout)
@@ -1342,7 +1376,7 @@ class Fold(Pipeline):
             process_index = 0
             self._fold_dbdisk_execution_instances = []
             for command in self._fold_dbdisk_commands:
-                execution_instance = ExecuteCommand(command, process_index)
+                execution_instance = ExecuteCommand(command, self._execution, process_index)
                 execution_instance.returncode_callbacks.add(
                     self._handle_execution_returncode)
                 self._fold_dbdisk_execution_instances.append(
@@ -1354,7 +1388,7 @@ class Fold(Pipeline):
         
         # Enable the SOD of baseband ring buffer with given time and then
         # "running"
-        if EXECUTE:
+        if self._execution:
             while self.state != "error":
                 if self._ready_counter == self._input_nbeam:
                     break
@@ -1391,7 +1425,7 @@ class Fold(Pipeline):
         self.state = "stopping"
         log.info("Stopping")
 
-        if EXECUTE:
+        if self._execution:
             process_index = 0
             for control_socket in self._input_control_socket:  # Stop data
                 self._capture_control(control_socket,
@@ -1417,7 +1451,7 @@ class Fold(Pipeline):
             process_index = 0
             execution_instances = []
             for command in self._spectrometer_delete_rbuf_commands:
-                execution_instances.append(ExecuteCommand(command, process_index))
+                execution_instances.append(ExecuteCommand(command, self._execution, process_index))
                 process_index += 1
             for execution_instance in execution_instances:
                 execution_instance.finish()
@@ -1426,7 +1460,7 @@ class Fold(Pipeline):
         process_index = 0
         execution_instances = []
         for command in self._fold_delete_rbuf_commands:
-            execution_instances.append(ExecuteCommand(command, process_index))
+            execution_instances.append(ExecuteCommand(command, self._execution, process_index))
             process_index += 1
         for execution_instance in execution_instances:
             execution_instance.finish()
@@ -1448,7 +1482,7 @@ class Fold(Pipeline):
             self.state = "deconfiguring"
 
             # To stop the capture
-            if EXECUTE:
+            if self._execution:
                 process_index = 0
                 for control_socket in self._input_control_socket:
                     self._capture_control(
@@ -1461,7 +1495,7 @@ class Fold(Pipeline):
             process_index = 0
             execution_instances = []
             for command in self._input_delete_rbuf_commands:
-                execution_instances.append(ExecuteCommand(command, process_index))
+                execution_instances.append(ExecuteCommand(command, self._execution, process_index))
                 process_index += 1
             for execution_instance in execution_instances:
                 execution_instance.finish()
@@ -1497,12 +1531,14 @@ class Search(Pipeline):
         self._input_config = input_config
 
         self._config_info  = json.loads(config_json)
-        self._freq         = self._config_info["frequency"]
-        self._input_ip     = self._config_info['ip_address']
+        self._config_freq   = self._config_info["frequency"]
+        self._config_ip     = self._config_info['ip_address']
+        self._config_nchunk = self._config_info['nbands']
+        self._config_nchunk_offset = self._config_info["bandoffset"]
         self._beam_alt_d   = self._reverse_offsets(self._config_info['beam_alt_d'])
         self._beam_az_d    = self._reverse_offsets(self._config_info['beam_az_d'])
                 
-        self._pacifix_numa = int(self._input_ip.split(".")[3]) - 1
+        self._pacifix_numa = int(self._config_ip.split(".")[3]) - 1
         self._utc_start_capture = Time(self._config_info["utc_start_capture"], format='isot', scale='utc')
         
         self._input_nbeam       = self._input_config["input_nbeam"]
@@ -1512,6 +1548,30 @@ class Search(Pipeline):
         self._input_nchunk      = self._input_nport * self._input_nchunk_per_port
         self._input_nchan       = self._input_nchunk * self._paf_nchan_per_chunk
  
+        # Check the frequency information in the configuration
+        if self._config_freq not in self._paf_freq:
+            log.error("The config frequency should be {}, but it is {}".format(self._paf_freq, self._config_freq))
+            self.state = "error"
+            self._cleanup(self._cleanup_commands_at_config)
+            raise PipelineError("The config frequency should be {}, but it is {}".format(self._paf_freq, self._config_freq))            
+        if self._input_nchunk != self._config_nchunk:
+            self.state = "error"
+            self._cleanup(self._cleanup_commands_at_config)
+            log.error("The config band number is not right, it should be {}, but it is {}".format(self._input_nchunk, self._config_nchunk))
+            raise PipelineError("The config band number is not right, it should be {}, but it is {}".format(self._input_nchunk, self._config_nchunk))        
+        self._start_chunk = int(math.floor((self._paf_nchunk_per_beam - self._input_nchunk) / 2.0))
+        self._first_chunk = self._start_chunk + self._config_nchunk_offset
+        self._last_chunk  = self._start_chunk + self._input_nchunk + self._config_nchunk_offset
+        if ((self._first_chunk < 0) or (self._last_chunk) > self._paf_nchunk_per_beam):
+            self.state = "error"
+            self._cleanup(self._cleanup_commands_at_config)
+            log.error("Required frequency chunks are out of range")
+            raise PipelineError("Required frequency chunks are out of range")        
+        self._freq         = self._config_freq +  \
+                             0.5 * (self._last_chunk + self._first_chunk - self._paf_nchunk_per_beam) *\
+                             self._paf_nchan_per_chunk
+
+        # Buffer size
         self._input_blksz = self._input_nchunk * \
                                  self._paf_df_dtsz * \
                                  self._rbuf_ndf_per_chunk_per_block  
@@ -1580,12 +1640,12 @@ class Search(Pipeline):
         self._spectrometer_dbdisk_commands = []
         self._search_dbdisk_commands = []
         for i in range(self._input_nbeam):
-            if EXECUTE:
+            if self._execution:
                 # To setup address
                 destination = []
                 for port in self._input_ports[i]:
                     destination.append("{}_{}_{}".format(
-                        self._input_ip, port, self._input_nchunk_per_port))
+                        self._config_ip, port, self._input_nchunk_per_port))
 
                 destination_alive, dead_info = self._check_beam_connection(
                     destination, self._input_check_ndf_per_chunk)
@@ -1798,7 +1858,7 @@ class Search(Pipeline):
         process_index = 0
         execution_instances = []
         for command in self._input_create_rbuf_commands:
-            execution_instance = ExecuteCommand(command, process_index)
+            execution_instance = ExecuteCommand(command, self._execution, process_index)
             execution_instances.append(execution_instance)
             #self._execution_instances_config.append(execution_instance)
             process_index += 1
@@ -1810,7 +1870,7 @@ class Search(Pipeline):
         self._ready_counter = 0
         self._input_execution_instances = []
         for command in self._input_commands:
-            execution_instance = ExecuteCommand(command, process_index)
+            execution_instance = ExecuteCommand(command, self._execution, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
             #execution_instance.stderr_callbacks.add(
@@ -1821,7 +1881,7 @@ class Search(Pipeline):
             self._execution_instances_config.append(execution_instance)
             process_index += 1
 
-        if EXECUTE:  # Ready when all capture threads and the capture control thread of all capture instances are ready
+        if self._execution:  # Ready when all capture threads and the capture control thread of all capture instances are ready
             while self.state != "error":
                 if self._ready_counter == (self._input_nport + 1) * self._input_nbeam:
                     break
@@ -1872,7 +1932,7 @@ class Search(Pipeline):
         process_index = 0
         execution_instances = []
         for command in self._search_create_rbuf_commands:
-            execution_instance = ExecuteCommand(command, process_index)
+            execution_instance = ExecuteCommand(command, self._execution, process_index)
             execution_instances.append(execution_instance)
             #self._execution_instances_start.append(execution_instance)
             process_index += 1
@@ -1885,7 +1945,7 @@ class Search(Pipeline):
             process_index = 0
             execution_instances = []
             for command in self._spectrometer_create_rbuf_commands:
-                execution_instance = ExecuteCommand(command, process_index)
+                execution_instance = ExecuteCommand(command, self._execution, process_index)
                 execution_instances.append(execution_instance)
                 #self._execution_instances_start.append(execution_instance)
                 process_index += 1
@@ -1901,7 +1961,7 @@ class Search(Pipeline):
         self._search_execution_instances = []
         for command in self._search_commands:
             log.error(command)
-            execution_instance = ExecuteCommand(command, process_index)
+            execution_instance = ExecuteCommand(command, self._execution, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
             #execution_instance.stderr_callbacks.add(
@@ -1918,7 +1978,7 @@ class Search(Pipeline):
             process_index = 0
             self._spectrometer_dbdisk_execution_instances = []
             for command in self._spectrometer_dbdisk_commands:
-                execution_instance = ExecuteCommand(command, process_index)
+                execution_instance = ExecuteCommand(command, self._execution, process_index)
                 execution_instance.stdout_callbacks.add(self._handle_execution_stdout)
                 execution_instance.returncode_callbacks.add(
                     self._handle_execution_returncode)
@@ -1930,7 +1990,7 @@ class Search(Pipeline):
             process_index = 0
             self._search_heimdall_execution_instances = []
             for command in self._search_heimdall_commands:
-                execution_instance = ExecuteCommand(command, process_index)
+                execution_instance = ExecuteCommand(command, self._execution, process_index)
                 execution_instance.returncode_callbacks.add(
                     self._handle_execution_returncode)
                 self._search_heimdall_execution_instances.append(
@@ -1942,7 +2002,7 @@ class Search(Pipeline):
             process_index = 0
             self._search_dbdisk_execution_instances = []
             for command in self._search_dbdisk_commands:
-                execution_instance = ExecuteCommand(command, process_index)
+                execution_instance = ExecuteCommand(command, self._execution, process_index)
                 execution_instance.returncode_callbacks.add(
                     self._handle_execution_returncode)
                 self._search_dbdisk_execution_instances.append(
@@ -1957,7 +2017,7 @@ class Search(Pipeline):
         
         # Enable the SOD of baseband ring buffer with given time and then
         # "running"
-        if EXECUTE:
+        if self._execution:
             while self.state != "error":
                 if self._ready_counter == self._input_nbeam:
                     break
@@ -1995,7 +2055,7 @@ class Search(Pipeline):
         self.state = "stopping"
         log.info("Stopping")
         
-        if EXECUTE:
+        if self._execution:
             process_index = 0
             for control_socket in self._input_control_socket:  # Stop data
                 self._capture_control(control_socket,
@@ -2024,7 +2084,7 @@ class Search(Pipeline):
             process_index = 0
             execution_instances = []
             for command in self._spectrometer_delete_rbuf_commands:
-                execution_instances.append(ExecuteCommand(command, process_index))
+                execution_instances.append(ExecuteCommand(command, self._execution, process_index))
                 process_index += 1
             for execution_instance in execution_instances:
                 execution_instance.finish()
@@ -2034,7 +2094,7 @@ class Search(Pipeline):
         process_index = 0
         execution_instances = []
         for command in self._search_delete_rbuf_commands:
-            execution_instances.append(ExecuteCommand(command, process_index))
+            execution_instances.append(ExecuteCommand(command, self._execution, process_index))
             process_index += 1
         for execution_instance in execution_instances:
             execution_instance.finish()
@@ -2057,7 +2117,7 @@ class Search(Pipeline):
             self.state = "deconfiguring"
 
             # To stop the capture
-            if EXECUTE:
+            if self._execution:
                 process_index = 0
                 for control_socket in self._input_control_socket:
                     self._capture_control(
@@ -2070,7 +2130,7 @@ class Search(Pipeline):
             process_index = 0
             execution_instances = []
             for command in self._input_delete_rbuf_commands:
-                execution_instances.append(ExecuteCommand(command, process_index))
+                execution_instances.append(ExecuteCommand(command, self._execution, process_index))
                 process_index += 1
             for execution_instance in execution_instances:
                 execution_instance.finish()
@@ -2107,12 +2167,14 @@ class Spectrometer(Pipeline):
         
         self._input_config = input_config
         self._config_info  = json.loads(config_json)
-        self._freq         = self._config_info["frequency"]
-        self._input_ip     = self._config_info['ip_address']
+        self._config_freq   = self._config_info["frequency"]
+        self._config_ip     = self._config_info['ip_address']
+        self._config_nchunk = self._config_info['nbands']
+        self._config_nchunk_offset = self._config_info["bandoffset"]
         self._beam_alt_d   = self._reverse_offsets(self._config_info['beam_alt_d'])
         self._beam_az_d    = self._reverse_offsets(self._config_info['beam_az_d'])
 
-        self._pacifix_numa = int(self._input_ip.split(".")[3]) - 1
+        self._pacifix_numa = int(self._config_ip.split(".")[3]) - 1
         self._utc_start_capture = Time(self._config_info["utc_start_capture"], format='isot', scale='utc')
 
         self._input_nbeam       = self._input_config["input_nbeam"]
@@ -2122,6 +2184,30 @@ class Spectrometer(Pipeline):
         self._input_nchunk      = self._input_nport * self._input_nchunk_per_port
         self._input_nchan       = self._input_nchunk * self._paf_nchan_per_chunk
  
+        # Check the frequency information in the configuration
+        if self._config_freq not in self._paf_freq:
+            log.error("The config frequency should be {}, but it is {}".format(self._paf_freq, self._config_freq))
+            self.state = "error"
+            self._cleanup(self._cleanup_commands_at_config)
+            raise PipelineError("The config frequency should be {}, but it is {}".format(self._paf_freq, self._config_freq))            
+        if self._input_nchunk != self._config_nchunk:
+            self.state = "error"
+            self._cleanup(self._cleanup_commands_at_config)
+            log.error("The config band number is not right, it should be {}, but it is {}".format(self._input_nchunk, self._config_nchunk))
+            raise PipelineError("The config band number is not right, it should be {}, but it is {}".format(self._input_nchunk, self._config_nchunk))        
+        self._start_chunk = int(math.floor((self._paf_nchunk_per_beam - self._input_nchunk) / 2.0))
+        self._first_chunk = self._start_chunk + self._config_nchunk_offset
+        self._last_chunk  = self._start_chunk + self._input_nchunk + self._config_nchunk_offset
+        if ((self._first_chunk < 0) or (self._last_chunk) > self._paf_nchunk_per_beam):
+            self.state = "error"
+            self._cleanup(self._cleanup_commands_at_config)
+            log.error("Required frequency chunks are out of range")
+            raise PipelineError("Required frequency chunks are out of range")        
+        self._freq         = self._config_freq +  \
+                             0.5 * (self._last_chunk + self._first_chunk - self._paf_nchunk_per_beam) *\
+                             self._paf_nchan_per_chunk
+
+        # Buffer size
         self._input_blksz = self._input_nchunk * \
                                  self._paf_df_dtsz * \
                                  self._rbuf_ndf_per_chunk_per_block 
@@ -2169,12 +2255,12 @@ class Spectrometer(Pipeline):
         self._spectrometer_dbdisk_commands = []
         self._spectrometer_commands = []
         for i in range(self._input_nbeam):
-            if EXECUTE:
+            if self._execution:
                 # To setup address
                 destination = []
                 for port in self._input_ports[i]:
                     destination.append("{}_{}_{}".format(
-                        self._input_ip, port, self._input_nchunk_per_port))
+                        self._config_ip, port, self._input_nchunk_per_port))
 
                 destination_alive, dead_info = self._check_beam_connection(
                     destination, self._input_check_ndf_per_chunk)
@@ -2315,7 +2401,7 @@ class Spectrometer(Pipeline):
         process_index = 0
         execution_instances = []
         for command in self._input_create_rbuf_commands:
-            execution_instances.append(ExecuteCommand(command, process_index))
+            execution_instances.append(ExecuteCommand(command, self._execution, process_index))
             process_index += 1
         for execution_instance in execution_instances:
             execution_instance.finish()
@@ -2325,7 +2411,7 @@ class Spectrometer(Pipeline):
         self._ready_counter = 0
         self._input_execution_instances = []
         for command in self._input_commands:
-            execution_instance = ExecuteCommand(command, process_index)
+            execution_instance = ExecuteCommand(command, self._execution, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
             #execution_instance.stderr_callbacks.add(
@@ -2336,7 +2422,7 @@ class Spectrometer(Pipeline):
             self._execution_instances_config.append(execution_instance)
             process_index += 1
             
-        if EXECUTE:  # Ready when all capture threads and the capture control thread of all capture instances are ready
+        if self._execution:  # Ready when all capture threads and the capture control thread of all capture instances are ready
             while self.state != "error":
                 if self._ready_counter == (self._input_nport + 1) * self._input_nbeam:
                     break
@@ -2382,7 +2468,7 @@ class Spectrometer(Pipeline):
             process_index = 0
             execution_instances = []
             for command in self._spectrometer_create_rbuf_commands:
-                execution_instances.append(ExecuteCommand(command, process_index))
+                execution_instances.append(ExecuteCommand(command, self._execution, process_index))
                 process_index += 1
             for execution_instance in execution_instances:         # Wait until the buffer creation is done
                 execution_instance.finish()
@@ -2392,7 +2478,7 @@ class Spectrometer(Pipeline):
         self._ready_counter = 0
         self._spectrometer_execution_instances = []
         for command in self._spectrometer_commands:
-            execution_instance = ExecuteCommand(command, process_index)
+            execution_instance = ExecuteCommand(command, self._execution, process_index)
             execution_instance.stdout_callbacks.add(
                 self._ready_counter_callback)
             #execution_instance.stderr_callbacks.add(
@@ -2409,7 +2495,7 @@ class Spectrometer(Pipeline):
             process_index = 0
             self._spectrometer_dbdisk_execution_instances = []
             for command in self._spectrometer_dbdisk_commands:
-                execution_instance = ExecuteCommand(command, process_index)
+                execution_instance = ExecuteCommand(command, self._execution, process_index)
                 execution_instance.returncode_callbacks.add(
                     self._handle_execution_returncode)
                 self._spectrometer_dbdisk_execution_instances.append(
@@ -2422,7 +2508,7 @@ class Spectrometer(Pipeline):
         
         # Enable the SOD of baseband ring buffer with given time and then
         # "running"
-        if EXECUTE:
+        if self._execution:
             while self.state != "error":
                 if self._ready_counter == self._input_nbeam:
                     break
@@ -2459,7 +2545,7 @@ class Spectrometer(Pipeline):
         self.state = "stopping"
         log.info("Stopping")
         
-        if EXECUTE:
+        if self._execution:
             process_index = 0
             for control_socket in self._input_control_socket:  # Stop data
                 self._capture_control(control_socket,
@@ -2480,7 +2566,7 @@ class Spectrometer(Pipeline):
             process_index = 0
             execution_instances = []
             for command in self._spectrometer_delete_rbuf_commands:
-                execution_instances.append(ExecuteCommand(command, process_index))
+                execution_instances.append(ExecuteCommand(command, self._execution, process_index))
                 process_index += 1
             for execution_instance in execution_instances:
                 execution_instance.finish()
@@ -2504,7 +2590,7 @@ class Spectrometer(Pipeline):
             self.state = "deconfiguring"
 
             # To stop the capture
-            if EXECUTE:
+            if self._execution:
                 process_index = 0
                 for control_socket in self._input_control_socket:
                     self._capture_control(
@@ -2517,7 +2603,7 @@ class Spectrometer(Pipeline):
             process_index = 0
             execution_instances = []
             for command in self._input_delete_rbuf_commands:
-                execution_instances.append(ExecuteCommand(command, process_index))
+                execution_instances.append(ExecuteCommand(command, self._execution, process_index))
                 process_index += 1
             for execution_instance in execution_instances:
                 execution_instance.finish()
@@ -2529,43 +2615,89 @@ class Spectrometer(Pipeline):
         self.state = "idle"
         log.info("Idle")
 
-@register_pipeline("Fold2Beams")
-class Fold2Beams(Fold):
-    
+#@register_pipeline("Fold2Beams")
+#class Fold2Beams(Fold):
+#    
+#    def configure(self, config_json):
+#        super(Fold2Beams, self).configure(config_json, INPUT_2BEAM)
+#
+#
+#@register_pipeline("Fold1Beam")
+#class Fold1Beam(Fold):
+#
+#    def configure(self, config_json):
+#        super(Fold1Beam, self).configure(config_json, INPUT_1BEAM)
+#
+#@register_pipeline("Search2Beams")
+#class Search2Beams(Search):
+#    
+#    def configure(self, config_json):
+#        super(Search2Beams, self).configure(config_json, INPUT_2BEAM)
+#
+#
+#@register_pipeline("Search1Beam")
+#class Search1Beam(Search):
+#
+#    def configure(self, config_json):
+#        super(Search1Beam, self).configure(config_json, INPUT_1BEAM)
+#
+#@register_pipeline("Spectrometer2Beams")
+#class Spectrometer2Beams(Spectrometer):
+#    def configure(self, config_json):
+#        super(Spectrometer2Beams, self).configure(config_json, INPUT_2BEAM)
+#
+#
+#@register_pipeline("Spectrometer1Beam")
+#class Spectrometer1Beam(Spectrometer):
+#
+#    def configure(self, config_json):
+#        super(Spectrometer1Beam, self).configure(config_json, INPUT_2BEAM)
+
+@register_pipeline("Spectrometer2Beam")
+class Spectrometer2Beam(Spectrometer):
+    def __init__(self):
+        self._spectrometer_monitor = 1 # Turn monitor on
+        self._spectrometer_dbdisk  = 0 # Send data to FITSwriter interface
+        super(Spectrometer2Beam, self).__init__()
+        
     def configure(self, config_json):
-        super(Fold2Beams, self).configure(config_json, INPUT_2BEAMS)
+        super(Spectrometer2Beam, self).configure(config_json, INPUT_2BEAM)
 
-
-@register_pipeline("Fold1Beam")
-class Fold1Beam(Fold):
-
+@register_pipeline("Search2BeamLow")
+class Search2BeamLow(Search):
+    def __init__(self):
+        self._search_spectrometer = 0 # Do not zoom in
+        self._search_monitor      = 1 # Turn monitor on
+        self._search_dbdisk       = 0 # Do not write filterbank into disk
+        self._search_heimdall     = 0 # Do not run heimdall
+        super(Search2BeamLow, self).__init__()
+        
     def configure(self, config_json):
-        super(Fold1Beam, self).configure(config_json, INPUT_1BEAM)
+        super(Search2BeamLow, self).configure(config_json, INPUT_2BEAM)
 
-@register_pipeline("Search2Beams")
-class Search2Beams(Search):
-    
+@register_pipeline("Search1BeamHigh")
+class Search1BeamHigh(Search):
+    def __init__(self):
+        self._search_spectrometer = 1 # Do zoom in                     
+        self._search_monitor      = 1 # Turn monitor on
+        self._search_dbdisk       = 1 # Write filterbank data to disk
+        self._search_heimdall     = 1 # Run heimdall parallel
+        super(Search1BeamHigh, self).__init__()
+        
     def configure(self, config_json):
-        super(Search2Beams, self).configure(config_json, INPUT_2BEAMS)
+        super(Search1BeamHigh, self).configure(config_json, INPUT_1BEAM)
 
-
-@register_pipeline("Search1Beam")
-class Search1Beam(Search):
-
+@register_pipeline("Search2BeamHigh")
+class Search2BeamHigh(Search):
+    def __init__(self):
+        self._search_spectrometer = 1 # Do zoom in                     
+        self._search_monitor      = 1 # Turn monitor on                
+        self._search_dbdisk       = 1 # Write filterbank data to disk  
+        self._search_heimdall     = 1 # Run heimdall parallel          
+        super(Search2BeamHigh, self).__init__()
+        
     def configure(self, config_json):
-        super(Search1Beam, self).configure(config_json, INPUT_1BEAM)
-
-@register_pipeline("Spectrometer2Beams")
-class Spectrometer2Beams(Spectrometer):
-    def configure(self, config_json):
-        super(Spectrometer2Beams, self).configure(config_json, INPUT_2BEAMS)
-
-
-@register_pipeline("Spectrometer1Beam1Pol")
-class Spectrometer1Beam(Spectrometer):
-
-    def configure(self, config_json):
-        super(Spectrometer1Beam, self).configure(config_json, INPUT_2BEAMS)
+        super(Search2BeamHigh, self).configure(config_json, INPUT_2BEAM)
 
 # ./pipeline.py -a 0 -b 1 -c search -d 1 -e 1 -f 100
 # ./pipeline.py -a 0 -b 2 -c search -d 1 -e 1 -f 100
@@ -2579,11 +2711,6 @@ if __name__ == "__main__":
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
         level='DEBUG',
         logger=log)
-    
-    source_name = "DEBUG"
-    ra = "00:00:00.00"   # "HH:MM:SS.SS"
-    dec = "00:00:00.00"   # "DD:MM:SS.SS"
-    host_id = check_output("hostname").strip()[-1]
 
     parser = argparse.ArgumentParser(
         description='To run the pipeline for my test')
@@ -2607,11 +2734,14 @@ if __name__ == "__main__":
     nconfigure = args.nconfigure[0]
     nstart = args.nstart[0]
     length = args.length[0]
-    
+
+    host_id = check_output("hostname").strip()[-1]
     ip = "10.17.{}.{}".format(host_id, numa + 1)
                
     config_info = {"utc_start_capture": Time(Time.now(), format='isot', scale='utc').value,
                    "frequency":         1340.5,
+                   "nbands":            33,
+                   "bandoffset":        0,
                    "ip_address":        ip,
                    "beam_alt_d":         [0, -0.1, -0.2, -0.3, -0.1, -0.2, -0.3,  0.1,  0.2,  0.3, -0.11, -0.21, -0.31, -0.11, -0.21, -0.31,  0.12,  0.22,  0.32, -0.12, -0.22, -0.32, -0.12, -0.22, -0.32,  0.12,  0.22,  0.32, 0.13, 0.23,  0.33, -0.13, -0.23, -0.33, -0.13, -0.23, -0.33,  0.13,  0.23],
                    # First column in the file, opposite value                                                                                                  
@@ -2626,84 +2756,118 @@ if __name__ == "__main__":
                    "subscannum":1002,
     }
     
-    if pipeline == "fold":
-        for i in range(nconfigure):
-            log.info("Create pipeline ...")
-            if beam == 1:
-                config_info["frequency"] = 1340.5
-                fold_mode = Fold1Beam()
-            if beam == 2:
-                config_info["frequency"] = 1337.0
-                fold_mode = Fold2Beams()
-    
-            log.info("Configure it ...")
-            config_info["utc_start_capture"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
-            config_json = json.dumps(config_info)
-            fold_mode.configure(config_json)
-    
-            for j in range(nstart):
-                log.info("Start it ...")
-                status_info["utc_start_process"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
-                status_json = json.dumps(status_info)
-                fold_mode.start(status_json)
-                time.sleep(length)
-                log.info("Stop it ...")
-                fold_mode.stop()
-    
-            log.info("Deconfigure it ...")
-            fold_mode.deconfigure()
-
-    if pipeline == "search":
-        for i in range(nconfigure):
-            log.info("Create pipeline ...")
-            if beam == 1:
-                config_info["frequency"] = 1340.5
-                search_mode = Search1Beam()
-            if beam == 2:
-                config_info["frequency"] = 1337.0
-                search_mode = Search2Beams()
-                
-            log.info("Configure it ...")
-            config_info["utc_start_capture"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
-            config_json = json.dumps(config_info)
-            search_mode.configure(config_json)
-    
-            for j in range(nstart):
-                log.info("Start it ...")
-                status_info["utc_start_process"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
-                status_json = json.dumps(status_info)
-                search_mode.start(status_json)
-                
-                time.sleep(length)
-                log.info("Stop it ...")
-                search_mode.stop()
-    
-            log.info("Deconfigure it ...")
-            search_mode.deconfigure()
+    for i in range(nconfigure):
+        log.info("Create pipeline ...")
+        if pipeline == "search2beamlow":
+            config_info["nbands"] = 33
+            mode = Search2BeamLow()
+        if pipeline == "search2beamhigh":
+            config_info["nbands"] = 33
+            mode = Search2BeamHigh()
+        if pipeline == "search1beamhigh":
+            config_info["nbands"] = 48
+            mode = Search1BeamHigh()
+        if pipeline == "spectrometer2beam":
+            config_info["nbands"] = 33
+            mode = Spectrometer2Beam()
+                    
+        log.info("Configure it ...")
+        config_info["utc_start_capture"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
+        config_json = json.dumps(config_info)
+        mode.configure(config_json)
+        
+        for j in range(nstart):
+            log.info("Start it ...")
+            status_info["utc_start_process"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
+            status_json = json.dumps(status_info)
+            mode.start(status_json)
             
-    if pipeline == "spectrometer":
-        for i in range(nconfigure):
-            log.info("Create pipeline ...")
-            if beam == 1:
-                config_info["frequency"] = 1340.5
-                spectrometer_mode = Spectrometer1Beam()
-            if beam == 2:
-                config_info["frequency"] = 1337.0
-                spectrometer_mode = Spectrometer2Beams()
-    
-            log.info("Configure it ...")
-            config_info["utc_start_capture"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
-            config_json = json.dumps(config_info)
-            spectrometer_mode.configure(config_json)
-    
-            for j in range(nstart):
-                log.info("Start it ...")
-                status_info["utc_start_process"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
-                status_json = json.dumps(status_info)
-                spectrometer_mode.start(status_json)
-                time.sleep(length)
-                log.info("Stop it ...")
-                spectrometer_mode.stop()
-    
-            log.info("Deconfigure it ...")
-            spectrometer_mode.deconfigure()
+            time.sleep(length)
+            log.info("Stop it ...")
+            mode.stop()
+
+        log.info("Deconfigure it ...")
+        mode.deconfigure()
+
+
+#if pipeline == "fold":
+#    for i in range(nconfigure):
+#        log.info("Create pipeline ...")
+#        if beam == 1:
+#            config_info["frequency"] = 1340.5
+#            fold_mode = Fold1Beam()
+#        if beam == 2:
+#            config_info["frequency"] = 1337.0
+#            fold_mode = Fold2Beams()
+#
+#        log.info("Configure it ...")
+#        config_info["utc_start_capture"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
+#        config_json = json.dumps(config_info)
+#        fold_mode.configure(config_json)
+#
+#        for j in range(nstart):
+#            log.info("Start it ...")
+#            status_info["utc_start_process"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
+#            status_json = json.dumps(status_info)
+#            fold_mode.start(status_json)
+#            time.sleep(length)
+#            log.info("Stop it ...")
+#            fold_mode.stop()
+#
+#        log.info("Deconfigure it ...")
+#        fold_mode.deconfigure()
+#
+#if pipeline == "search":
+#    for i in range(nconfigure):
+#        log.info("Create pipeline ...")
+#        if beam == 1:
+#            config_info["frequency"] = 1340.5
+#            search_mode = Search1Beam()
+#        if beam == 2:
+#            config_info["frequency"] = 1337.0
+#            search_mode = Search2Beams()
+#            
+#        log.info("Configure it ...")
+#        config_info["utc_start_capture"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
+#        config_json = json.dumps(config_info)
+#        search_mode.configure(config_json)
+#
+#        for j in range(nstart):
+#            log.info("Start it ...")
+#            status_info["utc_start_process"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
+#            status_json = json.dumps(status_info)
+#            search_mode.start(status_json)
+#            
+#            time.sleep(length)
+#            log.info("Stop it ...")
+#            search_mode.stop()
+#
+#        log.info("Deconfigure it ...")
+#        search_mode.deconfigure()
+#        
+#if pipeline == "spectrometer":
+#    for i in range(nconfigure):
+#        log.info("Create pipeline ...")
+#        if beam == 1:
+#            config_info["frequency"] = 1340.5
+#            spectrometer_mode = Spectrometer1Beam()
+#        if beam == 2:
+#            config_info["frequency"] = 1337.0
+#            spectrometer_mode = Spectrometer2Beams()
+#
+#        log.info("Configure it ...")
+#        config_info["utc_start_capture"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
+#        config_json = json.dumps(config_info)
+#        spectrometer_mode.configure(config_json)
+#
+#        for j in range(nstart):
+#            log.info("Start it ...")
+#            status_info["utc_start_process"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
+#            status_json = json.dumps(status_info)
+#            spectrometer_mode.start(status_json)
+#            time.sleep(length)
+#            log.info("Stop it ...")
+#            spectrometer_mode.stop()
+#
+#        log.info("Deconfigure it ...")
+#        spectrometer_mode.deconfigure()
