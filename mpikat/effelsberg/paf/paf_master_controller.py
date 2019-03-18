@@ -140,13 +140,18 @@ class PafMasterController(MasterController):
 
     def setup_sensors(self):
         super(PafMasterController, self).setup_sensors()
+        self._control_mode_sensor = Sensor.string(
+            "control-mode",
+            description="The control mode for the PAF",
+            default=self._control_mode,
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._control_mode_sensor)
         self._paf_config_sensor = Sensor.string(
             "current-config",
             description="The currently set configuration for the PAF backend",
             default="",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._paf_config_sensor)
-
         self._status_server_sensor = Sensor.address(
             "status-server-address",
             description="The address of the status server",
