@@ -119,3 +119,4 @@ def compile_psrdada_cpp(params):
         make_cmd = ["make", "-j", "16"]
         make_proc = Popen(make_cmd, stdout=PIPE, stderr=PIPE)
         yield process_watcher(make_proc, timeout=600)
+
