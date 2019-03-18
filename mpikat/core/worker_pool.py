@@ -106,6 +106,7 @@ class WorkerPool(object):
             log.debug("{} servers available".format(len(available_servers)))
             available_servers.sort(
                 key=lambda server: server.priority, reverse=True)
+            available_servers = [i for i in available_servers if i.is_connected()]
             if len(available_servers) < count:
                 raise WorkerAllocationError("Cannot allocate {0} servers, only {1} available".format(
                     count, len(available_servers)))
