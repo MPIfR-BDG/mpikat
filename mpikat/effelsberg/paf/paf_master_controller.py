@@ -64,6 +64,26 @@ FITS_INTERFACES = [
     }
 ]
 
+WORKER_SERVERS = [
+    (134.104.70.90, 5000),
+    (134.104.70.90, 5001),
+    (134.104.70.91, 5000),
+    (134.104.70.91, 5001),
+    (134.104.70.92, 5000),
+    (134.104.70.92, 5001),
+    (134.104.70.93, 5000),
+    (134.104.70.93, 5001),
+    (134.104.70.94, 5000),
+    (134.104.70.94, 5001),
+    (134.104.70.95, 5000),
+    (134.104.70.95, 5001),
+    (134.104.70.96, 5000),
+    (134.104.70.96, 5001),
+    (134.104.70.97, 5000),
+    (134.104.70.97, 5001),
+    (134.104.70.98, 5000),
+    (134.104.70.98, 5001)
+]
 
 class PafConfigurationError(Exception):
     pass
@@ -453,6 +473,10 @@ def main():
         server.start()
         if opts.scpi_mode:
             server.set_control_mode(server.SCPI)
+        for hostname, port in WORKER_SERVERS:
+
+            server._server_pool.add(hostname, port)
+
         log.info(
             "Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
     ioloop.add_callback(start_and_display)
