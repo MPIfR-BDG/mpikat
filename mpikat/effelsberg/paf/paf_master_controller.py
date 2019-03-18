@@ -116,18 +116,19 @@ class PafMasterController(MasterController):
         @params  ip       The IP address on which the server should listen
         @params  port     The port that the server should bind to
         """
-        super(PafMasterController, self).__init__(ip, port, PafWorkerPool())
+        #super(PafMasterController, self).__init__(ip, port, PafWorkerPool())
         self._control_mode = self.KATCP
         self._scpi_ip = scpi_ip
         self._scpi_port = scpi_port
         self._status_server = JsonStatusServer(ip, 0)
+        super(PafMasterController, self).__init__(ip, port, PafWorkerPool())
 
     def start(self):
         super(PafMasterController, self).start()
-        #self._status_server.start()
-        #address = self._status_server.bind_address
-        #log.info("Status server started at {}".format(address))
-        #self._status_server_sensor.set_value(address)
+        self._status_server.start()
+        address = self._status_server.bind_address
+        log.info("Status server started at {}".format(address))
+        self._status_server_sensor.set_value(address)
         self._scpi_interface = PafScpiInterface(
             self, self._scpi_ip, self._scpi_port, self.ioloop)
 
