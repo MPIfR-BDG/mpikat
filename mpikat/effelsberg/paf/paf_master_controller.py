@@ -51,6 +51,19 @@ SUPPORTED_MODE = {"spectrometer2beam", "search1beamhigh",
 TWO_FITS_INTERFACES_MODE = {"spectrometer2beam",
                             "search1beamhigh", "search2beamhigh"}
 
+FITS_INTERFACES = [
+    {
+        "id": "fits_interface_01",
+        "name": "FitsInterface",
+        "address": ["134.104.73.132", 6000]
+    },
+    {
+        "id": "fits_interface_02",
+        "name": "FitsInterface",
+        "address": ["134.104.73.132", 6000]
+    }
+]
+
 
 class PafConfigurationError(Exception):
     pass
@@ -214,31 +227,12 @@ class PafMasterController(MasterController):
         @note  The JSON configuration object should be of the form:
                @code
                 {
-                "products":
-                [
-                    {
-                       "mode": "Search1Beam",
-                       "nbands": 48,
-                       "frequency": 1340.5,
-                       "nbeams": 18,
-                       "band_offset": 0,
-                       "write_filterbank": 0
-                    }
-                ],
-                "fits_interfaces":
-                     [
-                         {
-                             "id": "fits_interface_01",
-                             "name": "FitsInterface",
-                             "address": ["134.104.73.132", 6000]
-                         },
-                         {
-                             "id": "fits_interface_02",
-                             "name": "FitsInterface",
-                             "address": ["134.104.73.132", 6000]
-                         }
-                     ]
-
+                   "mode": "Search1Beam",
+                   "nbands": 48,
+                   "frequency": 1340.5,
+                   "nbeams": 18,
+                   "band_offset": 0,
+                   "write_filterbank": 0
                }
                @endcode
 
@@ -250,7 +244,6 @@ class PafMasterController(MasterController):
             log.error("PAF already has a configured data product")
             raise PafConfigurationError(
                 "PAF already has a configured data product")
-        self._fits_interfaces = []
         try:
             config_dict = json.loads(config_json)
         except Exception as error:
@@ -279,9 +272,10 @@ class PafMasterController(MasterController):
                 "Configured product controller with ID: {}".format(PAF_PRODUCT_ID))
 
         log.info("Configuring FITS interfaces")
-        product_mode = config_dict['products'][0]['mode']
-        fits_interface_id = config_dict['fits_interfaces'][0]['id']
-        for fi_config in config_dict["fits_interfaces"]:
+        product_mode = config_json['mode']
+        self._fits_interfaces = []
+        for fi_config in FITS_INTERFACES:
+            fits_interface_id = FITS_INTERFACES['id']
             if product_mode in SUPPORTED_MODE:
                 fi = PafFitsInterfaceClient(
                     fi_config["id"], fi_config["address"])
