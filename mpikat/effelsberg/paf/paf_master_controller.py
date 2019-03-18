@@ -153,6 +153,12 @@ class PafMasterController(MasterController):
             default="",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._status_server_sensor)
+        self._paf_scpi_interface_addr_sensor = Sensor.string(
+            "scpi-interface-addr",
+            description="The SCPI interface address for this instance",
+            default="{}:{}".format(self._scpi_ip, self._scpi_port),
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._paf_scpi_interface_addr_sensor)
 
     @property
     def katcp_control_mode(self):
