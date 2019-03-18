@@ -33,6 +33,7 @@ from mpikat.effelsberg.status_server import JsonStatusServer
 from mpikat.effelsberg.paf.paf_product_controller import PafProductController
 from mpikat.effelsberg.paf.paf_worker_wrapper import PafWorkerPool
 from mpikat.effelsberg.paf.paf_scpi_interface import PafScpiInterface
+from mpikat.effelsberg.paf.paf_fi_client import PafFitsInterfaceClient
 
 # ?halt message means shutdown everything and power off all machines
 # beamfile observer8:/home/obseff/paf_test/Scripts
@@ -43,6 +44,12 @@ PAF_PRODUCT_ID = "paf0"
 SCPI_BASE_ID = "PAFBE"
 PAF_REQUIRED_KEYS = ["nbeams", "nbands", "band_offset",
                      "mode", "frequency", "write_filterbank"]
+
+SUPPORTED_MODE = {"spectrometer2beam", "search1beamhigh",
+                  "search2beamlow", "search2beamhigh"}
+
+TWO_FITS_INTERFACES_MODE = {"spectrometer2beam",
+                            "search1beamhigh", "search2beamhigh"}
 
 
 class PafConfigurationError(Exception):
@@ -175,6 +182,31 @@ class PafMasterController(MasterController):
         """
         @brief      Configure PAF to receive and process data
 
+        @note       This is the KATCP wrapper for the configure command
+
+        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        """
+        if not self.katcp_control_mode:
+            return ("fail", "Master controller is in control mode: {}".format(
+                self._control_mode))
+
+        @coroutine
+        def configure_wrapper():
+            try:
+                yield self.configure(config_json)
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(configure_wrapper)
+        raise AsyncReply
+
+    @coroutine
+    def configure(self, config_json):
+        """
+        @brief      Configure PAF to receive and process data
+
         @param      req           A katcp request object
         @param      config_json   A JSON object containing configuration
                                   information.
@@ -183,7 +215,7 @@ class PafMasterController(MasterController):
                @code
                 {
                 "products":
-                [  
+                [
                     {
                        "mode": "Search1Beam",
                        "nbands": 48,
@@ -212,24 +244,6 @@ class PafMasterController(MasterController):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
-        if not self.katcp_control_mode:
-            return ("fail", "Master controller is in control mode: {}".format(
-                self._control_mode))
-
-        @coroutine
-        def configure_wrapper():
-            try:
-                yield self.configure(config_json)
-            except Exception as error:
-                log.exception(str(error))
-                req.reply("fail", str(error))
-            else:
-                req.reply("ok")
-        self.ioloop.add_callback(configure_wrapper)
-        raise AsyncReply
-
-    @coroutine
-    def configure(self, config_json):
         log.info("Configuring PAF backend")
         log.info("Configuration string: '{}'".format(config_json))
         if self._products:
@@ -248,7 +262,7 @@ class PafMasterController(MasterController):
                     key)
                 log.error(message)
                 raise PafConfigurationError(message)
-        
+
         log.debug("Building product controller for PAF processing")
         self._products[PAF_PRODUCT_ID] = PafProductController(
             self, PAF_PRODUCT_ID)
@@ -265,10 +279,22 @@ class PafMasterController(MasterController):
                 "Configured product controller with ID: {}".format(PAF_PRODUCT_ID))
 
         log.info("Configuring FITS interfaces")
+        product_mode = config_dict['products'][0]['mode']
+        fits_interface_id = config_dict['fits_interfaces'][0]['id']
         for fi_config in config_dict["fits_interfaces"]:
-            fi = EddFitsInterfaceClient(fi_config["id"], fi_config["address"])
-            yield fi.configure(fi_config)
-            self._fits_interfaces.append(fi)
+            if product_mode in SUPPORTED_MODE:
+                fi = PafFitsInterfaceClient(
+                    fi_config["id"], fi_config["address"])
+                if product_mode in TWO_FITS_INTERFACES_MODE:
+                    if fits_interface_id == "fits_interface_01":
+                        yield fi.configure(False)
+                        self._fits_interfaces.append(fi)
+                    elif fits_interface_id == "fits_interface_02":
+                        yield fi.configure(True)
+                        self._fits_interfaces.append(fi)
+                elif product_mode == "search2beamlow" and fits_interface_id == "fits_interface_01":
+                    yield fi.configure(True)
+                    self._fits_interfaces.append(fi)
         self._paf_config_sensor.set_value(config_json)
         self._update_products_sensor()
         log.info("PAF backend configured")
@@ -292,6 +318,7 @@ class PafMasterController(MasterController):
             try:
                 yield self.deconfigure()
             except Exception as error:
+                log.exception(str(error))
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
@@ -306,6 +333,8 @@ class PafMasterController(MasterController):
             PAF_PRODUCT_ID))
         yield product.deconfigure()
         del self._products[PAF_PRODUCT_ID]
+        for fi in self._fits_interfaces:
+            fi.capture_stop()
         self._update_products_sensor()
         log.info("PAF backend deconfigured")
 
@@ -345,6 +374,9 @@ class PafMasterController(MasterController):
         log.debug("Starting product controller with ID: {}".format(
             PAF_PRODUCT_ID))
         yield product.capture_start(status_json)
+        log.debug("Starting fits interfaces")
+        for fi in self._fits_interfaces:
+            yield fi.capture_start()
         log.info("PAF backend started")
 
     @request()
@@ -365,6 +397,7 @@ class PafMasterController(MasterController):
             try:
                 yield self.capture_stop()
             except Exception as error:
+                log.exception(str(error))
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
@@ -374,6 +407,8 @@ class PafMasterController(MasterController):
     @coroutine
     def capture_stop(self):
         log.info("Stopping PAF backend")
+        for fi in self._fits_interfaces:
+            yield fi.capture_stop()
         product = self._get_product(PAF_PRODUCT_ID)
         log.debug("Stopping product controller with ID: {}".format(
             PAF_PRODUCT_ID))
