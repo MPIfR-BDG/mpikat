@@ -124,10 +124,10 @@ class PafMasterController(MasterController):
 
     def start(self):
         super(PafMasterController, self).start()
-        self._status_server.start()
-        address = self._status_server.bind_address
-        log.info("Status server started at {}".format(address))
-        self._status_server_sensor.set_value(address)
+        #self._status_server.start()
+        #address = self._status_server.bind_address
+        #log.info("Status server started at {}".format(address))
+        #self._status_server_sensor.set_value(address)
         self._scpi_interface = PafScpiInterface(
             self, self._scpi_ip, self._scpi_port, self.ioloop)
 
@@ -474,9 +474,7 @@ def main():
         if opts.scpi_mode:
             server.set_control_mode(server.SCPI)
         for hostname, port in WORKER_SERVERS:
-
             server._server_pool.add(hostname, port)
-
         log.info(
             "Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
     ioloop.add_callback(start_and_display)
