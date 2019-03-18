@@ -5,6 +5,7 @@ import socket
 import time
 import errno
 import threading
+import struct 
 import coloredlogs
 import inspect
 import numpy as np
@@ -156,6 +157,9 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._fw_connection_manager = FitsWriterConnectionManager(fw_ip, fw_port)
         self._capture_thread = None
         self._shutdown = False
+        self._mode = None
+        self._fw_soc = None
+        self._paf_handler = PafHandler(self._mode, self._fw_soc)
         super(FitsInterfaceServer, self).__init__(interface, port)
 
     def start(self):
@@ -188,6 +192,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
 
     @nchannels.setter
     def nchannels(self, value):
+        value = self._paf_handler.read_paf_metadata()
         self._nchannels_sensor.set_value(value)
 
     @property
@@ -250,13 +255,13 @@ class FitsInterfaceServer(AsyncDeviceServer):
             self._capture_thread = None
             log.debug("Capture thread cleaned")
 
-    @request(Int(), Int(), Int())
+    @request(Int())
     @return_reply()
-    def request_configure(self, req, total_beams, nactive_beams, channels):
+    def request_configure(self, req, fi_status):
         """
         @brief    Configure the FITS interface server
 
-        @param   totalBeams     Total number of beams. 18 beam mode or 36 beam mode
+        @param   fi_status    FITS interface status: for active(1), inactive(0)
         @param   nactiveBeams   The number of beams expected
         @param   channels       The number of channels per frequency chunk expected(512 or 864)
         @param   int_time       The integration time (milliseconds int)
@@ -264,14 +269,13 @@ class FitsInterfaceServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
-
-        message = "totalBeams={}, activeBeams = {}, nchannels={}".format(
-            total_beams, nactive_beams, channels)
+        if fi_status == 1: message = "FITS interface is active({})".format(fi_status)
+        elif fi_status == 0: message = "FITS interface is inactive({})".format(fi_status)
+        else:
+            message = "Invalid mode: {}".format(fi_status)
+            return ("fail", message)
         log.info("Configuring FITS interface server with params: {}".format(message))
-        self.totalbeams = total_beams
-        self.nactivebeams = nactive_beams
-        self.nsections = 4*self.totalbeams
-        self.nchannels = channels
+        self._mode = fi_status
         self._fw_connection_manager.drop_connection()
         self._stop_capture()
         self._configured = True
@@ -290,17 +294,18 @@ class FitsInterfaceServer(AsyncDeviceServer):
             msg = "FITS interface server is not configured"
             log.error(msg)
             return ("fail", msg)
-        try:
-            fw_socket = self._fw_connection_manager.get_transmit_socket()
-        except Exception as error:
-            log.exception(str(error))
-            return ("fail", str(error))
+        if self._mode == 1:
+            try:
+                fw_socket = self._fw_connection_manager.get_transmit_socket()
+            except Exception as error:
+                log.exception(str(error))
+                return ("fail", str(error))
+        else: fw_socket = None
         log.info("Starting FITS interface capture")
         self._stop_capture()
-        buffer_size = (4*self.nchannels) + 64
-        handler = PafHandler(self.nactivebeams, self.nsections, self.nchannels, fw_socket)
+        handler = PafHandler(self._mode, fw_socket)
         self._capture_thread = CaptureData(self._capture_interface,
-            self._capture_port, buffer_size, handler)
+            self._capture_port, handler)
         self._capture_thread.start()
         return ("ok",)
 
@@ -327,10 +332,10 @@ class CaptureData(Thread):
     """
     @brief     Captures formatted data from a UDP socket
     """
-    def __init__(self, ip, port, buffer_size, handler):
+    def __init__(self, ip, port, handler):
         Thread.__init__(self, name=self.__class__.__name__)
         self._address = (ip, port)
-        self._buffer_size = buffer_size
+        self._buffer_size = 3250 
         self._stop_event = Event()
         self._handler = handler
 
@@ -358,7 +363,6 @@ class CaptureData(Thread):
 
     def _capture(self):
         log.debug("Starting data capture")
-        print "Starting data capture"
         while not self._stop_event.is_set():
             try:
                 data, addr = self._socket.recvfrom(self._buffer_size)
@@ -463,15 +467,19 @@ class PafHandler(object):
     Aggregates spectrometer  or stokes data from different beams for the given time
     before sending to the fits writer
     """
-    def __init__(self, nactive_beams, nsections, nchannels, transmit_socket):
+    def __init__(self, mode, transmit_socket):
         
-        self._nactivebeams = nactive_beams
-        self._nsections = nsections 
+        self._mode = mode 
         self._npol = 4
-        self._nchannelsperpacket = nchannels
+        self._nsections = 36*self._npol 
         self._nphases = 1 
         self._transmit_socket = transmit_socket
         self._active_packets = {}
+
+    def read_paf_metadata(self, raw_data):
+        metadata = struct.unpack("<i28sfiffiiii", raw_data[0:64])
+        channelsPerPacket = metadata[3]/metadata[8]
+        return channelsPerPacket
 
     def __call__(self, raw_data):
         """
@@ -479,27 +487,29 @@ class PafHandler(object):
 
         @param      raw_data  The raw data captured from the network
         """
-        packet = PafPacket(raw_data, self._nchannelsperpacket)
+        self.nchannelsperpacket = self.read_paf_metadata(raw_data) 
+        packet = PafPacket(raw_data, self.nchannelsperpacket)
         log.debug("Aggregate received packet: {}".format(packet))
-        log.debug("From packet: beam_id: {}, pol_id: {}, ts: {}, channels: {}, freq_chunks: {}, chunk_index: {}".
-            format(packet.beam_id, packet.pol_id, packet.time_stamp, packet.nchannels, packet.nfreq_chunks, packet.freq_chunks_index))
+        log.debug("From packet: beam_id: {}, pol_id: {}, ts: {}, integ_time = {}, channels: {}, freq_chunks: {}, chunk_index: {}".
+            format(packet.beam_id, packet.pol_id, packet.time_stamp, packet.integ_time, packet.nchannels, packet.nfreq_chunks, packet.freq_chunks_index))
 
         key = packet.time_stamp
+        print "<ts: {}, beam_id: {}, pol_id: {} >".format(key, packet.beam_id, packet.pol_id)
 
         if key not in self._active_packets:
-            nexpected_packets = self._nactivebeams*self._npol*packet.nfreq_chunks
             fw_packet = build_fw_object(self._nsections, packet.nchannels, packet.time_stamp,
                 int(packet.integ_time*10**6), self._nphases)
             fw_packet.sections[(packet.beam_id*4)+packet.pol_id].data[(packet.nfreq_chunks*packet.freq_chunks_index):
                 ((packet.nfreq_chunks*packet.freq_chunks_index)+(packet.nchannels/packet.nfreq_chunks))] = packet.data
-            nexpected_packets = self._nactivebeams*self._npol*packet.nfreq_chunks
+
             max_age = packet.integ_time*2
-            self._active_packets[key] = [time.time(), max_age, 1, nexpected_packets, fw_packet]
+            if max_age < 3: max_age = 3 
+
+            self._active_packets[key] = [time.time(), max_age, fw_packet]
         else:
-            self._active_packets[key][2] += 1
-            self._active_packets[key][4].sections[(packet.beam_id*4)+packet.pol_id].data[(packet.nfreq_chunks*packet.freq_chunks_index):
+            self._active_packets[key][2].sections[(packet.beam_id*4)+packet.pol_id].data[(packet.nfreq_chunks*packet.freq_chunks_index):
                 ((packet.nfreq_chunks*packet.freq_chunks_index)+(packet.nchannels/packet.nfreq_chunks))] = packet.data
-        self.flush()
+        #self.flush()
 
     def flush(self):
         """
@@ -509,14 +519,11 @@ class PafHandler(object):
         log.debug("Number of active packets pre-flush: {}".format(len(self._active_packets)))
         now = time.time()
         for key in sorted(self._active_packets.iterkeys()):
-            timestamp, time_out, hits, max_hits, fw_packet = self._active_packets[key]
-            if ((now - timestamp) > time_out):
-                log.warning("Age exceeds maximum age. Incomplete packet will be flushed to FITS writer.")
-                self._transmit_socket.send(bytearray(fw_packet))
-                del self._active_packets[key]
-            elif (hits == max_hits):
-                log.debug("Sending complete packet with timestamp: {}".format(timestamp))
-                self._transmit_socket.send(bytearray(fw_packet))
+            timestamp, time_out, fw_packet = self._active_packets[key]
+            if ((now - timestamp) >= time_out):
+                if self._mode == 1:
+                    log.debug("Sending packets with timestamp: {}".format(timestamp))
+                    self._transmit_socket.send(bytearray(fw_packet))
                 del self._active_packets[key]
         log.debug("Number of active packets post-flush: {}".format(len(self._active_packets)))
 
