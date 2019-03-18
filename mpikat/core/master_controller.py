@@ -204,7 +204,7 @@ class MasterController(AsyncDeviceServer):
         @brief   List all control servers and provide minimal metadata
         """
         for server in self._server_pool.used():
-            req.inform("{} allocated".format(server))
+            req.inform("{} allocated {}".format(server, server.is_connected()))
         for server in self._server_pool.available():
             req.inform("{} free".format(server))
         return ("ok", len(self._server_pool.used()) + len(self._server_pool.available()))
