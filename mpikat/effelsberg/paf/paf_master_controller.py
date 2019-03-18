@@ -45,24 +45,36 @@ SCPI_BASE_ID = "PAFBE"
 PAF_REQUIRED_KEYS = ["nbeams", "nbands", "band_offset",
                      "mode", "frequency", "write_filterbank"]
 
-SUPPORTED_MODE = {"spectrometer2beam", "search1beamhigh",
-                  "search2beamlow", "search2beamhigh"}
-
-TWO_FITS_INTERFACES_MODE = {"spectrometer2beam",
-                            "search1beamhigh", "search2beamhigh"}
-
 FITS_INTERFACES = [
     {
         "id": "fits_interface_01",
         "name": "FitsInterface",
-        "address": ["134.104.73.132", 6000]
+        "address": ["134.104.70.90", 5000]
     },
     {
         "id": "fits_interface_02",
         "name": "FitsInterface",
-        "address": ["134.104.73.132", 6000]
+        "address": ["134.104.70.90", 5001]
     }
 ]
+
+FI_CONFIGURATIONS = {
+    "spectrometer2beam": {
+        "fits_interface_01": False,
+        "fits_interface_02": True
+    },
+    "search1beamhigh": {
+        "fits_interface_01": False,
+        "fits_interface_02": True
+    },
+    "search2beamlow": {
+        "fits_interface_01": True
+    },
+    "search2beamhigh": {
+        "fits_interface_01": False,
+        "fits_interface_02": True
+    }
+}
 
 WORKER_SERVERS = [
     ("134.104.70.90", 6000),
@@ -84,6 +96,7 @@ WORKER_SERVERS = [
     ("134.104.70.98", 6000),
     ("134.104.70.98", 6001)
 ]
+
 
 class PafConfigurationError(Exception):
     pass
@@ -306,21 +319,15 @@ class PafMasterController(MasterController):
         log.info("Configuring FITS interfaces")
         product_mode = config_json['mode']
         self._fits_interfaces = []
+        temp_fi_interfaces = {}
         for fi_config in FITS_INTERFACES:
-            fits_interface_id = FITS_INTERFACES['id']
-            if product_mode in SUPPORTED_MODE:
-                fi = PafFitsInterfaceClient(
-                    fi_config["id"], fi_config["address"])
-                if product_mode in TWO_FITS_INTERFACES_MODE:
-                    if fits_interface_id == "fits_interface_01":
-                        yield fi.configure(False)
-                        self._fits_interfaces.append(fi)
-                    elif fits_interface_id == "fits_interface_02":
-                        yield fi.configure(True)
-                        self._fits_interfaces.append(fi)
-                elif product_mode == "search2beamlow" and fits_interface_id == "fits_interface_01":
-                    yield fi.configure(True)
-                    self._fits_interfaces.append(fi)
+            temp_fi_interfaces[fi_config['id']] = PafFitsInterfaceClient(
+                fi_config["id"], fi_config["address"])
+        fi_setup = FI_CONFIGURATIONS[product_mode]
+        for _id, active in fi_setup.items():
+            fi = temp_fi_interfaces[_id]
+            yield fi.configure(active)
+            self._fits_interfaces.append(fi)
         self._paf_config_sensor.set_value(config_json)
         self._update_products_sensor()
         log.info("PAF backend configured")
