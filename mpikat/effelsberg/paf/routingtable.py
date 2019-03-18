@@ -7,7 +7,9 @@ import ipaddress
 import time
 import tempfile
 import socket
+import numpy as np
 from os.path import join
+import argparse
 
 log = logging.getLogger("mpikat.paf_routingtable")
 
@@ -26,8 +28,8 @@ CONFIG2BEAMS = {"nbeam":           36,  # Expected number from configuration, th
 
 CONFIG1BEAM = {"nbeam":           18,  # Expected number from configuration, the real number depends on the number of alive NiCs
                "nbeam_per_nic":   1,
-               "nport_per_beam":  6,
-               "nchunk_per_port": 8,
+               "nport_per_beam":  3,
+               "nchunk_per_port": 16,
                }
 
 PARAMIKO_BUFSZ = 102400
@@ -84,6 +86,22 @@ class RemoteAccess(object):
         self.sftp_client.put(src, dst)
         log.debug("Close scp channel")
         self.sftp_client.close()
+
+    def readbeamfile(self, src):
+        log.debug("Create SCP connection with {}... ".format(self.ip))
+        self.sftp_client = self.ssh_client.open_sftp()
+        log.debug("Reading {}".format(src))
+        beamfile = self.sftp_client.open(src)
+        beamlist = []
+        beam_alt_d = []
+        beam_az_d = []
+        for line in beamfile:
+            beamlist.append(np.fromstring(line, dtype=np.float32, sep=' '))
+        for i in range(1, len(beamlist)):
+            beam_alt_d.append(beamlist[i][0]), beam_az_d.append(beamlist[i][1])
+        log.debug("Close scp channel")
+        self.sftp_client.close()
+        return beam_alt_d, beam_az_d
 
     def disconnect(self):
         log.debug("Disconnect from {} ...".format(self.ip))
@@ -289,12 +307,20 @@ if __name__ == "__main__":
                     ['0x248a07e1ac50',	'10.17.8.2']]
 
     center_freq = 1340.5
-    nchunk = 48
-    nbeam = 18
-
-    nchunk = 33
-    nbeam = 36
+    
+    parser = argparse.ArgumentParser(
+        description='To run the pipeline for my test')
+    parser.add_argument('-a', '--nbeam', type=int, nargs='+',
+                        help='The number of beams on each GPU')
+    args = parser.parse_args()
+    nbeam = args.nbeam[0]
     nchunk_offset = 0
+    if nbeam == 1:
+        nchunk = 48
+        nbeam = 18
+    if nbeam == 2:
+        nchunk = 33
+        nbeam = 36
 
     routing_table = RoutingTable(
         destinations, nbeam, nchunk, nchunk_offset, center_freq)

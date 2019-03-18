@@ -33,6 +33,7 @@ from mpikat.effelsberg.status_server import JsonStatusServer
 from mpikat.effelsberg.paf.paf_product_controller import PafProductController
 from mpikat.effelsberg.paf.paf_worker_wrapper import PafWorkerPool
 from mpikat.effelsberg.paf.paf_scpi_interface import PafScpiInterface
+from mpikat.effelsberg.paf.paf_fi_client import PafFitsInterfaceClient
 
 # ?halt message means shutdown everything and power off all machines
 # beamfile observer8:/home/obseff/paf_test/Scripts
@@ -43,6 +44,25 @@ PAF_PRODUCT_ID = "paf0"
 SCPI_BASE_ID = "PAFBE"
 PAF_REQUIRED_KEYS = ["nbeams", "nbands", "band_offset",
                      "mode", "frequency", "write_filterbank"]
+
+SUPPORTED_MODE = {"spectrometer2beam", "search1beamhigh",
+                  "search2beamlow", "search2beamhigh"}
+
+TWO_FITS_INTERFACES_MODE = {"spectrometer2beam",
+                            "search1beamhigh", "search2beamhigh"}
+
+FITS_INTERFACES = [
+    {
+        "id": "fits_interface_01",
+        "name": "FitsInterface",
+        "address": ["134.104.73.132", 6000]
+    },
+    {
+        "id": "fits_interface_02",
+        "name": "FitsInterface",
+        "address": ["134.104.73.132", 6000]
+    }
+]
 
 
 class PafConfigurationError(Exception):
@@ -175,21 +195,7 @@ class PafMasterController(MasterController):
         """
         @brief      Configure PAF to receive and process data
 
-        @param      req           A katcp request object
-        @param      config_json   A JSON object containing configuration
-                                  information.
-
-        @note  The JSON configuration object should be of the form:
-               @code
-               {
-                   "mode": "Search1Beam",
-                   "nbands": 48,
-                   "frequency": 1340.5,
-                   "nbeams": 18,
-                   "band_offset": 0,
-                   "write_filterbank": 0
-               }
-               @endcode
+        @note       This is the KATCP wrapper for the configure command
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
@@ -211,24 +217,49 @@ class PafMasterController(MasterController):
 
     @coroutine
     def configure(self, config_json):
+        """
+        @brief      Configure PAF to receive and process data
+
+        @param      req           A katcp request object
+        @param      config_json   A JSON object containing configuration
+                                  information.
+
+        @note  The JSON configuration object should be of the form:
+               @code
+                {
+                   "mode": "Search1Beam",
+                   "nbands": 48,
+                   "frequency": 1340.5,
+                   "nbeams": 18,
+                   "band_offset": 0,
+                   "write_filterbank": 0
+               }
+               @endcode
+
+        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        """
         log.info("Configuring PAF backend")
         log.info("Configuration string: '{}'".format(config_json))
         if self._products:
             log.error("PAF already has a configured data product")
             raise PafConfigurationError(
                 "PAF already has a configured data product")
-        config_dict = json.loads(config_json)
+        try:
+            config_dict = json.loads(config_json)
+        except Exception as error:
+            log.error("Unable to parse configuration dictionary")
+            raise error
         for key in PAF_REQUIRED_KEYS:
             if key not in config_dict:
                 message = "No value set for required configuration parameter '{}'".format(
                     key)
                 log.error(message)
                 raise PafConfigurationError(message)
-        self._paf_config_sensor.set_value(config_json)
+
         log.debug("Building product controller for PAF processing")
         self._products[PAF_PRODUCT_ID] = PafProductController(
             self, PAF_PRODUCT_ID)
-        self._update_products_sensor()
+
         log.debug("Configuring product controller")
         try:
             yield self._products[PAF_PRODUCT_ID].configure(config_json)
@@ -239,6 +270,27 @@ class PafMasterController(MasterController):
         else:
             log.debug(
                 "Configured product controller with ID: {}".format(PAF_PRODUCT_ID))
+
+        log.info("Configuring FITS interfaces")
+        product_mode = config_json['mode']
+        self._fits_interfaces = []
+        for fi_config in FITS_INTERFACES:
+            fits_interface_id = FITS_INTERFACES['id']
+            if product_mode in SUPPORTED_MODE:
+                fi = PafFitsInterfaceClient(
+                    fi_config["id"], fi_config["address"])
+                if product_mode in TWO_FITS_INTERFACES_MODE:
+                    if fits_interface_id == "fits_interface_01":
+                        yield fi.configure(False)
+                        self._fits_interfaces.append(fi)
+                    elif fits_interface_id == "fits_interface_02":
+                        yield fi.configure(True)
+                        self._fits_interfaces.append(fi)
+                elif product_mode == "search2beamlow" and fits_interface_id == "fits_interface_01":
+                    yield fi.configure(True)
+                    self._fits_interfaces.append(fi)
+        self._paf_config_sensor.set_value(config_json)
+        self._update_products_sensor()
         log.info("PAF backend configured")
 
     @request()
@@ -260,6 +312,7 @@ class PafMasterController(MasterController):
             try:
                 yield self.deconfigure()
             except Exception as error:
+                log.exception(str(error))
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
@@ -274,6 +327,8 @@ class PafMasterController(MasterController):
             PAF_PRODUCT_ID))
         yield product.deconfigure()
         del self._products[PAF_PRODUCT_ID]
+        for fi in self._fits_interfaces:
+            fi.capture_stop()
         self._update_products_sensor()
         log.info("PAF backend deconfigured")
 
@@ -313,6 +368,9 @@ class PafMasterController(MasterController):
         log.debug("Starting product controller with ID: {}".format(
             PAF_PRODUCT_ID))
         yield product.capture_start(status_json)
+        log.debug("Starting fits interfaces")
+        for fi in self._fits_interfaces:
+            yield fi.capture_start()
         log.info("PAF backend started")
 
     @request()
@@ -333,6 +391,7 @@ class PafMasterController(MasterController):
             try:
                 yield self.capture_stop()
             except Exception as error:
+                log.exception(str(error))
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
@@ -342,6 +401,8 @@ class PafMasterController(MasterController):
     @coroutine
     def capture_stop(self):
         log.info("Stopping PAF backend")
+        for fi in self._fits_interfaces:
+            yield fi.capture_stop()
         product = self._get_product(PAF_PRODUCT_ID)
         log.debug("Stopping product controller with ID: {}".format(
             PAF_PRODUCT_ID))
