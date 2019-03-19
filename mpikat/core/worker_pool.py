@@ -139,7 +139,7 @@ class WorkerPool(object):
         """
         @brief   Return list of available servers
         """
-        available_servers = [i for i in available_servers if i.is_connected()]
+        available_servers = [i for i in list(self._servers.difference(self._allocated)) if i.is_connected()]
 
         return list(available_servers.difference(self._allocated))
         #return list(self._servers.difference(self._allocated))
