@@ -80,7 +80,7 @@ FI_CONFIGURATIONS = {
     "spectrometer2beam": {
         "fits_interface_01": False
     },
-    "search1beamhigh": {
+    "Search1beamhigh": {
         "fits_interface_01": False
     },
     "search2beamlow": {
@@ -333,7 +333,7 @@ class PafMasterController(MasterController):
                 "Configured product controller with ID: {}".format(PAF_PRODUCT_ID))
 
         log.info("Configuring FITS interfaces")
-        product_mode = config_dict['mode']
+        product_mode = config_dict['mode'].lower()
         self._fits_interfaces = []
         temp_fi_interfaces = {}
         for fi_config in FITS_INTERFACES:

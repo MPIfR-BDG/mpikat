@@ -209,7 +209,7 @@ PIPELINES = {}
 
 def register_pipeline(name):
     def _register(cls):
-        PIPELINES[name] = cls
+        PIPELINES[name.lower()] = cls
         return cls
     return _register
 
