@@ -299,6 +299,11 @@ class PafMasterController(MasterController):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
+        log.info("Attempting deconfiguring PAF backend")
+        try:
+            yield self.deconfigure()
+        except Exception as error:
+            log.warning("Unable to deconfigure: {}".format(str(error)))
         log.info("Configuring PAF backend")
         log.info("Configuration string: '{}'".format(config_json))
         if self._products:
