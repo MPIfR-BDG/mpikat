@@ -158,7 +158,7 @@ class PafProductController(ProductController):
         try:
             #beam_alt_d, beam_az_d = be4.readfile(config_dict['beam_pos_fname'])
             beam_offset_file = "/home/obseff/paf_test/Scripts/hexpack36"
-            beam_az_d, beam_alt_d = be4.readfile(beam_offset_file)
+            beam_az_d, beam_alt_d = be4.readbeamfile(beam_offset_file)
 
         except PafBeamFileError:
             log.warning("Unable to read beamfile")
