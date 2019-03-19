@@ -317,7 +317,7 @@ class PafMasterController(MasterController):
                 "Configured product controller with ID: {}".format(PAF_PRODUCT_ID))
 
         log.info("Configuring FITS interfaces")
-        product_mode = config_json['mode']
+        product_mode = config_dict['mode']
         self._fits_interfaces = []
         temp_fi_interfaces = {}
         for fi_config in FITS_INTERFACES:
