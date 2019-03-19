@@ -109,7 +109,7 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "gpu_nstream":                  2,
                    
                    "search_keys":         ["dbda", "dbdc"], # To put filterbank data 
-                   "search_nblk":         2,
+                   "search_nblk":         200,
                    "search_nchan":        1024,
                    "search_nchan":        512,
                    "search_cufft_nx":     128,
@@ -132,9 +132,12 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "spectrometer_cufft_nx":       1024,
                    "spectrometer_nbyte":          4,
                    "spectrometer_ndata_per_samp": 4,
-                   "spectrometer_ptype":          4,
-                   "spectrometer_ip":    	  '134.104.70.90',
-                   "spectrometer_port":    	  17108,
+                   "spectrometer_ptype":          2,
+                   "spectrometer_ip":    	  '239.3.1.2',
+                   "spectrometer_port":    	  2,
+                   #"spectrometer_port":    	  5556,
+                   #"spectrometer_ip":             "134.104.70.90",
+                   #"spectrometer_port":           17106,
                    "spectrometer_dbdisk":         0,
                    "spectrometer_monitor":        1,
                    "spectrometer_accumulate_nblk": 1,
@@ -159,8 +162,11 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "fold_software_name":  "baseband2baseband_main",
                    
                    "monitor_keys":            ["deda", "dedc"], # To put monitor data
-                   "monitor_ip":      	      '134.104.70.90',
-                   "monitor_port":     	      17109,
+                   "monitor_ip":      	      '239.3.1.1',
+                   "monitor_port":           2,
+                   #"monitor_port":     	      5556,
+                   #"monitor_ip":             "134.104.70.90",
+                   #"monitor_port":            17107,
                    "monitor_ptype":           2,
 
                    "tel_lat":                 50.524722,
@@ -380,7 +386,7 @@ class Pipeline(object):
         self._monitor_ip    = PIPELINE_CONFIG["monitor_ip"]
         self._monitor_port  = PIPELINE_CONFIG["monitor_port"]
         self._monitor_ptype = PIPELINE_CONFIG["monitor_ptype"]      
-        
+
         self._spectrometer_keys     = PIPELINE_CONFIG["spectrometer_keys"]
         self._spectrometer_nblk     = PIPELINE_CONFIG["spectrometer_nblk"]
         self._spectrometer_nreader  = PIPELINE_CONFIG["spectrometer_nreader"]
@@ -956,6 +962,9 @@ class Fold(Pipeline):
         self._config_ip            = self._config_info["ip_address"]
         self._config_nchunk_offset = self._config_info["bandoffset"]
         self._config_freq          = self._config_info["frequency"]
+        self._simultaneous_spectrometer_nchunk          = self._config_info["zoomnbands"]
+        self._simultaneous_spectrometer_start_chunk     = self._config_info["zoomband0"]
+        
         self._config_nchunk = self._config_info['nbands']
         self._beam_alt_d    = self._reverse_offsets(self._config_info["beam_alt_d"])
         self._beam_az_d     = self._reverse_offsets(self._config_info["beam_az_d"])
@@ -1535,6 +1544,9 @@ class Search(Pipeline):
         self._config_ip     = self._config_info['ip_address']
         self._config_nchunk = self._config_info['nbands']
         self._config_nchunk_offset = self._config_info["bandoffset"]
+        self._simultaneous_spectrometer_nchunk          = self._config_info["zoomnbands"]
+        self._simultaneous_spectrometer_start_chunk     = self._config_info["zoomband0"]
+        
         self._beam_alt_d   = self._reverse_offsets(self._config_info['beam_alt_d'])
         self._beam_az_d    = self._reverse_offsets(self._config_info['beam_az_d'])
                 
@@ -1547,7 +1559,13 @@ class Search(Pipeline):
         self._input_nport       = len(self._input_ports[0])
         self._input_nchunk      = self._input_nport * self._input_nchunk_per_port
         self._input_nchan       = self._input_nchunk * self._paf_nchan_per_chunk
- 
+
+        self._search_heimdall        = self._input_config["search_heimdall"]
+        self._search_dbdisk          = self._input_config["search_dbdisk"]
+        self._search_spectrometer    = self._input_config["search_spectrometer"]
+        self._search_sod             = self._input_config["search_sod"]
+        self._search_nreader         = self._input_config["search_nreader"]
+        
         # Check the frequency information in the configuration
         if self._config_freq not in self._paf_freq:
             log.error("The config frequency should be {}, but it is {}".format(self._paf_freq, self._config_freq))
@@ -1624,6 +1642,7 @@ class Search(Pipeline):
             raise PipelineError("{} is not exist".format(self._search_main))
         
         # To setup commands for each process
+        self._search_heimdall_commands = []
         self._execution_instances_config = []
         self._input_beam_index = []
         self._input_socket_address = []
@@ -2171,6 +2190,9 @@ class Spectrometer(Pipeline):
         self._config_ip     = self._config_info['ip_address']
         self._config_nchunk = self._config_info['nbands']
         self._config_nchunk_offset = self._config_info["bandoffset"]
+        self._simultaneous_spectrometer_nchunk          = self._config_info["zoomnbands"]
+        self._simultaneous_spectrometer_start_chunk     = self._config_info["zoomband0"]
+        
         self._beam_alt_d   = self._reverse_offsets(self._config_info['beam_alt_d'])
         self._beam_az_d    = self._reverse_offsets(self._config_info['beam_az_d'])
 
@@ -2183,7 +2205,7 @@ class Spectrometer(Pipeline):
         self._input_nport       = len(self._input_ports[0])
         self._input_nchunk      = self._input_nport * self._input_nchunk_per_port
         self._input_nchan       = self._input_nchunk * self._paf_nchan_per_chunk
- 
+
         # Check the frequency information in the configuration
         if self._config_freq not in self._paf_freq:
             log.error("The config frequency should be {}, but it is {}".format(self._paf_freq, self._config_freq))
@@ -2615,94 +2637,81 @@ class Spectrometer(Pipeline):
         self.state = "idle"
         log.info("Idle")
 
-#@register_pipeline("Fold2Beams")
-#class Fold2Beams(Fold):
-#    
-#    def configure(self, config_json):
-#        super(Fold2Beams, self).configure(config_json, INPUT_2BEAM)
-#
-#
-#@register_pipeline("Fold1Beam")
-#class Fold1Beam(Fold):
-#
-#    def configure(self, config_json):
-#        super(Fold1Beam, self).configure(config_json, INPUT_1BEAM)
-#
-#@register_pipeline("Search2Beams")
-#class Search2Beams(Search):
-#    
-#    def configure(self, config_json):
-#        super(Search2Beams, self).configure(config_json, INPUT_2BEAM)
-#
-#
-#@register_pipeline("Search1Beam")
-#class Search1Beam(Search):
-#
-#    def configure(self, config_json):
-#        super(Search1Beam, self).configure(config_json, INPUT_1BEAM)
-#
-#@register_pipeline("Spectrometer2Beams")
-#class Spectrometer2Beams(Spectrometer):
-#    def configure(self, config_json):
-#        super(Spectrometer2Beams, self).configure(config_json, INPUT_2BEAM)
-#
-#
-#@register_pipeline("Spectrometer1Beam")
-#class Spectrometer1Beam(Spectrometer):
-#
-#    def configure(self, config_json):
-#        super(Spectrometer1Beam, self).configure(config_json, INPUT_2BEAM)
-
 @register_pipeline("Spectrometer2Beam")
 class Spectrometer2Beam(Spectrometer):
     def __init__(self):
-        self._spectrometer_monitor = 1 # Turn monitor on
-        self._spectrometer_dbdisk  = 0 # Send data to FITSwriter interface
         super(Spectrometer2Beam, self).__init__()
         
     def configure(self, config_json):
-        super(Spectrometer2Beam, self).configure(config_json, INPUT_2BEAM)
-
-@register_pipeline("Search2BeamLow")
-class Search2BeamLow(Search):
-    def __init__(self):
-        self._search_spectrometer = 0 # Do not zoom in
-        self._search_monitor      = 1 # Turn monitor on
-        self._search_dbdisk       = 0 # Do not write filterbank into disk
-        self._search_heimdall     = 0 # Do not run heimdall
-        super(Search2BeamLow, self).__init__()
+        config_dictionary = {
+            "input_nbeam":                  2,
+            "input_nchunk_per_port":       11,
+            "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]]
+            }
         
-    def configure(self, config_json):
-        super(Search2BeamLow, self).configure(config_json, INPUT_2BEAM)
+        super(Spectrometer2Beam, self).configure(config_json, config_dictionary)
 
 @register_pipeline("Search1BeamHigh")
 class Search1BeamHigh(Search):
     def __init__(self):
-        self._search_spectrometer = 1 # Do zoom in                     
-        self._search_monitor      = 1 # Turn monitor on
-        self._search_dbdisk       = 1 # Write filterbank data to disk
-        self._search_heimdall     = 1 # Run heimdall parallel
         super(Search1BeamHigh, self).__init__()
         
     def configure(self, config_json):
-        super(Search1BeamHigh, self).configure(config_json, INPUT_1BEAM)
+        config_dictionary = {
+            "input_nbeam":                  1,
+            "input_nchunk_per_port":       16,
+            "input_ports":                 [[17100, 17101, 17102]],
+            "search_heimdall":     1,
+            "search_dbdisk":       1,
+            "search_spectrometer": 1,
+            "search_sod":          1,
+            "search_nreader":      2,
+            }
+        super(Search1BeamHigh, self).configure(config_json, config_dictionary)
+
+@register_pipeline("Search2BeamLow")
+class Search2BeamLow(Search):
+    def __init__(self):
+        super(Search2BeamLow, self).__init__()
+        
+    def configure(self, config_json):
+        config_dictionary = {
+            "input_nbeam":                  2,
+            "input_nchunk_per_port":       11,
+            "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]],
+            "search_heimdall":     0,
+            "search_dbdisk":       0,
+            "search_spectrometer": 0,
+            "search_sod":          0,
+            "search_nreader":      1,
+            }        
+        super(Search2BeamLow, self).configure(config_json, config_dictionary)
+        
 
 @register_pipeline("Search2BeamHigh")
 class Search2BeamHigh(Search):
     def __init__(self):
-        self._search_spectrometer = 1 # Do zoom in                     
-        self._search_monitor      = 1 # Turn monitor on                
-        self._search_dbdisk       = 1 # Write filterbank data to disk  
-        self._search_heimdall     = 1 # Run heimdall parallel          
         super(Search2BeamHigh, self).__init__()
         
     def configure(self, config_json):
-        super(Search2BeamHigh, self).configure(config_json, INPUT_2BEAM)
+        config_dictionary = {
+            "input_nbeam":                  2,
+            "input_nchunk_per_port":       11,
+            "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]],
+            #"search_heimdall":     0,
+            "search_heimdall":     1,
+            "search_dbdisk":       1,
+            "search_spectrometer": 1,
+            "search_sod":          1,
+            #"search_nreader":      1,
+            "search_nreader":      2,
+            }
+        super(Search2BeamHigh, self).configure(config_json, config_dictionary)
 
-# ./pipeline.py -a 0 -b 1 -c search -d 1 -e 1 -f 100
-# ./pipeline.py -a 0 -b 2 -c search -d 1 -e 1 -f 100
-# ./pipeline.py -a 1 -b 1 -c search -d 1 -e 1 -f 100
-# ./pipeline.py -a 1 -b 2 -c search -d 1 -e 1 -f 100
+# ./pipeline.py -a 0 -b search2beamlow    -c 1 -d 1 -e 100
+# ./pipeline.py -a 0 -b search2beamhigh   -c 1 -d 1 -e 100
+# ./pipeline.py -a 1 -b search1beamhigh   -c 1 -d 1 -e 100
+# ./pipeline.py -a 1 -b spectrometer2beam -c 1 -d 1 -e 100
 
 if __name__ == "__main__":
     logging.getLogger().addHandler(logging.NullHandler())
@@ -2716,20 +2725,17 @@ if __name__ == "__main__":
         description='To run the pipeline for my test')
     parser.add_argument('-a', '--numa', type=int, nargs='+',
                         help='The ID of numa node')
-    parser.add_argument('-b', '--beam', type=int, nargs='+',
-                        help='The number of beams')
-    parser.add_argument('-c', '--pipeline', type=str, nargs='+',
+    parser.add_argument('-b', '--pipeline', type=str, nargs='+',
                         help='The pipeline to run')
-    parser.add_argument('-d', '--nconfigure', type=int, nargs='+',
+    parser.add_argument('-c', '--nconfigure', type=int, nargs='+',
                         help='How many times to repeat the configure')
-    parser.add_argument('-e', '--nstart', type=int, nargs='+',
+    parser.add_argument('-d', '--nstart', type=int, nargs='+',
                         help='How many times to repeat the start')    
-    parser.add_argument('-f', '--length', type=int, nargs='+',
+    parser.add_argument('-e', '--length', type=int, nargs='+',
                         help='Length in seconds of observations')
     
     args = parser.parse_args()
     numa = args.numa[0]
-    beam = args.beam[0]
     pipeline = args.pipeline[0]
     nconfigure = args.nconfigure[0]
     nstart = args.nstart[0]
@@ -2746,6 +2752,8 @@ if __name__ == "__main__":
                    "beam_alt_d":         [0, -0.1, -0.2, -0.3, -0.1, -0.2, -0.3,  0.1,  0.2,  0.3, -0.11, -0.21, -0.31, -0.11, -0.21, -0.31,  0.12,  0.22,  0.32, -0.12, -0.22, -0.32, -0.12, -0.22, -0.32,  0.12,  0.22,  0.32, 0.13, 0.23,  0.33, -0.13, -0.23, -0.33, -0.13, -0.23, -0.33,  0.13,  0.23],
                    # First column in the file, opposite value                                                                                                  
                    "beam_az_d":        [0, -0.1, -0.2, -0.3,  0.1,  0.2,  0.3, -0.1, -0.2, -0.3, -0.11, -0.21, -0.31,  0.11,  0.21,  0.31, -0.12, -0.22, -0.32, -0.12, -0.22, -0.32,  0.12,  0.22,  0.32, -0.12, -0.22, -0.32, -0.13, -0.23, -0.33, -0.13, -0.23, -0.33,  0.13,  0.23,  0.33, -0.13, -0.23],
+                   "zoomband0": 26,
+                   "zoomnbands":5,
                    # Second column in the file, opposite value
     }
     status_info = {"utc_start_process":  Time(Time.now(), format='isot', scale='utc').value,
@@ -2763,9 +2771,11 @@ if __name__ == "__main__":
             mode = Search2BeamLow()
         if pipeline == "search2beamhigh":
             config_info["nbands"] = 33
+            config_info["zoomband0"] = 26
             mode = Search2BeamHigh()
         if pipeline == "search1beamhigh":
             config_info["nbands"] = 48
+            config_info["zoomband0"] = 33
             mode = Search1BeamHigh()
         if pipeline == "spectrometer2beam":
             config_info["nbands"] = 33
@@ -2788,86 +2798,3 @@ if __name__ == "__main__":
 
         log.info("Deconfigure it ...")
         mode.deconfigure()
-
-
-#if pipeline == "fold":
-#    for i in range(nconfigure):
-#        log.info("Create pipeline ...")
-#        if beam == 1:
-#            config_info["frequency"] = 1340.5
-#            fold_mode = Fold1Beam()
-#        if beam == 2:
-#            config_info["frequency"] = 1337.0
-#            fold_mode = Fold2Beams()
-#
-#        log.info("Configure it ...")
-#        config_info["utc_start_capture"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
-#        config_json = json.dumps(config_info)
-#        fold_mode.configure(config_json)
-#
-#        for j in range(nstart):
-#            log.info("Start it ...")
-#            status_info["utc_start_process"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
-#            status_json = json.dumps(status_info)
-#            fold_mode.start(status_json)
-#            time.sleep(length)
-#            log.info("Stop it ...")
-#            fold_mode.stop()
-#
-#        log.info("Deconfigure it ...")
-#        fold_mode.deconfigure()
-#
-#if pipeline == "search":
-#    for i in range(nconfigure):
-#        log.info("Create pipeline ...")
-#        if beam == 1:
-#            config_info["frequency"] = 1340.5
-#            search_mode = Search1Beam()
-#        if beam == 2:
-#            config_info["frequency"] = 1337.0
-#            search_mode = Search2Beams()
-#            
-#        log.info("Configure it ...")
-#        config_info["utc_start_capture"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
-#        config_json = json.dumps(config_info)
-#        search_mode.configure(config_json)
-#
-#        for j in range(nstart):
-#            log.info("Start it ...")
-#            status_info["utc_start_process"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
-#            status_json = json.dumps(status_info)
-#            search_mode.start(status_json)
-#            
-#            time.sleep(length)
-#            log.info("Stop it ...")
-#            search_mode.stop()
-#
-#        log.info("Deconfigure it ...")
-#        search_mode.deconfigure()
-#        
-#if pipeline == "spectrometer":
-#    for i in range(nconfigure):
-#        log.info("Create pipeline ...")
-#        if beam == 1:
-#            config_info["frequency"] = 1340.5
-#            spectrometer_mode = Spectrometer1Beam()
-#        if beam == 2:
-#            config_info["frequency"] = 1337.0
-#            spectrometer_mode = Spectrometer2Beams()
-#
-#        log.info("Configure it ...")
-#        config_info["utc_start_capture"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
-#        config_json = json.dumps(config_info)
-#        spectrometer_mode.configure(config_json)
-#
-#        for j in range(nstart):
-#            log.info("Start it ...")
-#            status_info["utc_start_process"] = Time(Time.now() + 10 * units.second, format='isot', scale='utc').value
-#            status_json = json.dumps(status_info)
-#            spectrometer_mode.start(status_json)
-#            time.sleep(length)
-#            log.info("Stop it ...")
-#            spectrometer_mode.stop()
-#
-#        log.info("Deconfigure it ...")
-#        spectrometer_mode.deconfigure()
