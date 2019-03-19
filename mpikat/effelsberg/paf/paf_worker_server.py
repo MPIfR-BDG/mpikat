@@ -263,7 +263,7 @@ class PafWorkerServer(AsyncDeviceServer):
         @coroutine
         def start_wrapper():
             try:
-                yield self.start_pipeline(config_json)
+                yield self.start_pipeline(status_json)
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
