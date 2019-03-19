@@ -50,14 +50,14 @@ FITS_INTERFACES = [
         "id": "fits_interface_01",
         "name": "FitsInterface",
         "address": ["134.104.70.90", 5000]
-    },
-    {
-        "id": "fits_interface_02",
-        "name": "FitsInterface",
-        "address": ["134.104.70.90", 5001]
     }
+#    {
+#        "id": "fits_interface_02",
+##        "name": "FitsInterface",
+#        "address": ["134.104.70.90", 5001]
+#    }
 ]
-
+"""
 FI_CONFIGURATIONS = {
     "spectrometer2beam": {
         "fits_interface_01": False,
@@ -75,6 +75,22 @@ FI_CONFIGURATIONS = {
         "fits_interface_02": True
     }
 }
+"""
+FI_CONFIGURATIONS = {
+    "spectrometer2beam": {
+        "fits_interface_01": False
+    },
+    "search1beamhigh": {
+        "fits_interface_01": False
+    },
+    "search2beamlow": {
+        "fits_interface_01": False
+    },
+    "search2beamhigh": {
+        "fits_interface_01": False
+    }
+}
+
 
 WORKER_SERVERS = [
     ("134.104.70.90", 6000),
