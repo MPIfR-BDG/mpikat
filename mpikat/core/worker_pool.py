@@ -141,7 +141,8 @@ class WorkerPool(object):
         """
         available_servers = [i for i in list(self._servers.difference(self._allocated)) if i.is_connected()]
 
-        return list(available_servers.difference(self._allocated))
+        return available_servers    
+        #return list(available_servers.difference(self._allocated))
         #return list(self._servers.difference(self._allocated))
 
     def navailable(self):
