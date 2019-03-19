@@ -170,7 +170,7 @@ class PafProductController(ProductController):
         config_dict['utc_start_capture'] = start_time.value
         config_dict['beam_alt_d'] = beam_alt_d
         config_dict['beam_az_d'] = beam_az_d
-        log.debug("Packing JSON")
+        log.debug("Packing JSON {}".format(config_dict))
         try:
             config_json = json.dumps(config_dict)
         except Exception:
