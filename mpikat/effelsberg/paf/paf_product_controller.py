@@ -170,7 +170,11 @@ class PafProductController(ProductController):
         config_dict['utc_start_capture'] = start_time.value
         config_dict['beam_alt_d'] = beam_alt_d
         config_dict['beam_az_d'] = beam_az_d
-        config_json = json.dumps(config_dict)
+        log.debug("Packing JSON")
+        try:
+            config_json = json.dumps(config_dict)
+        except Exception:
+            log.exception("error serializing JSON")
         quorum = PAF_WORKER_QUORUM
         failures = 0
         configure_futures = []
