@@ -106,6 +106,7 @@ class WorkerPool(object):
             log.debug("{} servers available".format(len(available_servers)))
             available_servers.sort(
                 key=lambda server: server.priority, reverse=True)
+            available_servers = [i for i in available_servers if i.is_connected()]
             if len(available_servers) < count:
                 raise WorkerAllocationError("Cannot allocate {0} servers, only {1} available".format(
                     count, len(available_servers)))
@@ -196,8 +197,12 @@ class WorkerWrapper(object):
         self._client.start()
         self._started = True
 
+    def is_connected(self):
+        return self._client.is_connected()
+
     def __repr__(self):
-        return "<{} @ {}:{}>".format(self.__class__.__name__, self.hostname, self.port)
+        return "<{} @ {}:{} (connected = {})>".format(self.__class__.__name__, 
+            self.hostname, self.port, self.is_connected())
 
     def __hash__(self):
         # This has override is required to allow these wrappers

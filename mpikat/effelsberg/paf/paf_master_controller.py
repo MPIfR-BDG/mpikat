@@ -33,6 +33,7 @@ from mpikat.effelsberg.status_server import JsonStatusServer
 from mpikat.effelsberg.paf.paf_product_controller import PafProductController
 from mpikat.effelsberg.paf.paf_worker_wrapper import PafWorkerPool
 from mpikat.effelsberg.paf.paf_scpi_interface import PafScpiInterface
+from mpikat.effelsberg.paf.paf_fi_client import PafFitsInterfaceClient
 
 # ?halt message means shutdown everything and power off all machines
 # beamfile observer8:/home/obseff/paf_test/Scripts
@@ -43,6 +44,58 @@ PAF_PRODUCT_ID = "paf0"
 SCPI_BASE_ID = "PAFBE"
 PAF_REQUIRED_KEYS = ["nbeams", "nbands", "band_offset",
                      "mode", "frequency", "write_filterbank"]
+
+FITS_INTERFACES = [
+    {
+        "id": "fits_interface_01",
+        "name": "FitsInterface",
+        "address": ["134.104.70.90", 5000]
+    },
+    {
+        "id": "fits_interface_02",
+        "name": "FitsInterface",
+        "address": ["134.104.70.90", 5001]
+    }
+]
+
+FI_CONFIGURATIONS = {
+    "spectrometer2beam": {
+        "fits_interface_01": False,
+        "fits_interface_02": True
+    },
+    "search1beamhigh": {
+        "fits_interface_01": False,
+        "fits_interface_02": True
+    },
+    "search2beamlow": {
+        "fits_interface_01": True
+    },
+    "search2beamhigh": {
+        "fits_interface_01": False,
+        "fits_interface_02": True
+    }
+}
+
+WORKER_SERVERS = [
+    ("134.104.70.90", 6000),
+    ("134.104.70.90", 6001),
+    ("134.104.70.91", 6000),
+    ("134.104.70.91", 6001),
+    ("134.104.70.92", 6000),
+    ("134.104.70.92", 6001),
+    ("134.104.70.93", 6000),
+    ("134.104.70.93", 6001),
+    ("134.104.70.94", 6000),
+    ("134.104.70.94", 6001),
+    ("134.104.70.95", 6000),
+    ("134.104.70.95", 6001),
+    ("134.104.70.96", 6000),
+    ("134.104.70.96", 6001),
+    ("134.104.70.97", 6000),
+    ("134.104.70.97", 6001),
+    ("134.104.70.98", 6000),
+    ("134.104.70.98", 6001)
+]
 
 
 class PafConfigurationError(Exception):
@@ -76,11 +129,12 @@ class PafMasterController(MasterController):
         @params  ip       The IP address on which the server should listen
         @params  port     The port that the server should bind to
         """
-        super(PafMasterController, self).__init__(ip, port, PafWorkerPool())
+        #super(PafMasterController, self).__init__(ip, port, PafWorkerPool())
         self._control_mode = self.KATCP
         self._scpi_ip = scpi_ip
         self._scpi_port = scpi_port
         self._status_server = JsonStatusServer(ip, 0)
+        super(PafMasterController, self).__init__(ip, port, PafWorkerPool())
 
     def start(self):
         super(PafMasterController, self).start()
@@ -99,19 +153,30 @@ class PafMasterController(MasterController):
 
     def setup_sensors(self):
         super(PafMasterController, self).setup_sensors()
+        self._control_mode_sensor = Sensor.string(
+            "control-mode",
+            description="The control mode for the PAF",
+            default=self._control_mode,
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._control_mode_sensor)
         self._paf_config_sensor = Sensor.string(
             "current-config",
             description="The currently set configuration for the PAF backend",
             default="",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._paf_config_sensor)
-
         self._status_server_sensor = Sensor.address(
             "status-server-address",
             description="The address of the status server",
             default="",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._status_server_sensor)
+        self._paf_scpi_interface_addr_sensor = Sensor.string(
+            "scpi-interface-addr",
+            description="The SCPI interface address for this instance",
+            default="{}:{}".format(self._scpi_ip, self._scpi_port),
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._paf_scpi_interface_addr_sensor)
 
     @property
     def katcp_control_mode(self):
@@ -175,40 +240,7 @@ class PafMasterController(MasterController):
         """
         @brief      Configure PAF to receive and process data
 
-        @param      req           A katcp request object
-        @param      config_json   A JSON object containing configuration
-                                  information.
-
-        @note  The JSON configuration object should be of the form:
-               @code
-                {
-                "products":
-                [  
-                    {
-                       "mode": "Search1Beam",
-                       "nbands": 48,
-                       "frequency": 1340.5,
-                       "nbeams": 18,
-                       "band_offset": 0,
-                       "write_filterbank": 0
-                    }
-                ],
-                "fits_interfaces":
-                     [
-                         {
-                             "id": "fits_interface_01",
-                             "name": "FitsInterface",
-                             "address": ["134.104.73.132", 6000]
-                         },
-                         {
-                             "id": "fits_interface_02",
-                             "name": "FitsInterface",
-                             "address": ["134.104.73.132", 6000]
-                         }
-                     ]
-
-               }
-               @endcode
+        @note       This is the KATCP wrapper for the configure command
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
@@ -230,13 +262,33 @@ class PafMasterController(MasterController):
 
     @coroutine
     def configure(self, config_json):
+        """
+        @brief      Configure PAF to receive and process data
+
+        @param      req           A katcp request object
+        @param      config_json   A JSON object containing configuration
+                                  information.
+
+        @note  The JSON configuration object should be of the form:
+               @code
+                {
+                   "mode": "Search1Beam",
+                   "nbands": 48,
+                   "frequency": 1340.5,
+                   "nbeams": 18,
+                   "band_offset": 0,
+                   "write_filterbank": 0
+               }
+               @endcode
+
+        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        """
         log.info("Configuring PAF backend")
         log.info("Configuration string: '{}'".format(config_json))
         if self._products:
             log.error("PAF already has a configured data product")
             raise PafConfigurationError(
                 "PAF already has a configured data product")
-        self._fits_interfaces = []
         try:
             config_dict = json.loads(config_json)
         except Exception as error:
@@ -248,7 +300,7 @@ class PafMasterController(MasterController):
                     key)
                 log.error(message)
                 raise PafConfigurationError(message)
-        
+
         log.debug("Building product controller for PAF processing")
         self._products[PAF_PRODUCT_ID] = PafProductController(
             self, PAF_PRODUCT_ID)
@@ -265,9 +317,16 @@ class PafMasterController(MasterController):
                 "Configured product controller with ID: {}".format(PAF_PRODUCT_ID))
 
         log.info("Configuring FITS interfaces")
-        for fi_config in config_dict["fits_interfaces"]:
-            fi = EddFitsInterfaceClient(fi_config["id"], fi_config["address"])
-            yield fi.configure(fi_config)
+        product_mode = config_json['mode']
+        self._fits_interfaces = []
+        temp_fi_interfaces = {}
+        for fi_config in FITS_INTERFACES:
+            temp_fi_interfaces[fi_config['id']] = PafFitsInterfaceClient(
+                fi_config["id"], fi_config["address"])
+        fi_setup = FI_CONFIGURATIONS[product_mode]
+        for _id, active in fi_setup.items():
+            fi = temp_fi_interfaces[_id]
+            yield fi.configure(active)
             self._fits_interfaces.append(fi)
         self._paf_config_sensor.set_value(config_json)
         self._update_products_sensor()
@@ -292,6 +351,7 @@ class PafMasterController(MasterController):
             try:
                 yield self.deconfigure()
             except Exception as error:
+                log.exception(str(error))
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
@@ -306,6 +366,8 @@ class PafMasterController(MasterController):
             PAF_PRODUCT_ID))
         yield product.deconfigure()
         del self._products[PAF_PRODUCT_ID]
+        for fi in self._fits_interfaces:
+            fi.capture_stop()
         self._update_products_sensor()
         log.info("PAF backend deconfigured")
 
@@ -345,6 +407,9 @@ class PafMasterController(MasterController):
         log.debug("Starting product controller with ID: {}".format(
             PAF_PRODUCT_ID))
         yield product.capture_start(status_json)
+        log.debug("Starting fits interfaces")
+        for fi in self._fits_interfaces:
+            yield fi.capture_start()
         log.info("PAF backend started")
 
     @request()
@@ -365,6 +430,7 @@ class PafMasterController(MasterController):
             try:
                 yield self.capture_stop()
             except Exception as error:
+                log.exception(str(error))
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
@@ -374,6 +440,8 @@ class PafMasterController(MasterController):
     @coroutine
     def capture_stop(self):
         log.info("Stopping PAF backend")
+        for fi in self._fits_interfaces:
+            yield fi.capture_stop()
         product = self._get_product(PAF_PRODUCT_ID)
         log.debug("Stopping product controller with ID: {}".format(
             PAF_PRODUCT_ID))
@@ -424,6 +492,8 @@ def main():
         server.start()
         if opts.scpi_mode:
             server.set_control_mode(server.SCPI)
+        for hostname, port in WORKER_SERVERS:
+            server._server_pool.add(hostname, port)
         log.info(
             "Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
     ioloop.add_callback(start_and_display)
