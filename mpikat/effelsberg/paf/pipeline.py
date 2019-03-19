@@ -1543,7 +1543,7 @@ class Search(Pipeline):
         self._config_freq   = self._config_info["frequency"]
         self._config_ip     = self._config_info['ip_address']
         self._config_nchunk = self._config_info['nbands']
-        self._config_nchunk_offset = self._config_info["bandoffset"]
+        self._config_nchunk_offset = self._config_info["band_offset"]
         self._simultaneous_spectrometer_nchunk          = self._config_info["zoomnbands"]
         self._simultaneous_spectrometer_start_chunk     = self._config_info["zoomband0"]
         
@@ -2189,7 +2189,7 @@ class Spectrometer(Pipeline):
         self._config_freq   = self._config_info["frequency"]
         self._config_ip     = self._config_info['ip_address']
         self._config_nchunk = self._config_info['nbands']
-        self._config_nchunk_offset = self._config_info["bandoffset"]
+        self._config_nchunk_offset = self._config_info["band_offset"]
         self._simultaneous_spectrometer_nchunk          = self._config_info["zoomnbands"]
         self._simultaneous_spectrometer_start_chunk     = self._config_info["zoomband0"]
         
@@ -2747,7 +2747,7 @@ if __name__ == "__main__":
     config_info = {"utc_start_capture": Time(Time.now(), format='isot', scale='utc').value,
                    "frequency":         1340.5,
                    "nbands":            33,
-                   "bandoffset":        0,
+                   "band_offset":        0,
                    "ip_address":        ip,
                    "beam_alt_d":         [0, -0.1, -0.2, -0.3, -0.1, -0.2, -0.3,  0.1,  0.2,  0.3, -0.11, -0.21, -0.31, -0.11, -0.21, -0.31,  0.12,  0.22,  0.32, -0.12, -0.22, -0.32, -0.12, -0.22, -0.32,  0.12,  0.22,  0.32, 0.13, 0.23,  0.33, -0.13, -0.23, -0.33, -0.13, -0.23, -0.33,  0.13,  0.23],
                    # First column in the file, opposite value                                                                                                  
