@@ -382,15 +382,19 @@ class PafMasterController(MasterController):
     @coroutine
     def deconfigure(self):
         log.info("Deconfiguring PAF backend")
-        product = self._get_product(PAF_PRODUCT_ID)
-        log.debug("Deconfiguring product controller with ID: {}".format(
-            PAF_PRODUCT_ID))
-        yield product.deconfigure()
-        del self._products[PAF_PRODUCT_ID]
-        for fi in self._fits_interfaces:
-            fi.capture_stop()
-        self._update_products_sensor()
-        log.info("PAF backend deconfigured")
+        try:
+            product = self._get_product(PAF_PRODUCT_ID)
+        except ProductLookupError:
+            pass
+        else:
+            log.debug("Deconfiguring product controller with ID: {}".format(
+                PAF_PRODUCT_ID))
+            yield product.deconfigure()
+            del self._products[PAF_PRODUCT_ID]
+            for fi in self._fits_interfaces:
+                fi.capture_stop()
+            self._update_products_sensor()
+            log.info("PAF backend deconfigured")
 
     @request()
     @return_reply()
