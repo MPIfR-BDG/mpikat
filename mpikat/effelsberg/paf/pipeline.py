@@ -1290,7 +1290,7 @@ class Fold(Pipeline):
         self._scan_num = self._status_info["scannum"]
         self._sub_scan_num = self._status_info["subscannum"]
         self._utc_start_process = Time(self._status_info["utc_start_process"], format='isot', scale='utc')
-        self._source_name = self._status_info["source_name"]
+        self._source_name = self._status_info["source-name"]
         self._source_ra, self._source_dec  = float(self._status_info['ra']), float(self._status_info['dec'])
             
         # To start the coord conversion in a thread to save the wait time
@@ -1935,7 +1935,7 @@ class Search(Pipeline):
         self._scan_num = self._status_info["scannum"]
         self._sub_scan_num = self._status_info["subscannum"]
         self._utc_start_process = Time(self._status_info["utc_start_process"], format='isot', scale='utc')
-        self._source_name = self._status_info["source_name"]
+        self._source_name = self._status_info["source-name"]
         self._source_ra, self._source_dec  = float(self._status_info['ra']), float(self._status_info['dec'])
 
         # To start the coord conversion in a thread to save the wait time
@@ -2476,7 +2476,7 @@ class Spectrometer(Pipeline):
         self._scan_num = self._status_info["scannum"]
         self._sub_scan_num = self._status_info["subscannum"]
         self._utc_start_process = Time(self._status_info["utc_start_process"], format='isot', scale='utc')
-        self._source_name = self._status_info["source_name"]
+        self._source_name = self._status_info["source-name"]
         self._source_ra, self._source_dec  = float(self._status_info['ra']), float(self._status_info['dec'])
 
         # To start the coord conversion in a thread to save the wait time
@@ -2757,7 +2757,7 @@ if __name__ == "__main__":
                    # Second column in the file, opposite value
     }
     status_info = {"utc_start_process":  Time(Time.now(), format='isot', scale='utc').value,
-                  "source_name": "J0332+5434",
+                  "source-name": "J0332+5434",
                   "ra":   190.3,
                   "dec":  80.10,
                    "scannum":    1001,
