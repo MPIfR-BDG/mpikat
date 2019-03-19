@@ -960,7 +960,7 @@ class Fold(Pipeline):
         self._input_config = input_config
         self._config_info  = json.loads(config_json)
         self._config_ip            = self._config_info["ip_address"]
-        self._config_nchunk_offset = self._config_info["bandoffset"]
+        self._config_nchunk_offset = self._config_info["band_offset"]
         self._config_freq          = self._config_info["frequency"]
         self._simultaneous_spectrometer_nchunk          = self._config_info["zoomnbands"]
         self._simultaneous_spectrometer_start_chunk     = self._config_info["zoomband0"]
