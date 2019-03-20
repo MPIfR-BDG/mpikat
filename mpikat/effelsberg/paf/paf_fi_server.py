@@ -549,8 +549,7 @@ def build_fw_object(nsections, nchannels, timestamp, integration_time, blank_pha
     for ii in range(nsections):
         packet.sections[ii].section_id = ii + 1
         packet.sections[ii].nchannels = nchannels
-        C.addressof(packet.sections[ii].data), 0, C.sizeof(
-            packet.sections[ii].data)
+        packet.sections[ii].data[:] = 0
     return packet
 
 
