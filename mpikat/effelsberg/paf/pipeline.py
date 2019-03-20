@@ -97,7 +97,7 @@ PIPELINE_CONFIG = {"execution":                    1,
 
                    # Configuration of input
                    "input_source_default":       "UNKNOW_00:00:00.00_00:00:00.00",
-                   "input_dada_hdr_fname":       "dada_header_template_PAF.txt",
+                   "input_dada_hdr_fname":       "/mpikat/mpikat/effelsberg/paf/dada_header_template_PAF.txt",
                    # To put baseband data from file
                    "input_keys":                 ["dada", "dadc"],
                    "input_nblk":                 5,
@@ -376,8 +376,8 @@ class Pipeline(object):
             self._paf_nsamp_per_df
 
         self._input_dada_hdr_fname = PIPELINE_CONFIG["input_dada_hdr_fname"]
-        self._input_dada_hdr_fname = "{}/config/{}".format(
-            self._root_software, self._input_dada_hdr_fname)
+        #self._input_dada_hdr_fname = "{}/config/{}".format(
+        #    self._root_software, self._input_dada_hdr_fname)
         self._input_source_default = PIPELINE_CONFIG["input_source_default"]
         self._input_keys = PIPELINE_CONFIG["input_keys"]
         self._input_nblk = PIPELINE_CONFIG["input_nblk"]
