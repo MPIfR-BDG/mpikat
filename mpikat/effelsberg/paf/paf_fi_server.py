@@ -289,11 +289,17 @@ class FitsInterfaceServer(AsyncDeviceServer):
         #current_qsize = sensor_queue.qsize()
         # for i in range(current_qsize):
         #    timestamp, metadata, data = sensor_queue.get()
+        log.info("Updating sensor values and making beam plots")
+        has_data = False
         while True:
             try:
                 timestamp, metadata, data = sensor_queue.get(False)
+                has_data = True
             except Queue.Empty:
                 break
+        if not has_data:
+            log.info("No updates available for sensors")
+            return
         self._integration_time_sensor.set_value(metadata.integ_time)
         self._nchannels_sensor.set_value(metadata.nchannels)
         self._pol_type_sensor.set_value(metadata.pol_type)
@@ -585,11 +591,7 @@ class PafHandler(object):
             packet.beam_id, packet.pol_id, packet.time_stamp,
             packet.integ_time, packet.nchannels, packet.nfreq_chunks,
             packet.freq_chunks_index))
-
         key = packet.time_stamp
-        print("<ts: {}, beam_id: {}, pol_id: {} >").format(
-            key, packet.beam_id, packet.pol_id)
-
         if key not in self._active_packets:
             fw_packet = build_fw_object(
                 self._nsections, packet.nchannels, packet.time_stamp,
