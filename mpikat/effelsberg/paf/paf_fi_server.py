@@ -610,7 +610,6 @@ class PafHandler(object):
             section_id = (packet.beam_id * 4) + packet.pol_id
             freq_idx_start = (self.nchannelsperpacket * packet.freq_chunks_index)
             freq_idx_end = (self.nchannelsperpacket * (packet.freq_chunks_index + 1))
-            fw_packet.sections[section_id].data[freq_idx_start:freq_idx_end] = packet.data
             self._active_packets[key][3].sections[section_id].data[freq_idx_start:freq_idx_end] = packet.data
         self.flush()
 
