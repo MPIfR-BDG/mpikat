@@ -4,25 +4,21 @@ import signal
 import socket
 import time
 import errno
-import threading
-import struct 
+import struct
 import coloredlogs
 import inspect
 import numpy as np
-import time
+import matplotlib.pyplot as plt
+import base64
 import Queue
 import ctypes as C
 import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 from StringIO import StringIO
-import base64
-from StringIO import StringIO
-from datetime import datetime
 from threading import Thread, Event
 from optparse import OptionParser
-from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
-from katcp.kattypes import (Str, Int, request, return_reply)
+from katcp import AsyncDeviceServer, Sensor, ProtocolFlags
+from katcp.kattypes import (Int, request, return_reply)
+matplotlib.use("Agg")
 
 log = logging.getLogger("mpikat.paf_fi_server")
 
@@ -55,11 +51,14 @@ QxeMX8H/hW2Zf7sDJK0tLSktbU1JZPJM5//I47jyOfzeX7Oz85xcHCg0dHRmvwOTpujUCjo8uXLWl1dN
 
 sensor_queue = Queue.Queue()
 
+
 class StopEventException(Exception):
     pass
 
+
 class FitsWriterNotConnected(Exception):
     pass
+
 
 class FitsWriterConnectionManager(Thread):
     """
@@ -70,6 +69,7 @@ class FitsWriterConnectionManager(Thread):
     and made available to any system that produces FITS writer compatible
     data.
     """
+
     def __init__(self, ip, port):
         """
         @brief    Construct a new instance
@@ -90,7 +90,8 @@ class FitsWriterConnectionManager(Thread):
             self._server_socket.close()
         log.debug("Creating the FITS writer TCP listening socket")
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._server_socket.setsockopt(
+            socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._server_socket.setblocking(False)
         log.debug("Binding to {}".format(self._address))
         self._server_socket.bind(self._address)
@@ -109,10 +110,12 @@ class FitsWriterConnectionManager(Thread):
                 if error_id == errno.EAGAIN or error_id == errno.EWOULDBLOCK:
                     time.sleep(1)
                 else:
-                    log.exception("Unexpected error on socket accept: {}".format(str(error)))
+                    log.exception(
+                        "Unexpected error on socket accept: {}".format(str(error)))
                     raise error
             except Exception as error:
-                log.exception("Unexpected error on socket accept: {}".format(str(error)))
+                log.exception(
+                    "Unexpected error on socket accept: {}".format(str(error)))
                 raise error
 
     def drop_connection(self):
@@ -190,7 +193,8 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._blank_phase = None
         self._capture_interface = capture_interface
         self._capture_port = capture_port
-        self._fw_connection_manager = FitsWriterConnectionManager(fw_ip, fw_port)
+        self._fw_connection_manager = FitsWriterConnectionManager(
+            fw_ip, fw_port)
         self._capture_thread = None
         self._shutdown = False
         self._mode = None
@@ -270,35 +274,37 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._beam_pngs = {}
         for beam_id in range(36):
             self._beam_pngs[beam_id] = Sensor.string(
-                "BEAM%02d_PNG"%beam_id,
-                 description="Data of beam {} sent from the back-end".format(beam_id),
-                 default=DEFAULT_BLOB,
-                 initial_status=Sensor.UNKNOWN)
+                "BEAM%02d_PNG" % beam_id,
+                description="Data of beam {} sent from the back-end".format(
+                    beam_id),
+                default=DEFAULT_BLOB,
+                initial_status=Sensor.UNKNOWN)
             self.add_sensor(self._beam_pngs[beam_id])
-        self._update_sensors_callback = tornado.ioloop.PeriodicCallback(self.update_sensors, 10000)
+        self._update_sensors_callback = tornado.ioloop.PeriodicCallback(
+            self.update_sensors, 10000)
         self._update_sensors_callback.start()
 
     def update_sensors(self):
         #current_qsize = sensor_queue.qsize()
-        #for i in range(current_qsize):
+        # for i in range(current_qsize):
         #    timestamp, metadata, data = sensor_queue.get()
         while True:
             try:
                 timestamp, metadata, data = sensor_queue.get(False)
             except Queue.Empty:
-                break 
+                break
         self._integration_time_sensor.set_value(metadata.integ_time)
         self._nchannels_sensor.set_value(metadata.nchannels)
         self._pol_type_sensor.set_value(metadata.pol_type)
         self._nblank_phases_sensor.set_value(data.blank_phases)
         self._center_freq_sensor.set_value(metadata.center_freq)
         self._channel_bw_sensor.set_value(metadata.channel_bw)
-        for i in range(36): 
+        for i in range(36):
             self.plot_beam_data(i, data)
 
     def zton(self, x):
         x = np.asarray(x)
-        x[x==0] = np.nan
+        x[x == 0] = np.nan
         return x
 
     def plot_beam_data(self, beam_id, beam_data):
@@ -306,16 +312,20 @@ class FitsInterfaceServer(AsyncDeviceServer):
         plt.xlabel('Channels')
         plt.ylabel('Power')
         x = beam_data
-        index = beam_id*4
-        plt.plot(np.arange(x.sections[index+0].nchannels),self.zton(x.sections[index+0].data))
-        plt.plot(np.arange(x.sections[index+1].nchannels),self.zton(x.sections[index+1].data))
-        plt.plot(np.arange(x.sections[index+2].nchannels),self.zton(x.sections[index+2].data))
-        plt.plot(np.arange(x.sections[index+3].nchannels),self.zton(x.sections[index+3].data))
+        index = beam_id * 4
+        plt.plot(np.arange(x.sections[index + 0].nchannels),
+                 self.zton(x.sections[index + 0].data))
+        plt.plot(np.arange(x.sections[index + 1].nchannels),
+                 self.zton(x.sections[index + 1].data))
+        plt.plot(np.arange(x.sections[index + 2].nchannels),
+                 self.zton(x.sections[index + 2].data))
+        plt.plot(np.arange(x.sections[index + 3].nchannels),
+                 self.zton(x.sections[index + 3].data))
         beam = StringIO()
         plt.savefig(beam, format='png', dpi=100)
         beam.seek(0)
         beam_png = beam.buf
-        beam_png = base64.b64encode(beam_png).replace("\n","")
+        beam_png = base64.b64encode(beam_png).replace("\n", "")
         self._beam_pngs[beam_id].set_value(beam_png)
 
     def _stop_capture(self):
@@ -336,8 +346,10 @@ class FitsInterfaceServer(AsyncDeviceServer):
 
         @return   katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
-        if fi_status == 1: message = "FITS interface is active({})".format(fi_status)
-        elif fi_status == 0: message = "FITS interface is passive({})".format(fi_status)
+        if fi_status == 1:
+            message = "FITS interface is active({})".format(fi_status)
+        elif fi_status == 0:
+            message = "FITS interface is passive({})".format(fi_status)
         else:
             message = "Invalid mode: {}".format(fi_status)
             return ("fail", message)
@@ -367,12 +379,13 @@ class FitsInterfaceServer(AsyncDeviceServer):
             except Exception as error:
                 log.exception(str(error))
                 return ("fail", str(error))
-        else: fw_socket = None
+        else:
+            fw_socket = None
         log.info("Starting FITS interface capture")
         self._stop_capture()
         self._paf_handler = PafHandler(self._mode, fw_socket)
         self._capture_thread = CaptureData(self._capture_interface,
-            self._capture_port, self._paf_handler)
+                                           self._capture_port, self._paf_handler)
         self._capture_thread.start()
         return ("ok",)
 
@@ -399,10 +412,11 @@ class CaptureData(Thread):
     """
     @brief     Captures formatted data from a UDP socket
     """
+
     def __init__(self, ip, port, handler):
         Thread.__init__(self, name=self.__class__.__name__)
         self._address = (ip, port)
-        self._buffer_size = 3250 
+        self._buffer_size = 1<<15
         self._stop_event = Event()
         self._handler = handler
 
@@ -433,7 +447,8 @@ class CaptureData(Thread):
         while not self._stop_event.is_set():
             try:
                 data, addr = self._socket.recvfrom(self._buffer_size)
-                log.debug("Received {} byte message from {}".format(len(data), addr))
+                log.debug("Received {} byte message from {}".format(
+                    len(data), addr))
                 self._handler(data)
             except socket.error as error:
                 error_id = error.args[0]
@@ -456,6 +471,7 @@ class CaptureData(Thread):
 
 
 class PafPacket(object):
+
     def __init__(self, raw_data, nchannels):
         self._raw_data = raw_data
         self._nchannels = nchannels
@@ -463,14 +479,13 @@ class PafPacket(object):
         for i in inspect.getmembers(self._data):
             if not i[0].startswith('_'):
                 if not inspect.ismethod(i[1]):
-                   setattr(self, i[0], i[1])
-
+                    setattr(self, i[0], i[1])
 
     def _get_packet_struct(self):
         class PafPacketFormat(C.LittleEndianStructure):
             _fields_ = [
                 ("beam_id", C.c_uint),
-                ("time_stamp", C.c_char*28),
+                ("time_stamp", C.c_char * 28),
                 ("integ_time", C.c_float),
                 ("nchannels", C.c_uint32),
                 ("center_freq", C.c_float),
@@ -484,7 +499,8 @@ class PafPacket(object):
         return PafPacketFormat
 
 #    def __repr__(self):
-#        return ["{} = {}>".format(key,getattr(self._data,key)) for key, _ in self._data._fields_]
+# return ["{} = {}>".format(key,getattr(self._data,key)) for key, _ in
+# self._data._fields_]
 
 
 def build_fw_type(nsections, nchannels):
@@ -492,16 +508,16 @@ def build_fw_type(nsections, nchannels):
         _fields_ = [
             ('section_id', C.c_uint32),
             ('nchannels', C.c_uint32),
-            ('data', C.c_float*nchannels)
+            ('data', C.c_float * nchannels)
         ]
 
     class FWPacket(C.LittleEndianStructure):
         _fields_ = [
-            ("data_type", C.c_char*4),
-            ("channel_data_type", C.c_char*4),
+            ("data_type", C.c_char * 4),
+            ("channel_data_type", C.c_char * 4),
             ("packet_size", C.c_uint32),
-            ("backend_name", C.c_char*8),
-            ("timestamp", C.c_char*28),
+            ("backend_name", C.c_char * 8),
+            ("timestamp", C.c_char * 28),
             ("integration_time", C.c_uint32),
             ("blank_phases", C.c_uint32),
             ("nsections", C.c_uint32),
@@ -509,6 +525,7 @@ def build_fw_type(nsections, nchannels):
             ("sections", FWData * nsections)
         ]
     return FWPacket
+
 
 def build_fw_object(nsections, nchannels, timestamp, integration_time, blank_phases):
     packet_format = build_fw_type(nsections, nchannels)
@@ -525,7 +542,8 @@ def build_fw_object(nsections, nchannels, timestamp, integration_time, blank_pha
     for ii in range(nsections):
         packet.sections[ii].section_id = ii + 1
         packet.sections[ii].nchannels = nchannels
-        C.addressof(packet.sections[ii].data), 0, C.sizeof(packet.sections[ii].data)
+        C.addressof(packet.sections[ii].data), 0, C.sizeof(
+            packet.sections[ii].data)
     return packet
 
 
@@ -534,19 +552,20 @@ class PafHandler(object):
     Aggregates spectrometer  or stokes data from different beams for the given time
     before sending to the fits writer
     """
+
     def __init__(self, mode, transmit_socket):
-        
-        self._mode = mode 
+
+        self._mode = mode
         self._npol = 4
-        self._nsections = 36*self._npol 
+        self._nsections = 36 * self._npol
         self._nphases = 1
-        self._raw_data = "" 
+        self._raw_data = ""
         self._transmit_socket = transmit_socket
         self._active_packets = {}
 
     def read_channels_per_packet(self):
         metadata = struct.unpack("<i28sfiffiiii", self._raw_data[0:64])
-        channelsPerPacket = metadata[3]/metadata[8]
+        channelsPerPacket = metadata[3] / metadata[8]
         return channelsPerPacket
 
     def __call__(self, raw_data):
@@ -559,26 +578,31 @@ class PafHandler(object):
         self.nchannelsperpacket = self.read_channels_per_packet()
         packet = PafPacket(raw_data, self.nchannelsperpacket)
         log.debug("Aggregate received packet: {}".format(packet))
-        log.debug("From packet: beam_id: {}, pol_id: {}, ts: {}, integ_time = {}, channels: {}, freq_chunks: {}, chunk_index: {}".
-            format(packet.beam_id, packet.pol_id, packet.time_stamp, packet.integ_time, packet.nchannels, packet.nfreq_chunks, packet.freq_chunks_index))
+        log.debug(("From packet: beam_id: {}, pol_id: {}, ts: {}, "
+                   "integ_time = {}, channels: {}, freq_chunks: {}, "
+                   "chunk_index: {}").format(
+            packet.beam_id, packet.pol_id, packet.time_stamp,
+            packet.integ_time, packet.nchannels, packet.nfreq_chunks,
+            packet.freq_chunks_index))
 
         key = packet.time_stamp
-        print "<ts: {}, beam_id: {}, pol_id: {} >".format(key, packet.beam_id, packet.pol_id)
+        print("<ts: {}, beam_id: {}, pol_id: {} >").format(
+            key, packet.beam_id, packet.pol_id)
 
         if key not in self._active_packets:
-            fw_packet = build_fw_object(self._nsections, packet.nchannels, packet.time_stamp,
-                int(packet.integ_time*10**6), self._nphases)
-            fw_packet.sections[(packet.beam_id*4)+packet.pol_id].data[(packet.nfreq_chunks*packet.freq_chunks_index):
-                ((packet.nfreq_chunks*packet.freq_chunks_index)+(packet.nchannels/packet.nfreq_chunks))] = packet.data
-            paf_metadata = packet
+            fw_packet = build_fw_object(
+                self._nsections, packet.nchannels, packet.time_stamp,
+                int(packet.integ_time * 10**6), self._nphases)
+            fw_packet.sections[(packet.beam_id * 4) + packet.pol_id].data[(packet.nfreq_chunks * packet.freq_chunks_index):                                                                          ((packet.nfreq_chunks * packet.freq_chunks_index) + (packet.nchannels / packet.nfreq_chunks))] = packet.data
+            max_age = packet.integ_time * 2
+            if max_age < 1:
+                max_age = 1
 
-            max_age = packet.integ_time*2
-            if max_age < 1: max_age = 1 
-
-            self._active_packets[key] = [time.time(), max_age, packet, fw_packet]
+            self._active_packets[key] = [
+                time.time(), max_age, packet, fw_packet]
         else:
-            self._active_packets[key][3].sections[(packet.beam_id*4)+packet.pol_id].data[(packet.nfreq_chunks*packet.freq_chunks_index):
-                ((packet.nfreq_chunks*packet.freq_chunks_index)+(packet.nchannels/packet.nfreq_chunks))] = packet.data
+            self._active_packets[key][3].sections[(packet.beam_id * 4) + packet.pol_id].data[(packet.nfreq_chunks * packet.freq_chunks_index):
+                                                                                             ((packet.nfreq_chunks * packet.freq_chunks_index) + (packet.nchannels / packet.nfreq_chunks))] = packet.data
         self.flush()
 
     def flush(self):
@@ -586,10 +610,12 @@ class PafHandler(object):
         @brief      Iterate through all currently managed packets and flush complete or
                     stale packet groups to the FITS writer
         """
-        log.debug("Number of active packets pre-flush: {}".format(len(self._active_packets)))
+        log.debug(
+            "Number of active packets pre-flush: {}".format(len(self._active_packets)))
         now = time.time()
         for key in sorted(self._active_packets.iterkeys()):
-            timestamp, time_out, metadata, fw_packet = self._active_packets[key]
+            timestamp, time_out, metadata, fw_packet = self._active_packets[
+                key]
             if ((now - timestamp) >= time_out):
                 try:
                     sensor_queue.put((timestamp, metadata, fw_packet), False)
@@ -597,10 +623,12 @@ class PafHandler(object):
                     sensor_queue.get()
                     sensor_queue.put((timestamp, metadata, fw_packet), False)
                 if self._mode == 1:
-                    log.debug("Sending packets with timestamp: {}".format(timestamp))
+                    log.debug(
+                        "Sending packets with timestamp: {}".format(timestamp))
                     self._transmit_socket.send(bytearray(fw_packet))
                 del self._active_packets[key]
-        log.debug("Number of active packets post-flush: {}".format(len(self._active_packets)))
+        log.debug(
+            "Number of active packets post-flush: {}".format(len(self._active_packets)))
 
 
 @tornado.gen.coroutine
@@ -609,23 +637,24 @@ def on_shutdown(ioloop, server):
     yield server.stop()
     ioloop.stop()
 
+
 def main():
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('', '--host', dest='host', type=str,
-        help='Host interface to bind to', default='127.0.0.1')
-    parser.add_option('-p', '--port', dest='port', type=long,
-        help='Port number to bind to', default=5000)
+                      help='Host interface to bind to', default='127.0.0.1')
+    parser.add_option('-p', '--port', dest='port', type=int,
+                      help='Port number to bind to', default=5000)
     parser.add_option('', '--cap-ip', dest='cap_ip', type=str,
-        help='Host interface to bind to for data capture', default='127.0.0.1')
-    parser.add_option('', '--cap-port', dest='cap_port', type=long,
-        help='Port number to bind to for data capture', default=5001)
+                      help='Host interface to bind to for data capture', default='127.0.0.1')
+    parser.add_option('', '--cap-port', dest='cap_port', type=int,
+                      help='Port number to bind to for data capture', default=5001)
     parser.add_option('', '--fw-ip', dest='fw_ip', type=str,
-        help='FITS writer interface to bind to for data trasmission', default='127.0.0.1')
-    parser.add_option('', '--fw-port', dest='fw_port', type=long,
-        help='FITS writer port number to bind to for data transmission', default=5002)
+                      help='FITS writer interface to bind to for data trasmission', default='127.0.0.1')
+    parser.add_option('', '--fw-port', dest='fw_port', type=int,
+                      help='FITS writer port number to bind to for data transmission', default=5002)
     parser.add_option('', '--log-level', dest='log_level', type=str,
-        help='Defauly logging level', default="INFO")
+                      help='Defauly logging level', default="INFO")
     (opts, args) = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     coloredlogs.install(
@@ -634,15 +663,19 @@ def main():
         logger=log)
     log.setLevel(opts.log_level.upper())
     ioloop = tornado.ioloop.IOLoop.current()
-    server = FitsInterfaceServer(opts.host, opts.port, opts.cap_ip, opts.cap_port, opts.fw_ip, opts.fw_port)
+    server = FitsInterfaceServer(
+        opts.host, opts.port, opts.cap_ip, opts.cap_port, opts.fw_ip, opts.fw_port)
     # Hook up to SIGINT so that ctrl-C results in a clean shutdown
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
+
     def start_and_display():
         server.start()
-        log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
+        log.info(
+            "Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
     ioloop.add_callback(start_and_display)
     ioloop.start()
+
 
 if __name__ == "__main__":
     main()
