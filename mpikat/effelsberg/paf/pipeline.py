@@ -51,8 +51,8 @@ import math
 # 19. Fresh iers data base at configure
 
 log = logging.getLogger('mpikat.effelsberg.paf.pipeline')
-log.setLevel('DEBUG')
-#log.setLevel('INFO')
+#log.setLevel('DEBUG')
+log.setLevel('INFO')
 
 # Configuration of input for different number of beams 
 INPUT_1BEAM = {"input_nbeam":                  1,
@@ -2285,6 +2285,7 @@ class Spectrometer(Pipeline):
             raise PipelineError("Can only configure pipeline in idle state")
         log.info("Configuring")
 
+        log.info("Setup and verify parameters for the pipeline")
         # Refresh IERS database to save the time on "start" for coordinate conversion
         self._refresh_iers()
 
@@ -2383,7 +2384,9 @@ class Spectrometer(Pipeline):
             self._cleanup(self._cleanup_commands_config)
             self.state = "error"
             raise PipelineError("{} is not exist".format(self._spectrometer_main))
-        
+        log.info("Setup and verify parameters for the pipeline")
+
+        log.info("Setup command lines for the pipeline")
         # To setup commands for each process
         for i in range(self._input_nbeam):
             if self._execution:
@@ -2524,8 +2527,10 @@ class Spectrometer(Pipeline):
                                self._spectrometer_keys[i],
                                self._pipeline_runtime_directory[i])
                 self._spectrometer_dbdisk_commands.append(command)
-
+        log.info("Setup command lines for the pipeline, DONE")
+        
         # Create baseband ring buffer
+        log.info("Create baseband ring buffer")
         process_index = 0
         execution_instances = []
         for command in self._input_create_rbuf_commands:
@@ -2537,8 +2542,10 @@ class Spectrometer(Pipeline):
             process_index += 1
         for execution_instance in execution_instances:
             execution_instance.finish()
-
+        log.info("Create baseband ring buffer, DONE")
+        
         # Execute the capture
+        log.info("Start capture")
         process_index = 0
         self._ready_counter = 0
         for command in self._input_commands:
@@ -2553,7 +2560,8 @@ class Spectrometer(Pipeline):
             while self.state != "error":
                 if self._ready_counter == (self._input_nport + 1) * self._input_nbeam:
                     break
-
+        log.info("Capturing")
+        
         for execution_instance in self._input_execution_instances:            
             execution_instance.stdout_callbacks.remove(self._ready_counter_callback)
             execution_instance.stdout_callbacks.add(self._capture_status_callback)
@@ -2591,6 +2599,7 @@ class Spectrometer(Pipeline):
         
         # Create ring buffer for spectrometer data
         if self._spectrometer_dbdisk:
+            log.info("Create spectrometer ring buffer")
             process_index = 0
             execution_instances = []
             for command in self._spectrometer_create_rbuf_commands:
@@ -2602,8 +2611,10 @@ class Spectrometer(Pipeline):
                 process_index += 1
             for execution_instance in execution_instances:         # Wait until the buffer creation is done
                 execution_instance.finish()
-                
+            log.info("Create spectrometer ring buffer, DONE")
+            
         # Run spectrometer
+        log.info("Start to run baseband2spectral")
         process_index = 0
         self._ready_counter = 0
         self._spectrometer_execution_instances = []
@@ -2617,6 +2628,7 @@ class Spectrometer(Pipeline):
                 
         # Send data to disk
         if self._spectrometer_dbdisk:
+            log.info("Start to run dbdisk for spectrometer output")
             process_index = 0
             self._spectrometer_dbdisk_execution_instances = []
             for command in self._spectrometer_dbdisk_commands:
@@ -2650,7 +2662,8 @@ class Spectrometer(Pipeline):
                                           start_buf),
                                       self._input_socket_address[process_index])
                 process_index += 1
-
+        log.info("Baseband2spectral is running")
+        
         # We do not need to monitor the stdout anymore
         for execution_instance in self._spectrometer_execution_instances:
             execution_instance.stdout_callbacks.remove(self._ready_counter_callback)
@@ -2672,20 +2685,25 @@ class Spectrometer(Pipeline):
         
         if self._execution:
             process_index = 0
+            log.info("Send 'END-OF-DATA' command to capture software")
             for control_socket in self._input_control_socket:  # Stop data
                 self._capture_control(control_socket,
                                       "END-OF-DATA",
                                       self._input_socket_address[process_index])
                 process_index += 1
+            log.info("Send 'END-OF-DATA' command to capture software, DONE")
+            
         if self._spectrometer_dbdisk:
             for execution_instance in self._spectrometer_dbdisk_execution_instances:
                 execution_instance.finish()
-        
+            log.info("Finish dbdisk for spectrometer output")
         for execution_instance in self._spectrometer_execution_instances:
             execution_instance.finish()
-        
+            log.info("Finish baseband2spectral")
+            
         # To delete spectrometer ring buffer
         if self._spectrometer_dbdisk:
+            log.info("Delete spectrometer ring buffer")
             process_index = 0
             execution_instances = []
             for command in self._spectrometer_delete_rbuf_commands:
@@ -2697,7 +2715,8 @@ class Spectrometer(Pipeline):
                 process_index += 1
             for execution_instance in execution_instances:
                 execution_instance.finish()
-
+            log.info("Delete spectrometer ring buffer, DONE")
+            
         self.state = "ready"
         log.info("Ready")
 
@@ -2715,17 +2734,22 @@ class Spectrometer(Pipeline):
         if self.state == "ready":  # Normal deconfigure
             self.state = "deconfiguring"
 
+            log.info("Deconfigure with normal status")
             # To stop the capture
             if self._execution:
                 process_index = 0
+                log.info("Send 'END-OF-CAPTURE' command to capture software")
                 for control_socket in self._input_control_socket:
                     self._capture_control(
                         control_socket, "END-OF-CAPTURE", self._input_socket_address[process_index])
                     process_index += 1
+                log.info("Send 'END-OF-CAPTURE' command to capture software, DONE")
             for execution_instance in self._input_execution_instances:
                 execution_instance.finish()
+            log.info("Finish capture")
             
             # To delete input ring buffer
+            log.info("Delete baseband ring buffer")
             process_index = 0
             execution_instances = []
             for command in self._input_delete_rbuf_commands:
@@ -2737,9 +2761,11 @@ class Spectrometer(Pipeline):
                 process_index += 1
             for execution_instance in execution_instances:
                 execution_instance.finish()
+            log.info("Delete spectrometer ring buffer, DONE")
 
         else:  # Force deconfigure
             self.state = "deconfiguring"
+            log.info("Deconfigure with wrong status")
             self._terminate_execution_instances()
             self._cleanup(self._cleanup_commands_config)
             
@@ -2827,7 +2853,8 @@ if __name__ == "__main__":
     log = logging.getLogger('mpikat')
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
-        level='DEBUG',
+        #level='DEBUG',
+        level='INFO',
         logger=log)
 
     parser = argparse.ArgumentParser(
