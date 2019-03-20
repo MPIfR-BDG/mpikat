@@ -93,6 +93,8 @@ class FitsWriterConnectionManager(Thread):
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.setsockopt(
             socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._server_socket.setsockopt(
+            socket.SOL_TCP, socket.TCP_NODELAY, 1)
         self._server_socket.setblocking(False)
         log.debug("Binding to {}".format(self._address))
         self._server_socket.bind(self._address)
@@ -289,7 +291,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         #current_qsize = sensor_queue.qsize()
         # for i in range(current_qsize):
         #    timestamp, metadata, data = sensor_queue.get()
-        log.info("Updating sensor values and making beam plots")
+        log.debug("Updating sensor values and making beam plots")
         has_data = False
         while True:
             try:
@@ -600,7 +602,7 @@ class PafHandler(object):
             freq_idx_start = (self.nchannelsperpacket * packet.freq_chunks_index)
             freq_idx_end = (self.nchannelsperpacket * (packet.freq_chunks_index + 1))
             fw_packet.sections[section_id].data[freq_idx_start:freq_idx_end] = packet.data
-            max_age = packet.integ_time * 2
+            max_age = packet.integ_time * 3
             if max_age < 1:
                 max_age = 1
             self._active_packets[key] = [
