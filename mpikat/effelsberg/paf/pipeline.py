@@ -1603,12 +1603,11 @@ class Search(Pipeline):
             raise PipelineError("Can only configure pipeline in idle state")
         log.info("Configuring")
         log.info("Setup and verify parameters for the pipeline")
-        
+        self.state = "configuring" 
         # Refresh IERS database to save the time on "start" for coordinate conversion
         self._refresh_iers()
 
         # Setup parameters of the pipeline
-        self.state         = "configuring"
         self._input_config = input_config
         self._config_info  = json.loads(config_json)
         self._config_freq   = self._config_info["frequency"]

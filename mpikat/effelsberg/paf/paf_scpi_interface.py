@@ -115,6 +115,7 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
 
         @param      req    An ScpiRequest object
         """
+        self._config["search_spectrometer"]= int("zoomband0" in self._config)
         self._ioloop.add_callback(self._make_coroutine_wrapper(req,
             self._mc.configure, json.dumps(self._config)))
 
