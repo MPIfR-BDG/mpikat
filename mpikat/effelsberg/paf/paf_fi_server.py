@@ -8,11 +8,12 @@ import struct
 import coloredlogs
 import inspect
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import base64
 import Queue
 import ctypes as C
-import matplotlib
 from StringIO import StringIO
 from threading import Thread, Event
 from optparse import OptionParser
