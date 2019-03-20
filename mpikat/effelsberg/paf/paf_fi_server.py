@@ -596,16 +596,22 @@ class PafHandler(object):
             fw_packet = build_fw_object(
                 self._nsections, packet.nchannels, packet.time_stamp,
                 int(packet.integ_time * 10**6), self._nphases)
-            fw_packet.sections[(packet.beam_id * 4) + packet.pol_id].data[(packet.nfreq_chunks * packet.freq_chunks_index):                                                                          ((packet.nfreq_chunks * packet.freq_chunks_index) + (packet.nchannels / packet.nfreq_chunks))] = packet.data
+
+            section_id = (packet.beam_id * 4) + packet.pol_id
+            freq_idx_start = (self.nchannelsperpacket * packet.freq_chunks_index)
+            freq_idx_end = (self.nchannelsperpacket * (packet.freq_chunks_index + 1))
+            fw_packet.sections[section_id].data[freq_idx_start:freq_idx_end] = packet.data
             max_age = packet.integ_time * 2
             if max_age < 1:
                 max_age = 1
-
             self._active_packets[key] = [
                 time.time(), max_age, packet, fw_packet]
         else:
-            self._active_packets[key][3].sections[(packet.beam_id * 4) + packet.pol_id].data[(packet.nfreq_chunks * packet.freq_chunks_index):
-                                                                                             ((packet.nfreq_chunks * packet.freq_chunks_index) + (packet.nchannels / packet.nfreq_chunks))] = packet.data
+            section_id = (packet.beam_id * 4) + packet.pol_id
+            freq_idx_start = (self.nchannelsperpacket * packet.freq_chunks_index)
+            freq_idx_end = (self.nchannelsperpacket * (packet.freq_chunks_index + 1))
+            fw_packet.sections[section_id].data[freq_idx_start:freq_idx_end] = packet.data
+            self._active_packets[key][3].sections[section_id].data[freq_idx_start:freq_idx_end] = packet.data
         self.flush()
 
     def flush(self):
