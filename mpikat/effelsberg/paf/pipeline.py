@@ -492,15 +492,6 @@ class Pipeline(object):
 
         # To see if the dada header template file is there
         if not os.path.isfile(self._input_dada_hdr_fname):
-            try:
-                log.debug("File stat: {}".format(
-                    os.stat(self._input_dada_hdr_fname)))
-            except:
-                log.error("Unable to stat file")
-
-            log.debug("Testing mount: mount healthy = {}".format(
-                os.path.isdir("/home/pulsar/xinping/")))
-
             log.error("{} is not there".format(self._input_dada_hdr_fname))
             self._terminate_execution_instances()
             self._cleanup(self._cleanup_commands_config)
