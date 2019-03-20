@@ -38,6 +38,7 @@ TOSSIX_IP = "134.104.74.36"
 TOSSIX_SCRIPT_ROOT = "/home/pulsar/aaron/askap-trunk/"
 
 
+
 class RoutingTableError(Exception):
     pass
 
@@ -96,7 +97,8 @@ class RemoteAccess(object):
         beam_alt_d = []
         beam_az_d = []
         for line in beamfile:
-            beamlist.append(np.fromstring(line, dtype=np.float32, sep=' '))
+            value = line.split()
+            beamlist.append((float(value[0]), float(value[1])))
         for i in range(1, len(beamlist)):
             beam_alt_d.append(beamlist[i][0]), beam_az_d.append(beamlist[i][1])
         log.debug("Close scp channel")

@@ -147,7 +147,7 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
         @param      req        An ScpiRequest object
         @param      number     The first band in the zoomband
         """
-        self._config['cmdzoomband0'] = number
+        self._config['zoomband0'] = number
 
     @scpi_request(int)
     @raise_or_ok
@@ -159,5 +159,5 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
         @param      number     The number of band in the zoomband
 
         """
-        self._config['cmdzoomnbands'] = number
+        self._config['zoomnbands'] = number
 

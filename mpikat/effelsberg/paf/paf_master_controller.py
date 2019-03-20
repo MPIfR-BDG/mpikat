@@ -50,14 +50,14 @@ FITS_INTERFACES = [
         "id": "fits_interface_01",
         "name": "FitsInterface",
         "address": ["134.104.70.90", 5000]
-    },
-    {
-        "id": "fits_interface_02",
-        "name": "FitsInterface",
-        "address": ["134.104.70.90", 5001]
     }
+#    {
+#        "id": "fits_interface_02",
+##        "name": "FitsInterface",
+#        "address": ["134.104.70.90", 5001]
+#    }
 ]
-
+"""
 FI_CONFIGURATIONS = {
     "spectrometer2beam": {
         "fits_interface_01": False,
@@ -75,6 +75,22 @@ FI_CONFIGURATIONS = {
         "fits_interface_02": True
     }
 }
+"""
+FI_CONFIGURATIONS = {
+    "spectrometer2beam": {
+        "fits_interface_01": False
+    },
+    "Search1beamhigh": {
+        "fits_interface_01": False
+    },
+    "search2beamlow": {
+        "fits_interface_01": False
+    },
+    "search2beamhigh": {
+        "fits_interface_01": False
+    }
+}
+
 
 WORKER_SERVERS = [
     ("134.104.70.90", 6000),
@@ -283,6 +299,11 @@ class PafMasterController(MasterController):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
+        log.info("Attempting deconfiguring PAF backend")
+        try:
+            yield self.deconfigure()
+        except Exception as error:
+            log.warning("Unable to deconfigure: {}".format(str(error)))
         log.info("Configuring PAF backend")
         log.info("Configuration string: '{}'".format(config_json))
         if self._products:
@@ -317,7 +338,7 @@ class PafMasterController(MasterController):
                 "Configured product controller with ID: {}".format(PAF_PRODUCT_ID))
 
         log.info("Configuring FITS interfaces")
-        product_mode = config_json['mode']
+        product_mode = config_dict['mode'].lower()
         self._fits_interfaces = []
         temp_fi_interfaces = {}
         for fi_config in FITS_INTERFACES:
@@ -361,15 +382,19 @@ class PafMasterController(MasterController):
     @coroutine
     def deconfigure(self):
         log.info("Deconfiguring PAF backend")
-        product = self._get_product(PAF_PRODUCT_ID)
-        log.debug("Deconfiguring product controller with ID: {}".format(
-            PAF_PRODUCT_ID))
-        yield product.deconfigure()
-        del self._products[PAF_PRODUCT_ID]
-        for fi in self._fits_interfaces:
-            fi.capture_stop()
-        self._update_products_sensor()
-        log.info("PAF backend deconfigured")
+        try:
+            product = self._get_product(PAF_PRODUCT_ID)
+        except ProductLookupError:
+            pass
+        else:
+            log.debug("Deconfiguring product controller with ID: {}".format(
+                PAF_PRODUCT_ID))
+            yield product.deconfigure()
+            del self._products[PAF_PRODUCT_ID]
+            for fi in self._fits_interfaces:
+                fi.capture_stop()
+            self._update_products_sensor()
+            log.info("PAF backend deconfigured")
 
     @request()
     @return_reply()

@@ -207,7 +207,7 @@ PIPELINES = {}
 
 def register_pipeline(name):
     def _register(cls):
-        PIPELINES[name] = cls
+        PIPELINES[name.lower()] = cls
         return cls
     return _register
 
@@ -959,7 +959,7 @@ class Fold(Pipeline):
         self._config_info  = json.loads(config_json)
         self._config_nchunk = self._config_info['nbands']
         self._config_ip            = self._config_info["ip_address"]
-        self._config_nchunk_offset = self._config_info["bandoffset"]
+        self._config_nchunk_offset = self._config_info["band_offset"]
         self._config_freq          = self._config_info["frequency"]
         self._simultaneous_spectrometer_nchunk          = self._config_info["zoomnbands"]
         self._simultaneous_spectrometer_start_chunk     = self._config_info["zoomband0"]
@@ -1302,7 +1302,7 @@ class Fold(Pipeline):
         self._scan_num = self._status_info["scannum"]
         self._sub_scan_num = self._status_info["subscannum"]
         self._utc_start_process = Time(self._status_info["utc_start_process"], format='isot', scale='utc')
-        self._source_name = self._status_info["source_name"]
+        self._source_name = self._status_info["source-name"]
         self._source_ra, self._source_dec  = float(self._status_info['ra']), float(self._status_info['dec'])
             
         # To start the coord conversion in a thread to save the wait time
@@ -1599,7 +1599,7 @@ class Search(Pipeline):
         self._config_freq   = self._config_info["frequency"]
         self._config_ip     = self._config_info['ip_address']
         self._config_nchunk = self._config_info['nbands']
-        self._config_nchunk_offset = self._config_info["bandoffset"]
+        self._config_nchunk_offset = self._config_info["band_offset"]
         self._simultaneous_spectrometer_nchunk          = self._config_info["zoomnbands"]
         self._simultaneous_spectrometer_start_chunk     = self._config_info["zoomband0"]
         
@@ -1989,7 +1989,7 @@ class Search(Pipeline):
         self._scan_num = self._status_info["scannum"]
         self._sub_scan_num = self._status_info["subscannum"]
         self._utc_start_process = Time(self._status_info["utc_start_process"], format='isot', scale='utc')
-        self._source_name = self._status_info["source_name"]
+        self._source_name = self._status_info["source-name"]
         self._source_ra, self._source_dec  = float(self._status_info['ra']), float(self._status_info['dec'])
 
         # To start the coord conversion in a thread to save the wait time
@@ -2253,7 +2253,7 @@ class Spectrometer(Pipeline):
         self._config_freq   = self._config_info["frequency"]
         self._config_ip     = self._config_info['ip_address']
         self._config_nchunk = self._config_info['nbands']
-        self._config_nchunk_offset = self._config_info["bandoffset"]
+        self._config_nchunk_offset = self._config_info["band_offset"]
         self._simultaneous_spectrometer_nchunk          = self._config_info["zoomnbands"]
         self._simultaneous_spectrometer_start_chunk     = self._config_info["zoomband0"]
         
@@ -2540,7 +2540,7 @@ class Spectrometer(Pipeline):
         self._scan_num = self._status_info["scannum"]
         self._sub_scan_num = self._status_info["subscannum"]
         self._utc_start_process = Time(self._status_info["utc_start_process"], format='isot', scale='utc')
-        self._source_name = self._status_info["source_name"]
+        self._source_name = self._status_info["source-name"]
         self._source_ra, self._source_dec  = float(self._status_info['ra']), float(self._status_info['dec'])
 
         # To start the coord conversion in a thread to save the wait time
@@ -2815,7 +2815,7 @@ if __name__ == "__main__":
     config_info = {"utc_start_capture": Time(Time.now(), format='isot', scale='utc').value,
                    "frequency":         1340.5,
                    "nbands":            33,
-                   "bandoffset":        0,
+                   "band_offset":        0,
                    "ip_address":        ip,
                    "beam_alt_d":         [0, -0.1, -0.2, -0.3, -0.1, -0.2, -0.3,  0.1,  0.2,  0.3, -0.11, -0.21, -0.31, -0.11, -0.21, -0.31,  0.12,  0.22,  0.32, -0.12, -0.22, -0.32, -0.12, -0.22, -0.32,  0.12,  0.22,  0.32, 0.13, 0.23,  0.33, -0.13, -0.23, -0.33, -0.13, -0.23, -0.33,  0.13,  0.23],
                    # First column in the file, opposite value                                                                                                  
@@ -2825,7 +2825,7 @@ if __name__ == "__main__":
                    # Second column in the file, opposite value
     }
     status_info = {"utc_start_process":  Time(Time.now(), format='isot', scale='utc').value,
-                  "source_name": "J0332+5434",
+                  "source-name": "J0332+5434",
                   "ra":   190.3,
                   "dec":  80.10,
                    "scannum":    1001,
