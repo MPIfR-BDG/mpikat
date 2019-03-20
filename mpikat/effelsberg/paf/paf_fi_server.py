@@ -279,17 +279,22 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._update_sensors_callback.start()
 
     def update_sensors(self):
-        print "Qsize: ",sensor_queue.qsize()
-        for i in range(sensor_queue.qsize()):
-            timestamp, metadata, data = sensor_queue.get()
-        print "after Qsize: ",sensor_queue.qsize()
+        #current_qsize = sensor_queue.qsize()
+        #for i in range(current_qsize):
+        #    timestamp, metadata, data = sensor_queue.get()
+        while True:
+            try:
+                timestamp, metadata, data = sensor_queue.get(False)
+            except Queue.Empty:
+                break 
         self._integration_time_sensor.set_value(metadata.integ_time)
         self._nchannels_sensor.set_value(metadata.nchannels)
         self._pol_type_sensor.set_value(metadata.pol_type)
         self._nblank_phases_sensor.set_value(data.blank_phases)
         self._center_freq_sensor.set_value(metadata.center_freq)
         self._channel_bw_sensor.set_value(metadata.channel_bw)
-        for i in range(36): self.plot_beam_data(i, data)
+        for i in range(36): 
+            self.plot_beam_data(i, data)
 
     def zton(self, x):
         x = np.asarray(x)
@@ -387,7 +392,6 @@ class FitsInterfaceServer(AsyncDeviceServer):
         log.info("Stopping FITS interface capture")
         self._stop_capture()
         self._fw_connection_manager.drop_connection()
-#        self.update_sensors()
         return ("ok",)
 
 
@@ -545,27 +549,6 @@ class PafHandler(object):
         channelsPerPacket = metadata[3]/metadata[8]
         return channelsPerPacket
 
-    def read_paf_metadata(self):
-        for key in self._active_packets.iterkeys(): entry = key
-        metadata = self._active_packets[entry][2]
-        return metadata
-
-    def plot_data(self):
-        for key in self._active_packets.iterkeys(): entry = key
-        fig = plt.figure(1)
-        plt.figure(1)
-        plt.clf()
-        beam1 = StringIO()
-        #nchannels, data
-        plt.plot(self._active_packets[entry][3].sections[0].nchannels, self._active_packets[entry][3].sections[0].data)
-        plt.plot(self._active_packets[entry][3].sections[1].nchannels, self._active_packets[entry][3].sections[1].data)
-        plt.savefig(beam1, format='png', dpi=100)
-        beam1.seek(0)
-        beam1_png = adc_power_spectrum.buf
-        beam1_png = base64.b64encode(adc_power_spectrum_png).replace("\n","")
-        self._beam_data_blob.set_value(beam1_png)
-
-
     def __call__(self, raw_data):
         """
         @brief      Handle a raw packet from the network
@@ -608,9 +591,11 @@ class PafHandler(object):
         for key in sorted(self._active_packets.iterkeys()):
             timestamp, time_out, metadata, fw_packet = self._active_packets[key]
             if ((now - timestamp) >= time_out):
-                #sensor_queue.put((timestamp, metadata, fw_packet), False)
-                sensor_queue.put((timestamp, metadata, fw_packet))
-                print "qsize put: ", sensor_queue.qsize()
+                try:
+                    sensor_queue.put((timestamp, metadata, fw_packet), False)
+                except Queue.Full:
+                    sensor_queue.get()
+                    sensor_queue.put((timestamp, metadata, fw_packet), False)
                 if self._mode == 1:
                     log.debug("Sending packets with timestamp: {}".format(timestamp))
                     self._transmit_socket.send(bytearray(fw_packet))
