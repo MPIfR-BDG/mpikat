@@ -673,7 +673,7 @@ class Pipeline(object):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         # Force to timeout after one data frame period
-        socket.settimeout(1)
+        sock.settimeout(1)
         server_address = (ip, port)
         sock.bind(server_address)
 
@@ -753,7 +753,7 @@ class Pipeline(object):
                              socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         # Force to timeout after one data frame period
-        socket.settimeout(1)
+        sock.settimeout(1)
         server_address = (ip, port)
         sock.bind(server_address)
 
@@ -831,7 +831,7 @@ class Pipeline(object):
                              socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         # Force to timeout after one data frame period
-        socket.settimeout(1)
+        sock.settimeout(1)
         server_address = (ip, port)
         sock.bind(server_address)
 
