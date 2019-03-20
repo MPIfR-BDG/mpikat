@@ -28,6 +28,10 @@ from sympy.physics.vector import vlatex
 from sympy.printing import latex
 from astropy.coordinates import ICRS, Galactic, FK4, FK5
 import math
+from astropy.utils import iers
+
+iers.conf.auto_download = False  # Turn the download off
+iers.conf.auto_max_age = None    # Enable prediction
 
 # Updates:
 # 1. Check the directory exist or not, create it if not;
@@ -51,8 +55,8 @@ import math
 # 19. Fresh iers data base at configure
 
 log = logging.getLogger('mpikat.effelsberg.paf.pipeline')
-#log.setLevel('DEBUG')
-log.setLevel('INFO')
+log.setLevel('DEBUG')
+#log.setLevel('INFO')
 
 # Configuration of input for different number of beams 
 INPUT_1BEAM = {"input_nbeam":                  1,
@@ -889,6 +893,12 @@ class Pipeline(object):
                 self._ready_lock.acquire()
                 self._ready_counter += 1
                 self._ready_lock.release()
+
+    def _process_status_callback(self, stdout, callback):
+        if self._execution:
+            if stdout.find("finished") != -1:
+                log.debug(stdout)
+                log.info(stdout)
                 
     def _capture_status_callback(self, stdout, callback):
         if self._execution:
@@ -2125,6 +2135,7 @@ class Search(Pipeline):
         # Remove ready_counter_callback 
         for execution_instance in self._search_execution_instances:
             execution_instance.stdout_callbacks.remove(self._ready_counter_callback)
+            #execution_instance.stdout_callbacks.add(self._process_status_callback)
             execution_instance.stdout_callbacks.add(self._handle_execution_stdout)
             
         self.state = "running"
@@ -2667,6 +2678,7 @@ class Spectrometer(Pipeline):
         # We do not need to monitor the stdout anymore
         for execution_instance in self._spectrometer_execution_instances:
             execution_instance.stdout_callbacks.remove(self._ready_counter_callback)
+            #execution_instance.stdout_callbacks.add(self._process_status_callback)
             execution_instance.stdout_callbacks.add(self._handle_execution_stdout)
             
         self.state = "running"
@@ -2853,8 +2865,8 @@ if __name__ == "__main__":
     log = logging.getLogger('mpikat')
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
-        #level='DEBUG',
-        level='INFO',
+        level='DEBUG',
+        #level='INFO',
         logger=log)
 
     parser = argparse.ArgumentParser(
