@@ -831,7 +831,7 @@ class Pipeline(object):
                              socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         # Force to timeout after one data frame period
-        socket.setdefaulttimeout(self._paf_period)
+        socket.setdefaulttimeout(1)
         server_address = (ip, port)
         sock.bind(server_address)
 
