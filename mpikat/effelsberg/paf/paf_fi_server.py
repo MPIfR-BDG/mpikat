@@ -10,7 +10,14 @@ import coloredlogs
 import inspect
 import numpy as np
 import time
+import Queue
 import ctypes as C
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from StringIO import StringIO
+import base64
+from StringIO import StringIO
 from datetime import datetime
 from threading import Thread, Event
 from optparse import OptionParser
@@ -18,6 +25,35 @@ from katcp import AsyncDeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import (Str, Int, request, return_reply)
 
 log = logging.getLogger("mpikat.paf_fi_server")
+
+DEFAULT_BLOB = "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"
+
+sensor_queue = Queue.Queue()
 
 class StopEventException(Exception):
     pass
@@ -159,7 +195,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._shutdown = False
         self._mode = None
         self._fw_soc = None
-        self._paf_handler = PafHandler(self._mode, self._fw_soc)
+        #self._paf_handler = PafHandler(self._mode, self._fw_soc)
         super(FitsInterfaceServer, self).__init__(interface, port)
 
     def start(self):
@@ -178,39 +214,6 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._fw_connection_manager.stop()
         super(FitsInterfaceServer, self).stop()
 
-    @property
-    def nbeams(self):
-        return self._active_beams_sensor.value()
-
-    @nbeams.setter
-    def nbeams(self, value):
-        self._active_beams_sensor.set_value(value)
-
-    @property
-    def nchannels(self):
-        return self._nchannels_sensor.value()
-
-    @nchannels.setter
-    def nchannels(self, value):
-        value = self._paf_handler.read_paf_metadata()
-        self._nchannels_sensor.set_value(value)
-
-    @property
-    def integration_time(self):
-        return self._integration_time_sensor.value()
-
-    @integration_time.setter
-    def integration_time(self, value):
-        self._integration_time_sensor.set_value(value)
-
-    @property
-    def nblank_phases(self):
-        return self._nblank_phases_sensor.value()
-
-    @nblank_phases.setter
-    def nblank_phases(self, value):
-        self._nblank_phases_sensor.set_value(value)
-
     def setup_sensors(self):
         """
         @brief   Setup monitoring sensors
@@ -222,30 +225,93 @@ class FitsInterfaceServer(AsyncDeviceServer):
             default="ok",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._device_status_sensor)
-        self._active_beams_sensor = Sensor.float(
-            "nbeams",
-            description="Number of beams that are currently active",
-            default=1,
+        self._mode_sensor = Sensor.string(
+            "fi-mode",
+            description="FITS interface mode",
+            default="passive",
             initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._active_beams_sensor)
-        self._nchannels_sensor = Sensor.float(
-            "nchannels",
-            description="Number of channels in each beam",
-            default=1,
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._nchannels_sensor)
+        self.add_sensor(self._mode_sensor)
         self._integration_time_sensor = Sensor.float(
             "integration-time",
             description="The integration time for each beam",
             default=1,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._integration_time_sensor)
+        self._nchannels_sensor = Sensor.integer(
+            "nchannels",
+            description="Number of channels in each beam",
+            default=1,
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._nchannels_sensor)
+        self._pol_type_sensor = Sensor.integer(
+            "pol-type",
+            description="Data sent by paf backend",
+            default=1,
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._pol_type_sensor)
         self._nblank_phases_sensor = Sensor.integer(
             "nblank-phases",
             description="The number of blank phases",
             default=1,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._nblank_phases_sensor)
+        self._center_freq_sensor = Sensor.float(
+            "center-frequency in MHz",
+            description="Center frequency",
+            default=1,
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._center_freq_sensor)
+        self._channel_bw_sensor = Sensor.float(
+            "channel-bandwidth in MHz",
+            description="Channel bandwidth in MHz",
+            default=1,
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._channel_bw_sensor)
+        self._beam_pngs = {}
+        for beam_id in range(36):
+            self._beam_pngs[beam_id] = Sensor.string(
+                "BEAM%02d_PNG"%beam_id,
+                 description="Data of beam {} sent from the back-end".format(beam_id),
+                 default=DEFAULT_BLOB,
+                 initial_status=Sensor.UNKNOWN)
+            self.add_sensor(self._beam_pngs[beam_id])
+        self._update_sensors_callback = tornado.ioloop.PeriodicCallback(self.update_sensors, 10000)
+        self._update_sensors_callback.start()
+
+    def update_sensors(self):
+        print "Qsize: ",sensor_queue.qsize()
+        for i in range(sensor_queue.qsize()):
+            timestamp, metadata, data = sensor_queue.get()
+        print "after Qsize: ",sensor_queue.qsize()
+        self._integration_time_sensor.set_value(metadata.integ_time)
+        self._nchannels_sensor.set_value(metadata.nchannels)
+        self._pol_type_sensor.set_value(metadata.pol_type)
+        self._nblank_phases_sensor.set_value(data.blank_phases)
+        self._center_freq_sensor.set_value(metadata.center_freq)
+        self._channel_bw_sensor.set_value(metadata.channel_bw)
+        for i in range(36): self.plot_beam_data(i, data)
+
+    def zton(self, x):
+        x = np.asarray(x)
+        x[x==0] = np.nan
+        return x
+
+    def plot_beam_data(self, beam_id, beam_data):
+        plt.cla()
+        plt.xlabel('Channels')
+        plt.ylabel('Power')
+        x = beam_data
+        index = beam_id*4
+        plt.plot(np.arange(x.sections[index+0].nchannels),self.zton(x.sections[index+0].data))
+        plt.plot(np.arange(x.sections[index+1].nchannels),self.zton(x.sections[index+1].data))
+        plt.plot(np.arange(x.sections[index+2].nchannels),self.zton(x.sections[index+2].data))
+        plt.plot(np.arange(x.sections[index+3].nchannels),self.zton(x.sections[index+3].data))
+        beam = StringIO()
+        plt.savefig(beam, format='png', dpi=100)
+        beam.seek(0)
+        beam_png = beam.buf
+        beam_png = base64.b64encode(beam_png).replace("\n","")
+        self._beam_pngs[beam_id].set_value(beam_png)
 
     def _stop_capture(self):
         if self._capture_thread:
@@ -261,16 +327,12 @@ class FitsInterfaceServer(AsyncDeviceServer):
         """
         @brief    Configure the FITS interface server
 
-        @param   fi_status    FITS interface status: for active(1), inactive(0)
-        @param   nactiveBeams   The number of beams expected
-        @param   channels       The number of channels per frequency chunk expected(512 or 864)
-        @param   int_time       The integration time (milliseconds int)
-        @param   blank_phases   The number of blank phases (1-4)
+        @param    fi_status    FITS interface status: for active(1), inactive(0)
 
-        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        @return   katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
         if fi_status == 1: message = "FITS interface is active({})".format(fi_status)
-        elif fi_status == 0: message = "FITS interface is inactive({})".format(fi_status)
+        elif fi_status == 0: message = "FITS interface is passive({})".format(fi_status)
         else:
             message = "Invalid mode: {}".format(fi_status)
             return ("fail", message)
@@ -303,9 +365,9 @@ class FitsInterfaceServer(AsyncDeviceServer):
         else: fw_socket = None
         log.info("Starting FITS interface capture")
         self._stop_capture()
-        handler = PafHandler(self._mode, fw_socket)
+        self._paf_handler = PafHandler(self._mode, fw_socket)
         self._capture_thread = CaptureData(self._capture_interface,
-            self._capture_port, handler)
+            self._capture_port, self._paf_handler)
         self._capture_thread.start()
         return ("ok",)
 
@@ -325,6 +387,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         log.info("Stopping FITS interface capture")
         self._stop_capture()
         self._fw_connection_manager.drop_connection()
+#        self.update_sensors()
         return ("ok",)
 
 
@@ -472,14 +535,36 @@ class PafHandler(object):
         self._mode = mode 
         self._npol = 4
         self._nsections = 36*self._npol 
-        self._nphases = 1 
+        self._nphases = 1
+        self._raw_data = "" 
         self._transmit_socket = transmit_socket
         self._active_packets = {}
 
-    def read_paf_metadata(self, raw_data):
-        metadata = struct.unpack("<i28sfiffiiii", raw_data[0:64])
+    def read_channels_per_packet(self):
+        metadata = struct.unpack("<i28sfiffiiii", self._raw_data[0:64])
         channelsPerPacket = metadata[3]/metadata[8]
         return channelsPerPacket
+
+    def read_paf_metadata(self):
+        for key in self._active_packets.iterkeys(): entry = key
+        metadata = self._active_packets[entry][2]
+        return metadata
+
+    def plot_data(self):
+        for key in self._active_packets.iterkeys(): entry = key
+        fig = plt.figure(1)
+        plt.figure(1)
+        plt.clf()
+        beam1 = StringIO()
+        #nchannels, data
+        plt.plot(self._active_packets[entry][3].sections[0].nchannels, self._active_packets[entry][3].sections[0].data)
+        plt.plot(self._active_packets[entry][3].sections[1].nchannels, self._active_packets[entry][3].sections[1].data)
+        plt.savefig(beam1, format='png', dpi=100)
+        beam1.seek(0)
+        beam1_png = adc_power_spectrum.buf
+        beam1_png = base64.b64encode(adc_power_spectrum_png).replace("\n","")
+        self._beam_data_blob.set_value(beam1_png)
+
 
     def __call__(self, raw_data):
         """
@@ -487,7 +572,8 @@ class PafHandler(object):
 
         @param      raw_data  The raw data captured from the network
         """
-        self.nchannelsperpacket = self.read_paf_metadata(raw_data) 
+        self._raw_data = raw_data
+        self.nchannelsperpacket = self.read_channels_per_packet()
         packet = PafPacket(raw_data, self.nchannelsperpacket)
         log.debug("Aggregate received packet: {}".format(packet))
         log.debug("From packet: beam_id: {}, pol_id: {}, ts: {}, integ_time = {}, channels: {}, freq_chunks: {}, chunk_index: {}".
@@ -501,15 +587,16 @@ class PafHandler(object):
                 int(packet.integ_time*10**6), self._nphases)
             fw_packet.sections[(packet.beam_id*4)+packet.pol_id].data[(packet.nfreq_chunks*packet.freq_chunks_index):
                 ((packet.nfreq_chunks*packet.freq_chunks_index)+(packet.nchannels/packet.nfreq_chunks))] = packet.data
+            paf_metadata = packet
 
             max_age = packet.integ_time*2
-            if max_age < 3: max_age = 3 
+            if max_age < 1: max_age = 1 
 
-            self._active_packets[key] = [time.time(), max_age, fw_packet]
+            self._active_packets[key] = [time.time(), max_age, packet, fw_packet]
         else:
-            self._active_packets[key][2].sections[(packet.beam_id*4)+packet.pol_id].data[(packet.nfreq_chunks*packet.freq_chunks_index):
+            self._active_packets[key][3].sections[(packet.beam_id*4)+packet.pol_id].data[(packet.nfreq_chunks*packet.freq_chunks_index):
                 ((packet.nfreq_chunks*packet.freq_chunks_index)+(packet.nchannels/packet.nfreq_chunks))] = packet.data
-        #self.flush()
+        self.flush()
 
     def flush(self):
         """
@@ -519,8 +606,11 @@ class PafHandler(object):
         log.debug("Number of active packets pre-flush: {}".format(len(self._active_packets)))
         now = time.time()
         for key in sorted(self._active_packets.iterkeys()):
-            timestamp, time_out, fw_packet = self._active_packets[key]
+            timestamp, time_out, metadata, fw_packet = self._active_packets[key]
             if ((now - timestamp) >= time_out):
+                #sensor_queue.put((timestamp, metadata, fw_packet), False)
+                sensor_queue.put((timestamp, metadata, fw_packet))
+                print "qsize put: ", sensor_queue.qsize()
                 if self._mode == 1:
                     log.debug("Sending packets with timestamp: {}".format(timestamp))
                     self._transmit_socket.send(bytearray(fw_packet))
