@@ -46,7 +46,7 @@ NCHAN        {{nchan}}     # number of channels here
 
 #MeerKAT specifics
 DADA_KEY     {{dada_key}}
-DADA_MODE    4
+DADA_MODE    {{dada_mode}}
 NANTS        {{nantennas}}
 ANTS         {{antennas_csv}}
 ORDER        TAFTP

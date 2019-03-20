@@ -6,6 +6,8 @@ from katcp.testutils import mock_req, handle_mock_req
 from katpoint import Target
 from mpikat.meerkat.fbfuse import BaseFbfConfigurationAuthority
 
+class SensorNotFoundError(Exception):
+    pass
 
 class MockFbfConfigurationAuthority(BaseFbfConfigurationAuthority):
     def __init__(self, host, port):

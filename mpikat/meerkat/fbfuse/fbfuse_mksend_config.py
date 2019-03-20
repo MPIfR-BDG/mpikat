@@ -4,12 +4,17 @@ import logging
 log = logging.getLogger('mpikat.fbfuse_mksend_config')
 
 HEADER_TEMPLATE = """
+HEADER       DADA                # Distributed aquisition and data analysis
+HDR_VERSION  1.0                 # Version of this ASCII header
+HDR_SIZE     4096                # Size of the header in bytes
+DADA_VERSION 1.0                 # Version of the DADA Software
+
 PACKET_SIZE  9000                   # Jumbo frames
 BUFFER_SIZE  8388608                # use default = 8 MB
 NTHREADS     16
 NHEAPS       36
 
-DADA_MODE    1                      # 0 = artificial data
+DADA_MODE    {{dada_mode}}                     # 0 = artificial data
                                     # 1 = data from dada ringbuffer
 DADA_KEY     {{dada_key}}
 

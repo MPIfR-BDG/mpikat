@@ -46,6 +46,18 @@ MKRECV_CONFIG_FILENAME = "mkrecv_feng.cfg"
 MKSEND_COHERENT_CONFIG_FILENAME = "mksend_coherent.cfg"
 MKSEND_INCOHERENT_CONFIG_FILENAME = "mksend_incoherent.cfg"
 
+EXEC_MODES = ["dryrun", "output_only", "input_output", "full"]
+DRYRUN, OUTPUT_ONLY, INPUT_OUTPUT, FULL = EXEC_MODES
+
+# For elegantly doing nothing instead of starting a process
+DUMMY_CMD = ["tail", "-f", "/dev/null"]
+
+MKRECV_STDOUT_KEYS = {
+    "STAT": [("slot-size", int), ("heaps-completed", int),
+             ("heaps-discarded", int), ("heaps-needed", int),
+             ("payload-expected", int), ("payload-received", int)]
+}
+
 
 class FbfWorkerServer(AsyncDeviceServer):
     VERSION_INFO = ("fbf-control-server-api", 0, 1)
@@ -55,7 +67,7 @@ class FbfWorkerServer(AsyncDeviceServer):
               "starting", "capturing", "stopping", "error"]
     IDLE, PREPARING, READY, STARTING, CAPTURING, STOPPING, ERROR = STATES
 
-    def __init__(self, ip, port, capture_interface, dummy=False):
+    def __init__(self, ip, port, capture_interface, exec_mode=FULL):
         """
         @brief       Construct new FbfWorkerServer instance
 
@@ -70,7 +82,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         self._delay_client = None
         self._delay_client = None
         self._delays = None
-        self._dummy = dummy
+        self._exec_mode = exec_mode
         self._dada_input_key = 0xdada
         self._dada_coh_output_key = 0xcaca
         self._dada_incoh_output_key = 0xbaba
@@ -164,6 +176,13 @@ class FbfWorkerServer(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._mkrecv_incoh_header_sensor)
 
+        self._psrdada_cpp_args_sensor = Sensor.string(
+            "psrdada-cpp-arguments",
+            description="The command line arguments used to invoke psrdada_cpp",
+            default="",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._psrdada_cpp_args_sensor)
+
     @property
     def capturing(self):
         return self.state == self.CAPTURING
@@ -198,16 +217,7 @@ class FbfWorkerServer(AsyncDeviceServer):
 
     def _system_call_wrapper(self, cmd):
         log.debug("System call: '{}'".format(" ".join(cmd)))
-        if self._dummy:
-            log.debug(
-                "Server is running in dummy mode, system call will be ignored")
-        else:
-            check_call(cmd)
-
-    def _process_open_wrapper(self, *args, **kwargs):
-        if self.dummy:
-            pass
-
+        check_call(cmd)
 
     @coroutine
     def _process_close_wrapper(self, process, timeout=10.0):
@@ -271,7 +281,62 @@ class FbfWorkerServer(AsyncDeviceServer):
         }
         return info
 
-    @request(Str(), Int(), Int(), Float(), Float(), Str(), Str(), Str(), Str(), Str(), Int())
+    def _make_db(self, key, block_size, nblocks):
+        log.debug(("Building DADA buffer: key={}, block_size={}, "
+                   "nblocks={}").format(key=key, block_size=block_size,
+                  nblocks=nblocks))
+        if self._exec_mode == FULL:
+            self._system_call_wrapper(
+                ["dada_db", "-k", key, "-b", block_size, "-n",
+                 nblocks, "-l", "-p"])
+        else:
+            log.warning(("Current execution mode disables "
+                         "DADA buffer creation/destruction"))
+
+    def _destroy_db(self, key):
+        log.debug("Destroying DADA buffer with key={}".format(key))
+        if self._exec_mode == FULL:
+            self._system_call_wrapper(["dada_db", "-k", key, "-d"])
+        else:
+            log.warning(("Current execution mode disables "
+                         "DADA buffer creation/destruction"))
+
+    def _reset_db(self, key):
+        log.debug("Resetting DADA buffer with key={}".format(key))
+        if self._exec_mode == FULL:
+            self._system_call_wrapper(["dbreset", "-k", key])
+        else:
+            log.warning(("Current execution mode disables "
+                         "DADA buffer reset"))
+
+    def _start_mksend_instance(self, config):
+        log.info("Starting MKSEND instance with config={}".format(config))
+        cmdline = ["mksend", "--config", config]
+        log.debug("cmdline: {}".format(" ".join(cmdline)))
+        if self._exec_mode == DRYRUN:
+            log.warning(("In dry-run mode, replacing MKSEND call "
+                         "with busy loop"))
+            cmdline = DUMMY_CMD
+        proc = Popen(cmdline, stdout=PIPE, stderr=PIPE, shell=False,
+                     close_fd=True)
+        log.debug("Started MKSEND instance with PID={}".format(proc.pid))
+        return proc
+
+    def _start_mkrecv_instance(self, config):
+        log.info("Starting MKRECV instance with config={}".format(config))
+        cmdline = ["mkrecv", "--config", config]
+        log.debug("cmdline: {}".format(" ".join(cmdline)))
+        if self._exec_mode in [DRYRUN, OUTPUT_ONLY]:
+            log.warning(("In {} mode, replacing MKRECV call "
+                         "with busy loop").format(self._exec_mode))
+            cmdline = DUMMY_CMD
+        proc = Popen(cmdline, stdout=PIPE, stderr=PIPE, shell=False,
+                     close_fd=True)
+        log.debug("Started MKRECV instance with PID={}".format(proc.pid))
+        return proc
+
+    @request(Str(), Int(), Int(), Float(), Float(), Str(), Str(),
+             Str(), Str(), Str(), Int())
     @return_reply()
     def request_prepare(self, req, feng_groups, nchans_per_group, chan0_idx,
                         chan0_freq, chan_bw, nbeams, mcast_to_beam_map, feng_config,
@@ -407,7 +472,8 @@ class FbfWorkerServer(AsyncDeviceServer):
                                * nantennas)
             ngroups_data = 1024
             ngroups_temp = 512
-            centre_frequency = (chan0_freq + feng_config['nchans'] / 2.0 * chan_bw),
+            centre_frequency = (
+                chan0_freq + feng_config['nchans'] / 2.0 * chan_bw),
             mkrecv_config = {
                 'frequency_mhz': centre_frequency / 1e6,
                 'bandwidth': partition_bandwidth,
@@ -478,8 +544,10 @@ class FbfWorkerServer(AsyncDeviceServer):
                                   * coherent_beam_config['fscrunch'] * 2)
 
             log.debug("Determining MKSEND configuration for coherent beams")
+            dada_mode = int(self._exec_mode == FULL)
             mksend_coh_config = {
                 'dada_key': self._dada_coh_output_key,
+                'dada_mode': dada_mode,
                 'interface': self._capture_interface,
                 'data_rate': coh_data_rate,
                 'mcast_port': coh_group_range.port,
@@ -503,9 +571,11 @@ class FbfWorkerServer(AsyncDeviceServer):
                                     * incoherent_beam_config['fscrunch'] * 2)
 
             log.debug("Determining MKSEND configuration for incoherent beams")
+            dada_mode = int(self._exec_mode == FULL)
             incoh_ip_range = ip_range_from_stream(incoherent_beam_group)
             mksend_incoh_config = {
                 'dada_key': self._dada_incoh_output_key,
+                'dada_mode': dada_mode,
                 'interface': self._capture_interface,
                 'data_rate': incoh_data_rate,
                 'mcast_port': incoh_ip_range.port,
@@ -539,74 +609,43 @@ class FbfWorkerServer(AsyncDeviceServer):
                 'coherent_nantennas': len(coherent_beam_config['antennas'].split(",")),
                 'coherent_antenna_offset': 0,
                 'coherent_nbeams': nbeams,
-                'incoherent_tscrunch': incoherent_beam_config['tscrunch'] ,
+                'incoherent_tscrunch': incoherent_beam_config['tscrunch'],
                 'incoherent_fscrunch': incoherent_beam_config['fscrunch']
             }
-            psrdada_compilation_future = compile_psrdada_cpp(fbfuse_pipeline_params)
+            psrdada_compilation_future = compile_psrdada_cpp(
+                fbfuse_pipeline_params)
 
             # Create capture data DADA buffer
             capture_block_size = ngroups_data * heap_group_size
             capture_block_count = AVAILABLE_CAPTURE_MEMORY / capture_block_size
             log.debug("Creating dada buffer for input with key '{}'".format(
                 "%x" % self._dada_input_key))
-            log.debug("Buffer will use {} blocks of {} bytes".format(
-                capture_block_count, capture_block_size))
-            self._system_call_wrapper(
-                ["dada_db", "-k", self._dada_input_key, "-b",
-                 capture_block_size, "-n", capture_block_count,
-                 "-l", "-p"])
+            self._make_db(self._dada_input_key, capture_block_size,
+                          capture_block_count)
 
             # Create coherent beam output DADA buffer
-            coh_output_channels = (ngroups * nchans_per_group)/coherent_beam_config['fscrunch']
-            coh_output_samples = ngroups_data * 256 / coherent_beam_config['tscrunch']
+            coh_output_channels = (ngroups * nchans_per_group) / \
+                coherent_beam_config['fscrunch']
+            coh_output_samples = ngroups_data * \
+                256 / coherent_beam_config['tscrunch']
             coherent_block_size = nbeams * coh_output_channels * coh_output_samples
             coherent_block_count = 8
             log.debug("Creating dada buffer for coherent beam output with key '{}'".format(
                 "%x" % self._dada_coh_output_key))
-            log.debug("Buffer will use {} blocks of {} bytes".format(
-                coherent_block_count, coherent_block_size))
-            self._system_call_wrapper(
-                ["dada_db", "-k", self._dada_coh_output_key, "-b",
-                 coherent_block_size, "-n", coherent_block_count,
-                 "-l", "-p"])
+            self._make_db(self._dada_coh_output_key, coherent_block_size,
+                          coherent_block_count)
 
             # Create incoherent beam output DADA buffer
-            incoh_output_channels = (ngroups * nchans_per_group)/incoherent_beam_config['fscrunch']
-            incoh_output_samples = (ngroups_data * 256) / incoherent_beam_config['tscrunch']
+            incoh_output_channels = (
+                ngroups * nchans_per_group) / incoherent_beam_config['fscrunch']
+            incoh_output_samples = (ngroups_data * 256) / \
+                incoherent_beam_config['tscrunch']
             incoherent_block_size = incoh_output_channels * incoh_output_samples
             incoherent_block_count = 8
             log.debug("Creating dada buffer for incoherent beam output with key '{}'".format(
                 "%x" % self._dada_incoh_output_key))
-            log.debug("Buffer will use {} blocks of {} bytes".format(
-                incoherent_block_count, incoherent_block_size))
-            self._system_call_wrapper(
-                ["dada_db", "-k", self._dada_incoh_output_key, "-b",
-                 incoherent_block_size, "-n", incoherent_block_count,
-                 "-l", "-p"])
-
-            # Create SPEAD transmitter for coherent beams
-            # Call to MKSEND
-            mksend_coh_cmdline = ["mksend",
-                                  "--config", MKSEND_COHERENT_CONFIG_FILENAME]
-            log.info("Starting MKSEND for coherent beams: {}".format(
-                " ".join(mksend_coh_cmdline)))
-            self._mksend_coh_proc = Popen(
-                mksend_coh_cmdline,
-                stdout=PIPE, stderr=PIPE, shell=False, close_fd=True)
-            log.debug("MKSEND (coherent) PID = {}".format(self._mksend_coh_proc.pid))
-            self._mksend_coh_stdout_mon = PipeMonitor(self._mksend_coh_proc.stdout, {})
-
-            # Create SPEAD transmitter for incoherent beam
-            # Call to MKSEND
-            mksend_incoh_cmdline = ["mksend",
-                                    "--config", MKSEND_INCOHERENT_CONFIG_FILENAME]
-            log.info("Starting MKSEND for incoherent beam: {}".format(
-                " ".join(mksend_incoh_cmdline)))
-            self._mksend_incoh_proc = Popen(
-                mksend_incoh_cmdline,
-                stdout=PIPE, stderr=PIPE, shell=False, close_fd=True)
-            log.debug("MKSEND (incoherent) PID = {}".format(self._mksend_incoh_proc.pid))
-            self._mksend_incoh_stdout_mon = PipeMonitor(self._mksend_incoh_proc.stdout, {})
+            self._make_db(self._dada_incoh_output_key, incoherent_block_size,
+                          incoherent_block_count)
 
             # Need to pass the delay buffer controller the F-engine capture
             # order but only for the coherent beams
@@ -622,7 +661,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             # etc. This means that the configurations need to be unique by NUMA node... [Note: no
             # they don't, we can use the container IPC channel which isolates
             # the IPC namespaces.]
-            if not self._dummy:
+            if not self._exec_mode:
                 n_coherent_beams = len(coherent_beam_to_group_map)
                 coherent_beam_antennas = parse_csv_antennas(
                     coherent_beam_config['antennas'])
@@ -637,7 +676,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             yield psrdada_compilation_future
 
             # Start beamformer instance
-            psrdada_cpp_cmdline = [
+            self._psrdada_cpp_cmdline = [
                 "fbfuse_cli",
                 "--input_key", self._dada_input_key,
                 "--cb_key", self._dada_coh_output_key,
@@ -648,14 +687,8 @@ class FbfWorkerServer(AsyncDeviceServer):
                 "--input_level", 32.0,
                 "--output_level", 32.0,
                 "--log_level", "debug"]
-            log.info("Calling psrdada_cpp application: {}".format(" ".join(
-                psrdada_cpp_cmdline)))
-            self._psrdada_cpp_proc = Popen(
-                psrdada_cpp_cmdline,
-                stdout=PIPE, stderr=PIPE, shell=False, close_fd=True)
-            log.debug("fbfuse_cli started with PID = {}".format(
-                self._psrdada_cpp_proc))
-
+            self._psrdada_cpp_args_sensor.set_value(
+                " ".join(self._psrdada_cpp_cmdline))
             # SPEAD receiver does not get started until a capture init call
             self._state_sensor.set_value(self.READY)
             req.reply("ok",)
@@ -681,26 +714,17 @@ class FbfWorkerServer(AsyncDeviceServer):
         # Call self.stop?
 
         # Need to delete all allocated DADA buffers:
-
         @coroutine
         def deconfigure():
-            log.info("Destroying dada buffer for input with key '{}'".format(
-                self._dada_input_key))
-            self._system_call_wrapper(
-                ["dada_db", "-k", self._dada_input_key, "-d"])
-            log.info("Destroying dada buffer for coherent beam output with key '{}'".format(
-                self._dada_coh_output_key))
-            self._system_call_wrapper(
-                ["dada_db", "-k", self._dada_coh_output_key, "-d"])
-            log.info("Destroying dada buffer for incoherent beam output with key '{}'".format(
-                self._dada_incoh_output_key))
-            self._system_call_wrapper(
-                ["dada_db", "-k", self._dada_incoh_output_key, "-d"])
+            log.info("Destroying allocated DADA buffers")
+            self._destroy_db(self._dada_input_key)
+            self._destroy_db(self._dada_coh_output_key)
+            self._destroy_db(self._dada_incoh_output_key)
             log.info("Destroying delay buffer controller")
             del self._delay_buffer_controller
             self._delay_buffer_controller = None
+            self._state_sensor.set_value(self.IDLE)
             req.reply("ok",)
-
         self.ioloop.add_callback(deconfigure)
         raise AsyncReply
 
@@ -721,9 +745,35 @@ class FbfWorkerServer(AsyncDeviceServer):
         """
         if not self.ready:
             return ("fail", "FBF worker not in READY state")
-        # Here we start MKRECV running into the input dada buffer
-        self._mkrecv_ingest_proc = Popen(
-            ["mkrecv", "--config", MKRECV_CONFIG_FILENAME], stdout=PIPE, stderr=PIPE)
+        self._state_sensor.set_value(self.STARTING)
+        # Create SPEAD transmitter for coherent beams
+        self._mksend_coh_proc = self._start_mksend_instance(
+            MKSEND_COHERENT_CONFIG_FILENAME)
+        self._mksend_coh_stdout_mon = PipeMonitor(
+            self._mksend_coh_proc.stdout, {})
+
+        # Create SPEAD transmitter for incoherent beam
+        self._mksend_incoh_proc = self._start_mksend_instance(
+            MKSEND_INCOHERENT_CONFIG_FILENAME)
+        self._mksend_incoh_stdout_mon = PipeMonitor(
+            self._mksend_incoh_proc.stdout, {})
+
+        # Start beamforming pipeline
+        log.info("Starting PSRDADA_CPP beamforming pipeline")
+        self._psrdada_cpp_proc = Popen(
+            self._psrdada_cpp_cmdline,
+            stdout=PIPE, stderr=PIPE, shell=False, close_fd=True)
+        log.debug("fbfuse_cli started with PID = {}".format(
+            self._psrdada_cpp_proc))
+
+        # Create SPEAD receiver for incoming antenna voltages
+        self._mkrecv_ingest_proc = self._start_mkrecv_instance(
+            MKRECV_CONFIG_FILENAME)
+        self._mkrecv_ingest_mon = PipeMonitor(
+                self._mkrecv_ingest_proc.stdout,
+                MKRECV_STDOUT_KEYS)
+        self._mkrecv_ingest_mon.start()
+        self._state_sensor.set_value(self.CAPTURING)
         return ("ok",)
 
     @request(Str())
@@ -744,30 +794,26 @@ class FbfWorkerServer(AsyncDeviceServer):
         """
         if not self.capturing and not self.error:
             return ("ok",)
-
         @coroutine
-        def stop_mkrecv_capture():
+        def stop_processes():
             # send SIGTERM to MKRECV
-            log.info("Sending SIGTERM to MKRECV process")
-            self._mkrecv_ingest_proc.terminate()
-            self._mkrecv_timeout = 10.0
-            log.info("Waiting {} seconds for MKRECV to terminate...".format(
-                self._mkrecv_timeout))
-            now = time.time()
-            while time.time() - now < self._mkrecv_timeout:
-                retval = self._mkrecv_ingest_proc.poll()
-                if retval is not None:
-                    log.info(
-                        "MKRECV returned a return value of {}".format(retval))
-                    break
-                else:
-                    yield sleep(0.5)
-            else:
-                log.warning("MKRECV failed to terminate in alloted time")
-                log.info("Killing MKRECV process")
-                self._mkrecv_ingest_proc.kill()
+            self._state_sensor.set_value(self.STOPPING)
+            self._process_close_wrapper(self._mkrecv_ingest_proc)
+            self._mkrecv_ingest_mon.stop()
+            self._process_close_wrapper(self._psrdada_cpp_proc)
+            self._process_close_wrapper(self._mksend_coh_proc)
+            self._mksend_coh_stdout_mon.stop()
+            self._process_close_wrapper(self._mksend_incoh_proc)
+            self._mksend_incoh_stdout_mon.stop()
+            self._mkrecv_ingest_mon.join()
+            self._mksend_coh_stdout_mon.join()
+            self._mksend_incoh_stdout_mon.join()
+            self._state_sensor.set_value(self.IDLE)
+            self._reset_db(self._dada_input_key)
+            self._reset_db(self._dada_coh_output_key)
+            self._reset_db(self._dada_incoh_output_key)
             req.reply("ok",)
-        self.ioloop.add_callback(self.stop_mkrecv_capture)
+        self.ioloop.add_callback(stop_processes)
         raise AsyncReply
 
 
@@ -786,9 +832,10 @@ def main():
     parser.add_option('-p', '--port', dest='port', type=int,
                       help='Port number to bind to')
     parser.add_option('', '--log_level', dest='log_level', type=str,
-                      help='Port number of status server instance', default="INFO")
-    parser.add_option('', '--dummy', action="store_true", dest='dummy',
-                      help='Set status server to dummy')
+                      help='Port number of status server instance',
+                      default="INFO")
+    parser.add_option('', '--exec_mode', dest='exec_mode', type=str,
+                      default="full", help='Set status server to exec_mode')
     parser.add_option('-n', '--nodes', dest='nodes', type=str, default=None,
                       help='Path to file containing list of available nodes')
     (opts, args) = parser.parse_args()
@@ -799,7 +846,7 @@ def main():
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting FbfWorkerServer instance")
 
-    server = FbfWorkerServer(opts.host, opts.port, dummy=opts.dummy)
+    server = FbfWorkerServer(opts.host, opts.port, exec_mode=opts.exec_mode)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
 

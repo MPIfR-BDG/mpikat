@@ -2,7 +2,7 @@ import time
 import logging
 from threading import Thread, Event
 
-log = logging.getLogger('mpikat.mkrecv_monitor')
+log = logging.getLogger('mpikat.pipe_monitor')
 
 DELIMETER = None
 

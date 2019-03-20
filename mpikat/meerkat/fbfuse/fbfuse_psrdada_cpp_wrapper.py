@@ -88,7 +88,7 @@ def make_psrdada_cpp_header(params, outfile=None):
 
 @coroutine
 def process_watcher(process, timeout=120):
-    log.debug("Watiching process: {}".format(process))
+    log.debug("Watching process: {}".format(process.pid))
     start = time.time()
     while process.poll() is None:
         yield sleep(1)
@@ -103,7 +103,8 @@ def process_watcher(process, timeout=120):
         raise PsrdadaCppCompilationException(
             "Process returned non-zero returncode: {}".format(
                 process.returncode))
-
+    else:
+        log.debug("Process output:\n{}".format(process.stdout.read()))
 
 @coroutine
 def compile_psrdada_cpp(params):
@@ -114,9 +115,15 @@ def compile_psrdada_cpp(params):
                      "-DCMAKE_BUILD_TYPE=release",
                      str(PSRDADA_CPP_BASE_DIR)]
         cmake_proc = Popen(cmake_cmd, stdout=PIPE, stderr=PIPE)
+        log.info("Running CMake on PSRDADA_CPP")
         yield process_watcher(cmake_proc, timeout=60)
 
         make_cmd = ["make", "-j", "16"]
         make_proc = Popen(make_cmd, stdout=PIPE, stderr=PIPE)
+        log.info("Making PSRDADA_CPP")
         yield process_watcher(make_proc, timeout=600)
 
+        make_install_cmd = ["make", "install", "-j", "16"]
+        make_install_proc = Popen(make_install_cmd, stdout=PIPE, stderr=PIPE)
+        log.info("Installing PSRDADA_CPP")
+        yield process_watcher(make_install_proc, timeout=60)

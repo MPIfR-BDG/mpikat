@@ -16,7 +16,8 @@ setup(name='mpikat',
           'mosaic',
           'posix_ipc',
           'jinja2',
-          'coloredlogs'
+          'coloredlogs',
+          'path.py'
       ],
       dependency_links=[
           'git+https://github.com/ska-sa/katportalclient.git',
