@@ -1638,7 +1638,6 @@ class Search(Pipeline):
 
         self._search_heimdall        = self._input_config["search_heimdall"]
         self._search_dbdisk          = self._input_config["search_dbdisk"]
-        self._search_spectrometer    = self._input_config["search_spectrometer"]
         self._search_sod             = self._input_config["search_sod"]
         self._search_nreader         = self._input_config["search_nreader"]
         
@@ -1752,17 +1751,17 @@ class Search(Pipeline):
                 for port in self._input_ports[i]:
                     destination.append("{}_{}_{}".format(
                         self._config_ip, port, self._input_nchunk_per_port))
-
+                log.debug("checking beam connection")
                 destination_alive, dead_info = self._check_beam_connection(
                     destination, self._input_check_ndf_per_chunk)
                 first_alive_ip = destination_alive[0].split("_")[0]
                 first_alive_port = int(destination_alive[0].split("_")[1])
-
+                log.debug("acquire beam connection")
                 beam_index = self._acquire_beam_index(
                     first_alive_ip, first_alive_port, self._input_check_ndf_per_chunk)
                 refinfo = self._synced_refinfo(
                     self._utc_start_capture, first_alive_ip, first_alive_port)
-
+                log.debug("beam index is {}".format(beam_index))
                 # To get directory for data and socket for control
                 pipeline_runtime_directory = "{}/beam{:02}".format(
                     self._root_runtime, beam_index)
