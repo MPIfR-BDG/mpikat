@@ -1574,6 +1574,8 @@ class Search(Pipeline):
 
     def configure(self, config_json, input_config):
         log.info("Received 'CONFIGURE' command")
+        log.debug("Config json: {}".format(config_json))
+        log.debug("Input config: {}".format(input_config))
         self._execution_instances = []
         self._input_execution_instances = []
         
