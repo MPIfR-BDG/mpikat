@@ -61,18 +61,18 @@ FITS_INTERFACES = [
 FI_CONFIGURATIONS = {
     "spectrometer2beam": {
         "fits_interface_01": False,
-        "fits_interface_02": True
+        "fits_interface_02": False
     },
     "search1beamhigh": {
         "fits_interface_01": False,
-        "fits_interface_02": True
+        "fits_interface_02": False
     },
     "search2beamlow": {
-        "fits_interface_01": True
+        "fits_interface_01": False
     },
     "search2beamhigh": {
         "fits_interface_01": False,
-        "fits_interface_02": True
+        "fits_interface_02": False
     }
 }
 """
