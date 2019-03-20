@@ -149,6 +149,7 @@ class PafMasterController(MasterController):
         self._control_mode = self.KATCP
         self._scpi_ip = scpi_ip
         self._scpi_port = scpi_port
+        self._fits_interfaces = []
         self._status_server = JsonStatusServer(ip, 0)
         super(PafMasterController, self).__init__(ip, port, PafWorkerPool())
 
@@ -339,7 +340,6 @@ class PafMasterController(MasterController):
 
         log.info("Configuring FITS interfaces")
         product_mode = config_dict['mode'].lower()
-        self._fits_interfaces = []
         temp_fi_interfaces = {}
         for fi_config in FITS_INTERFACES:
             temp_fi_interfaces[fi_config['id']] = PafFitsInterfaceClient(
@@ -393,6 +393,7 @@ class PafMasterController(MasterController):
             del self._products[PAF_PRODUCT_ID]
             for fi in self._fits_interfaces:
                 fi.capture_stop()
+            self._fits_interfaces = []
             self._update_products_sensor()
             log.info("PAF backend deconfigured")
 

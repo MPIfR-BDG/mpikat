@@ -244,7 +244,7 @@ class RoutingTable(object):
                 port = BASE_PORT + int(math.floor(math.floor(beam * self.nchunk + sb -
                                                              self.first_chunk) % nchunk_nic / self.config["nchunk_per_port"]))  # PORT
                 table[sb][beam_idx + 2] = port
-        log.debug("Completed routing table: {}".format(table))
+        #log.debug("Completed routing table: {}".format(table))
 
         # Write out table
         self.table_file.seek(0)
