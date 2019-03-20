@@ -45,23 +45,72 @@ SCPI_BASE_ID = "PAFBE"
 PAF_REQUIRED_KEYS = ["nbeams", "nbands", "band_offset",
                      "mode", "frequency", "write_filterbank"]
 
-SUPPORTED_MODE = {"spectrometer2beam", "search1beamhigh",
-                  "search2beamlow", "search2beamhigh"}
-
-TWO_FITS_INTERFACES_MODE = {"spectrometer2beam",
-                            "search1beamhigh", "search2beamhigh"}
-
 FITS_INTERFACES = [
     {
         "id": "fits_interface_01",
         "name": "FitsInterface",
-        "address": ["134.104.73.132", 6000]
-    },
-    {
-        "id": "fits_interface_02",
-        "name": "FitsInterface",
-        "address": ["134.104.73.132", 6000]
+        "address": ["134.104.70.90", 5000]
     }
+#    {
+#        "id": "fits_interface_02",
+##        "name": "FitsInterface",
+#        "address": ["134.104.70.90", 5001]
+#    }
+]
+"""
+FI_CONFIGURATIONS = {
+    "spectrometer2beam": {
+        "fits_interface_01": False,
+        "fits_interface_02": True
+    },
+    "search1beamhigh": {
+        "fits_interface_01": False,
+        "fits_interface_02": True
+    },
+    "search2beamlow": {
+        "fits_interface_01": True
+    },
+    "search2beamhigh": {
+        "fits_interface_01": False,
+        "fits_interface_02": True
+    }
+}
+"""
+FI_CONFIGURATIONS = {
+    "spectrometer2beam": {
+        "fits_interface_01": False
+    },
+    "Search1beamhigh": {
+        "fits_interface_01": False
+    },
+    "search2beamlow": {
+        "fits_interface_01": False
+    },
+    "search2beamhigh": {
+        "fits_interface_01": False
+    }
+}
+
+
+WORKER_SERVERS = [
+    ("134.104.70.90", 6000),
+    ("134.104.70.90", 6001),
+    ("134.104.70.91", 6000),
+    ("134.104.70.91", 6001),
+    ("134.104.70.92", 6000),
+    ("134.104.70.92", 6001),
+    ("134.104.70.93", 6000),
+    ("134.104.70.93", 6001),
+    ("134.104.70.94", 6000),
+    ("134.104.70.94", 6001),
+    ("134.104.70.95", 6000),
+    ("134.104.70.95", 6001),
+    ("134.104.70.96", 6000),
+    ("134.104.70.96", 6001),
+    ("134.104.70.97", 6000),
+    ("134.104.70.97", 6001),
+    ("134.104.70.98", 6000),
+    ("134.104.70.98", 6001)
 ]
 
 
@@ -96,11 +145,12 @@ class PafMasterController(MasterController):
         @params  ip       The IP address on which the server should listen
         @params  port     The port that the server should bind to
         """
-        super(PafMasterController, self).__init__(ip, port, PafWorkerPool())
+        #super(PafMasterController, self).__init__(ip, port, PafWorkerPool())
         self._control_mode = self.KATCP
         self._scpi_ip = scpi_ip
         self._scpi_port = scpi_port
         self._status_server = JsonStatusServer(ip, 0)
+        super(PafMasterController, self).__init__(ip, port, PafWorkerPool())
 
     def start(self):
         super(PafMasterController, self).start()
@@ -119,19 +169,30 @@ class PafMasterController(MasterController):
 
     def setup_sensors(self):
         super(PafMasterController, self).setup_sensors()
+        self._control_mode_sensor = Sensor.string(
+            "control-mode",
+            description="The control mode for the PAF",
+            default=self._control_mode,
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._control_mode_sensor)
         self._paf_config_sensor = Sensor.string(
             "current-config",
             description="The currently set configuration for the PAF backend",
             default="",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._paf_config_sensor)
-
         self._status_server_sensor = Sensor.address(
             "status-server-address",
             description="The address of the status server",
             default="",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._status_server_sensor)
+        self._paf_scpi_interface_addr_sensor = Sensor.string(
+            "scpi-interface-addr",
+            description="The SCPI interface address for this instance",
+            default="{}:{}".format(self._scpi_ip, self._scpi_port),
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._paf_scpi_interface_addr_sensor)
 
     @property
     def katcp_control_mode(self):
@@ -238,6 +299,11 @@ class PafMasterController(MasterController):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
+        log.info("Attempting deconfiguring PAF backend")
+        try:
+            yield self.deconfigure()
+        except Exception as error:
+            log.warning("Unable to deconfigure: {}".format(str(error)))
         log.info("Configuring PAF backend")
         log.info("Configuration string: '{}'".format(config_json))
         if self._products:
@@ -272,23 +338,17 @@ class PafMasterController(MasterController):
                 "Configured product controller with ID: {}".format(PAF_PRODUCT_ID))
 
         log.info("Configuring FITS interfaces")
-        product_mode = config_json['mode']
+        product_mode = config_dict['mode'].lower()
         self._fits_interfaces = []
+        temp_fi_interfaces = {}
         for fi_config in FITS_INTERFACES:
-            fits_interface_id = FITS_INTERFACES['id']
-            if product_mode in SUPPORTED_MODE:
-                fi = PafFitsInterfaceClient(
-                    fi_config["id"], fi_config["address"])
-                if product_mode in TWO_FITS_INTERFACES_MODE:
-                    if fits_interface_id == "fits_interface_01":
-                        yield fi.configure(False)
-                        self._fits_interfaces.append(fi)
-                    elif fits_interface_id == "fits_interface_02":
-                        yield fi.configure(True)
-                        self._fits_interfaces.append(fi)
-                elif product_mode == "search2beamlow" and fits_interface_id == "fits_interface_01":
-                    yield fi.configure(True)
-                    self._fits_interfaces.append(fi)
+            temp_fi_interfaces[fi_config['id']] = PafFitsInterfaceClient(
+                fi_config["id"], fi_config["address"])
+        fi_setup = FI_CONFIGURATIONS[product_mode]
+        for _id, active in fi_setup.items():
+            fi = temp_fi_interfaces[_id]
+            yield fi.configure(active)
+            self._fits_interfaces.append(fi)
         self._paf_config_sensor.set_value(config_json)
         self._update_products_sensor()
         log.info("PAF backend configured")
@@ -322,15 +382,19 @@ class PafMasterController(MasterController):
     @coroutine
     def deconfigure(self):
         log.info("Deconfiguring PAF backend")
-        product = self._get_product(PAF_PRODUCT_ID)
-        log.debug("Deconfiguring product controller with ID: {}".format(
-            PAF_PRODUCT_ID))
-        yield product.deconfigure()
-        del self._products[PAF_PRODUCT_ID]
-        for fi in self._fits_interfaces:
-            fi.capture_stop()
-        self._update_products_sensor()
-        log.info("PAF backend deconfigured")
+        try:
+            product = self._get_product(PAF_PRODUCT_ID)
+        except ProductLookupError:
+            pass
+        else:
+            log.debug("Deconfiguring product controller with ID: {}".format(
+                PAF_PRODUCT_ID))
+            yield product.deconfigure()
+            del self._products[PAF_PRODUCT_ID]
+            for fi in self._fits_interfaces:
+                fi.capture_stop()
+            self._update_products_sensor()
+            log.info("PAF backend deconfigured")
 
     @request()
     @return_reply()
@@ -453,6 +517,8 @@ def main():
         server.start()
         if opts.scpi_mode:
             server.set_control_mode(server.SCPI)
+        for hostname, port in WORKER_SERVERS:
+            server._server_pool.add(hostname, port)
         log.info(
             "Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
     ioloop.add_callback(start_and_display)
