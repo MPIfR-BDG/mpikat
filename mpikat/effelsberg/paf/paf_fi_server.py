@@ -18,7 +18,7 @@ from StringIO import StringIO
 from threading import Thread, Event
 from optparse import OptionParser
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags
-from katcp.kattypes import (Int, request, return_reply)
+from katcp.kattypes import (Int, Str, request, return_reply)
 matplotlib.use("Agg")
 
 log = logging.getLogger("mpikat.paf_fi_server")
@@ -178,38 +178,28 @@ class FitsInterfaceServer(AsyncDeviceServer):
         ProtocolFlags.MESSAGE_IDS,
     ]))
 
-    def __init__(self, interface, port, capture_interface, capture_port, fw_ip, fw_port):
+    def __init__(self, interface, port):
         """
         @brief Initialization of the FitsInterfaceServer object
 
         @param  interface          Interface address to serve on
         @param  port               Port number to serve on
-        @param  capture_interface  Interface to capture data on from instruments
-        @param  capture_port       Port to capture data on from instruments
-        @param  fw_ip              IP address of the FITS writer
-        @param  fw_port            Port number to connected to on FITS writer
         """
         self._configured = False
         self._no_active_beams = None
         self._nchannels = None
         self._integ_time = None
         self._blank_phase = None
-        self._capture_interface = capture_interface
-        self._capture_port = capture_port
-        self._fw_connection_manager = FitsWriterConnectionManager(
-            fw_ip, fw_port)
         self._capture_thread = None
         self._shutdown = False
         self._mode = None
         self._fw_soc = None
-        #self._paf_handler = PafHandler(self._mode, self._fw_soc)
         super(FitsInterfaceServer, self).__init__(interface, port)
 
     def start(self):
         """
         @brief   Start the server
         """
-        self._fw_connection_manager.start()
         super(FitsInterfaceServer, self).start()
 
     def stop(self):
@@ -288,9 +278,6 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._update_sensors_callback.start()
 
     def update_sensors(self):
-        #current_qsize = sensor_queue.qsize()
-        # for i in range(current_qsize):
-        #    timestamp, metadata, data = sensor_queue.get()
         log.debug("Updating sensor values and making beam plots")
         has_data = False
         while True:
@@ -345,9 +332,9 @@ class FitsInterfaceServer(AsyncDeviceServer):
             self._capture_thread = None
             log.debug("Capture thread cleaned")
 
-    @request(Int())
+    @request(Int(), Str(), Int(), Str(), Int())
     @return_reply()
-    def request_configure(self, req, fi_status):
+    def request_configure(self, req, fi_status, cap_ip, cap_port, fw_ip, fw_port):
         """
         @brief    Configure the FITS interface server
 
@@ -364,7 +351,11 @@ class FitsInterfaceServer(AsyncDeviceServer):
             return ("fail", message)
         log.info("Configuring FITS interface server with params: {}".format(message))
         self._mode = fi_status
-        self._fw_connection_manager.drop_connection()
+        self._capture_interface = cap_ip
+        self._capture_port = cap_port
+        self._fw_connection_manager = FitsWriterConnectionManager(
+            fw_ip, fw_port)
+        self._fw_connection_manager.start()
         self._stop_capture()
         self._configured = True
         return ("ok",)
@@ -672,8 +663,7 @@ def main():
         logger=log)
     log.setLevel(opts.log_level.upper())
     ioloop = tornado.ioloop.IOLoop.current()
-    server = FitsInterfaceServer(
-        opts.host, opts.port, opts.cap_ip, opts.cap_port, opts.fw_ip, opts.fw_port)
+    server = FitsInterfaceServer(opts.host, opts.port)
     # Hook up to SIGINT so that ctrl-C results in a clean shutdown
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
