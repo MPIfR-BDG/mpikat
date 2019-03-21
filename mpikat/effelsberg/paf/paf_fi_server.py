@@ -126,9 +126,13 @@ class FitsWriterConnectionManager(Thread):
         @breif   Drop any current FITS writer connection
         """
         if self._transmit_socket:
-            self._transmit_socket.shutdown(socket.SHUT_RDWR)
-            self._transmit_socket.close()
-            self._transmit_socket = None
+            try:
+                self._transmit_socket.shutdown(socket.SHUT_RDWR)
+                self._transmit_socket.close()
+                self._transmit_socket = None
+            except Exception as error:
+                log.warning(("Caught exception while dropping transmit "
+                             "socket: {}").format(str(error)))
             self._has_connection.clear()
 
     def get_transmit_socket(self, timeout=10):
