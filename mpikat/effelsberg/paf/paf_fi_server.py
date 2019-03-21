@@ -308,8 +308,8 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._nblank_phases_sensor.set_value(data.blank_phases)
         self._center_freq_sensor.set_value(metadata.center_freq)
         self._channel_bw_sensor.set_value(metadata.channel_bw)
-        for i in range(36):
-            self.plot_beam_data(i, data)
+        #for i in range(36):
+        #    self.plot_beam_data(i, data)
 
     def zton(self, x):
         x = np.asarray(x)
