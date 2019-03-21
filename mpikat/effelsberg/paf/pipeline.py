@@ -3098,7 +3098,7 @@ class Search2BeamLow(Search):
             "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]],
             "search_heimdall":     1,
             "search_dbdisk":       1,
-            "search_spectrometer": 1,
+            "search_spectrometer": 0,
             "search_sod":          1,
             "search_nreader":      2,
         }
