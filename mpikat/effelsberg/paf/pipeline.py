@@ -174,7 +174,7 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "monitor_keys":            ["deda", "dedc"],
                    #"monitor_ip":      	      '239.3.1.1',
                    #"monitor_port":           2,
-                   "monitor_ip":             "134.104.70.90",
+                   "monitor_ip":             "10.17.0.2",
                    "monitor_port":            17106,
                    "monitor_ptype":           2,
 
