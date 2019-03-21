@@ -383,10 +383,11 @@ class PafMasterController(MasterController):
             active, cap_ip, cap_port, fw_ip, fw_port = [config[i] for i in range(5)]
             yield fi.configure(active, cap_ip, cap_port, fw_ip, fw_port)
             self._fits_interfaces.append(fi)
+        """    
         self._paf_config_sensor.set_value(config_json)
         self._update_products_sensor()
         log.info("PAF backend configured")
-"""
+
     @request()
     @return_reply()
     def request_deconfigure(self, req):
