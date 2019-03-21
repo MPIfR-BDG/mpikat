@@ -1423,7 +1423,7 @@ class Fold(Pipeline):
                     self._cleanup(self._cleanup_commands_config)
                     self.state = "error"
                     raise PipelineError("{} is not exist".format(kfname))
-                pfname = "/home/pulsar/xinping/phased-array-feed/config/{}.par".format(
+                pfname = "/phased-array-feed/config/{}.par".format(
                     self._source_name)
                 if not os.path.isfile(pfname):
                     log.error("{} is not exist".format(pfname))
