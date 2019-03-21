@@ -90,14 +90,14 @@ SYSTEM_CONFIG = {"paf_nchan_per_chunk":    	     7,        # MHz
 
 # Configuration for pipelines
 PIPELINE_CONFIG = {"execution":                    1,
-                   "root_software":                "/home/pulsar/xinping/phased-array-feed/",
+                   "root_software":                "/phased-array-feed/",
                    "root_runtime":                 "/beegfs/DENG/",
                    "rbuf_ndf_per_chunk_per_block": 16384,  # For all ring buffers
                    "tbuf_ndf_per_chunk_per_block": 128,  # Only need for capture
 
                    # Configuration of input
                    "input_source_default":       "UNKNOW_00:00:00.00_00:00:00.00",
-                   "input_dada_hdr_fname":       "/mpikat/mpikat/effelsberg/paf/dada_header_template_PAF.txt",
+                   "input_dada_hdr_fname":       "dada_header_template_PAF.txt",
                    # To put baseband data from file
                    "input_keys":                 ["dada", "dadc"],
                    "input_nblk":                 5,
@@ -174,7 +174,7 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "monitor_keys":            ["deda", "dedc"],
                    #"monitor_ip":      	      '239.3.1.1',
                    #"monitor_port":           2,
-                   "monitor_ip":             "134.104.70.90",
+                   "monitor_ip":             "10.17.0.2",
                    "monitor_port":            17106,
                    "monitor_ptype":           2,
 
@@ -376,8 +376,8 @@ class Pipeline(object):
             self._paf_nsamp_per_df
 
         self._input_dada_hdr_fname = PIPELINE_CONFIG["input_dada_hdr_fname"]
-        #self._input_dada_hdr_fname = "{}/config/{}".format(
-        #    self._root_software, self._input_dada_hdr_fname)
+        self._input_dada_hdr_fname = "{}/config/{}".format(
+            self._root_software, self._input_dada_hdr_fname)
         self._input_source_default = PIPELINE_CONFIG["input_source_default"]
         self._input_keys = PIPELINE_CONFIG["input_keys"]
         self._input_nblk = PIPELINE_CONFIG["input_nblk"]
@@ -1423,7 +1423,7 @@ class Fold(Pipeline):
                     self._cleanup(self._cleanup_commands_config)
                     self.state = "error"
                     raise PipelineError("{} is not exist".format(kfname))
-                pfname = "/home/pulsar/xinping/phased-array-feed/config/{}.par".format(
+                pfname = "/phased-array-feed/config/{}.par".format(
                     self._source_name)
                 if not os.path.isfile(pfname):
                     log.error("{} is not exist".format(pfname))
