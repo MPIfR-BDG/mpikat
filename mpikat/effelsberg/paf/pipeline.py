@@ -3096,11 +3096,11 @@ class Search2BeamLow(Search):
             "input_nbeam":                  2,
             "input_nchunk_per_port":       11,
             "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]],
-            "search_heimdall":     1,
+            "search_heimdall":     0,
             "search_dbdisk":       1,
             "search_spectrometer": 0,
             "search_sod":          1,
-            "search_nreader":      2,
+            "search_nreader":      1,
         }
         super(Search2BeamLow, self).configure(config_json, config_dictionary)
 
