@@ -143,8 +143,8 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "spectrometer_ptype":          2,
                    #"spectrometer_ip":    	  '239.3.1.2',
                    #"spectrometer_port":    	  2,
-                   "spectrometer_ip":             "134.104.70.90",
-                   "spectrometer_port":           17107,
+                   "spectrometer_ip":             "10.17.0.2",
+                   "spectrometer_port":           17106,
                    "spectrometer_dbdisk":         0,
                    "spectrometer_monitor":        1,
                    "spectrometer_accumulate_nblk": 1,
@@ -174,8 +174,8 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "monitor_keys":            ["deda", "dedc"],
                    #"monitor_ip":      	      '239.3.1.1',
                    #"monitor_port":           2,
-                   "monitor_ip":             "10.17.0.2",
-                   "monitor_port":            17106,
+                   "monitor_ip":             "10.17.0.1",
+                   "monitor_port":            17107,
                    "monitor_ptype":           2,
 
                    "tel_lat":                 50.524722,
@@ -3080,15 +3080,26 @@ class Search2BeamLow(Search):
     def __init__(self):
         super(Search2BeamLow, self).__init__()
 
+    #def configure(self, config_json):
+    #    config_dictionary = {
+    #        "input_nbeam":                  2,
+    #        "input_nchunk_per_port":       11,
+    #        "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]],
+    #        "search_heimdall":     0,
+    #        "search_dbdisk":       0,
+    #        "search_spectrometer": 0,
+    #        "search_sod":          0,
+    #        "search_nreader":      1,
+    #    }
     def configure(self, config_json):
         config_dictionary = {
             "input_nbeam":                  2,
             "input_nchunk_per_port":       11,
             "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]],
             "search_heimdall":     0,
-            "search_dbdisk":       0,
+            "search_dbdisk":       1,
             "search_spectrometer": 0,
-            "search_sod":          0,
+            "search_sod":          1,
             "search_nreader":      1,
         }
         super(Search2BeamLow, self).configure(config_json, config_dictionary)
