@@ -57,7 +57,6 @@ FITS_INTERFACES = [
         "address": ["134.104.70.90", 5001]
     }
 ]
-
 """
 FI_CONFIGURATIONS = {
     "spectrometer2beam": {
@@ -77,26 +76,6 @@ FI_CONFIGURATIONS = {
     }
 }
 """
-"""
-FI_CONFIGURATIONS = {
-     "spectrometer2beam": {
-         "fits_interface_01": (False, "134.104.70.90", 17106, "127.0.0.1", 9999),
-         "fits_interface_02": (True, "134.104.70.90", 17107, "134.104.70.90", 5100)
-     },
-     "search1beamhigh": {
-         "fits_interface_01": (False, "134.104.70.90", 17106, "127.0.0.1", 9999),
-         "fits_interface_02": (True, "134.104.70.90", 17107, "134.104.70.90", 5100)
-     },
-     "search2beamlow": {
-         "fits_interface_01": (True, "134.104.70.90", 17106, "134.104.70.90", 5100)
-     },
-     "search2beamhigh": {
-         "fits_interface_01": (False, "134.104.70.90", 17106, "127.0.0.1", 9999),
-         "fits_interface_02": (True, "134.104.70.90", 17107, "134.104.70.90", 5100)
-     }
- }
-"""
-
 FI_CONFIGURATIONS = {
     "spectrometer2beam": {
         "fits_interface_01": True
@@ -370,20 +349,6 @@ class PafMasterController(MasterController):
             fi = temp_fi_interfaces[_id]
             yield fi.configure(active)
             self._fits_interfaces.append(fi)
-"""           
-        log.info("Configuring FITS interfaces")
-        product_mode = config_dict['mode'].lower()
-        temp_fi_interfaces = {}
-        for fi_config in FITS_INTERFACES:
-            temp_fi_interfaces[fi_config['id']] = PafFitsInterfaceClient(
-                fi_config["id"], fi_config["address"])
-        fi_setup = FI_CONFIGURATIONS[product_mode]
-        for _id, config in fi_setup.items():
-            fi = temp_fi_interfaces[_id]
-            active, cap_ip, cap_port, fw_ip, fw_port = [config[i] for i in range(5)]
-            yield fi.configure(active, cap_ip, cap_port, fw_ip, fw_port)
-            self._fits_interfaces.append(fi)
-        """    
         self._paf_config_sensor.set_value(config_json)
         self._update_products_sensor()
         log.info("PAF backend configured")
