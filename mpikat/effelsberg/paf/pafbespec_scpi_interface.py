@@ -32,8 +32,8 @@ class PafbeSpecScpiInterface(ScpiAsyncDeviceServer):
         self._ioloop.add_callback(self._make_coroutine_wrapper(req,
             self._mc.configure, active_sections))
 
-    @scpi_request(str)
-    def request_pafbespec_cmdsections(self, req, used_sections):
+    @scpi_request(*([int,]*144))
+    def request_pafbespec_cmdsections(self, req, *used_sections):
         """
         @brief      Set the used sections for the FI
 
