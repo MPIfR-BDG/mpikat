@@ -2350,7 +2350,7 @@ class Search(Pipeline):
             log.info("Send 'END-OF-DATA' command to capture software, DONE")
             
         for execution_instance in self._search_execution_instances:
-            execution_instance.terminate()
+            execution_instance.finish()
             log.info("Finish the baseband2filterbank execution")
 
         if self._search_spectrometer and self._spectrometer_dbdisk:
