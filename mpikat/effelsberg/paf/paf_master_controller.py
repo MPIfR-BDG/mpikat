@@ -117,6 +117,8 @@ WORKER_SERVERS = [
 class PafConfigurationError(Exception):
     pass
 
+class ProductLookupError(Exception):
+    pass
 
 class UnknownControlMode(Exception):
     pass
