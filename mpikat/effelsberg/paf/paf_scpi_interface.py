@@ -130,6 +130,16 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
             self._mc.capture_start))
 
     @scpi_request()
+    def request_pafbe_capturestart(self, req):
+        """
+        @brief      Start data processing in the PAF backend
+
+        @param      req    An ScpiRequest object
+        """
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req,
+            self._mc.capture_start))
+
+    @scpi_request()
     def request_pafbe_stop(self, req):
         """
         @brief      Stop data processing in the PAF backend
