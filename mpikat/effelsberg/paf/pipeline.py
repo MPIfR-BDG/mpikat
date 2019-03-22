@@ -2348,7 +2348,16 @@ class Search(Pipeline):
                                       self._input_socket_address[process_index])
                 process_index += 1
             log.info("Send 'END-OF-DATA' command to capture software, DONE")
+            
+        for execution_instance in self._search_execution_instances:
+            execution_instance.terminate()
+            log.info("Finish the baseband2filterbank execution")
 
+        if self._search_spectrometer and self._spectrometer_dbdisk:
+            for execution_instance in self._spectrometer_dbdisk_execution_instances:
+                execution_instance.terminate()
+            log.info("Finish the spectrometer_dbdisk execution")
+            
         if self._search_dbdisk:
             for execution_instance in self._search_dbdisk_execution_instances:
                 execution_instance.terminate()
@@ -2368,13 +2377,13 @@ class Search(Pipeline):
         #    for execution_instance in self._search_heimdall_execution_instances:
         #        execution_instance.finish()
         #    log.info("Finish the heimdall execution")
-        if self._search_spectrometer and self._spectrometer_dbdisk:
-            for execution_instance in self._spectrometer_dbdisk_execution_instances:
-                execution_instance.finish()
-            log.info("Finish the spectrometer_dbdisk execution")
-        for execution_instance in self._search_execution_instances:
-            execution_instance.finish()
-            log.info("Finish the baseband2filterbank execution")
+        #if self._search_spectrometer and self._spectrometer_dbdisk:
+        #    for execution_instance in self._spectrometer_dbdisk_execution_instances:
+        #        execution_instance.finish()
+        #    log.info("Finish the spectrometer_dbdisk execution")
+        #for execution_instance in self._search_execution_instances:
+        #    execution_instance.finish()
+        #    log.info("Finish the baseband2filterbank execution")
 
         # To delete simultaneous spectral output buffer
         if self._search_spectrometer and self._spectrometer_dbdisk:
