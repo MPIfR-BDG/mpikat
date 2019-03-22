@@ -139,11 +139,23 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
         self._ioloop.add_callback(self._make_coroutine_wrapper(req,
             self._mc.capture_stop))
 
+    @scpi_request()
+    def request_pafbe_abort(self, req):
+        """
+        @brief      Stop data processing in the PAF backend
+
+        @param      req    An ScpiRequest object
+
+        @note       This is a synonym for stop
+        """
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req,
+            self._mc.capture_stop))
+
     @scpi_request(int)
     @raise_or_ok
     def request_pafbe_cmdzoomband0(self, req, number):
         """
-        @brief      Set the top of the zoomband 
+        @brief      Set the top of the zoomband
 
         @param      req        An ScpiRequest object
         @param      number     The first band in the zoomband
