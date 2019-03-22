@@ -1,3 +1,24 @@
+"""
+Copyright (c) 2018 Ewan Barr <ebarr@mpifr-bonn.mpg.de>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
 import tornado
 import logging
 import signal
@@ -17,8 +38,10 @@ import ctypes as C
 from StringIO import StringIO
 from threading import Thread, Event
 from optparse import OptionParser
+from mpikat.effelsberg.paf.pafbespec_scpi_interface import PafbeSpecScpiInterface
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags
 from katcp.kattypes import (Str, Int, request, return_reply)
+from mpikat.core.master_controller import MasterController
 matplotlib.use("Agg")
 
 log = logging.getLogger("mpikat.paf_fi_server")
@@ -169,7 +192,7 @@ class FitsWriterConnectionManager(Thread):
         self._server_socket.close()
 
 
-class FitsInterfaceServer(AsyncDeviceServer):
+class FitsInterfaceServer(MasterController):
     """
     Class providing an interface between EDD processes and the
     Effelsberg FITS writer
@@ -181,8 +204,10 @@ class FitsInterfaceServer(AsyncDeviceServer):
         ProtocolFlags.MULTI_CLIENT,
         ProtocolFlags.MESSAGE_IDS,
     ]))
+    CONTROL_MODES = ["KATCP", "SCPI"]
+    KATCP, SCPI = CONTROL_MODES
 
-    def __init__(self, interface, port, capture_interface, capture_port, fw_ip, fw_port):
+    def __init__(self, interface, port, capture_interface, capture_port, fw_ip, fw_port, scpi_ip, scpi_port):
         """
         @brief Initialization of the FitsInterfaceServer object
 
@@ -193,6 +218,9 @@ class FitsInterfaceServer(AsyncDeviceServer):
         @param  fw_ip              IP address of the FITS writer
         @param  fw_port            Port number to connected to on FITS writer
         """
+        self._control_mode = self.KATCP
+        self._scpi_ip = scpi_ip
+        self._scpi_port = scpi_port
         self._configured = False
         self._no_active_beams = None
         self._nchannels = None
@@ -215,11 +243,15 @@ class FitsInterfaceServer(AsyncDeviceServer):
         """
         self._fw_connection_manager.start()
         super(FitsInterfaceServer, self).start()
+        self._scpi_interface = PafbeSpecScpiInterface(
+            self, self._scpi_ip, self._scpi_port, self.ioloop)
 
     def stop(self):
         """
         @brief   Stop the server
         """
+        self._scpi_interface.stop()
+        self._scpi_interface = None
         self._shutdown = True
         self._stop_capture()
         self._fw_connection_manager.stop()
@@ -242,6 +274,12 @@ class FitsInterfaceServer(AsyncDeviceServer):
             default="passive",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._mode_sensor)
+        self._fi_scpi_interface_addr_sensor = Sensor.string(
+            "scpi-interface-addr",
+            description="The SCPI interface address for this instance",
+            default="{}:{}".format(self._scpi_ip, self._scpi_port),
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._paf_scpi_interface_addr_sensor)
         self._integration_time_sensor = Sensor.float(
             "integration-time",
             description="The integration time for each beam",
@@ -315,6 +353,63 @@ class FitsInterfaceServer(AsyncDeviceServer):
         #for i in range(36):
         #    self.plot_beam_data(i, data)
 
+    @property
+    def katcp_control_mode(self):
+        return self._control_mode == self.KATCP
+
+    @property
+    def scpi_control_mode(self):
+        return self._control_mode == self.SCPI
+
+    @request(Str())
+    @return_reply()
+    def request_set_control_mode(self, req, mode):
+        """
+        @brief     Set the external control mode for the master controller
+
+        @param     mode   The external control mode to be used by the server
+                          (options: KATCP, SCPI)
+
+        @detail    The PafMasterController supports two methods of external control:
+                   KATCP and SCPI. The server will always respond to a subset of KATCP
+                   commands, however when set to SCPI mode the following commands are
+                   disabled to the KATCP interface:
+                       - configure
+                       - capture_start
+                       - capture_stop
+                       - deconfigure
+                   In SCPI control mode the PafbeSpecScpiInterface is activated and the server
+                   will respond to SCPI requests.
+
+        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        """
+        try:
+            self.set_control_mode(mode)
+        except Exception as error:
+            return ("fail", str(error))
+        else:
+            return ("ok",)
+
+    def set_control_mode(self, mode):
+        """
+        @brief     Set the external control mode for the master controller
+
+        @param     mode   The external control mode to be used by the server
+                          (options: KATCP, SCPI)
+        """
+        mode = mode.upper()
+        if mode not in self.CONTROL_MODES:
+            raise UnknownControlMode("Unknown mode '{}', valid modes are '{}' ".format(
+                mode, ", ".join(self.CONTROL_MODES)))
+        else:
+            self._control_mode = mode
+        if self._control_mode == self.SCPI:
+            self._scpi_interface.start()
+        else:
+            self._scpi_interface.stop()
+        self._control_mode_sensor.set_value(self._control_mode)
+
+
     def zton(self, x):
         x = np.asarray(x)
         x[x == 0] = np.nan
@@ -368,6 +463,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             return ("fail", message)
         log.info("Configuring FITS interface server with params: {}".format(message))
         self._mode = fi_status
+        self._active_sections = active_sections
         self._fw_connection_manager.drop_connection()
         self._stop_capture()
         self._configured = True
@@ -597,26 +693,29 @@ class PafHandler(object):
             packet.integ_time, packet.nchannels, packet.nfreq_chunks,
             packet.freq_chunks_index))
         key = packet.time_stamp
-        if key not in self._active_packets:
-            fw_packet = build_fw_object(
-                self._nsections, packet.nchannels, packet.time_stamp,
-                int(packet.integ_time * 10**6), self._nphases)
-
-            section_id = (packet.beam_id * 4) + packet.pol_id
-            freq_idx_start = (self.nchannelsperpacket * packet.freq_chunks_index)
-            freq_idx_end = (self.nchannelsperpacket * (packet.freq_chunks_index + 1))
-            fw_packet.sections[section_id].data[freq_idx_start:freq_idx_end] = packet.data
-            max_age = packet.integ_time * 3
-            if max_age < 1:
-                max_age = 1
-            self._active_packets[key] = [
-                time.time(), max_age, packet, fw_packet]
+        section_id = (packet.beam_id * 4) + packet.pol_id
+        if self._active_sections[section_id] == "1":
+            if key not in self._active_packets:
+                fw_packet = build_fw_object(
+                    self._nsections, packet.nchannels, packet.time_stamp,
+                    int(packet.integ_time * 10**6), self._nphases)
+                section_id = (packet.beam_id * 4) + packet.pol_id
+                freq_idx_start = (self.nchannelsperpacket * packet.freq_chunks_index)
+                freq_idx_end = (self.nchannelsperpacket * (packet.freq_chunks_index + 1))
+                fw_packet.sections[section_id].data[freq_idx_start:freq_idx_end] = packet.data
+                max_age = packet.integ_time * 3
+                if max_age < 1:
+                    max_age = 1
+                self._active_packets[key] = [
+                    time.time(), max_age, packet, fw_packet]
+            else:
+                section_id = (packet.beam_id * 4) + packet.pol_id
+                freq_idx_start = (self.nchannelsperpacket * packet.freq_chunks_index)
+                freq_idx_end = (self.nchannelsperpacket * (packet.freq_chunks_index + 1))
+                self._active_packets[key][3].sections[section_id].data[freq_idx_start:freq_idx_end] = packet.data
+            self.flush()
         else:
-            section_id = (packet.beam_id * 4) + packet.pol_id
-            freq_idx_start = (self.nchannelsperpacket * packet.freq_chunks_index)
-            freq_idx_end = (self.nchannelsperpacket * (packet.freq_chunks_index + 1))
-            self._active_packets[key][3].sections[section_id].data[freq_idx_start:freq_idx_end] = packet.data
-        self.flush()
+            self.flush()
 
     def flush(self):
         """
@@ -666,6 +765,13 @@ def main():
                       help='FITS writer interface to bind to for data trasmission', default='127.0.0.1')
     parser.add_option('', '--fw-port', dest='fw_port', type=int,
                       help='FITS writer port number to bind to for data transmission', default=5002)
+    parser.add_option('', '--scpi-interface', dest='scpi_interface', type=str,
+                      help='The interface to listen on for SCPI requests',
+                      default="")
+    parser.add_option('', '--scpi-port', dest='scpi_port', type=int,
+                      help='The port number to listen on for SCPI requests')
+    parser.add_option('', '--scpi-mode', dest='scpi_mode', action="store_true",
+                      help='Activate the SCPI interface on startup')
     parser.add_option('', '--log-level', dest='log_level', type=str,
                       help='Defauly logging level', default="INFO")
     (opts, args) = parser.parse_args()
@@ -677,12 +783,14 @@ def main():
     log.setLevel(opts.log_level.upper())
     ioloop = tornado.ioloop.IOLoop.current()
     server = FitsInterfaceServer(
-        opts.host, opts.port, opts.cap_ip, opts.cap_port, opts.fw_ip, opts.fw_port)
+        opts.host, opts.port, opts.cap_ip, opts.cap_port, opts.fw_ip, opts.fw_port, opts.scpi_interface, opts.scpi_port)
     # Hook up to SIGINT so that ctrl-C results in a clean shutdown
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
 
     def start_and_display():
+        if opts.scpi_mode:
+            server.set_control_mode(server.SCPI)
         server.start()
         log.info(
             "Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))

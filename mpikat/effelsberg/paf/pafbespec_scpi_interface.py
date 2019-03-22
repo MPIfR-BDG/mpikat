@@ -5,7 +5,9 @@ from mpikat.core.scpi import ScpiAsyncDeviceServer, scpi_request, raise_or_ok
 
 log = logging.getLogger('mpikat.paf_scpi_interface')
 
+
 class PafbeSpecScpiInterface(ScpiAsyncDeviceServer):
+
     def __init__(self, master_controller, interface, port, ioloop=None):
         """
         @brief      A SCPI interface for a PafMasterController instance
@@ -30,9 +32,9 @@ class PafbeSpecScpiInterface(ScpiAsyncDeviceServer):
         """
         active_sections = self._config["active_sections"]
         self._ioloop.add_callback(self._make_coroutine_wrapper(req,
-            self._mc.configure, active_sections))
+                                                               self._mc.configure, active_sections, 1))
 
-    @scpi_request(*([int,]*144))
+    @scpi_request(*([int, ] * 144))
     def request_pafbespec_cmdsections(self, req, *used_sections):
         """
         @brief      Set the used sections for the FI
@@ -49,7 +51,7 @@ class PafbeSpecScpiInterface(ScpiAsyncDeviceServer):
         @param      req    An ScpiRequest object
         """
         self._ioloop.add_callback(self._make_coroutine_wrapper(req,
-            self._mc.capture_start))
+                                                               self._mc.capture_start))
 
     @scpi_request()
     def request_pafbespec_stop(self, req):
@@ -59,7 +61,7 @@ class PafbeSpecScpiInterface(ScpiAsyncDeviceServer):
         @param      req    An ScpiRequest object
         """
         self._ioloop.add_callback(self._make_coroutine_wrapper(req,
-            self._mc.capture_stop))
+                                                               self._mc.capture_stop))
 
     @scpi_request()
     def request_pafbespec_abort(self, req):
@@ -71,4 +73,4 @@ class PafbeSpecScpiInterface(ScpiAsyncDeviceServer):
         @note       This is a synonym for stop
         """
         self._ioloop.add_callback(self._make_coroutine_wrapper(req,
-            self._mc.capture_stop))
+                                                               self._mc.capture_stop))
