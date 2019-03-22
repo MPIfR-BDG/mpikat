@@ -2351,13 +2351,23 @@ class Search(Pipeline):
 
         if self._search_dbdisk:
             for execution_instance in self._search_dbdisk_execution_instances:
-                execution_instance.finish()
+                execution_instance.terminate()
             log.info("Finish the search_dbdisk execution")
-
+            
         if self._search_heimdall:
             for execution_instance in self._search_heimdall_execution_instances:
-                execution_instance.finish()
+                execution_instance.terminate()
             log.info("Finish the heimdall execution")
+        
+        #if self._search_dbdisk:
+        #    for execution_instance in self._search_dbdisk_execution_instances:
+        #        execution_instance.finish()
+        #    log.info("Finish the search_dbdisk execution")
+        #
+        #if self._search_heimdall:
+        #    for execution_instance in self._search_heimdall_execution_instances:
+        #        execution_instance.finish()
+        #    log.info("Finish the heimdall execution")
         if self._search_spectrometer and self._spectrometer_dbdisk:
             for execution_instance in self._spectrometer_dbdisk_execution_instances:
                 execution_instance.finish()
