@@ -90,7 +90,8 @@ SYSTEM_CONFIG = {"paf_nchan_per_chunk":    	     7,        # MHz
 
 # Configuration for pipelines
 PIPELINE_CONFIG = {"execution":                    1,
-                   "root_software":                "/phased-array-feed/",
+                   #"root_software":                "/phased-array-feed/",
+                   "root_software":                "/home/pulsar/xinping/phased-array-feed/",
                    "root_runtime":                 "/beegfs/DENG/",
                    "rbuf_ndf_per_chunk_per_block": 16384,  # For all ring buffers
                    "tbuf_ndf_per_chunk_per_block": 128,  # Only need for capture
@@ -147,7 +148,7 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "spectrometer_port":           17106,
                    "spectrometer_dbdisk":         0,
                    "spectrometer_monitor":        1,
-                   "spectrometer_accumulate_nblk": 1,
+                   "spectrometer_accumulate_nblk": 3,
                    "spectrometer_software_name":  "baseband2spectral_main",
 
                    # Spectral parameters for the simultaneous spectral output from fold and search mode
@@ -3080,29 +3081,29 @@ class Search2BeamLow(Search):
     def __init__(self):
         super(Search2BeamLow, self).__init__()
 
-    #def configure(self, config_json):
-    #    config_dictionary = {
-    #        "input_nbeam":                  2,
-    #        "input_nchunk_per_port":       11,
-    #        "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]],
-    #        "search_heimdall":     0,
-    #        "search_dbdisk":       0,
-    #        "search_spectrometer": 0,
-    #        "search_sod":          0,
-    #        "search_nreader":      1,
-    #    }
-    def configure(self, config_json):
-        config_dictionary = {
-            "input_nbeam":                  2,
-            "input_nchunk_per_port":       11,
-            "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]],
-            "search_heimdall":     0,
-            "search_dbdisk":       1,
-            "search_spectrometer": 0,
-            "search_sod":          1,
-            "search_nreader":      1,
-        }
-        super(Search2BeamLow, self).configure(config_json, config_dictionary)
+        def configure(self, config_json):
+            config_dictionary = {
+                "input_nbeam":                  2,
+                "input_nchunk_per_port":       11,
+                "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]],
+                "search_heimdall":     0,
+                "search_dbdisk":       0,
+                "search_spectrometer": 0,
+                "search_sod":          0,
+                "search_nreader":      1,
+            }
+            #def configure(self, config_json):
+            #    config_dictionary = {
+            #        "input_nbeam":                  2,
+            #        "input_nchunk_per_port":       11,
+            #        "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]],
+            #        "search_heimdall":     0,
+            #        "search_dbdisk":       1,
+            #        "search_spectrometer": 0,
+            #        "search_sod":          1,
+            #        "search_nreader":      1,
+            #    }
+            super(Search2BeamLow, self).configure(config_json, config_dictionary)
 
 
 @register_pipeline("Search2BeamHigh")
@@ -3119,7 +3120,7 @@ class Search2BeamHigh(Search):
             #"search_heimdall":     0,
             "search_heimdall":     1,
             "search_dbdisk":       1,
-            "search_spectrometer": 1,
+            "search_spectrometer": 0,
             "search_sod":          1,
             #"search_nreader":      1,
             "search_nreader":      2,
