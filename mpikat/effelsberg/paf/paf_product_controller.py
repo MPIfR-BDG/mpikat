@@ -46,7 +46,7 @@ class PafProductError(Exception):
     pass
 
 class PafBeamFileError(Exception):
-    pass    
+    pass
 
 
 class PafProductController(ProductController):
@@ -226,7 +226,7 @@ class PafProductController(ProductController):
         for server in self._servers:
             log.debug("Sending start request to server {}".format(server))
             start_futures.append(server._client.req.start(
-                status_json, timeout=30.0))
+                status_json, timeout=60.0))
         for future, server in zip(start_futures, self._servers):
             log.debug("Awaiting response from server {}".format(server))
             result = yield future
@@ -251,7 +251,7 @@ class PafProductController(ProductController):
         stop_futures = []
         for server in self._servers:
             log.debug("Sending stop request to server {}".format(server))
-            stop_futures.append(server._client.req.stop(timeout=30.0))
+            stop_futures.append(server._client.req.stop(timeout=60.0))
         for future, server in zip(stop_futures, self._servers):
             result = yield future
             if not result.reply.reply_ok():
