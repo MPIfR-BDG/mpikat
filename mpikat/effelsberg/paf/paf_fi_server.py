@@ -723,7 +723,6 @@ def on_shutdown(ioloop, server):
 
 
 def main():
-    os.system("taskset -p -c {} {}".format(0, os.getpid()))
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('', '--host', dest='host', type=str,
