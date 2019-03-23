@@ -395,7 +395,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             if not has_data:
                 log.debug("No updates available for sensors")
                 return
-            beam_data = {beam_id: [np.array(data.sections[beam_id + i].data) for i in range(4)] for beam_id in range(36)}
+            beam_data = {beam_id: [np.array(data.sections[4*beam_id + i].data) for i in range(4)] for beam_id in range(36)}
             self._plotting_process.put_data_to_plot(beam_data)
             self._integration_time_sensor.set_value(metadata.integ_time)
             self._nchannels_sensor.set_value(metadata.nchannels)
@@ -723,6 +723,7 @@ def on_shutdown(ioloop, server):
 
 
 def main():
+    os.system("taskset -p -c {} {}".format(8, os.getpid()))
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('', '--host', dest='host', type=str,
