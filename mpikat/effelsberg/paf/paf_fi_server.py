@@ -247,9 +247,9 @@ class PlotterProcess(mp.Process):
         return beam_png
 
     def run(self):
+        pngs = {i: DEFAULT_BLOB for i in range(36)}
         try:
             self.set_affinity()
-            pngs = {i: DEFAULT_BLOB for i in range(36)}
             while True:
                 data = self.get_data_to_plot()
                 for beam_id in range(36):
@@ -723,7 +723,7 @@ def on_shutdown(ioloop, server):
 
 
 def main():
-    os.system("taskset -p -c {} {}".format(8, os.getpid()))
+    os.system("taskset -p -c {} {}".format(0, os.getpid()))
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('', '--host', dest='host', type=str,
