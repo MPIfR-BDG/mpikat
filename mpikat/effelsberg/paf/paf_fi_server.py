@@ -235,10 +235,10 @@ class PlotterProcess(mp.Process):
         plt.cla()
         plt.xlabel('Channels')
         plt.ylabel('Power')
-        plt.plot(beam_data[0])
-        plt.plot(beam_data[1])
-        plt.plot(beam_data[2])
-        plt.plot(beam_data[3])
+        plt.plot(self.zton(beam_data[0]))
+        plt.plot(self.zton(beam_data[1]))
+        plt.plot(self.zton(beam_data[2]))
+        plt.plot(self.zton(beam_data[3]))
         beam = StringIO()
         plt.savefig(beam, format='png', dpi=100)
         beam.seek(0)
@@ -723,6 +723,7 @@ def on_shutdown(ioloop, server):
 
 
 def main():
+    os.system("taskset -p -c {} {}".format(8, os.getpid()))
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('', '--host', dest='host', type=str,
