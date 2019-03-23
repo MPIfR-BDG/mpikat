@@ -7,15 +7,17 @@ import errno
 import struct
 import coloredlogs
 import inspect
-import numpy as np
 import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import base64
-import Queue
+import os
+import numpy as np
 import ctypes as C
+matplotlib.use("Agg")
+import multiprocessing as mp
+import matplotlib.pyplot as plt
 from StringIO import StringIO
 from threading import Thread, Event
+from Queue import Queue, Empty, Full
 from optparse import OptionParser
 from katcp import AsyncDeviceServer, Sensor, ProtocolFlags
 from katcp.kattypes import (Int, request, return_reply)
@@ -50,7 +52,10 @@ QxeMX8H/hW2Zf7sDJK0tLSktbU1JZPJM5//I47jyOfzeX7Oz85xcHCg0dHRmvwOTpujUCjo8uXLWl1dN
 4+rq6lIsFlM4HHb9Xxlv3rzR3NycyuWyrl+/rkgkoomJCTmOo+HhYc3MzOjz58+6cuWKp4/QP5rj/v37unbtmm7duqVYLFa3Ofx\
 +vzY3NzU3N0fAAGrn3P0NDPxOCBgwjIABwwgYMIyAAcMIGDCMgAHDCBgwjIABwwgYMIyAAcP+BIRuVF8qjgxoAAAAAElFTkSuQmCC"
 
-sensor_queue = Queue.Queue()
+manager = mp.Manager()
+sensor_queue = Queue()
+plotter_input_queue = manager.Queue()
+plotter_output_queue = manager.Queue()
 
 
 class StopEventException(Exception):
@@ -169,6 +174,91 @@ class FitsWriterConnectionManager(Thread):
         self._server_socket.close()
 
 
+class PlotterProcess(mp.Process):
+    def __init__(self, cpu):
+        mp.Process.__init__(self)
+        self.daemon = True
+        self._cpu = cpu
+        self._manager = mp.Manager()
+        self._input_queue = self._manager.Queue()
+        self._output_queue = self._manager.Queue()
+
+    def get_data_to_plot(self):
+        log.debug("Getting data to plot")
+        has_data = False
+        while True:
+            try:
+                data = self._input_queue.get(True, 0.1)
+                has_data = True
+                log.debug("Read data from queue")
+            except Empty:
+                if has_data:
+                    log.debug("Flushed queue, returning last entry")
+                    break
+                else:
+                    continue
+        return data
+
+    def put_data_to_plot(self, data):
+        log.debug("Enquing data to plot")
+        try:
+            self._input_queue.put(data, False)
+        except Full:
+            log.warning("Plotting queue is full")
+
+    def get_plotted_data(self):
+        log.debug("Getting plotted data")
+        try:
+            beam_pngs = self._output_queue.get(False)
+            return beam_pngs
+        except Empty:
+            log.warning("No plotted data available")
+            return None
+
+    def put_plotted_data(self, beam_pngs):
+        log.debug("Enquing plotted data")
+        try:
+            self._output_queue.put(beam_pngs, False)
+        except Full:
+            log.warning("Plotted data queue is full")
+
+    def set_affinity(self):
+        log.debug("Binding plotting processing to CPU {}".format(self._cpu))
+        os.system("taskset -p -c {} {}".format(self._cpu, self.pid))
+
+    def zton(self, x):
+        x = np.asarray(x)
+        x[x == 0] = np.nan
+        return x
+
+    def plot_beam_data(self, beam_id, beam_data):
+        plt.cla()
+        plt.xlabel('Channels')
+        plt.ylabel('Power')
+        plt.plot(beam_data[0])
+        plt.plot(beam_data[1])
+        plt.plot(beam_data[2])
+        plt.plot(beam_data[3])
+        beam = StringIO()
+        plt.savefig(beam, format='png', dpi=100)
+        beam.seek(0)
+        beam_png = beam.buf
+        beam_png = base64.b64encode(beam_png).replace("\n", "")
+        return beam_png
+
+    def run(self):
+        try:
+            self.set_affinity()
+            pngs = {i: DEFAULT_BLOB for i in range(36)}
+            while True:
+                data = self.get_data_to_plot()
+                for beam_id in range(36):
+                    pngs[beam_id] = self.plot_beam_data(beam_id, data[beam_id])
+                self.put_plotted_data(pngs)
+        except Exception:
+            log.exception("Error in plotting thread")
+
+
 class FitsInterfaceServer(AsyncDeviceServer):
     """
     Class providing an interface between EDD processes and the
@@ -206,7 +296,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._shutdown = False
         self._mode = None
         self._fw_soc = None
-        #self._paf_handler = PafHandler(self._mode, self._fw_soc)
+        self._plotting_process = PlotterProcess(9)
         super(FitsInterfaceServer, self).__init__(interface, port)
 
     def start(self):
@@ -214,6 +304,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         @brief   Start the server
         """
         self._fw_connection_manager.start()
+        self._plotting_process.start()
         super(FitsInterfaceServer, self).start()
 
     def stop(self):
@@ -292,54 +383,34 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._update_sensors_callback.start()
 
     def update_sensors(self):
-        #current_qsize = sensor_queue.qsize()
-        # for i in range(current_qsize):
-        #    timestamp, metadata, data = sensor_queue.get()
-        log.debug("Updating sensor values and making beam plots")
-        has_data = False
-        while True:
-            try:
-                timestamp, metadata, data = sensor_queue.get(False)
-                has_data = True
-            except Queue.Empty:
-                break
-        if not has_data:
-            log.info("No updates available for sensors")
-            return
-        self._integration_time_sensor.set_value(metadata.integ_time)
-        self._nchannels_sensor.set_value(metadata.nchannels)
-        self._pol_type_sensor.set_value(metadata.pol_type)
-        self._nblank_phases_sensor.set_value(data.blank_phases)
-        self._center_freq_sensor.set_value(metadata.center_freq)
-        self._channel_bw_sensor.set_value(metadata.channel_bw)
-        #for i in range(36):
-        #    self.plot_beam_data(i, data)
-
-    def zton(self, x):
-        x = np.asarray(x)
-        x[x == 0] = np.nan
-        return x
-
-    def plot_beam_data(self, beam_id, beam_data):
-        plt.cla()
-        plt.xlabel('Channels')
-        plt.ylabel('Power')
-        x = beam_data
-        index = beam_id * 4
-        plt.plot(np.arange(x.sections[index + 0].nchannels),
-                 self.zton(x.sections[index + 0].data))
-        plt.plot(np.arange(x.sections[index + 1].nchannels),
-                 self.zton(x.sections[index + 1].data))
-        plt.plot(np.arange(x.sections[index + 2].nchannels),
-                 self.zton(x.sections[index + 2].data))
-        plt.plot(np.arange(x.sections[index + 3].nchannels),
-                 self.zton(x.sections[index + 3].data))
-        beam = StringIO()
-        plt.savefig(beam, format='png', dpi=100)
-        beam.seek(0)
-        beam_png = beam.buf
-        beam_png = base64.b64encode(beam_png).replace("\n", "")
-        self._beam_pngs[beam_id].set_value(beam_png)
+        try:
+            log.debug("Updating sensor values and making beam plots")
+            has_data = False
+            while True:
+                try:
+                    timestamp, metadata, data = sensor_queue.get(False)
+                    has_data = True
+                except Empty:
+                    break
+            if not has_data:
+                log.debug("No updates available for sensors")
+                return
+            beam_data = {beam_id: [np.array(data.sections[beam_id + i].data) for i in range(4)] for beam_id in range(36)}
+            self._plotting_process.put_data_to_plot(beam_data)
+            self._integration_time_sensor.set_value(metadata.integ_time)
+            self._nchannels_sensor.set_value(metadata.nchannels)
+            self._pol_type_sensor.set_value(metadata.pol_type)
+            self._nblank_phases_sensor.set_value(data.blank_phases)
+            self._center_freq_sensor.set_value(metadata.center_freq)
+            self._channel_bw_sensor.set_value(metadata.channel_bw)
+            pngs = self._plotting_process.get_plotted_data()
+            if not pngs is None:
+                for beam_id in range(36):
+                    self._beam_pngs[beam_id].set_value(pngs[beam_id])
+            else:
+                log.debug("No plots available")
+        except Exception:
+            log.exception("Excpetion while updating sensor values")
 
     def _stop_capture(self):
         if self._capture_thread:
