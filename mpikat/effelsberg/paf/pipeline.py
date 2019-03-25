@@ -90,8 +90,8 @@ SYSTEM_CONFIG = {"paf_nchan_per_chunk":    	     7,        # MHz
 
 # Configuration for pipelines
 PIPELINE_CONFIG = {"execution":                    1,
-                   "root_software":                "/phased-array-feed/",
-                   #"root_software":                "/home/pulsar/xinping/phased-array-feed/",
+                   #"root_software":                "/phased-array-feed/",
+                   "root_software":                "/home/pulsar/xinping/phased-array-feed/",
                    "root_runtime":                 "/beegfs/DENG/",
                    "rbuf_ndf_per_chunk_per_block": 16384,  # For all ring buffers
                    "tbuf_ndf_per_chunk_per_block": 128,  # Only need for capture
@@ -146,7 +146,7 @@ PIPELINE_CONFIG = {"execution":                    1,
                    #"spectrometer_port":    	  2,
                    "spectrometer_ip":             "10.17.0.2",
                    "spectrometer_port":           17106,
-                   "spectrometer_dbdisk":         0,
+                   "spectrometer_dbdisk":         1,
                    "spectrometer_monitor":        1,
                    "spectrometer_accumulate_nblk": 3,
                    "spectrometer_software_name":  "baseband2spectral_main",
