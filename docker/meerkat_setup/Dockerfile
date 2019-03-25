@@ -36,6 +36,8 @@ RUN apt-get --no-install-recommends -y install \
     libhwloc-dev \
     libltdl-dev \
     libtool \
+    librdmacm-dev \
+    libibverbs-dev \
     ntp \
     ntpstat \
     openssl \
@@ -72,7 +74,18 @@ RUN git clone https://github.com/ewanbarr/mpikat.git &&\
     git checkout fbf_control_worker && \
     pip install -e .
 
-#ENV PACKAGES /usr/local/cuda-8.0/
+ENV PACKAGES /usr/local/cuda-8.0/
+
+# Install SPEAD2
+WORKDIR $PSRHOME
+RUN git clone https://github.com/ska-sa/spead2.git && \
+    cd spead2 && \
+    ./bootstrap.sh --no-python && \
+    ./configure --prefix=/usr/local && \
+    make -j 6 && \
+    make install && \
+    make clean
+    ENV PACKAGES $PACKAGES $PSRHOME
 
 # Install PSRDADA
 COPY psrdada_cvs_login $PSRHOME
@@ -90,19 +103,7 @@ RUN mkdir build/ && \
 ENV PATH $PATH:$PSRDADA_HOME/build/bin
 ENV PSRDADA_BUILD $PSRDADA_HOME/build/
 ENV PACKAGES $PACKAGES $PSRDADA_BUILD
-RUN cp $PSRDADA_HOME/src/*.h $PSRDADA_BUILD/include/
 
-# Install SPEAD2
-WORKDIR $PSRHOME
-RUN git clone https://github.com/ska-sa/spead2.git && \
-    cd spead2 && \
-    ./bootstrap.sh --no-python && \
-    ./configure --prefix=/usr/local && \
-    make -j 6 && \
-    make install && \
-    make clean
-ENV PACKAGES $PACKAGES $PSRHOME
-ENV ARSE 1
 WORKDIR $PSRHOME
 RUN git clone https://github.com/ewanbarr/psrdada_cpp.git && \
     cd psrdada_cpp/ &&\
@@ -121,19 +122,19 @@ RUN git config --global http.sslverify false && \
     git clone https://gitlab.mpifr-bonn.mpg.de/mhein/mkrecv.git && \
     cd mkrecv && \
     git checkout master && \
-    cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DPSRDADA_CPP_INCLUDE_DIR=$PSRHOME/psrdada_cpp/ && \
+    cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DPSRDADA_CPP_INCLUDE_DIR=$PSRHOME/psrdada_cpp/ -DENABLE_CUDA=true && \
     make -j 6 && \
     make install
 
-#install MKRecv
-WORKDIR $PSRHOME
-RUN git config --global http.sslverify false && \
-    git clone https://gitlab.mpifr-bonn.mpg.de/mhein/mksend.git && \
-    cd mkrecv && \
-    git checkout master && \
-    cmake -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    make -j 6 && \
-    make install
+#install MKSend
+#WORKDIR $PSRHOME
+#RUN git config --global http.sslverify false && \
+#    git clone https://gitlab.mpifr-bonn.mpg.de/mhein/mksend.git && \
+#    cd mksend && \
+#    git checkout master && \
+#    cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DPSRDADA_CPP_INCLUDE_DIR=$PSRHOME/psrdada_cpp/ -DENABLE_CUDA=true && \
+#    make -j 6 && \
+#    make install
 
 RUN env | awk '{print "export ",$0}' > $HOME/.profile && \
     echo "source $HOME/.profile" >> $HOME/.bashrc
