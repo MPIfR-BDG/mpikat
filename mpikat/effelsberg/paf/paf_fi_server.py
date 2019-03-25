@@ -54,8 +54,7 @@ QxeMX8H/hW2Zf7sDJK0tLSktbU1JZPJM5//I47jyOfzeX7Oz85xcHCg0dHRmvwOTpujUCjo8uXLWl1dN
 
 manager = mp.Manager()
 sensor_queue = Queue()
-plotter_input_queue = manager.Queue()
-plotter_output_queue = manager.Queue()
+logging_queue = manager.Queue()
 
 
 class StopEventException(Exception):
@@ -233,7 +232,8 @@ class PlotterProcess(mp.Process):
 
     def plot_beam_data(self, beam_id, beam_data):
         plt.cla()
-        plt.xlabel('Channels')
+        plt.title("Beam {}".format(beam_id))
+        plt.xlabel('Channel')
         plt.ylabel('Power')
         plt.plot(self.zton(beam_data[0]))
         plt.plot(self.zton(beam_data[1]))
@@ -242,8 +242,7 @@ class PlotterProcess(mp.Process):
         beam = StringIO()
         plt.savefig(beam, format='png', dpi=100)
         beam.seek(0)
-        beam_png = beam.buf
-        beam_png = base64.b64encode(beam_png).replace("\n", "")
+        beam_png = base64.b64encode(beam.buf).replace("\n", "")
         return beam_png
 
     def run(self):
