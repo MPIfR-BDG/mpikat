@@ -146,9 +146,9 @@ PIPELINE_CONFIG = {"execution":                    1,
                    #"spectrometer_port":    	  2,
                    "spectrometer_ip":             "10.17.0.2",
                    "spectrometer_port":           17106,
-                   "spectrometer_dbdisk":         1,
+                   "spectrometer_dbdisk":         0,
                    "spectrometer_monitor":        1,
-                   "spectrometer_accumulate_nblk": 1,
+                   "spectrometer_accumulate_nblk": 5,
                    "spectrometer_software_name":  "baseband2spectral_main",
 
                    # Spectral parameters for the simultaneous spectral output from fold and search mode
@@ -3122,8 +3122,6 @@ if __name__ == "__main__":
         log.info("Configure it ...")
         config_info["utc_start_capture"] = Time(
             Time.now() + 27 * units.second, format='isot', scale='utc').value
-        print "UTC_START at pipeline level {}".format(config_info["utc_start_capture"])
-        
         config_json = json.dumps(config_info)
         mode.configure(config_json)
 
