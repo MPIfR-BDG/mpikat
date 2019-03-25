@@ -148,7 +148,7 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "spectrometer_port":           17106,
                    "spectrometer_dbdisk":         0,
                    "spectrometer_monitor":        1,
-                   "spectrometer_accumulate_nblk": 9,
+                   "spectrometer_accumulate_nblk": 5,
                    "spectrometer_software_name":  "baseband2spectral_main",
 
                    # Spectral parameters for the simultaneous spectral output from fold and search mode
