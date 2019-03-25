@@ -90,8 +90,8 @@ SYSTEM_CONFIG = {"paf_nchan_per_chunk":    	     7,        # MHz
 
 # Configuration for pipelines
 PIPELINE_CONFIG = {"execution":                    1,
-                   "root_software":                "/phased-array-feed/",
-                   #"root_software":                "/home/pulsar/xinping/phased-array-feed/",
+                   #"root_software":                "/phased-array-feed/",
+                   "root_software":                "/home/pulsar/xinping/phased-array-feed/",
                    "root_runtime":                 "/beegfs/DENG/",
                    "rbuf_ndf_per_chunk_per_block": 16384,  # For all ring buffers
                    "tbuf_ndf_per_chunk_per_block": 128,  # Only need for capture
@@ -148,7 +148,7 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "spectrometer_port":           17106,
                    "spectrometer_dbdisk":         0,
                    "spectrometer_monitor":        1,
-                   "spectrometer_accumulate_nblk": 5,
+                   "spectrometer_accumulate_nblk": 1,
                    "spectrometer_software_name":  "baseband2spectral_main",
 
                    # Spectral parameters for the simultaneous spectral output from fold and search mode
@@ -3122,6 +3122,8 @@ if __name__ == "__main__":
         log.info("Configure it ...")
         config_info["utc_start_capture"] = Time(
             Time.now() + 27 * units.second, format='isot', scale='utc').value
+        print "UTC_START at pipeline level {}".format(config_info["utc_start_capture"])
+        
         config_json = json.dumps(config_info)
         mode.configure(config_json)
 
