@@ -72,7 +72,7 @@ RUN git clone https://github.com/ewanbarr/mpikat.git &&\
     git checkout fbf_control_worker && \
     pip install -e .
 
-ENV PACKAGES /usr/local/cuda-8.0/
+#ENV PACKAGES /usr/local/cuda-8.0/
 
 # Install PSRDADA
 COPY psrdada_cvs_login $PSRHOME
@@ -90,6 +90,7 @@ RUN mkdir build/ && \
 ENV PATH $PATH:$PSRDADA_HOME/build/bin
 ENV PSRDADA_BUILD $PSRDADA_HOME/build/
 ENV PACKAGES $PACKAGES $PSRDADA_BUILD
+RUN cp $PSRDADA_HOME/src/*.h $PSRDADA_BUILD/include/
 
 # Install SPEAD2
 WORKDIR $PSRHOME
@@ -101,7 +102,7 @@ RUN git clone https://github.com/ska-sa/spead2.git && \
     make install && \
     make clean
 ENV PACKAGES $PACKAGES $PSRHOME
-
+ENV ARSE 1
 WORKDIR $PSRHOME
 RUN git clone https://github.com/ewanbarr/psrdada_cpp.git && \
     cd psrdada_cpp/ &&\
