@@ -21,8 +21,6 @@ SOFTWARE.
 """
 
 import logging
-import json
-import time
 from tornado.gen import coroutine, Return
 from katcp import Sensor, Message
 from mpikat.core.utils import LoggingSensor
