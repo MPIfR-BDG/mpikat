@@ -154,7 +154,7 @@ class TestCaptureOrdering(unittest.TestCase):
                          set(feng_antenna_map[i] for i in incoherent_beam_antennas))
         self.assertEqual(info['unused_span'][0], info['unused_span'][1])
 
-    def test_different_antennas_all_used(self):
+    def test_different_antennas_not_all_used(self):
         antennas = ["m%03d" % ii for ii in range(16)]
         feng_antenna_map = {antenna: ii for ii, antenna in enumerate(antennas)}
         coherent_beam_antennas = antennas[4:9]
