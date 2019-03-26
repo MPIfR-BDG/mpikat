@@ -127,14 +127,14 @@ RUN git config --global http.sslverify false && \
     make install
 
 #install MKSend
-#WORKDIR $PSRHOME
-#RUN git config --global http.sslverify false && \
-#    git clone https://gitlab.mpifr-bonn.mpg.de/mhein/mksend.git && \
-#    cd mksend && \
-#    git checkout master && \
-#    cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DPSRDADA_CPP_INCLUDE_DIR=$PSRHOME/psrdada_cpp/ -DENABLE_CUDA=true && \
-#    make -j 6 && \
-#    make install
+WORKDIR $PSRHOME
+RUN git config --global http.sslverify false && \
+    git clone https://gitlab.mpifr-bonn.mpg.de/mhein/mksend.git && \
+    cd mksend && \
+    git checkout master && \
+    cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DPSRDADA_CPP_INCLUDE_DIR=$PSRHOME/psrdada_cpp/ -DENABLE_CUDA=true && \
+    make -j 6 && \
+    make install
 
 RUN env | awk '{print "export ",$0}' > $HOME/.profile && \
     echo "source $HOME/.profile" >> $HOME/.bashrc

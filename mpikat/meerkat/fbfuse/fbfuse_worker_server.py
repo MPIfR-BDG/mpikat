@@ -59,6 +59,50 @@ MKRECV_STDOUT_KEYS = {
 }
 
 
+def determine_feng_capture_order(self, antenna_to_feng_id_map,
+                                  coherent_beam_config,
+                                  incoherent_beam_config):
+    # Need to sort the f-engine IDs into 4 states
+    # 1. Incoherent but not coherent
+    # 2. Incoherent and coherent
+    # 3. Coherent but not incoherent
+    # 4. Neither coherent nor incoherent
+    #
+    # We must catch all antennas as even in case 4 the data is required for the
+    # transient buffer.
+    #
+    # To make this split, we first create the three sets, coherent,
+    # incoherent and all.
+    mapping = antenna_to_feng_id_map
+    all_feng_ids = set(mapping.values())
+    coherent_feng_ids = set(mapping[antenna] for antenna in parse_csv_antennas(
+        coherent_beam_config['antennas']))
+    incoherent_feng_ids = set(mapping[antenna] for antenna in parse_csv_antennas(
+        incoherent_beam_config['antennas']))
+    incoh_not_coh = incoherent_feng_ids.difference(coherent_feng_ids)
+    incoh_and_coh = incoherent_feng_ids.intersection(coherent_feng_ids)
+    coh_not_incoh = coherent_feng_ids.difference(incoherent_feng_ids)
+    used_fengs = incoh_not_coh.union(incoh_and_coh).union(coh_not_incoh)
+    unused_fengs = all_feng_ids.difference(used_fengs)
+    # Output final order
+    final_order = list(incoh_not_coh) + list(incoh_and_coh) + \
+        list(coh_not_incoh) + list(unused_fengs)
+    start_of_incoherent_fengs = 0
+    end_of_incoherent_fengs = len(incoh_not_coh) + len(incoh_and_coh)
+    start_of_coherent_fengs = len(incoh_not_coh)
+    end_of_coherent_fengs = len(
+        incoh_not_coh) + len(incoh_and_coh) + len(coh_not_incoh)
+    start_of_unused_fengs = end_of_coherent_fengs
+    end_of_unused_fengs = len(all_feng_ids)
+    info = {
+        "order": final_order,
+        "incoherent_span": (start_of_incoherent_fengs, end_of_incoherent_fengs),
+        "coherent_span": (start_of_coherent_fengs, end_of_coherent_fengs),
+        "unused_span": (start_of_unused_fengs, end_of_unused_fengs)
+    }
+    return info
+
+
 class FbfWorkerServer(AsyncDeviceServer):
     VERSION_INFO = ("fbf-control-server-api", 0, 1)
     BUILD_INFO = ("fbf-control-server-implementation", 0, 1, "rc1")
@@ -238,49 +282,6 @@ class FbfWorkerServer(AsyncDeviceServer):
             log.info("Killing process")
             process.kill()
 
-    def _determine_feng_capture_order(self, antenna_to_feng_id_map,
-                                      coherent_beam_config,
-                                      incoherent_beam_config):
-        # Need to sort the f-engine IDs into 4 states
-        # 1. Incoherent but not coherent
-        # 2. Incoherent and coherent
-        # 3. Coherent but not incoherent
-        # 4. Neither coherent nor incoherent
-        #
-        # We must catch all antennas as even in case 4 the data is required for the
-        # transient buffer.
-        #
-        # To make this split, we first create the three sets, coherent,
-        # incoherent and all.
-        mapping = antenna_to_feng_id_map
-        all_feng_ids = set(mapping.values())
-        coherent_feng_ids = set(mapping[antenna] for antenna in parse_csv_antennas(
-            coherent_beam_config['antennas']))
-        incoherent_feng_ids = set(mapping[antenna] for antenna in parse_csv_antennas(
-            incoherent_beam_config['antennas']))
-        incoh_not_coh = incoherent_feng_ids.difference(coherent_feng_ids)
-        incoh_and_coh = incoherent_feng_ids.intersection(coherent_feng_ids)
-        coh_not_incoh = coherent_feng_ids.difference(incoherent_feng_ids)
-        used_fengs = incoh_not_coh.union(incoh_and_coh).union(coh_not_incoh)
-        unused_fengs = all_feng_ids.difference(used_fengs)
-        # Output final order
-        final_order = list(incoh_not_coh) + list(incoh_and_coh) + \
-            list(coh_not_incoh) + list(unused_fengs)
-        start_of_incoherent_fengs = 0
-        end_of_incoherent_fengs = len(incoh_not_coh) + len(incoh_and_coh)
-        start_of_coherent_fengs = len(incoh_not_coh)
-        end_of_coherent_fengs = len(
-            incoh_not_coh) + len(incoh_and_coh) + len(coh_not_incoh)
-        start_of_unused_fengs = end_of_coherent_fengs
-        end_of_unused_fengs = len(all_feng_ids)
-        info = {
-            "order": final_order,
-            "incoherent_span": (start_of_incoherent_fengs, end_of_incoherent_fengs),
-            "coherent_span": (start_of_coherent_fengs, end_of_coherent_fengs),
-            "unused_span": (start_of_unused_fengs, end_of_unused_fengs)
-        }
-        return info
-
     def _make_db(self, key, block_size, nblocks):
         log.debug(("Building DADA buffer: key={}, block_size={}, "
                    "nblocks={}").format(key, block_size, nblocks))
@@ -439,7 +440,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             self._delay_client.start()
 
             log.debug("Determining F-engine capture order")
-            feng_capture_order_info = self._determine_feng_capture_order(
+            feng_capture_order_info = determine_feng_capture_order(
                 feng_config['feng-antenna-map'], coherent_beam_config,
                 incoherent_beam_config)
             log.debug("Capture order info: {}".format(feng_capture_order_info))
@@ -703,7 +704,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
-                
+
         self.ioloop.add_callback(safe_configure)
         raise AsyncReply
 

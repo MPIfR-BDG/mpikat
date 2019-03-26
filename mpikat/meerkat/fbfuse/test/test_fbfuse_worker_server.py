@@ -21,39 +21,28 @@ SOFTWARE.
 """
 
 import unittest
-import mock
-import signal
 import logging
-import time
-import sys
-import importlib
-import re
-import ipaddress
 import json
-from StringIO import StringIO
-from tornado.ioloop import IOLoop
-from tornado.gen import coroutine, Return, sleep
-from tornado.testing import AsyncTestCase, gen_test
+from tornado.gen import sleep
+from tornado.testing import gen_test
 from katpoint import Antenna, Target
-from katcp import AsyncReply, AsyncDeviceServer
-from katcp.testutils import mock_req, handle_mock_req
-from katpoint import Antenna
-from mpikat.meerkat.fbfuse import FbfWorkerServer, FbfMasterController, DelayConfigurationServer, BeamManager
-from mpikat.meerkat.katportalclient_wrapper import KatportalClientWrapper
-from mpikat.meerkat.test.utils import MockFbfConfigurationAuthority, ANTENNAS, MockKatportalClientWrapper
+from mpikat.meerkat.fbfuse import FbfWorkerServer, DelayConfigurationServer, BeamManager
+from mpikat.meerkat.fbfuse.fbfuse_worker_server import determine_feng_capture_order
+from mpikat.meerkat.test.utils import ANTENNAS
 from mpikat.test.utils import AsyncServerTester
-from mpikat.core.ip_manager import ContiguousIpRange, ip_range_from_stream
 
 root_logger = logging.getLogger('mpikat')
 root_logger.setLevel(logging.DEBUG)
 
 
 class TestFbfWorkerServer(AsyncServerTester):
+
     def setUp(self):
         super(TestFbfWorkerServer, self).setUp()
-        self.server = FbfWorkerServer('127.0.0.1', 0, '127.0.0.1', exec_mode="dry-run")
+        self.server = FbfWorkerServer(
+            '127.0.0.1', 0, '127.0.0.1', exec_mode="dry-run")
         self.server.start()
-        
+
     def tearDown(self):
         super(TestFbfWorkerServer, self).tearDown()
 
@@ -61,26 +50,32 @@ class TestFbfWorkerServer(AsyncServerTester):
     def test_init(self):
         yield self._check_sensor_value('device-status', 'ok')
         yield self._check_sensor_value('state', self.server.IDLE)
-        yield self._check_sensor_value('delay-engine-server', '', expected_status='unknown')
-        yield self._check_sensor_value('antenna-capture-order', '', expected_status='unknown')
-        yield self._check_sensor_value('mkrecv-capture-header', '', expected_status='unknown')
+        yield self._check_sensor_value(
+            'delay-engine-server', '', expected_status='unknown')
+        yield self._check_sensor_value(
+            'antenna-capture-order', '', expected_status='unknown')
+        yield self._check_sensor_value(
+            'mkrecv-capture-header', '', expected_status='unknown')
 
     @gen_test(timeout=100000)
     def test_prepare(self):
         nbeams = 32
-        antennas = ["m%03d"%ii for ii in range(16)]
-        feng_antenna_map = {antenna:ii for ii,antenna in enumerate(antennas)}
+        antennas = ["m%03d" % ii for ii in range(16)]
+        feng_antenna_map = {antenna: ii for ii, antenna in enumerate(antennas)}
         coherent_beam_antennas = antennas
         incoherent_beam_antennas = antennas
         nantennas = len(antennas)
-        beam_manager = BeamManager(nbeams, [Antenna(ANTENNAS[i]) for i in coherent_beam_antennas])
-        delay_config_server = DelayConfigurationServer("127.0.0.1", 0, beam_manager)
+        beam_manager = BeamManager(
+            nbeams, [Antenna(ANTENNAS[i]) for i in coherent_beam_antennas])
+        delay_config_server = DelayConfigurationServer(
+            "127.0.0.1", 0, beam_manager)
         delay_config_server.start()
         dc_ip, dc_port = delay_config_server.bind_address
         for _ in range(nbeams):
             beam_manager.add_beam(Target("source0, radec, 123.1, -30.3"))
 
-        coherent_beams_csv = ",".join([beam.idx for beam in beam_manager.get_beams()])
+        coherent_beams_csv = ",".join(
+            [beam.idx for beam in beam_manager.get_beams()])
         tot_nchans = 4096
         feng_groups = "spead://239.11.1.150+3:7147"
         nchans_per_group = tot_nchans / nantennas / 4
@@ -88,8 +83,8 @@ class TestFbfWorkerServer(AsyncServerTester):
         chan0_freq = 1240e6
         chan_bw = 856e6 / tot_nchans
         mcast_to_beam_map = {
-            "spead://239.11.2.150:7147":coherent_beams_csv,
-            "spead://239.11.2.151:7147":"ifbf00001"
+            "spead://239.11.2.150:7147": coherent_beams_csv,
+            "spead://239.11.2.151:7147": "ifbf00001"
         }
         feng_config = {
             "bandwidth": 856e6,
@@ -110,12 +105,39 @@ class TestFbfWorkerServer(AsyncServerTester):
             "antennas": ",".join(incoherent_beam_antennas)
         }
         yield self._send_request_expect_ok('prepare', feng_groups, nchans_per_group, chan0_idx, chan0_freq,
-                                           chan_bw, nbeams, json.dumps(mcast_to_beam_map), json.dumps(feng_config),
+                                           chan_bw, nbeams, json.dumps(
+                                               mcast_to_beam_map), json.dumps(feng_config),
                                            json.dumps(coherent_beam_config), json.dumps(incoherent_beam_config), dc_ip, dc_port)
         yield sleep(10)
         self.server._delay_buffer_controller.stop()
 
 
+class TestCaptureOrdering(unittest.TestCase):
+    def test_same_antennas(self):
+        antennas = ["m%03d" % ii for ii in range(16)]
+        feng_antenna_map = {antenna: ii for ii, antenna in enumerate(antennas)}
+        coherent_beam_antennas = antennas
+        incoherent_beam_antennas = antennas
+        coherent_beam_config = {
+            "tscrunch": 16,
+            "fscrunch": 1,
+            "antennas": ",".join(coherent_beam_antennas)
+        }
+        incoherent_beam_config = {
+            "tscrunch": 16,
+            "fscrunch": 1,
+            "antennas": ",".join(incoherent_beam_antennas)
+        }
+
+        info = determine_feng_capture_order(
+                feng_antenna_map, coherent_beam_config,
+                incoherent_beam_config)
+
+        self.assertEqual(info['coherent_span'], info['incoherent_span'])
+        self.assertEqual(info['unused_span'][0], info['unused_span'][1])
+        for a, b in zip(info['order'], range(len(antennas))):
+            self.assertEqual(a, b)
+
+
 if __name__ == '__main__':
     unittest.main(buffer=True)
-
