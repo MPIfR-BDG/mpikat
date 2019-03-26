@@ -59,7 +59,7 @@ MKRECV_STDOUT_KEYS = {
 }
 
 
-def determine_feng_capture_order(self, antenna_to_feng_id_map,
+def determine_feng_capture_order(antenna_to_feng_id_map,
                                   coherent_beam_config,
                                   incoherent_beam_config):
     # Need to sort the f-engine IDs into 4 states
