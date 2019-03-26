@@ -26,6 +26,8 @@ matplotlib.use("Agg")
 
 log = logging.getLogger("mpikat.paf_fi_server")
 
+SENTINEL = "EOD"
+
 DEFAULT_BLOB = "iVBORw0KGgoAAAANSUhEUgAAAPAAAACgCAYAAAAy2+FlAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAGJgA\
 ABiYBnxM6IwAAADl0RVh0U29mdHdhcmUAbWF0cGxvdGxpYiB2ZXJzaW9uIDIuMi4zLCBodHRwOi8vbWF0cGxvdGxpYi5vcmcvIx\
 REBQAABt1JREFUeJzt3D9IW/sbx/FPfr3QFi3VgEPjUJoOgpCho6sdUhA6SALpkEFBcJIqCUQkUBUdC0JBunYp7RYsUYfaQIdIU\
@@ -259,6 +261,62 @@ class PlotterProcess(mp.Process):
             log.exception("Error in plotting thread")
 
 
+class WriterProcess(mp.Process):
+    def __init__(self, pipe,
+                 dumps_per_file=10,
+                 filestem='paf_hi_res_dump',
+                 sentinel=None):
+        mp.Process.__init__(self)
+        self._pipe = pipe
+        self._filestem = filestem
+        self._dumps_per_file = dumps_per_file
+        self._file = None
+        self._file_counter = 0
+        self._dump_counter = 0
+        self._sentinel = sentinel
+        self._stop_event = mp.Event()
+
+    def open_file(self):
+        self.close_file()
+        fname = "{}-{:05d}".format(self._filestem, self._file_counter)
+        self._file = open(fname, "w")
+        self._file_counter += 1
+
+    def close_file(self):
+        if self._file:
+            self._file.close()
+        self._file = None
+
+    def write(self, to_write):
+        if self._dump_counter % self._dumps_per_file == 0:
+            self.open_file()
+        self._file.write(to_write)
+        self._dump_counter += 1
+
+    def consume(self):
+        while not self._stop_event.is_set():
+            if self._pipe.poll():
+                to_write = self._pipe.recv()
+                if to_write == self._sentinel:
+                    break
+                else:
+                    self.write(to_write)
+            else:
+                time.sleep(0.01)
+
+    def run(self):
+        try:
+            self.consume()
+        except Exception as error:
+            log.exception("Error in WriterProcess: {}".format(str(error)))
+        else:
+            self._pipe.close()
+            self.close_file()
+
+    def stop(self):
+        self._stop_event.set()
+
+
 class FitsInterfaceServer(AsyncDeviceServer):
     """
     Class providing an interface between EDD processes and the
@@ -293,6 +351,9 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._fw_connection_manager = FitsWriterConnectionManager(
             fw_ip, fw_port)
         self._capture_thread = None
+        self._input_fd = None
+        self._output_fd = None
+        self._writer_process = None
         self._shutdown = False
         self._mode = None
         self._fw_soc = None
@@ -404,7 +465,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             self._center_freq_sensor.set_value(metadata.center_freq)
             self._channel_bw_sensor.set_value(metadata.channel_bw)
             pngs = self._plotting_process.get_plotted_data()
-            if not pngs is None:
+            if pngs is not None:
                 for beam_id in range(36):
                     self._beam_pngs[beam_id].set_value(pngs[beam_id])
             else:
@@ -419,6 +480,14 @@ class FitsInterfaceServer(AsyncDeviceServer):
             self._capture_thread.join()
             self._capture_thread = None
             log.debug("Capture thread cleaned")
+        if self._writer_process:
+            self._input_fd.write(SENTINEL)
+            self._writer_process.join()
+            self._input_fd.close()
+            self._output_fd.close()
+            self._input_fd = None
+            self._output_fd = None
+            self._writer_process = None
 
     @request(Int())
     @return_reply()
@@ -467,9 +536,17 @@ class FitsInterfaceServer(AsyncDeviceServer):
             fw_socket = None
         log.info("Starting FITS interface capture")
         self._stop_capture()
-        self._paf_handler = PafHandler(self._mode, fw_socket)
+        self._input_fd, self._output_fd = mp.Pipe(duplex=False)
+        self._writer_process = WriterProcess(
+            self._output_fd,
+            filestem='/beegfs/DENG/DATA/paf_hi_res_dump_{}'.format(
+                datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')),
+            sentinel="EOD")
+        self._writer_process.start()
+        self._paf_handler = PafHandler(fw_socket, self._input_fd)
         self._capture_thread = CaptureData(self._capture_interface,
-                                           self._capture_port, self._paf_handler)
+                                           self._capture_port,
+                                           self._paf_handler)
         self._capture_thread.start()
         return ("ok",)
 
@@ -636,7 +713,7 @@ class PafHandler(object):
     before sending to the fits writer
     """
 
-    def __init__(self, mode, transmit_socket):
+    def __init__(self, mode, transmit_socket, input_fd):
 
         self._mode = mode
         self._npol = 4
@@ -644,13 +721,9 @@ class PafHandler(object):
         self._nphases = 1
         self._raw_data = ""
         self._transmit_socket = transmit_socket
+        self._input_fd = input_fd
         self._active_packets = {}
         self._sent_first = False
-        self.counter = 0
-        self.filecounter = 0
-        self.time = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')
-        self.filename = '/beegfs/DENG/DATA/paf_hi_res_dump{}-{:050%}'.format(self.time, self.filecounter)
-        self.file = open(self.f, "w")
 
     def read_channels_per_packet(self):
         metadata = struct.unpack("<i28sfiffiiii", self._raw_data[0:64])
@@ -673,7 +746,6 @@ class PafHandler(object):
             packet.beam_id, packet.pol_id, packet.time_stamp,
             packet.integ_time, packet.nchannels, packet.nfreq_chunks,
             packet.freq_chunks_index))
-	#log.info("time stamp {}, {}UTC".format(packet.time_stamp, datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')))
         key = packet.time_stamp
         if key not in self._active_packets:
             fw_packet = build_fw_object(
@@ -713,26 +785,15 @@ class PafHandler(object):
                 except Queue.Full:
                     sensor_queue.get()
                     sensor_queue.put((timestamp, metadata, fw_packet), False)
-                if self._mode == 1:
+                if self._transmit_socket:
                     log.debug(
                         "Sending packets with timestamp: {}".format(timestamp))
                     if self._sent_first == False:
                         log.info("Starting streaming to FITS writer...")
                         self._sent_first = True
-		    #fw_packet.timestamp = "{}UTC ".format(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-2]) 
                     self._transmit_socket.send(bytearray(fw_packet))
-		if self._mode == 0:
-		    log.debug("Writing to file {}".format(self.filename))
-	            self.file.write(bytearray(fw_packet))
-		    self.counter += 1
-		    if self.counter == 999 :
-		        self.file.close()
-		        self.filecounter += 1
-        	        self.filename = 'paf_hi_res_dump{}-{:050%}'.format(self.time, self.filecounter)
-                        log.debug("Opening new file {}".format(self.filename))
-			self.file = open(self.filename, "w") 
-			self.counter = 0
-                del self._active_packets[key]
+                if self._input_fd:
+                    self._input_fd.send(bytearray(fw_packet))
         log.debug(
             "Number of active packets post-flush: {}".format(len(self._active_packets)))
 
