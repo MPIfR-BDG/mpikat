@@ -98,6 +98,6 @@ def make_mkrecv_header(params, outfile=None):
             "Error while rendering MKRECV configuration: {}".format(
                 error.message))
     if outfile:
-        with open(outfile) as f:
+        with open(outfile, "w") as f:
             f.write(rendered)
     return rendered

@@ -55,7 +55,7 @@ class TestFbfMasterController(AsyncServerTester):
 
     def setUp(self):
         super(TestFbfMasterController, self).setUp()
-        self.server = FbfMasterController('127.0.0.1', 0, dummy=False)
+        self.server = FbfMasterController('127.0.0.1', 0, dummy=True)
         self.server._katportal_wrapper_type = MockKatportalClientWrapper
         self.server.start()
 

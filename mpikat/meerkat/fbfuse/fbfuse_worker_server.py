@@ -169,12 +169,12 @@ class FbfWorkerServer(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._mksend_coh_header_sensor)
 
-        self._mkrecv_incoh_header_sensor = Sensor.string(
+        self._mksend_incoh_header_sensor = Sensor.string(
             "mksend-incoherent-beam-header",
             description="The MKSEND/DADA header used for configuring transmission of incoherent beam data",
             default="",
             initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._mkrecv_incoh_header_sensor)
+        self.add_sensor(self._mksend_incoh_header_sensor)
 
         self._psrdada_cpp_args_sensor = Sensor.string(
             "psrdada-cpp-arguments",
@@ -283,8 +283,7 @@ class FbfWorkerServer(AsyncDeviceServer):
 
     def _make_db(self, key, block_size, nblocks):
         log.debug(("Building DADA buffer: key={}, block_size={}, "
-                   "nblocks={}").format(key=key, block_size=block_size,
-                  nblocks=nblocks))
+                   "nblocks={}").format(key, block_size, nblocks))
         if self._exec_mode == FULL:
             self._system_call_wrapper(
                 ["dada_db", "-k", key, "-b", block_size, "-n",
@@ -335,7 +334,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         log.debug("Started MKRECV instance with PID={}".format(proc.pid))
         return proc
 
-    @request(Str(), Int(), Int(), Float(), Float(), Str(), Str(),
+    @request(Str(), Int(), Int(), Float(), Float(), Int(), Str(), Str(),
              Str(), Str(), Str(), Int())
     @return_reply()
     def request_prepare(self, req, feng_groups, nchans_per_group, chan0_idx,
@@ -472,9 +471,13 @@ class FbfWorkerServer(AsyncDeviceServer):
                                * nantennas)
             ngroups_data = 1024
             ngroups_temp = 512
-            centre_frequency = (
-                chan0_freq + feng_config['nchans'] / 2.0 * chan_bw),
+            centre_frequency = chan0_freq + feng_config['nchans'] / 2.0 * chan_bw
+            if self._exec_mode == FULL:
+                dada_mode = 4
+            else:
+                dada_mode = 1
             mkrecv_config = {
+                'dada_mode': dada_mode,
                 'frequency_mhz': centre_frequency / 1e6,
                 'bandwidth': partition_bandwidth,
                 'tsamp_us': tsamp * 1e6,
@@ -491,6 +494,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                 'timestamp_step': timestamp_step,
                 'ordered_feng_ids_csv': ",".join(map(str, feng_capture_order_info['order'])),
                 'frequency_partition_ids_csv': ",".join(map(str, frequency_ids)),
+                'nheaps': ngroups_data * heap_group_size,
                 'ngroups_data': ngroups_data,
                 'ngroups_temp': ngroups_temp
             }
@@ -584,7 +588,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                 'sample_clock': sample_clock,
                 'heap_size': incoh_heap_size,
                 'timestamp_step': incoh_timestamp_step,
-                'beam_ids': 0,
+                'beam_ids': (0,),
                 'subband_idx': chan0_idx,
                 'heap_group': 1
             }
@@ -661,15 +665,14 @@ class FbfWorkerServer(AsyncDeviceServer):
             # etc. This means that the configurations need to be unique by NUMA node... [Note: no
             # they don't, we can use the container IPC channel which isolates
             # the IPC namespaces.]
-            if not self._exec_mode:
-                n_coherent_beams = len(coherent_beam_to_group_map)
-                coherent_beam_antennas = parse_csv_antennas(
-                    coherent_beam_config['antennas'])
-                self._delay_buffer_controller = DelayBufferController(
-                    self._delay_client,
-                    coherent_beam_to_group_map.keys(),
-                    coherent_beam_antenna_capture_order, 1)
-                yield self._delay_buffer_controller.start()
+            n_coherent_beams = len(coherent_beam_to_group_map)
+            coherent_beam_antennas = parse_csv_antennas(
+                coherent_beam_config['antennas'])
+            self._delay_buffer_controller = DelayBufferController(
+                self._delay_client,
+                coherent_beam_to_group_map.keys(),
+                coherent_beam_antenna_capture_order, 1)
+            yield self._delay_buffer_controller.start()
 
             # By this point we require psrdada_cpp to have been compiled
             # as such we can yield on the future we created earlier
@@ -688,12 +691,20 @@ class FbfWorkerServer(AsyncDeviceServer):
                 "--output_level", 32.0,
                 "--log_level", "debug"]
             self._psrdada_cpp_args_sensor.set_value(
-                " ".join(self._psrdada_cpp_cmdline))
+                " ".join(map(str, self._psrdada_cpp_cmdline)))
             # SPEAD receiver does not get started until a capture init call
             self._state_sensor.set_value(self.READY)
             req.reply("ok",)
 
-        self.ioloop.add_callback(configure)
+        @coroutine
+        def safe_configure():
+            try:
+                yield configure()
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+                
+        self.ioloop.add_callback(safe_configure)
         raise AsyncReply
 
     @request(Str())

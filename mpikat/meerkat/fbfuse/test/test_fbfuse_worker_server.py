@@ -44,16 +44,16 @@ from mpikat.meerkat.test.utils import MockFbfConfigurationAuthority, ANTENNAS, M
 from mpikat.test.utils import AsyncServerTester
 from mpikat.core.ip_manager import ContiguousIpRange, ip_range_from_stream
 
-root_logger = logging.getLogger('')
-root_logger.setLevel(logging.CRITICAL)
+root_logger = logging.getLogger('mpikat')
+root_logger.setLevel(logging.DEBUG)
 
 
 class TestFbfWorkerServer(AsyncServerTester):
     def setUp(self):
         super(TestFbfWorkerServer, self).setUp()
-        self.server = FbfWorkerServer('127.0.0.1', 0, dummy=False)
+        self.server = FbfWorkerServer('127.0.0.1', 0, '127.0.0.1', exec_mode="dry-run")
         self.server.start()
-
+        
     def tearDown(self):
         super(TestFbfWorkerServer, self).tearDown()
 
@@ -63,15 +63,15 @@ class TestFbfWorkerServer(AsyncServerTester):
         yield self._check_sensor_value('state', self.server.IDLE)
         yield self._check_sensor_value('delay-engine-server', '', expected_status='unknown')
         yield self._check_sensor_value('antenna-capture-order', '', expected_status='unknown')
-        yield self._check_sensor_value('mkrecv-header', '', expected_status='unknown')
+        yield self._check_sensor_value('mkrecv-capture-header', '', expected_status='unknown')
 
     @gen_test(timeout=100000)
     def test_prepare(self):
         nbeams = 32
         antennas = ["m%03d"%ii for ii in range(16)]
         feng_antenna_map = {antenna:ii for ii,antenna in enumerate(antennas)}
-        coherent_beam_antennas = antennas[:-1]
-        incoherent_beam_antennas = antennas[1:]
+        coherent_beam_antennas = antennas
+        incoherent_beam_antennas = antennas
         nantennas = len(antennas)
         beam_manager = BeamManager(nbeams, [Antenna(ANTENNAS[i]) for i in coherent_beam_antennas])
         delay_config_server = DelayConfigurationServer("127.0.0.1", 0, beam_manager)
@@ -110,8 +110,8 @@ class TestFbfWorkerServer(AsyncServerTester):
             "antennas": ",".join(incoherent_beam_antennas)
         }
         yield self._send_request_expect_ok('prepare', feng_groups, nchans_per_group, chan0_idx, chan0_freq,
-                        chan_bw, json.dumps(mcast_to_beam_map), json.dumps(feng_config),
-                        json.dumps(coherent_beam_config), json.dumps(incoherent_beam_config), dc_ip, dc_port)
+                                           chan_bw, nbeams, json.dumps(mcast_to_beam_map), json.dumps(feng_config),
+                                           json.dumps(coherent_beam_config), json.dumps(incoherent_beam_config), dc_ip, dc_port)
         yield sleep(10)
         self.server._delay_buffer_controller.stop()
 

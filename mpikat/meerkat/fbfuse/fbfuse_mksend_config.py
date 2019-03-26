@@ -90,6 +90,6 @@ def make_mksend_header(params, outfile=None):
             "Error while rendering MKSEND configuration: {}".format(
                 error.message))
     if outfile:
-        with open(outfile) as f:
+        with open(outfile, "w") as f:
             f.write(rendered)
     return rendered
