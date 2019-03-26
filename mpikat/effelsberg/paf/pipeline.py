@@ -2355,7 +2355,7 @@ class Search(Pipeline):
 
         if self._search_dbdisk:
             for execution_instance in self._search_dbdisk_execution_instances:
-                execution_instance.finish()
+                execution_instance.terminate()
             log.info("Finish the search_dbdisk execution")
             
         if self._search_spectrometer and self._spectrometer_dbdisk:
@@ -3074,6 +3074,23 @@ class Spectrometer2Beam(Spectrometer):
             config_json, config_dictionary)
 
 
+@register_pipeline("Spectrometer1Beam")
+class Spectrometer1Beam(Spectrometer):
+
+    def __init__(self):
+        super(Spectrometer1Beam, self).__init__()
+
+    def configure(self, config_json):
+        config_dictionary = {
+            "input_nbeam":                  1,
+            "input_nchunk_per_port":       16,
+            "input_ports":                 [[17100, 17101, 17102]]
+        }
+
+        super(Spectrometer1Beam, self).configure(
+            config_json, config_dictionary)
+
+
 @register_pipeline("Search1BeamHigh")
 class Search1BeamHigh(Search):
 
@@ -3220,6 +3237,9 @@ if __name__ == "__main__":
         if pipeline == "spectrometer2beam":
             config_info["nbands"] = 33
             mode = Spectrometer2Beam()
+        if pipeline == "spectrometer1beam":
+            config_info["nbands"] = 48
+            mode = Spectrometer1Beam()
 
         log.info("Configure it ...")
         config_info["utc_start_capture"] = Time(
