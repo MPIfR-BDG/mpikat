@@ -646,6 +646,11 @@ class PafHandler(object):
         self._transmit_socket = transmit_socket
         self._active_packets = {}
         self._sent_first = False
+        self.counter = 0
+        self.filecounter = 0
+        self.time = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')
+        self.filename = '/beegfs/DENG/DATA/paf_hi_res_dump{}-{:050%}'.format(self.time, self.filecounter)
+        self.file = open(self.f, "w")
 
     def read_channels_per_packet(self):
         metadata = struct.unpack("<i28sfiffiiii", self._raw_data[0:64])
@@ -716,6 +721,17 @@ class PafHandler(object):
                         self._sent_first = True
 		    #fw_packet.timestamp = "{}UTC ".format(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-2]) 
                     self._transmit_socket.send(bytearray(fw_packet))
+		if self._mode == 0:
+		    log.debug("Writing to file {}".format(self.filename))
+	            self.file.write(bytearray(fw_packet))
+		    self.counter += 1
+		    if self.counter == 999 :
+		        self.file.close()
+		        self.filecounter += 1
+        	        self.filename = 'paf_hi_res_dump{}-{:050%}'.format(self.time, self.filecounter)
+                        log.debug("Opening new file {}".format(self.filename))
+			self.file = open(self.filename, "w") 
+			self.counter = 0
                 del self._active_packets[key]
         log.debug(
             "Number of active packets post-flush: {}".format(len(self._active_packets)))
