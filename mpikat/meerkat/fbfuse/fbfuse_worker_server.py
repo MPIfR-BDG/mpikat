@@ -35,7 +35,7 @@ from mpikat.utils.pipe_monitor import PipeMonitor
 from mpikat.meerkat.fbfuse import DelayBufferController
 from mpikat.meerkat.fbfuse.fbfuse_mkrecv_config import make_mkrecv_header
 from mpikat.meerkat.fbfuse.fbfuse_mksend_config import make_mksend_header
-from mpikar.meerkat.fbfuse.fbfuse_psrdada_cpp_wrapper import compile_psrdada_cpp
+from mpikat.meerkat.fbfuse.fbfuse_psrdada_cpp_wrapper import compile_psrdada_cpp
 
 log = logging.getLogger("mpikat.fbfuse_worker_server")
 

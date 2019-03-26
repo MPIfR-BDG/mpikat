@@ -59,7 +59,7 @@ IBV_IF       {{interface}}
 IBV_VECTOR   -1
 IBV_MAX_POLL 10
 PACKET_SIZE  1500
-SAMPLE_CLOCK_START 13
+SAMPLE_CLOCK_START unset
 NTHREADS      16
 NHEAPS        {{nheaps}}
 NGROUPS_DATA  {{ngroups_data}}

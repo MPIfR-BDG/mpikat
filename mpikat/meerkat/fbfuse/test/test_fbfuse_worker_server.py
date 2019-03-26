@@ -100,14 +100,14 @@ class TestFbfWorkerServer(AsyncServerTester):
             "nchans": 4096
         }
         coherent_beam_config = {
-            "tscrunch":16,
-            "fscrunch":1,
-            "antennas":",".join(coherent_beam_antennas)
+            "tscrunch": 16,
+            "fscrunch": 1,
+            "antennas": ",".join(coherent_beam_antennas)
         }
         incoherent_beam_config = {
-            "tscrunch":16,
-            "fscrunch":1,
-            "antennas":",".join(incoherent_beam_antennas)
+            "tscrunch": 16,
+            "fscrunch": 1,
+            "antennas": ",".join(incoherent_beam_antennas)
         }
         yield self._send_request_expect_ok('prepare', feng_groups, nchans_per_group, chan0_idx, chan0_freq,
                         chan_bw, json.dumps(mcast_to_beam_map), json.dumps(feng_config),
@@ -118,8 +118,4 @@ class TestFbfWorkerServer(AsyncServerTester):
 
 if __name__ == '__main__':
     unittest.main(buffer=True)
-
-
-
-
 
