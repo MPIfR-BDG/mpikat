@@ -267,7 +267,7 @@ class FbfWorkerServer(AsyncDeviceServer):
     def _process_close_wrapper(self, process, timeout=10.0):
         log.info("Sending SIGTERM to {} process".format(process))
         process.terminate()
-        log.info("Waiting {} seconds for process to terminate...")
+        log.info("Waiting {} seconds for process to terminate...".format(timeout))
         now = time.time()
         while time.time() - now < timeout:
             retval = process.poll()
@@ -318,7 +318,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                          "with busy loop"))
             cmdline = DUMMY_CMD
         proc = Popen(cmdline, stdout=PIPE, stderr=PIPE, shell=False,
-                     close_fd=True)
+                     close_fds=True)
         log.debug("Started MKSEND instance with PID={}".format(proc.pid))
         return proc
 
@@ -331,7 +331,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                          "with busy loop").format(self._exec_mode))
             cmdline = DUMMY_CMD
         proc = Popen(cmdline, stdout=PIPE, stderr=PIPE, shell=False,
-                     close_fd=True)
+                     close_fds=True)
         log.debug("Started MKRECV instance with PID={}".format(proc.pid))
         return proc
 
@@ -617,8 +617,8 @@ class FbfWorkerServer(AsyncDeviceServer):
                 'incoherent_tscrunch': incoherent_beam_config['tscrunch'],
                 'incoherent_fscrunch': incoherent_beam_config['fscrunch']
             }
-            psrdada_compilation_future = compile_psrdada_cpp(
-                fbfuse_pipeline_params)
+            #psrdada_compilation_future = compile_psrdada_cpp(
+            #    fbfuse_pipeline_params)
 
             # Create capture data DADA buffer
             capture_block_size = ngroups_data * heap_group_size
@@ -674,11 +674,11 @@ class FbfWorkerServer(AsyncDeviceServer):
 
             # By this point we require psrdada_cpp to have been compiled
             # as such we can yield on the future we created earlier
-            yield psrdada_compilation_future
+            #yield psrdada_compilation_future
 
             # Start beamformer instance
             self._psrdada_cpp_cmdline = [
-                "fbfuse_cli",
+                "fbfuse",
                 "--input_key", self._dada_input_key,
                 "--cb_key", self._dada_coh_output_key,
                 "--ib_key", self._dada_incoh_output_key,
@@ -705,7 +705,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         self.ioloop.add_callback(safe_configure)
         raise AsyncReply
 
-    @request(Str())
+    @request()
     @return_reply()
     def request_deconfigure(self, req):
         """
@@ -737,7 +737,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         self.ioloop.add_callback(deconfigure)
         raise AsyncReply
 
-    @request(Str())
+    @request()
     @return_reply()
     def request_capture_start(self, req):
         """
@@ -760,19 +760,21 @@ class FbfWorkerServer(AsyncDeviceServer):
             MKSEND_COHERENT_CONFIG_FILENAME)
         self._mksend_coh_stdout_mon = PipeMonitor(
             self._mksend_coh_proc.stdout, {})
+        self._mksend_coh_stdout_mon.start()
 
         # Create SPEAD transmitter for incoherent beam
         self._mksend_incoh_proc = self._start_mksend_instance(
             MKSEND_INCOHERENT_CONFIG_FILENAME)
         self._mksend_incoh_stdout_mon = PipeMonitor(
             self._mksend_incoh_proc.stdout, {})
+        self._mksend_incoh_stdout_mon.start()
 
         # Start beamforming pipeline
         log.info("Starting PSRDADA_CPP beamforming pipeline")
         self._psrdada_cpp_proc = Popen(
-            self._psrdada_cpp_cmdline,
-            stdout=PIPE, stderr=PIPE, shell=False, close_fd=True)
-        log.debug("fbfuse_cli started with PID = {}".format(
+            map(str, self._psrdada_cpp_cmdline),
+            stdout=PIPE, stderr=PIPE, shell=False, close_fds=True)
+        log.debug("fbfuse started with PID = {}".format(
             self._psrdada_cpp_proc))
 
         # Create SPEAD receiver for incoming antenna voltages
@@ -785,7 +787,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         self._state_sensor.set_value(self.CAPTURING)
         return ("ok",)
 
-    @request(Str())
+    @request()
     @return_reply()
     def request_capture_stop(self, req):
         """
