@@ -113,8 +113,8 @@ class TestFbfWorkerServer(AsyncServerTester):
             dc_ip, dc_port)
         yield self._check_sensor_value('device-status', 'ok')
         yield self._send_request_expect_ok('capture-start')
-
         yield sleep(10)
+        yield self._send_request_expect_ok('capture-stop')
         self.server._delay_buffer_controller.stop()
 
 
