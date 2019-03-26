@@ -58,7 +58,7 @@ class TestFbfWorkerServer(AsyncServerTester):
             'mkrecv-capture-header', '', expected_status='unknown')
 
     @gen_test(timeout=100000)
-    def test_prepare(self):
+    def test_dryrun(self):
         nbeams = 32
         antennas = ["m%03d" % ii for ii in range(16)]
         feng_antenna_map = {antenna: ii for ii, antenna in enumerate(antennas)}
@@ -104,10 +104,16 @@ class TestFbfWorkerServer(AsyncServerTester):
             "fscrunch": 1,
             "antennas": ",".join(incoherent_beam_antennas)
         }
-        yield self._send_request_expect_ok('prepare', feng_groups, nchans_per_group, chan0_idx, chan0_freq,
-                                           chan_bw, nbeams, json.dumps(
-                                               mcast_to_beam_map), json.dumps(feng_config),
-                                           json.dumps(coherent_beam_config), json.dumps(incoherent_beam_config), dc_ip, dc_port)
+        yield self._send_request_expect_ok(
+            'prepare', feng_groups, nchans_per_group, chan0_idx, chan0_freq,
+            chan_bw, nbeams, json.dumps(mcast_to_beam_map),
+            json.dumps(feng_config),
+            json.dumps(coherent_beam_config),
+            json.dumps(incoherent_beam_config),
+            dc_ip, dc_port)
+        yield self._check_sensor_value('device-status', 'ok')
+        yield self._send_request_expect_ok('capture-start')
+
         yield sleep(10)
         self.server._delay_buffer_controller.stop()
 
@@ -144,7 +150,7 @@ class TestCaptureOrdering(unittest.TestCase):
         incoherent_beam_config = {
             "antennas": ",".join(incoherent_beam_antennas)
         }
-        
+
         info = determine_feng_capture_order(
             feng_antenna_map, coherent_beam_config,
             incoherent_beam_config)
@@ -165,7 +171,7 @@ class TestCaptureOrdering(unittest.TestCase):
         incoherent_beam_config = {
             "antennas": ",".join(incoherent_beam_antennas)
         }
-        
+
         info = determine_feng_capture_order(
             feng_antenna_map, coherent_beam_config,
             incoherent_beam_config)
@@ -177,7 +183,7 @@ class TestCaptureOrdering(unittest.TestCase):
         for antenna in unused_antennas:
             self.assertNotIn(antenna, set(feng_antenna_map[i] for i in coherent_beam_antennas))
             self.assertNotIn(antenna, set(feng_antenna_map[i] for i in incoherent_beam_antennas))
-        
+
 
 if __name__ == '__main__':
     unittest.main(buffer=True)

@@ -60,8 +60,8 @@ MKRECV_STDOUT_KEYS = {
 
 
 def determine_feng_capture_order(antenna_to_feng_id_map,
-                                  coherent_beam_config,
-                                  incoherent_beam_config):
+                                 coherent_beam_config,
+                                 incoherent_beam_config):
     # Need to sort the f-engine IDs into 4 states
     # 1. Incoherent but not coherent
     # 2. Incoherent and coherent
@@ -666,9 +666,6 @@ class FbfWorkerServer(AsyncDeviceServer):
             # etc. This means that the configurations need to be unique by NUMA node... [Note: no
             # they don't, we can use the container IPC channel which isolates
             # the IPC namespaces.]
-            n_coherent_beams = len(coherent_beam_to_group_map)
-            coherent_beam_antennas = parse_csv_antennas(
-                coherent_beam_config['antennas'])
             self._delay_buffer_controller = DelayBufferController(
                 self._delay_client,
                 coherent_beam_to_group_map.keys(),
