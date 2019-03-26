@@ -15,6 +15,7 @@ import ctypes as C
 matplotlib.use("Agg")
 import multiprocessing as mp
 import matplotlib.pyplot as plt
+from datetime import datetime
 from StringIO import StringIO
 from threading import Thread, Event
 from Queue import Queue, Empty, Full
@@ -644,6 +645,7 @@ class PafHandler(object):
         self._raw_data = ""
         self._transmit_socket = transmit_socket
         self._active_packets = {}
+        self._sent_first = False
 
     def read_channels_per_packet(self):
         metadata = struct.unpack("<i28sfiffiiii", self._raw_data[0:64])
@@ -666,6 +668,7 @@ class PafHandler(object):
             packet.beam_id, packet.pol_id, packet.time_stamp,
             packet.integ_time, packet.nchannels, packet.nfreq_chunks,
             packet.freq_chunks_index))
+	#log.info("time stamp {}, {}UTC".format(packet.time_stamp, datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')))
         key = packet.time_stamp
         if key not in self._active_packets:
             fw_packet = build_fw_object(
@@ -708,6 +711,10 @@ class PafHandler(object):
                 if self._mode == 1:
                     log.debug(
                         "Sending packets with timestamp: {}".format(timestamp))
+                    if self._sent_first == False:
+                        log.info("Starting streaming to FITS writer...")
+                        self._sent_first = True
+		    #fw_packet.timestamp = "{}UTC ".format(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-2]) 
                     self._transmit_socket.send(bytearray(fw_packet))
                 del self._active_packets[key]
         log.debug(
