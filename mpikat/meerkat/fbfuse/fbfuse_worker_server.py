@@ -287,6 +287,11 @@ class FbfWorkerServer(AsyncDeviceServer):
 
     @coroutine
     def _make_db(self, key, block_size, nblocks, timeout=120):
+        try:
+            self._destroy_db(key)
+        except Exception as error:
+            self.debug("Could not clean previous buffer (key={}): {}".format(
+                key, str(error)))
         log.debug(("Building DADA buffer: key={}, block_size={}, "
                    "nblocks={}").format(key, block_size, nblocks))
         if self._exec_mode == FULL:
