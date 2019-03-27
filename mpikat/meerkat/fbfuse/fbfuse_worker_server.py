@@ -288,8 +288,8 @@ class FbfWorkerServer(AsyncDeviceServer):
         log.debug(("Building DADA buffer: key={}, block_size={}, "
                    "nblocks={}").format(key, block_size, nblocks))
         if self._exec_mode == FULL:
-            cmdline = ["dada_db", "-k", key, "-b", block_size, "-n",
-                       nblocks, "-l", "-p"]
+            cmdline = map(str, ["dada_db", "-k", key, "-b", block_size, "-n",
+                          nblocks, "-l", "-p"])
             proc = Popen(cmdline, stdout=PIPE,
                          stderr=PIPE, shell=False,
                          close_fds=True)
@@ -823,6 +823,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         """
         if not self.capturing and not self.error:
             return ("ok",)
+
         @coroutine
         def stop_processes():
             # send SIGTERM to MKRECV
@@ -846,7 +847,10 @@ class FbfWorkerServer(AsyncDeviceServer):
             reset_tasks.append(self._reset_db(
                 self._dada_incoh_output_key), timeout=5.0)
             for task in reset_tasks:
-                yield task
+                try:
+                    yield task
+                except Exception as error:
+                    log.warning("Error raised on DB reset: {}".format(str(error)))
             req.reply("ok",)
         self.ioloop.add_callback(stop_processes)
         raise AsyncReply
