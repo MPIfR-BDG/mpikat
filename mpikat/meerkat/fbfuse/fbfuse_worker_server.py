@@ -330,7 +330,7 @@ class FbfWorkerServer(AsyncDeviceServer):
 
     def _start_mksend_instance(self, config):
         log.info("Starting MKSEND instance with config={}".format(config))
-        cmdline = ["mksend", "--config", config]
+        cmdline = ["mksend", "--header", config]
         log.debug("cmdline: {}".format(" ".join(cmdline)))
         if self._exec_mode == DRYRUN:
             log.warning(("In dry-run mode, replacing MKSEND call "
@@ -343,7 +343,7 @@ class FbfWorkerServer(AsyncDeviceServer):
 
     def _start_mkrecv_instance(self, config):
         log.info("Starting MKRECV instance with config={}".format(config))
-        cmdline = ["mkrecv", "--config", config]
+        cmdline = ["mkrecv", "--header", config]
         log.debug("cmdline: {}".format(" ".join(cmdline)))
         if self._exec_mode in [DRYRUN, OUTPUT_ONLY]:
             log.warning(("In {} mode, replacing MKRECV call "
@@ -688,11 +688,11 @@ class FbfWorkerServer(AsyncDeviceServer):
             # etc. This means that the configurations need to be unique by NUMA node... [Note: no
             # they don't, we can use the container IPC channel which isolates
             # the IPC namespaces.]
-            self._delay_buffer_controller = DelayBufferController(
+            self._delay_buf_ctrl = DelayBufferController(
                 self._delay_client,
                 coherent_beam_to_group_map.keys(),
                 coherent_beam_antenna_capture_order, 1)
-            yield self._delay_buffer_controller.start()
+            yield self._delay_buf_ctrl.start()
 
             # By this point we require psrdada_cpp to have been compiled
             # as such we can yield on the future we created earlier
@@ -703,13 +703,15 @@ class FbfWorkerServer(AsyncDeviceServer):
             yield coh_output_make_db_future
             yield incoh_output_make_db_future
 
+
+            delay_buffer_key = self._delay_buf_ctrl.shared_buffer_key
             # Start beamformer instance
             self._psrdada_cpp_cmdline = [
                 "fbfuse",
                 "--input_key", self._dada_input_key,
                 "--cb_key", self._dada_coh_output_key,
                 "--ib_key", self._dada_incoh_output_key,
-                "--delay_key_root", "fbfuse_delay_engine",
+                "--delay_key_root", delay_buffer_key,
                 "--cfreq", centre_frequency,
                 "--bandwidth", partition_bandwidth,
                 "--input_level", 32.0,
@@ -757,8 +759,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             self._destroy_db(self._dada_coh_output_key)
             self._destroy_db(self._dada_incoh_output_key)
             log.info("Destroying delay buffer controller")
-            del self._delay_buffer_controller
-            self._delay_buffer_controller = None
+            del self._delay_buf_ctrl
+            self._delay_buf_ctrl = None
             self._state_sensor.set_value(self.IDLE)
             req.reply("ok",)
         self.ioloop.add_callback(deconfigure)

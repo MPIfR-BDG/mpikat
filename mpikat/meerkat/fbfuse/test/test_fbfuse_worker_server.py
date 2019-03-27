@@ -115,7 +115,7 @@ class TestFbfWorkerServer(AsyncServerTester):
         yield self._send_request_expect_ok('capture-start')
         yield sleep(10)
         yield self._send_request_expect_ok('capture-stop')
-        self.server._delay_buffer_controller.stop()
+        self.server._delay_buf_ctrl.stop()
 
 
 class TestCaptureOrdering(unittest.TestCase):
