@@ -1,9 +1,9 @@
 import jinja2
 import logging
-import time
 from path import Path
-from tornado.gen import coroutine, sleep
+from tornado.gen import coroutine
 from subprocess import Popen, PIPE
+from mpikat.utils.process_tools import process_watcher
 
 log = logging.getLogger('mpikat.fbfuse_psrdada_cpp_wrapper')
 
@@ -84,27 +84,6 @@ def make_psrdada_cpp_header(params, outfile=None):
             f.write(rendered)
         log.debug("Wrote header to file: {}".format(outfile))
     return rendered
-
-
-@coroutine
-def process_watcher(process, timeout=120):
-    log.debug("Watching process: {}".format(process.pid))
-    start = time.time()
-    while process.poll() is None:
-        yield sleep(1)
-        if (time.time() - start) > timeout:
-            raise PsrdadaCppCompilationTimeout
-    if process.returncode != 0:
-        message = "Process returned non-zero returncode: {}".format(
-            process.returncode)
-        log.error(message)
-        log.error("Process STDOUT dump:\n{}".format(process.stdout.read()))
-        log.error("Process STDERR dump:\n{}".format(process.stderr.read()))
-        raise PsrdadaCppCompilationException(
-            "Process returned non-zero returncode: {}".format(
-                process.returncode))
-    else:
-        log.debug("Process output:\n{}".format(process.stdout.read()))
 
 @coroutine
 def compile_psrdada_cpp(params):

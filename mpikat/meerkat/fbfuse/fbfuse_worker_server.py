@@ -36,6 +36,7 @@ from mpikat.meerkat.fbfuse import DelayBufferController
 from mpikat.meerkat.fbfuse.fbfuse_mkrecv_config import make_mkrecv_header
 from mpikat.meerkat.fbfuse.fbfuse_mksend_config import make_mksend_header
 from mpikat.meerkat.fbfuse.fbfuse_psrdada_cpp_wrapper import compile_psrdada_cpp
+from mpikat.utils.process_tools import process_watcher
 
 log = logging.getLogger("mpikat.fbfuse_worker_server")
 
@@ -282,13 +283,17 @@ class FbfWorkerServer(AsyncDeviceServer):
             log.info("Killing process")
             process.kill()
 
-    def _make_db(self, key, block_size, nblocks):
+    @coroutine
+    def _make_db(self, key, block_size, nblocks, timeout=120):
         log.debug(("Building DADA buffer: key={}, block_size={}, "
                    "nblocks={}").format(key, block_size, nblocks))
         if self._exec_mode == FULL:
-            self._system_call_wrapper(
-                ["dada_db", "-k", key, "-b", block_size, "-n",
-                 nblocks, "-l", "-p"])
+            cmdline = ["dada_db", "-k", key, "-b", block_size, "-n",
+                       nblocks, "-l", "-p"]
+            proc = Popen(cmdline, stdout=PIPE,
+                         stderr=PIPE, shell=False,
+                         close_fds=True)
+            yield process_watcher(proc, timeout=timeout)
         else:
             log.warning(("Current execution mode disables "
                          "DADA buffer creation/destruction"))
@@ -317,8 +322,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             log.warning(("In dry-run mode, replacing MKSEND call "
                          "with busy loop"))
             cmdline = DUMMY_CMD
-        proc = Popen(cmdline, stdout=PIPE, stderr=PIPE, shell=False,
-                     close_fds=True)
+            proc = Popen(cmdline, stdout=PIPE, stderr=PIPE, shell=False,
+                         close_fds=True)
         log.debug("Started MKSEND instance with PID={}".format(proc.pid))
         return proc
 
@@ -617,16 +622,17 @@ class FbfWorkerServer(AsyncDeviceServer):
                 'incoherent_tscrunch': incoherent_beam_config['tscrunch'],
                 'incoherent_fscrunch': incoherent_beam_config['fscrunch']
             }
-            #psrdada_compilation_future = compile_psrdada_cpp(
-            #    fbfuse_pipeline_params)
+            psrdada_compilation_future = compile_psrdada_cpp(
+                fbfuse_pipeline_params)
 
             # Create capture data DADA buffer
             capture_block_size = ngroups_data * heap_group_size
             capture_block_count = AVAILABLE_CAPTURE_MEMORY / capture_block_size
             log.debug("Creating dada buffer for input with key '{}'".format(
                 "%x" % self._dada_input_key))
-            self._make_db(self._dada_input_key, capture_block_size,
-                          capture_block_count)
+            input_make_db_future = self._make_db(
+                self._dada_input_key, capture_block_size,
+                capture_block_count)
 
             # Create coherent beam output DADA buffer
             coh_output_channels = (ngroups * nchans_per_group) / \
@@ -637,8 +643,9 @@ class FbfWorkerServer(AsyncDeviceServer):
             coherent_block_count = 8
             log.debug("Creating dada buffer for coherent beam output with key '{}'".format(
                 "%x" % self._dada_coh_output_key))
-            self._make_db(self._dada_coh_output_key, coherent_block_size,
-                          coherent_block_count)
+            coh_output_make_db_future = self._make_db(
+                self._dada_coh_output_key, coherent_block_size,
+                coherent_block_count)
 
             # Create incoherent beam output DADA buffer
             incoh_output_channels = (
@@ -649,8 +656,9 @@ class FbfWorkerServer(AsyncDeviceServer):
             incoherent_block_count = 8
             log.debug("Creating dada buffer for incoherent beam output with key '{}'".format(
                 "%x" % self._dada_incoh_output_key))
-            self._make_db(self._dada_incoh_output_key, incoherent_block_size,
-                          incoherent_block_count)
+            incoh_output_make_db_future = self._make_db(
+                self._dada_incoh_output_key, incoherent_block_size,
+                incoherent_block_count)
 
             # Need to pass the delay buffer controller the F-engine capture
             # order but only for the coherent beams
@@ -674,7 +682,12 @@ class FbfWorkerServer(AsyncDeviceServer):
 
             # By this point we require psrdada_cpp to have been compiled
             # as such we can yield on the future we created earlier
-            #yield psrdada_compilation_future
+            yield psrdada_compilation_future
+
+            # Now we can yield on dada buffer generation
+            yield input_make_db_future
+            yield coh_output_make_db_future
+            yield incoh_output_make_db_future
 
             # Start beamformer instance
             self._psrdada_cpp_cmdline = [
