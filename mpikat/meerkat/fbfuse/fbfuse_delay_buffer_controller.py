@@ -54,13 +54,15 @@ class DelayBufferController(object):
         self._delay_client = delay_client
         self._ordered_antennas = ordered_antennas
         self._ordered_beams = ordered_beams
-        self.shared_buffer_key = "delay_buffer"
+        self.shared_buffer_key = "delay_buffer_shm"
         self.mutex_semaphore_key = "delay_buffer_mutex"
-        self.counting_semaphore_key = "delay_buffer_count"
+        self.counting_semaphore_key = "delay_buffer_sem"
         self._nbeams = len(self._ordered_beams)
         self._nantennas = len(self._ordered_antennas)
-        self._delays_array = self._delays = np.rec.recarray((self._nbeams, self._nantennas),
-            dtype=[("delay_rate","float32"),("delay_offset","float32")])
+        self._delays_array = self._delays = np.rec.recarray(
+            (self._nbeams, self._nantennas),
+            dtype=[("delay_rate", "float32"),
+                   ("delay_offset", "float32")])
         self._targets = OrderedDict()
         for beam in self._ordered_beams:
             self._targets[beam] = Target(DEFAULT_TARGET)
