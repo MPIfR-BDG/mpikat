@@ -40,7 +40,7 @@ class TestFbfWorkerServer(AsyncServerTester):
     def setUp(self):
         super(TestFbfWorkerServer, self).setUp()
         self.server = FbfWorkerServer(
-            '127.0.0.1', 0, '127.0.0.1', exec_mode="dry-run")
+            '127.0.0.1', 0, '127.0.0.1', exec_mode="full")
         self.server.start()
 
     def tearDown(self):

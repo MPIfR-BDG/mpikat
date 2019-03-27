@@ -306,10 +306,15 @@ class FbfWorkerServer(AsyncDeviceServer):
             log.warning(("Current execution mode disables "
                          "DADA buffer creation/destruction"))
 
-    def _reset_db(self, key):
+    @coroutine
+    def _reset_db(self, key, timeout=5.0):
         log.debug("Resetting DADA buffer with key={}".format(key))
         if self._exec_mode == FULL:
-            self._system_call_wrapper(["dbreset", "-k", key])
+            cmdline = map(str, ["dbreset", "-k", key])
+            proc = Popen(cmdline, stdout=PIPE,
+                         stderr=PIPE, shell=False,
+                         close_fds=True)
+            yield process_watcher(proc, timeout=timeout)
         else:
             log.warning(("Current execution mode disables "
                          "DADA buffer reset"))
@@ -833,9 +838,15 @@ class FbfWorkerServer(AsyncDeviceServer):
             self._mksend_coh_stdout_mon.join()
             self._mksend_incoh_stdout_mon.join()
             self._state_sensor.set_value(self.IDLE)
-            self._reset_db(self._dada_input_key)
-            self._reset_db(self._dada_coh_output_key)
-            self._reset_db(self._dada_incoh_output_key)
+            reset_tasks = []
+            reset_tasks.append(self._reset_db(
+                self._dada_input_key), timeout=7.0)
+            reset_tasks.append(self._reset_db(
+                self._dada_coh_output_key), timeout=4.0)
+            reset_tasks.append(self._reset_db(
+                self._dada_incoh_output_key), timeout=5.0)
+            for task in reset_tasks:
+                yield task
             req.reply("ok",)
         self.ioloop.add_callback(stop_processes)
         raise AsyncReply
