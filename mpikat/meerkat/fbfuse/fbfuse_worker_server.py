@@ -636,7 +636,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             capture_block_size = ngroups_data * heap_group_size
             capture_block_count = AVAILABLE_CAPTURE_MEMORY / capture_block_size
             log.debug("Creating dada buffer for input with key '{}'".format(
-                "%x" % self._dada_input_key))
+                "%s" % self._dada_input_key))
             input_make_db_future = self._make_db(
                 self._dada_input_key, capture_block_size,
                 capture_block_count)
@@ -649,7 +649,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             coherent_block_size = nbeams * coh_output_channels * coh_output_samples
             coherent_block_count = 8
             log.debug("Creating dada buffer for coherent beam output with key '{}'".format(
-                "%x" % self._dada_coh_output_key))
+                "%s" % self._dada_coh_output_key))
             coh_output_make_db_future = self._make_db(
                 self._dada_coh_output_key, coherent_block_size,
                 coherent_block_count)
@@ -662,7 +662,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             incoherent_block_size = incoh_output_channels * incoh_output_samples
             incoherent_block_count = 8
             log.debug("Creating dada buffer for incoherent beam output with key '{}'".format(
-                "%x" % self._dada_incoh_output_key))
+                "%s" % self._dada_incoh_output_key))
             incoh_output_make_db_future = self._make_db(
                 self._dada_incoh_output_key, incoherent_block_size,
                 incoherent_block_count)
