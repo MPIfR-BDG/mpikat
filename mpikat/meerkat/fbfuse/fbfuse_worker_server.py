@@ -282,6 +282,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             log.warning("Process failed to terminate in alloted time")
             log.info("Killing process")
             process.kill()
+        log.debug("Process stdout:\n{}".format(process.stdout.read()))
+        log.debug("Process stderr:\n{}".format(process.stderr.read()))
 
     @coroutine
     def _make_db(self, key, block_size, nblocks, timeout=120):
