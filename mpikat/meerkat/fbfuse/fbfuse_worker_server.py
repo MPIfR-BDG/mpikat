@@ -128,9 +128,9 @@ class FbfWorkerServer(AsyncDeviceServer):
         self._delay_client = None
         self._delays = None
         self._exec_mode = exec_mode
-        self._dada_input_key = 0xdada
-        self._dada_coh_output_key = 0xcaca
-        self._dada_incoh_output_key = 0xbaba
+        self._dada_input_key = "dada"
+        self._dada_coh_output_key = "caca"
+        self._dada_incoh_output_key = "baba"
         self._capture_interface = capture_interface
         super(FbfWorkerServer, self).__init__(ip, port)
 
