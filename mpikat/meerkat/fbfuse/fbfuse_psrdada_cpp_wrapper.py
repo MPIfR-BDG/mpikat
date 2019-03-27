@@ -96,14 +96,15 @@ def compile_psrdada_cpp(params):
                      str(PSRDADA_CPP_BASE_DIR)]
         cmake_proc = Popen(cmake_cmd, stdout=PIPE, stderr=PIPE)
         log.info("Running CMake on PSRDADA_CPP")
-        yield process_watcher(cmake_proc, timeout=60)
+        yield process_watcher(cmake_proc, name="cmake fbfuse", timeout=60)
 
         make_cmd = ["make", "fbfuse", "-j", "16"]
         make_proc = Popen(make_cmd, stdout=PIPE, stderr=PIPE)
         log.info("Making PSRDADA_CPP")
-        yield process_watcher(make_proc, timeout=600)
+        yield process_watcher(make_proc, name="make fbfuse", timeout=600)
 
         make_install_cmd = ["make", "install", "fbfuse", "-j", "16"]
         make_install_proc = Popen(make_install_cmd, stdout=PIPE, stderr=PIPE)
         log.info("Installing PSRDADA_CPP")
-        yield process_watcher(make_install_proc, timeout=60)
+        yield process_watcher(make_install_proc, name="make install fbfuse",
+                              timeout=60)

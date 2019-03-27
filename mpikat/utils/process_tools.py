@@ -14,8 +14,12 @@ class ProcessException(Exception):
 
 
 @coroutine
-def process_watcher(process, timeout=120):
-    log.debug("Watching process: {}".format(process.pid))
+def process_watcher(process, name=None, timeout=120):
+    if name is None:
+        name = ""
+    else:
+        name = "(name: {})".format(name)
+    log.debug("Watching process: {} {}".format(process.pid, name))
     start = time.time()
     while process.poll() is None:
         yield sleep(0.2)
@@ -23,14 +27,18 @@ def process_watcher(process, timeout=120):
             process.kill()
             raise ProcessTimeout
     if process.returncode != 0:
-        message = "Process returned non-zero returncode: {}".format(
-            process.returncode)
+        message = "Process returned non-zero returncode: {} {}".format(
+            process.returncode, name)
         log.error(message)
-        log.error("Process STDOUT dump:\n{}".format(process.stdout.read()))
-        log.error("Process STDERR dump:\n{}".format(process.stderr.read()))
+        log.error("Process STDOUT dump {}:\n{}".format(
+            name, process.stdout.read()))
+        log.error("Process STDERR dump {}:\n{}".format(
+            name, process.stderr.read()))
         raise ProcessException(
-            "Process returned non-zero returncode: {}".format(
-                process.returncode))
+            "Process returned non-zero returncode: {} {}".format(
+                process.returncode, name))
     else:
-        log.debug("Process stdout:\n{}".format(process.stdout.read()))
-        log.debug("Process stderr:\n{}".format(process.stderr.read()))
+        log.debug("Process stdout {}:\n{}".format(
+            name, process.stdout.read()))
+        log.debug("Process stderr {}:\n{}".format(
+            name, process.stderr.read()))

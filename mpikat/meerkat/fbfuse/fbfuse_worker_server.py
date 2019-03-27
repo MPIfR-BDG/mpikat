@@ -295,7 +295,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             proc = Popen(cmdline, stdout=PIPE,
                          stderr=PIPE, shell=False,
                          close_fds=True)
-            yield process_watcher(proc, timeout=timeout)
+            yield process_watcher(proc, name="make_db({})".format(key),
+                                  timeout=timeout)
         else:
             log.warning(("Current execution mode disables "
                          "DADA buffer creation/destruction"))
@@ -316,7 +317,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             proc = Popen(cmdline, stdout=PIPE,
                          stderr=PIPE, shell=False,
                          close_fds=True)
-            yield process_watcher(proc, timeout=timeout)
+            yield process_watcher(proc, name="reset_db({})".format(key),
+                                  timeout=timeout)
         else:
             log.warning(("Current execution mode disables "
                          "DADA buffer reset"))
