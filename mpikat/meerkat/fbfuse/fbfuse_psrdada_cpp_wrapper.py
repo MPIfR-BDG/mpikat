@@ -85,6 +85,7 @@ def make_psrdada_cpp_header(params, outfile=None):
         log.debug("Wrote header to file: {}".format(outfile))
     return rendered
 
+
 @coroutine
 def compile_psrdada_cpp(params):
     make_psrdada_cpp_header(params, outfile=str(FBFUSE_CONSTANTS_FILE))

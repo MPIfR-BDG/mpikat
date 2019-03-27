@@ -322,8 +322,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             log.warning(("In dry-run mode, replacing MKSEND call "
                          "with busy loop"))
             cmdline = DUMMY_CMD
-            proc = Popen(cmdline, stdout=PIPE, stderr=PIPE, shell=False,
-                         close_fds=True)
+        proc = Popen(cmdline, stdout=PIPE, stderr=PIPE, shell=False,
+                     close_fds=True)
         log.debug("Started MKSEND instance with PID={}".format(proc.pid))
         return proc
 
