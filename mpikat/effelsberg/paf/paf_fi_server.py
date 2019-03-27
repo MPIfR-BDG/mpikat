@@ -276,6 +276,10 @@ class WriterProcess(mp.Process):
         self._sentinel = sentinel
         self._stop_event = mp.Event()
 
+    def set_affinity(self):
+        log.debug("Binding plotting processing to CPU {}".format(self._cpu))
+        os.system("taskset -p -c {} {}".format(self._cpu, self.pid))
+
     def open_file(self):
         self.close_file()
         fname = "{}-{:05d}".format(self._filestem, self._file_counter)
@@ -305,6 +309,7 @@ class WriterProcess(mp.Process):
                 time.sleep(0.01)
 
     def run(self):
+        self.set_affinity(7)
         try:
             self.consume()
         except Exception as error:
@@ -714,7 +719,6 @@ class PafHandler(object):
     """
 
     def __init__(self, transmit_socket, input_fd):
-
         self._npol = 4
         self._nsections = 36 * self._npol
         self._nphases = 1
@@ -722,6 +726,7 @@ class PafHandler(object):
         self._transmit_socket = transmit_socket
         self._input_fd = input_fd
         self._active_packets = {}
+        self._packet_tracker = {}
         self._sent_first = False
 
     def read_channels_per_packet(self):
@@ -758,13 +763,14 @@ class PafHandler(object):
             max_age = packet.integ_time * 3
             if max_age < 1:
                 max_age = 1
-            self._active_packets[key] = [
-                time.time(), max_age, packet, fw_packet]
+            self._active_packets[key] = [time.time(), max_age, packet, fw_packet]
+            self._packet_tracker[key] = 1
         else:
             section_id = (packet.beam_id * 4) + packet.pol_id
             freq_idx_start = (self.nchannelsperpacket * packet.freq_chunks_index)
             freq_idx_end = (self.nchannelsperpacket * (packet.freq_chunks_index + 1))
             self._active_packets[key][3].sections[section_id].data[freq_idx_start:freq_idx_end] = packet.data
+            self._active_packets[key] += 1
         self.flush()
 
     def flush(self):
@@ -776,14 +782,15 @@ class PafHandler(object):
             "Number of active packets pre-flush: {}".format(len(self._active_packets)))
         now = time.time()
         for key in sorted(self._active_packets.iterkeys()):
-            timestamp, time_out, metadata, fw_packet = self._active_packets[
-                key]
+            timestamp, time_out, metadata, fw_packet = self._active_packets[key]
             if ((now - timestamp) >= time_out):
+                """
                 try:
                     sensor_queue.put((timestamp, metadata, fw_packet), False)
                 except Queue.Full:
                     sensor_queue.get()
                     sensor_queue.put((timestamp, metadata, fw_packet), False)
+                """
                 if self._transmit_socket:
                     log.debug(
                         "Sending packets with timestamp: {}".format(timestamp))
@@ -792,7 +799,12 @@ class PafHandler(object):
                         self._sent_first = True
                     self._transmit_socket.send(bytearray(fw_packet))
                 if self._input_fd:
+                    log.info("Sending block with {} captured packets to file writer".format(
+                        self._packet_tracker[key]))
                     self._input_fd.send(bytearray(fw_packet))
+
+            del self._active_packets[key]
+            del self._packet_tracker[key]
         log.debug(
             "Number of active packets post-flush: {}".format(len(self._active_packets)))
 
