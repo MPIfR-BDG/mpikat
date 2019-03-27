@@ -24,6 +24,7 @@ import json
 import posix_ipc
 import time
 import numpy as np
+import ctypes as C
 from collections import OrderedDict
 from mmap import mmap
 from tornado.gen import coroutine
@@ -38,6 +39,17 @@ DEFAULT_TARGET = "unset,radec,0,0"
 DEFAULT_UPDATE_RATE = 2.0
 DEFAULT_DELAY_SPAN = 2 * DEFAULT_UPDATE_RATE
 
+
+def delay_model_type(nbeams, nants):
+    class DelayModel(C.LittleEndianStructure):
+        _fields_ = [
+                ("epoch", C.c_double),
+                ("duration", C.c_double),
+                ("delays", C.c_float * 2 * nbeams * nants)
+            ]
+    return DelayModel
+
+
 class DelayBufferController(object):
     def __init__(self, delay_client, ordered_beams, ordered_antennas, nreaders):
         """
@@ -49,6 +61,17 @@ class DelayBufferController(object):
         @params   orderded_antennas  A list of antenna IDs in the order which they should be captured by the beamformer
         @params   nreaders           The number of posix shared memory readers that will access the memory
                                      buffers that are managed by this instance.
+
+
+        @note     The delay model definition in FBFUSE looks like:
+                  @code
+                      struct DelayModel
+                      {
+                          double epoch;
+                          double duration;
+                          float2 delays[FBFUSE_CB_NBEAMS * FBFUSE_CB_NANTENNAS];
+                      };
+                  @endcode
         """
         self._nreaders = nreaders
         self._delay_client = delay_client
@@ -59,10 +82,8 @@ class DelayBufferController(object):
         self.counting_semaphore_key = "delay_buffer_count"
         self._nbeams = len(self._ordered_beams)
         self._nantennas = len(self._ordered_antennas)
-        self._delays_array = self._delays = np.rec.recarray(
-            (self._nbeams, self._nantennas),
-            dtype=[("delay_rate", "float32"),
-                   ("delay_offset", "float32")])
+        self._delay_model = delay_model_type(
+            self._nbeams, self._nantennas)()
         self._targets = OrderedDict()
         for beam in self._ordered_beams:
             self._targets[beam] = Target(DEFAULT_TARGET)
@@ -104,7 +125,8 @@ class DelayBufferController(object):
             log.exception("Failed to parse antennas")
             raise error
         self._antennas = [Antenna(antennas[antenna]) for antenna in self._ordered_antennas]
-        log.debug("Ordered the antenna capture list to:\n {}".format("\n".join([i.format_katcp() for i in self._antennas])))
+        log.debug("Ordered the antenna capture list to:\n {}".format(
+            "\n".join([i.format_katcp() for i in self._antennas])))
         reference_antenna = yield self._delay_client.sensor.reference_antenna.get_value()
         self._reference_antenna = Antenna(reference_antenna)
         log.debug("Reference antenna: {}".format(self._reference_antenna.format_katcp()))
@@ -144,7 +166,7 @@ class DelayBufferController(object):
         self._shared_buffer = posix_ipc.SharedMemory(
             self.shared_buffer_key,
             flags=posix_ipc.O_CREX,
-            size=len(self._delays_array.tobytes()))
+            size=C.sizeof(self._delay_model))
 
         # For reference one can access this memory from another python process using:
         # shm = posix_ipc.SharedMemory("delay_buffer")
@@ -244,21 +266,27 @@ class DelayBufferController(object):
         """
         log.info("Updating delays")
         timer = Timer()
-        delay_calc = DelayPolynomial(self._antennas, self._phase_reference,
-            self._targets.values(), self._reference_antenna)
-        poly = delay_calc.get_delay_polynomials(time.time(), duration=self._delay_span)
+        delay_calc = DelayPolynomial(
+            self._antennas, self._phase_reference, self._targets.values(),
+            self._reference_antenna)
+        self._delay_model.epoch = time.time()
+        self._delay_model.duration = self._delay_span
+        poly = delay_calc.get_delay_polynomials(
+            self._delay_model.epoch, duration=self._delay_span)
+        self._delay_model.delays[:] = poly.astype('float32')
         poly_calc_time = timer.elapsed()
         log.debug("Poly calculation took {} seconds".format(poly_calc_time))
         if poly_calc_time >= self._update_rate:
-            log.warning("The time required for polynomial calculation >= delay update rate, "
-                "this may result in degredation of beamforming quality")
+            log.warning("The time required for polynomial calculation >= delay"
+                        " update rate, this may result in degredation of "
+                        "beamforming quality")
         timer.reset()
         # Acquire the semaphore for each possible reader
         log.debug("Acquiring semaphore for each reader")
         for ii in range(self._nreaders):
             self._mutex_semaphore.acquire()
         self._shared_buffer_mmap.seek(0)
-        self._shared_buffer_mmap.write(poly.astype('float32').tobytes())
+        self._shared_buffer_mmap.write(bytearray(self._delay_model))
         # Increment the counting semaphore to notify the readers
         # that a new model is available
         log.debug("Incrementing counting semaphore")
@@ -267,5 +295,5 @@ class DelayBufferController(object):
         log.debug("Releasing semaphore for each reader")
         for ii in range(self._nreaders):
             self._mutex_semaphore.release()
-        log.debug("Delay model writing took {} seconds on worker side".format(timer.elapsed()))
-
+        log.debug("Delay model writing took {} seconds on worker side".format(
+            timer.elapsed()))

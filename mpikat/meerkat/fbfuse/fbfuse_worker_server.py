@@ -800,6 +800,7 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         # Start beamforming pipeline
         log.info("Starting PSRDADA_CPP beamforming pipeline")
+        log.debug(" ".join(map(str, self._psrdada_cpp_cmdline)))
         self._psrdada_cpp_proc = Popen(
             map(str, self._psrdada_cpp_cmdline),
             stdout=PIPE, stderr=PIPE, shell=False, close_fds=True)

@@ -138,7 +138,6 @@ class TestCaptureOrdering(unittest.TestCase):
         for a, b in zip(info['order'], range(len(antennas))):
             self.assertEqual(a, b)
 
-
     def test_different_antennas_all_used(self):
         antennas = ["m%03d" % ii for ii in range(16)]
         feng_antenna_map = {antenna: ii for ii, antenna in enumerate(antennas)}
@@ -154,10 +153,12 @@ class TestCaptureOrdering(unittest.TestCase):
         info = determine_feng_capture_order(
             feng_antenna_map, coherent_beam_config,
             incoherent_beam_config)
-        self.assertEqual(set(info['order'][info['coherent_span'][0]:info['coherent_span'][1]]),
-                         set(feng_antenna_map[i] for i in coherent_beam_antennas))
-        self.assertEqual(set(info['order'][info['incoherent_span'][0]:info['incoherent_span'][1]]),
-                         set(feng_antenna_map[i] for i in incoherent_beam_antennas))
+        self.assertEqual(
+            set(info['order'][info['coherent_span'][0]:info['coherent_span'][1]]),
+            set(feng_antenna_map[i] for i in coherent_beam_antennas))
+        self.assertEqual(
+            set(info['order'][info['incoherent_span'][0]:info['incoherent_span'][1]]),
+            set(feng_antenna_map[i] for i in incoherent_beam_antennas))
         self.assertEqual(info['unused_span'][0], info['unused_span'][1])
 
     def test_different_antennas_not_all_used(self):
@@ -175,14 +176,18 @@ class TestCaptureOrdering(unittest.TestCase):
         info = determine_feng_capture_order(
             feng_antenna_map, coherent_beam_config,
             incoherent_beam_config)
-        self.assertEqual(set(info['order'][info['coherent_span'][0]:info['coherent_span'][1]]),
-                         set(feng_antenna_map[i] for i in coherent_beam_antennas))
-        self.assertEqual(set(info['order'][info['incoherent_span'][0]:info['incoherent_span'][1]]),
-                         set(feng_antenna_map[i] for i in incoherent_beam_antennas))
+        self.assertEqual(
+            set(info['order'][info['coherent_span'][0]:info['coherent_span'][1]]),
+            set(feng_antenna_map[i] for i in coherent_beam_antennas))
+        self.assertEqual(
+            set(info['order'][info['incoherent_span'][0]:info['incoherent_span'][1]]),
+            set(feng_antenna_map[i] for i in incoherent_beam_antennas))
         unused_antennas = list(set(info['order'][info['unused_span'][0]:info['unused_span'][1]]))
         for antenna in unused_antennas:
-            self.assertNotIn(antenna, set(feng_antenna_map[i] for i in coherent_beam_antennas))
-            self.assertNotIn(antenna, set(feng_antenna_map[i] for i in incoherent_beam_antennas))
+            self.assertNotIn(antenna, set(
+                feng_antenna_map[i] for i in coherent_beam_antennas))
+            self.assertNotIn(antenna, set(
+                feng_antenna_map[i] for i in incoherent_beam_antennas))
 
 
 if __name__ == '__main__':

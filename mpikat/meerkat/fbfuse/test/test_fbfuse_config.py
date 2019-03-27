@@ -23,47 +23,55 @@ import unittest
 import mock
 from mpikat.meerkat.fbfuse.fbfuse_config import FbfConfigurationManager, MIN_NBEAMS, FbfConfigurationError
 
-NBEAMS_OVERFLOW_TOLERANCE = 0.05 # 5%
+NBEAMS_OVERFLOW_TOLERANCE = 0.05  # 5%
+
 
 def make_ip_pool_mock(nips):
     ip_pool = mock.Mock()
     ip_pool.largest_free_range.return_value = nips
     return ip_pool
 
+
 def make_worker_pool_mock(nworkers):
     worker_pool = mock.Mock()
     worker_pool.navailable.return_value = nworkers
     return worker_pool
 
+
 class TestFbfConfigurationManager(unittest.TestCase):
+
     def _verify_configuration(self, cm, tscrunch, fscrunch, bandwidth,
-        nbeams, nantennas, granularity):
-        max_allowable_nbeams = nbeams+NBEAMS_OVERFLOW_TOLERANCE*nbeams
+                              nbeams, nantennas, granularity):
+        max_allowable_nbeams = nbeams + NBEAMS_OVERFLOW_TOLERANCE * nbeams
         if max_allowable_nbeams < MIN_NBEAMS:
             max_allowable_nbeams = MIN_NBEAMS
         min_allowable_nbeams = MIN_NBEAMS
-        config = cm.get_configuration(tscrunch, fscrunch, nbeams, nantennas, bandwidth, granularity)
+        config = cm.get_configuration(
+            tscrunch, fscrunch, nbeams, nantennas, bandwidth, granularity)
         self.assertTrue(config['num_beams'] <= max_allowable_nbeams,
-            "Actual number of beams {}".format(config['num_beams']))
+                        "Actual number of beams {}".format(config['num_beams']))
         self.assertTrue(config['num_beams'] >= min_allowable_nbeams)
         self.assertTrue(config['num_mcast_groups'] <= cm.nips)
         self.assertTrue(config['num_workers_total'] <= cm.nworkers)
         nbpmg = config['num_beams_per_mcast_group']
-        self.assertTrue((nbpmg%granularity==0) or (granularity%nbpmg==0))
-        nchans = cm._sanitise_user_nchans(int(bandwidth / cm.total_bandwidth * cm.total_nchans))
+        self.assertTrue((nbpmg % granularity == 0)
+                        or (granularity % nbpmg == 0))
+        nchans = cm._sanitise_user_nchans(
+            int(bandwidth / cm.total_bandwidth * cm.total_nchans))
         self.assertEqual(config['num_chans'], nchans)
 
     def test_full_ranges(self):
         cm = FbfConfigurationManager(64, 856e6, 4096, 64, 128)
-        bandwidths = [10e6,100e6,1000e6]
+        bandwidths = [10e6, 100e6, 1000e6]
         antennas = [1, 4, 13, 16, 26, 32, 33, 56, 64]
-        granularities = [1,2,5,6]
-        nbeams = [1,3,40,100,2000,100000]
+        granularities = [1, 2, 5, 6]
+        nbeams = [1, 3, 40, 100, 2000, 100000]
         for bandwidth in bandwidths:
             for antenna in antennas:
                 for granularity in granularities:
                     for nbeam in nbeams:
-                        self._verify_configuration(cm, 16, 1, bandwidth, nbeam, antenna, granularity)
+                        self._verify_configuration(
+                            cm, 16, 1, bandwidth, nbeam, antenna, granularity)
 
     def test_invalid_nantennas(self):
         cm = FbfConfigurationManager(64, 856e6, 4096, 64, 128)
