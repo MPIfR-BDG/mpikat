@@ -32,4 +32,5 @@ def process_watcher(process, timeout=120):
             "Process returned non-zero returncode: {}".format(
                 process.returncode))
     else:
-        log.debug("Process output:\n{}".format(process.stdout.read()))
+        log.debug("Process stdout:\n{}".format(process.stdout.read()))
+        log.debug("Process stderr:\n{}".format(process.stderr.read()))
