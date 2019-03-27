@@ -103,7 +103,7 @@ def compile_psrdada_cpp(params):
         log.info("Making PSRDADA_CPP")
         yield process_watcher(make_proc, timeout=600)
 
-        make_install_cmd = ["make", "install", "fbfuse, ""-j", "16"]
+        make_install_cmd = ["make", "install", "fbfuse", "-j", "16"]
         make_install_proc = Popen(make_install_cmd, stdout=PIPE, stderr=PIPE)
         log.info("Installing PSRDADA_CPP")
         yield process_watcher(make_install_proc, timeout=60)

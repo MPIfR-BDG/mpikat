@@ -841,11 +841,11 @@ class FbfWorkerServer(AsyncDeviceServer):
             self._state_sensor.set_value(self.IDLE)
             reset_tasks = []
             reset_tasks.append(self._reset_db(
-                self._dada_input_key), timeout=7.0)
+                self._dada_input_key, timeout=7.0))
             reset_tasks.append(self._reset_db(
-                self._dada_coh_output_key), timeout=4.0)
+                self._dada_coh_output_key, timeout=4.0))
             reset_tasks.append(self._reset_db(
-                self._dada_incoh_output_key), timeout=5.0)
+                self._dada_incoh_output_key, timeout=5.0))
             for task in reset_tasks:
                 try:
                     yield task
