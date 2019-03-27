@@ -481,7 +481,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             self._capture_thread = None
             log.debug("Capture thread cleaned")
         if self._writer_process:
-            self._input_fd.write(SENTINEL)
+            self._input_fd.send(SENTINEL)
             self._writer_process.join()
             self._input_fd.close()
             self._output_fd.close()
@@ -536,7 +536,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             fw_socket = None
         log.info("Starting FITS interface capture")
         self._stop_capture()
-        self._input_fd, self._output_fd = mp.Pipe(duplex=False)
+        self._input_fd, self._output_fd = mp.Pipe()
         self._writer_process = WriterProcess(
             self._output_fd,
             filestem='/beegfs/DENG/DATA/paf_hi_res_dump_{}'.format(
@@ -713,9 +713,8 @@ class PafHandler(object):
     before sending to the fits writer
     """
 
-    def __init__(self, mode, transmit_socket, input_fd):
+    def __init__(self, transmit_socket, input_fd):
 
-        self._mode = mode
         self._npol = 4
         self._nsections = 36 * self._npol
         self._nphases = 1
