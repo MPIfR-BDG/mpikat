@@ -286,7 +286,8 @@ class DelayBufferController(object):
         for ii in range(self._nreaders):
             self._mutex_semaphore.acquire()
         self._shared_buffer_mmap.seek(0)
-        self._shared_buffer_mmap.write(bytearray(self._delay_model))
+        self._shared_buffer_mmap.write(C.string_at(
+            C.addressof(self._delay_model), C.sizeof(self._delay_model)))
         # Increment the counting semaphore to notify the readers
         # that a new model is available
         log.debug("Incrementing counting semaphore")
