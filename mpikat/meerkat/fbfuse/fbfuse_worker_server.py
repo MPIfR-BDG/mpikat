@@ -291,7 +291,7 @@ class FbfWorkerServer(AsyncDeviceServer):
     @coroutine
     def _make_db(self, key, block_size, nblocks, timeout=120):
         try:
-            self._destroy_db(key)
+            yield self._destroy_db(key, timeout=20)
         except Exception as error:
             log.debug("Could not clean previous buffer (key={}): {}".format(
                 key, str(error)))
