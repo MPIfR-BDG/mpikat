@@ -61,7 +61,8 @@ class DelayConfigurationServer(AsyncDeviceServer):
                 initial_status=Sensor.UNKNOWN)
             self.add_sensor(sensor)
             beam.register_observer(lambda beam, sensor=sensor:
-                sensor.set_value(beam.target.format_katcp()))
+                                   sensor.set_value(
+                                    beam.target.format_katcp()))
 
         antenna_map = {a.name:a.format_katcp() for a in self._beam_manager.antennas}
         self._antennas_sensor = Sensor.string(

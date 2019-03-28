@@ -79,6 +79,7 @@ def make_psrdada_cpp_header(params, outfile=None):
         raise PsrdadaCppHeaderException(
             "Error while rendering MKRECV configuration: {}".format(
                 error.message))
+    log.debug("PSRDADA_CPP header:\n{}".format(rendered))
     if outfile:
         with open(outfile, "w") as f:
             f.write(rendered)

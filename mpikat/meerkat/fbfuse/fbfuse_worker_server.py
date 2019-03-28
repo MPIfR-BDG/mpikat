@@ -265,25 +265,28 @@ class FbfWorkerServer(AsyncDeviceServer):
         check_call(cmd)
 
     @coroutine
-    def _process_close_wrapper(self, process, timeout=10.0):
-        log.info("Sending SIGTERM to {} process".format(process))
+    def _process_close_wrapper(self, process, name, timeout=10.0):
+        log.info("Sending SIGTERM to {} process".format(name))
         process.terminate()
-        log.info("Waiting {} seconds for process to terminate...".format(timeout))
+        log.info("Waiting {} seconds for {} process to terminate...".format(
+            name, timeout))
         now = time.time()
         while time.time() - now < timeout:
             retval = process.poll()
             if retval is not None:
-                log.info(
-                    "process returned a return value of {}".format(retval))
+                log.warning(
+                    "{} process returned a return value of {}".format(
+                        name, retval))
                 break
             else:
                 yield sleep(0.5)
         else:
-            log.warning("Process failed to terminate in alloted time")
-            log.info("Killing process")
+            log.warning("{} process failed to terminate in alloted time".format(
+                name))
+            log.debug("Killing {} process".format(name))
             process.kill()
-        log.debug("Process stdout:\n{}".format(process.stdout.read()))
-        log.debug("Process stderr:\n{}".format(process.stderr.read()))
+        log.debug("{} process stdout:\n{}".format(name, process.stdout.read()))
+        log.debug("{} process stderr:\n{}".format(name, process.stderr.read()))
 
     @coroutine
     def _make_db(self, key, block_size, nblocks, timeout=120):
@@ -306,10 +309,16 @@ class FbfWorkerServer(AsyncDeviceServer):
             log.warning(("Current execution mode disables "
                          "DADA buffer creation/destruction"))
 
-    def _destroy_db(self, key):
+    @coroutine
+    def _destroy_db(self, key, timeout=5.0):
         log.debug("Destroying DADA buffer with key={}".format(key))
         if self._exec_mode == FULL:
-            self._system_call_wrapper(["dada_db", "-k", key, "-d"])
+            cmdline = map(str, ["dada_db", "-k", key, "-d"])
+            proc = Popen(cmdline, stdout=PIPE,
+                         stderr=PIPE, shell=False,
+                         close_fds=True)
+            yield process_watcher(proc, name="destroy_db({})".format(key),
+                                  timeout=timeout)
         else:
             log.warning(("Current execution mode disables "
                          "DADA buffer creation/destruction"))
@@ -508,12 +517,15 @@ class FbfWorkerServer(AsyncDeviceServer):
                 'antennas_csv': antenna_capture_order_csv,
                 'sync_epoch': feng_config['sync-epoch'],
                 'sample_clock': sample_clock,
-                'mcast_sources': ",".join([str(group) for group in capture_range]),
+                'mcast_sources': ",".join(
+                    [str(group) for group in capture_range]),
                 'mcast_port': capture_range.port,
                 'interface': self._capture_interface,
                 'timestamp_step': timestamp_step,
-                'ordered_feng_ids_csv': ",".join(map(str, feng_capture_order_info['order'])),
-                'frequency_partition_ids_csv': ",".join(map(str, frequency_ids)),
+                'ordered_feng_ids_csv': ",".join(
+                    map(str, feng_capture_order_info['order'])),
+                'frequency_partition_ids_csv': ",".join(
+                    map(str, frequency_ids)),
                 'nheaps': ngroups_data * heap_group_size,
                 'ngroups_data': ngroups_data,
                 'ngroups_temp': ngroups_temp
@@ -521,7 +533,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             mkrecv_header = make_mkrecv_header(
                 mkrecv_config, outfile=MKRECV_CONFIG_FILENAME)
             self._mkrecv_header_sensor.set_value(mkrecv_header)
-            log.info("Determined MKRECV configuration:\n{}".format(mkrecv_header))
+            log.info("Determined MKRECV configuration:\n{}".format(
+                mkrecv_header))
 
             log.debug("Parsing beam to multicast mapping")
             incoherent_beam = None
@@ -586,6 +599,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             }
             mksend_coh_header = make_mksend_header(
                 mksend_coh_config, outfile=MKSEND_COHERENT_CONFIG_FILENAME)
+            log.info("Determined MKSEND configuration for coherent beams:\n{}".format(
+                mksend_coh_header))
             self._mksend_coh_header_sensor.set_value(mksend_coh_header)
 
             incoh_data_rate = (partition_bandwidth / incoherent_beam_config['tscrunch']
@@ -614,6 +629,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             }
             mksend_incoh_header = make_mksend_header(
                 mksend_incoh_config, outfile=MKSEND_INCOHERENT_CONFIG_FILENAME)
+            log.info("Determined MKSEND configuration for incoherent beam:\n{}".format(
+                mksend_incoh_header))
             self._mksend_incoh_header_sensor.set_value(mksend_incoh_header)
 
             """
@@ -639,6 +656,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             psrdada_compilation_future = compile_psrdada_cpp(
                 fbfuse_pipeline_params)
 
+            log.info("Creating all DADA buffers")
             # Create capture data DADA buffer
             capture_block_size = ngroups_data * heap_group_size
             capture_block_count = AVAILABLE_CAPTURE_MEMORY / capture_block_size
@@ -703,7 +721,6 @@ class FbfWorkerServer(AsyncDeviceServer):
             yield coh_output_make_db_future
             yield incoh_output_make_db_future
 
-
             delay_buffer_key = self._delay_buf_ctrl.shared_buffer_key
             # Start beamformer instance
             self._psrdada_cpp_cmdline = [
@@ -755,9 +772,9 @@ class FbfWorkerServer(AsyncDeviceServer):
         @coroutine
         def deconfigure():
             log.info("Destroying allocated DADA buffers")
-            self._destroy_db(self._dada_input_key)
-            self._destroy_db(self._dada_coh_output_key)
-            self._destroy_db(self._dada_incoh_output_key)
+            yield self._destroy_db(self._dada_input_key)
+            yield self._destroy_db(self._dada_coh_output_key)
+            yield self._destroy_db(self._dada_incoh_output_key)
             log.info("Destroying delay buffer controller")
             del self._delay_buf_ctrl
             self._delay_buf_ctrl = None
@@ -840,12 +857,16 @@ class FbfWorkerServer(AsyncDeviceServer):
         def stop_processes():
             # send SIGTERM to MKRECV
             self._state_sensor.set_value(self.STOPPING)
-            self._process_close_wrapper(self._mkrecv_ingest_proc)
+            self._process_close_wrapper(
+                self._mkrecv_ingest_proc, "mkrecv")
             self._mkrecv_ingest_mon.stop()
-            self._process_close_wrapper(self._psrdada_cpp_proc)
-            self._process_close_wrapper(self._mksend_coh_proc)
+            self._process_close_wrapper(
+                self._psrdada_cpp_proc, "fbfuse")
+            self._process_close_wrapper(
+                self._mksend_coh_proc, "mksend (coherent)")
             self._mksend_coh_stdout_mon.stop()
-            self._process_close_wrapper(self._mksend_incoh_proc)
+            self._process_close_wrapper(
+                self._mksend_incoh_proc, "mksend (incoherent)")
             self._mksend_incoh_stdout_mon.stop()
             self._mkrecv_ingest_mon.join()
             self._mksend_coh_stdout_mon.join()

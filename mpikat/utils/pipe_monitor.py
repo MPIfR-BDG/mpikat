@@ -73,7 +73,6 @@ class PipeMonitor(Thread):
         line = line.strip()
         log.debug("Parsing line: '{}'".format(line))
         if len(line) == 0:
-            log.warning("Zero length line detected")
             return
         split = line.split(self._delimeter)
         key = split[0]

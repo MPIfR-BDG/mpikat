@@ -43,14 +43,15 @@ DEFAULT_DELAY_SPAN = 2 * DEFAULT_UPDATE_RATE
 def delay_model_type(nbeams, nants):
     class DelayModel(C.LittleEndianStructure):
         _fields_ = [
-                ("epoch", C.c_double),
-                ("duration", C.c_double),
-                ("delays", C.c_float * (2 * nbeams * nants))
-            ]
+            ("epoch", C.c_double),
+            ("duration", C.c_double),
+            ("delays", C.c_float * (2 * nbeams * nants))
+        ]
     return DelayModel
 
 
 class DelayBufferController(object):
+
     def __init__(self, delay_client, ordered_beams, ordered_antennas, nreaders):
         """
         @brief    Controls shared memory delay buffers that are accessed by one or more
@@ -97,7 +98,8 @@ class DelayBufferController(object):
         """
         @brief   Unlink (remove) all posix shared memory sections and semaphores.
         """
-        log.debug("Unlinking all relevant posix shared memory segments and semaphores")
+        log.debug(
+            "Unlinking all relevant posix shared memory segments and semaphores")
         try:
             posix_ipc.unlink_semaphore(self.counting_semaphore_key)
         except posix_ipc.ExistentialError:
@@ -116,20 +118,24 @@ class DelayBufferController(object):
         """
         @brief   Retrieve configuration information from the delay configuration server
         """
-        log.debug("Fetching configuration information from the delay configuration server")
+        log.debug(
+            "Fetching configuration information from the delay configuration server")
         yield self._delay_client.until_synced()
-        antennas_json = yield self._delay_client.sensor.antennas.get_value()
+        sensors = self._delay_client.sensor
+        antennas_json = yield sensors.antennas.get_value()
         try:
             antennas = json.loads(antennas_json)
         except Exception as error:
             log.exception("Failed to parse antennas")
             raise error
-        self._antennas = [Antenna(antennas[antenna]) for antenna in self._ordered_antennas]
+        self._antennas = [Antenna(antennas[antenna])
+                          for antenna in self._ordered_antennas]
         log.debug("Ordered the antenna capture list to:\n {}".format(
             "\n".join([i.format_katcp() for i in self._antennas])))
-        reference_antenna = yield self._delay_client.sensor.reference_antenna.get_value()
+        reference_antenna = yield sensors.reference_antenna.get_value()
         self._reference_antenna = Antenna(reference_antenna)
-        log.debug("Reference antenna: {}".format(self._reference_antenna.format_katcp()))
+        log.debug("Reference antenna: {}".format(
+            self._reference_antenna.format_katcp()))
 
     @coroutine
     def start(self):
@@ -140,13 +146,17 @@ class DelayBufferController(object):
                  and semaphores, retreive necessary information from the delay
                  configuration server and start the delay update callback loop.
         """
+        log.info("Starting delay buffer controller")
+        log.info("Creating IPC buffers and semaphores for delay buffer")
         yield self.fetch_config_info()
         self.register_callbacks()
         self.unlink_all()
         # This semaphore is required to protect access to the shared_buffer
         # so that it is not read and written simultaneously
-        # The value is set to two such that two processes can read simultaneously
-        log.info("Creating mutex semaphore, key='{}'".format(self.mutex_semaphore_key))
+        # The value is set to two such that two processes can read
+        # simultaneously
+        log.debug("Creating mutex semaphore, key='{}'".format(
+            self.mutex_semaphore_key))
         self._mutex_semaphore = posix_ipc.Semaphore(
             self.mutex_semaphore_key,
             flags=posix_ipc.O_CREX,
@@ -155,14 +165,19 @@ class DelayBufferController(object):
         # This semaphore is used to notify beamformer instances of a change to the
         # delay models. Upon any change its value is simply incremented by one.
         # Note: There sem_getvalue does not work on Mac OS X so the value of this
-        # semaphore cannot be tested on OS X (this is only a problem for local testing).
-        log.info("Creating counting semaphore, key='{}'".format(self.counting_semaphore_key))
-        self._counting_semaphore = posix_ipc.Semaphore(self.counting_semaphore_key,
+        # semaphore cannot be tested on OS X (this is only a problem for local
+        # testing).
+        log.debug("Creating counting semaphore, key='{}'".format(
+            self.counting_semaphore_key))
+        self._counting_semaphore = posix_ipc.Semaphore(
+            self.counting_semaphore_key,
             flags=posix_ipc.O_CREX,
             initial_value=0)
 
-        # This is the share memory buffer that contains the delay models for the
-        log.info("Creating shared memory, key='{}'".format(self.shared_buffer_key))
+        # This is the share memory buffer that contains the delay models for
+        # the
+        log.debug("Creating shared memory, key='{}'".format(
+            self.shared_buffer_key))
         self._shared_buffer = posix_ipc.SharedMemory(
             self.shared_buffer_key,
             flags=posix_ipc.O_CREX,
@@ -173,10 +188,16 @@ class DelayBufferController(object):
         # data_map = mmap.mmap(shm.fd, shm.size)
         # data = np.frombuffer(data_map, dtype=[("delay_rate","float32"),("delay_offset","float32")])
         # data = data.reshape(nbeams, nantennas)
+        self._shared_buffer_mmap = mmap(
+            self._shared_buffer.fd, self._shared_buffer.size)
 
-        self._shared_buffer_mmap = mmap(self._shared_buffer.fd, self._shared_buffer.size)
-        self._update_callback = PeriodicCallback(self._safe_update_delays, self._update_rate*1000)
+        log.info(("Starting delay calculation cycle, "
+                  "update rate = {} seconds").format(
+            self._update_rate))
+        self._update_callback = PeriodicCallback(
+            self._safe_update_delays, self._update_rate * 1000)
         self._update_callback.start()
+        log.info("Delay buffer controller started")
 
     def stop(self):
         """
@@ -186,17 +207,20 @@ class DelayBufferController(object):
                  any sensor callbacks and trigger the closing and unlinking of
                  posix IPC objects.
         """
+        log.info("Stopping delay buffer controller")
         self._update_callback.stop()
         self.deregister_callbacks()
         log.debug("Closing shared memory mmap and file descriptor")
         self._shared_buffer_mmap.close()
         self._shared_buffer.close_fd()
         self.unlink_all()
+        log.info("Delay buffer controller stopped")
 
     def _update_phase_reference(self, rt, t, status, value):
         if status != "nominal":
             return
-        log.debug("Received update to phase-reference: {}, {}, {}, {}".format(rt, t, status, value))
+        log.debug("Received update to phase-reference: {}, {}, {}, {}".format(
+            rt, t, status, value))
         self._phase_reference = Target(value)
 
     def register_callbacks(self):
@@ -210,20 +234,28 @@ class DelayBufferController(object):
                  string specifying the bore sight pointing position) and the individial beam targets.
         """
         log.debug("Registering phase-reference update callback")
-        self._delay_client.sensor.phase_reference.set_sampling_strategy('event')
-        self._delay_client.sensor.phase_reference.register_listener(self._update_phase_reference)
+        self._delay_client.sensor.phase_reference.set_sampling_strategy(
+            'event')
+        self._delay_client.sensor.phase_reference.register_listener(
+            self._update_phase_reference)
         for beam in self._ordered_beams:
             sensor_name = "{}_target".format(beam)
+
             def callback(rt, t, status, value, beam):
-                log.debug("Received target update for beam {}: {}".format(beam, value))
+                log.debug("Received target update for beam {}: {}".format(
+                    beam, value))
                 if status == 'nominal':
                     try:
                         self._targets[beam] = Target(value)
                     except Exception as error:
-                        log.exception("Error when updating target for beam {}".format(beam))
-            self._delay_client.sensor[sensor_name].set_sampling_strategy('event')
+                        log.exception(
+                            "Error updating target for beam {}:{}".format(
+                                beam, str(error)))
+            self._delay_client.sensor[
+                sensor_name].set_sampling_strategy('event')
             self._delay_client.sensor[sensor_name].register_listener(
-                lambda rt, r, status, value, beam=beam: callback(rt, r, status, value, beam))
+                lambda rt, r, status, value, beam=beam: callback(
+                    rt, r, status, value, beam))
             self._beam_callbacks[beam] = callback
 
     def deregister_callbacks(self):
@@ -232,12 +264,15 @@ class DelayBufferController(object):
         """
         log.debug("Deregistering phase-reference update callback")
         self._delay_client.sensor.phase_reference.set_sampling_strategy('none')
-        self._delay_client.sensor.phase_reference.unregister_listener(self._update_phase_reference)
+        self._delay_client.sensor.phase_reference.unregister_listener(
+            self._update_phase_reference)
         log.debug("Deregistering targets update callbacks")
         for beam in self._ordered_beams:
             sensor_name = "{}_target".format(beam)
-            self._delay_client.sensor[sensor_name].set_sampling_strategy('none')
-            self._delay_client.sensor[sensor_name].unregister_listener(self._beam_callbacks[beam])
+            self._delay_client.sensor[
+                sensor_name].set_sampling_strategy('none')
+            self._delay_client.sensor[sensor_name].unregister_listener(
+                self._beam_callbacks[beam])
         self._beam_callbacks = {}
 
     def _safe_update_delays(self):
@@ -245,7 +280,7 @@ class DelayBufferController(object):
         # stops it throwing an exception
         try:
             self.update_delays()
-        except Exception as error:
+        except Exception:
             log.exception("Failure while updating delays")
 
     def update_delays(self):
@@ -264,7 +299,6 @@ class DelayBufferController(object):
                                 from the shared memory segment. It is the responsibility
                                 of client applications to track the value of this semaphore.
         """
-        log.info("Updating delays")
         timer = Timer()
         delay_calc = DelayPolynomial(
             self._antennas, self._phase_reference, self._targets.values(),
