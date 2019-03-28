@@ -45,7 +45,7 @@ def delay_model_type(nbeams, nants):
         _fields_ = [
                 ("epoch", C.c_double),
                 ("duration", C.c_double),
-                ("delays", C.c_float * 2 * nbeams * nants)
+                ("delays", C.c_float * (2 * nbeams * nants))
             ]
     return DelayModel
 
