@@ -290,7 +290,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         try:
             self._destroy_db(key)
         except Exception as error:
-            self.debug("Could not clean previous buffer (key={}): {}".format(
+            log.debug("Could not clean previous buffer (key={}): {}".format(
                 key, str(error)))
         log.debug(("Building DADA buffer: key={}, block_size={}, "
                    "nblocks={}").format(key, block_size, nblocks))
