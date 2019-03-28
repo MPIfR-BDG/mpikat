@@ -822,7 +822,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             map(str, self._psrdada_cpp_cmdline),
             stdout=PIPE, stderr=PIPE, shell=False, close_fds=True)
         log.debug("fbfuse started with PID = {}".format(
-            self._psrdada_cpp_proc))
+            self._psrdada_cpp_proc.pid))
 
         # Create SPEAD receiver for incoming antenna voltages
         self._mkrecv_ingest_proc = self._start_mkrecv_instance(

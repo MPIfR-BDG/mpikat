@@ -18,7 +18,7 @@ def process_watcher(process, name=None, timeout=120):
     if name is None:
         name = ""
     else:
-        name = "(name: {})".format(name)
+        name = "'{}'".format(name)
     log.debug("Watching process: {} {}".format(process.pid, name))
     start = time.time()
     while process.poll() is None:
