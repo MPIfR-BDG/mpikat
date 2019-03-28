@@ -273,7 +273,7 @@ class DelayBufferController(object):
         self._delay_model.duration = self._delay_span
         poly = delay_calc.get_delay_polynomials(
             self._delay_model.epoch, duration=self._delay_span)
-        self._delay_model.delays[:] = poly.astype('float32')
+        self._delay_model.delays[:] = poly.astype('float32').ravel()
         poly_calc_time = timer.elapsed()
         log.debug("Poly calculation took {} seconds".format(poly_calc_time))
         if poly_calc_time >= self._update_rate:
