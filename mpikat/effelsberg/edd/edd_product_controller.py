@@ -25,37 +25,33 @@ import json
 from paramiko import PasswordRequiredException
 from tornado.gen import coroutine
 from mpikat.core.product_controller import ProductController, state_change
-from mpikat.effelsberg.paf.routingtable import RoutingTable
 
-log = logging.getLogger("mpikat.paf_product_controller")
-
-PAF_WORKER_QUORUM = 0.6
+log = logging.getLogger("mpikat.edd_product_controller")
 
 
-class PafProductStateError(Exception):
-
+class EddProductStateError(Exception):
     def __init__(self, expected_states, current_state):
         message = ("Possible states for this operation are '{}', "
                    "but current state is '{}'").format(
                    expected_states, current_state)
-        super(PafProductStateError, self).__init__(message)
+        super(EddProductStateError, self).__init__(message)
 
 
-class PafProductError(Exception):
+class EddProductError(Exception):
     pass
 
 
-class PafProductController(ProductController):
+class EddProductController(ProductController):
     """
-    Wrapper class for a PAF product.
+    Wrapper class for an EDD product.
     """
     def __init__(self, parent, product_id):
         """
         @brief      Construct new instance
 
-        @param      parent            The parent PafMasterController instance
+        @param      parent            The parent EddMasterController instance
         """
-        super(PafProductController, self).__init__(parent, product_id)
+        super(EddProductController, self).__init__(parent, product_id)
 
     def setup_sensors(self):
         """
@@ -65,7 +61,7 @@ class PafProductController(ProductController):
                   is required to let connected clients know that the proxy interface has
                   changed.
         """
-        super(PafProductController, self).setup_sensors()
+        super(EddProductController, self).setup_sensors()
 
     @state_change(["capturing", "ready", "error"], "idle")
     @coroutine
@@ -118,8 +114,8 @@ class PafProductController(ProductController):
         nservers = self._parent._server_pool.navailable()
         log.info("PAF servers available: {}".format(nservers))
         if nservers == 0:
-            raise PafProductError("No servers available for processing")
-            raise PafProductError("No servers available for processing")
+            raise EddProductError("No servers available for processing")
+            raise EddProductError("No servers available for processing")
         log.info("Allocating PAF servers")
         servers = self._parent._server_pool.allocate(nservers)
         log.info("Allocated {} PAF servers".format(len(servers)))
@@ -172,7 +168,7 @@ class PafProductController(ProductController):
                        "{} of {} servers failed to configure"
                        ).format(quorum*100, failures, len(servers))
             log.error(message)
-            raise PafProductError(message)
+            raise EddProductError(message)
         else:
             log.info("Successfully configured {} of {} servers".format(
                 len(self._servers)-failures, len(self._servers)))
@@ -200,7 +196,7 @@ class PafProductController(ProductController):
                            "processing with error:\n{}").format(
                            server, result.reply.arguments)
                 log.error(message)
-                raise PafProductError(message)
+                raise EddProductError(message)
             else:
                 log.debug("Server {} started successfully".format(
                     server))
@@ -224,7 +220,7 @@ class PafProductController(ProductController):
                            "processing with error:\n{}").format(
                            server, result.reply.arguments)
                 log.error(message)
-                raise PafProductError(message)
+                raise EddProductError(message)
             else:
                 log.debug("Server {} stopped successfully".format(
                     server))
