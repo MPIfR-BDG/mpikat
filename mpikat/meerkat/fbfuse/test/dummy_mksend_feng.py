@@ -1,4 +1,6 @@
+from __future__ import print_function
 import jinja2
+import time
 import logging
 from subprocess import Popen, PIPE
 from mpikat.utils.pipe_monitor import PipeMonitor
@@ -95,9 +97,16 @@ def make_mksend_header(params, outfile=None):
 
 
 class CustomMonitor(PipeMonitor):
-    def parse_line(self, line):
-        print(line)
+    def __init__(self, *args, **kwargs):
+        PipeMonitor.__init__(self, *args, **kwargs)
+	self.message_interval = 1.0
+	self.last_message_time = 0.0  		
 
+    def parse_line(self, line):
+	now = time.time()
+	if now - self.last_message_time > self.message_interval: 
+	    print(line.strip(), end="\n")
+            self.last_message_time = now        
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
@@ -117,6 +126,9 @@ if __name__ == "__main__":
                         help='The data rate in Gbps', default=1.0)
     args = parser.parse_args()
 
+    logging.basicConfig()
+    logging.getLogger('mpikat').setLevel(logging.INFO)		
+
     ip_range = ContiguousIpRange(args.base_ip, 7148, args.nbands)
 
     params = {
@@ -131,7 +143,7 @@ if __name__ == "__main__":
         "heap_group": args.nants,
         "port": 7148
     }
-    outfile = "dummy_mksenf_feng.cfg"
+    outfile = "dummy_mksend_feng.cfg"
     header = make_mksend_header(params, outfile=outfile)
     print(header)
     cmdline = ["mksend", "--header", outfile]
@@ -139,3 +151,6 @@ if __name__ == "__main__":
                  close_fds=True)
     monitor = CustomMonitor(proc.stdout, {})
     monitor.start()
+    proc.wait()
+    print(proc.stderr.read())
+	
