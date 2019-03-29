@@ -77,8 +77,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Download and install Mellanox OFED 4.4 for Ubuntu 16.04
 RUN wget http://content.mellanox.com/ofed/MLNX_OFED-4.4-2.0.7.0/MLNX_OFED_LINUX-4.4-2.0.7.0-ubuntu16.04-x86_64.tgz && \
     tar -xzvf MLNX_OFED_LINUX-4.4-2.0.7.0-ubuntu16.04-x86_64.tgz && \
-    MLNX_OFED_LINUX-4.4-2.0.7.0-ubuntu16.04-x86_64/mlnxofedinstall \
-    --force--user-space-only --without-fw-update --all -q && \
+    MLNX_OFED_LINUX-4.4-2.0.7.0-ubuntu16.04-x86_64/mlnxofedinstall --force \
+     --user-space-only --without-fw-update --all -q && \
     cd .. && \
     rm -rf MLNX_OFED_LINUX-4.4-2.0.7.0-ubuntu16.04-x86_64 && \
     rm -rf *.tgz
