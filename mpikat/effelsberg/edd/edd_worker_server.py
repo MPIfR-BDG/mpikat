@@ -28,10 +28,9 @@ import time
 import astropy.units as units
 from astropy.time import Time
 from optparse import OptionParser
-from tornado.gen import Return, coroutine
-from tornado.iostream import IOStream
-from katcp import AsyncDeviceServer, Message, Sensor, ProtocolFlags, AsyncReply
-from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
+from tornado.gen import coroutine
+from katcp import AsyncDeviceServer, Message, Sensor, AsyncReply
+from katcp.kattypes import request, return_reply, Str
 from mpikat.effelsberg.edd.pipeline.pipeline import PIPELINES
 
 
