@@ -73,12 +73,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-libxml2 && \
     rm -rf /var/lib/apt/lists/*
 
-# Download and install Mellanox OFED 4.1.1 for Ubuntu 16.04
-RUN wget http://content.mellanox.com/ofed/MLNX_OFED-4.1-1.0.2.0/MLNX_OFED_LINUX-4.1-1.0.2.0-ubuntu16.04-x86_64.tgz && \
-    tar -xzvf MLNX_OFED_LINUX-4.1-1.0.2.0-ubuntu16.04-x86_64.tgz && \
-    MLNX_OFED_LINUX-4.1-1.0.2.0-ubuntu16.04-x86_64/mlnxofedinstall --user-space-only --without-fw-update --all -q && \
+
+# Download and install Mellanox OFED 4.4 for Ubuntu 16.04
+RUN wget http://content.mellanox.com/ofed/MLNX_OFED-4.4-2.0.7.0/MLNX_OFED_LINUX-4.4-2.0.7.0-ubuntu16.04-x86_64.tgz && \
+    tar -xzvf MLNX_OFED_LINUX-4.4-2.0.7.0-ubuntu16.04-x86_64.tgz && \
+    MLNX_OFED_LINUX-4.4-2.0.7.0-ubuntu16.04-x86_64/mlnxofedinstall \
+    --force--user-space-only --without-fw-update --all -q && \
     cd .. && \
-    rm -rf MLNX_OFED_LINUX-4.1-1.0.2.0-ubuntu16.04-x86_64 && \
+    rm -rf MLNX_OFED_LINUX-4.4-2.0.7.0-ubuntu16.04-x86_64 && \
     rm -rf *.tgz
 
 ENV PSRHOME /software/
@@ -147,7 +149,8 @@ RUN git config --global http.sslverify false && \
     git clone https://gitlab.mpifr-bonn.mpg.de/mhein/mkrecv.git && \
     cd mkrecv && \
     git checkout master && \
-    cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DPSRDADA_CPP_INCLUDE_DIR=$PSRHOME/psrdada_cpp/ -DENABLE_CUDA=true && \
+    cmake -DCMAKE_INSTALL_PREFIX=/usr/local \
+    -DPSRDADA_CPP_INCLUDE_DIR=$PSRHOME/psrdada_cpp/ -DENABLE_CUDA=true && \
     make -j 6 && \
     make install
 
