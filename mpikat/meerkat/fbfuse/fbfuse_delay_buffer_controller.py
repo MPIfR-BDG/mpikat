@@ -23,10 +23,13 @@ import logging
 import json
 import posix_ipc
 import time
-import numpy as np
+import socket
+import os
+import struct
 import ctypes as C
 from collections import OrderedDict
 from mmap import mmap
+from threading import Thread, Event
 from tornado.gen import coroutine
 from tornado.ioloop import PeriodicCallback
 from katpoint import Antenna, Target
@@ -38,6 +41,7 @@ log = logging.getLogger("mpikat.fbfuse_delay_buffer_controller")
 DEFAULT_TARGET = "unset,radec,0,0"
 DEFAULT_UPDATE_RATE = 2.0
 DEFAULT_DELAY_SPAN = 2 * DEFAULT_UPDATE_RATE
+CONTROL_SOCKET_ADDR = "/tmp/fbfuse_control.sock"
 
 
 def delay_model_type(nbeams, nants):
@@ -50,9 +54,81 @@ def delay_model_type(nbeams, nants):
     return DelayModel
 
 
+class OfflineControlThread(Thread):
+
+    def __init__(self, controller):
+        Thread.__init__(self)
+        self.daemon = True
+        self._controller = controller
+        self._control_socket = None
+        self._stop_event = Event()
+        self._ready_event = Event()
+
+    def start_control_socket(self):
+        if self._control_socket:
+            self.stop_control_socket()
+        log.debug("Starting up control socket")
+        self._control_socket = socket.socket(
+            socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            os.unlink(CONTROL_SOCKET_ADDR)
+        except OSError:
+            if os.path.exists(CONTROL_SOCKET_ADDR):
+                raise
+        self._control_socket.bind(CONTROL_SOCKET_ADDR)
+        self._control_socket.listen(1)
+        self._control_socket.settimeout(1)
+        self._ready_event.set()
+        log.debug("Control socket running")
+
+    def stop_control_socket(self):
+        log.debug("Closing control socket")
+        self._control_socket.close()
+
+    def accept(self):
+        while not self._stop_event.is_set():
+            try:
+                conn, addr = self._control_socket.accept()
+            except socket.timeout:
+                continue
+            else:
+                log.debug("Handling control socket connection")
+                self.handle(conn)
+
+    def handle(self, conn):
+        conn.settimeout(1)
+        log.debug("Receiving delay epoch")
+        epoch = struct.unpack("d", conn.recv(8))[0]
+        log.debug("Delay epoch = {}".format(epoch))
+        try:
+            self._controller.update_delays(epoch=epoch)
+        except Exception:
+            log.exception("Error on delay update")
+            conn.sendall(struct.pack("b", 0))
+        else:
+            conn.sendall(struct.pack("b", 1))
+        conn.close()
+
+    def run(self):
+        self.start_control_socket()
+        try:
+            self.accept()
+        except Exception:
+            log.exception("Error in control socket thread")
+        finally:
+            self.stop_control_socket()
+
+    def stop(self):
+        self._stop_event.set()
+
+    def wait_until_ready(self, timeout=2):
+        self._ready_event.wait(timeout)
+
+
 class DelayBufferController(object):
 
-    def __init__(self, delay_client, ordered_beams, ordered_antennas, nreaders):
+    def __init__(self, delay_client, ordered_beams, ordered_antennas,
+                 nreaders, offline=False):
         """
         @brief    Controls shared memory delay buffers that are accessed by one or more
                   beamformer instances.
@@ -93,6 +169,8 @@ class DelayBufferController(object):
         self._delay_span = DEFAULT_DELAY_SPAN
         self._update_callback = None
         self._beam_callbacks = {}
+        self._offline = offline
+        self._offline_control_thread = None
 
     def unlink_all(self):
         """
@@ -149,7 +227,7 @@ class DelayBufferController(object):
         log.info("Starting delay buffer controller")
         log.info("Creating IPC buffers and semaphores for delay buffer")
         yield self.fetch_config_info()
-        self.register_callbacks()
+        yield self.register_callbacks()
         self.unlink_all()
         # This semaphore is required to protect access to the shared_buffer
         # so that it is not read and written simultaneously
@@ -191,12 +269,17 @@ class DelayBufferController(object):
         self._shared_buffer_mmap = mmap(
             self._shared_buffer.fd, self._shared_buffer.size)
 
-        log.info(("Starting delay calculation cycle, "
-                  "update rate = {} seconds").format(
-            self._update_rate))
-        self._update_callback = PeriodicCallback(
-            self._safe_update_delays, self._update_rate * 1000)
-        self._update_callback.start()
+        if not self._offline:
+            log.info(("Starting delay calculation cycle, "
+                      "update rate = {} seconds").format(
+                self._update_rate))
+            self._update_callback = PeriodicCallback(
+                self._safe_update_delays, self._update_rate * 1000)
+            self._update_callback.start()
+        else:
+            self._offline_control_thread = OfflineControlThread(self)
+            self._offline_control_thread.start()
+            self._offline_control_thread.wait_until_ready()
         log.info("Delay buffer controller started")
 
     def stop(self):
@@ -208,7 +291,11 @@ class DelayBufferController(object):
                  posix IPC objects.
         """
         log.info("Stopping delay buffer controller")
-        self._update_callback.stop()
+        if not self._offline:
+            self._update_callback.stop()
+        else:
+            self._offline_control_thread.stop()
+            self._offline_control_thread.join()
         self.deregister_callbacks()
         log.debug("Closing shared memory mmap and file descriptor")
         self._shared_buffer_mmap.close()
@@ -223,6 +310,7 @@ class DelayBufferController(object):
             rt, t, status, value))
         self._phase_reference = Target(value)
 
+    @coroutine
     def register_callbacks(self):
         """
         @brief   Register callbacks on the phase-reference and target positions for each beam
@@ -234,6 +322,7 @@ class DelayBufferController(object):
                  string specifying the bore sight pointing position) and the individial beam targets.
         """
         log.debug("Registering phase-reference update callback")
+        yield self._delay_client.until_synced()
         self._delay_client.sensor.phase_reference.set_sampling_strategy(
             'event')
         self._delay_client.sensor.phase_reference.register_listener(
@@ -251,7 +340,7 @@ class DelayBufferController(object):
                         log.exception(
                             "Error updating target for beam {}:{}".format(
                                 beam, str(error)))
-            self._delay_client.sensor[
+            yield self._delay_client.sensor[
                 sensor_name].set_sampling_strategy('event')
             self._delay_client.sensor[sensor_name].register_listener(
                 lambda rt, r, status, value, beam=beam: callback(
@@ -283,7 +372,7 @@ class DelayBufferController(object):
         except Exception:
             log.exception("Failure while updating delays")
 
-    def update_delays(self):
+    def update_delays(self, epoch=None):
         """
         @brief    Calculate updated delays based on the currently set targets and
                   phase reference.
@@ -303,7 +392,9 @@ class DelayBufferController(object):
         delay_calc = DelayPolynomial(
             self._antennas, self._phase_reference, self._targets.values(),
             self._reference_antenna)
-        self._delay_model.epoch = time.time()
+        if epoch is None:
+            epoch = time.time()
+        self._delay_model.epoch = epoch
         self._delay_model.duration = self._delay_span
         poly = delay_calc.get_delay_polynomials(
             self._delay_model.epoch, duration=self._delay_span)

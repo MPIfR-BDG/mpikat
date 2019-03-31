@@ -27,7 +27,7 @@ log = logging.getLogger("mpikat.fbfuse_ca_server")
 
 DEFAULT_KATPOINT_TARGET = "unset, radec, 0, 0"
 
-class BeamAllocationError(object):
+class BeamAllocationError(Exception):
     pass
 
 class Beam(object):
