@@ -27,10 +27,12 @@ from mpikat.core.worker_pool import WorkerPool, WorkerWrapper
 
 log = logging.getLogger("mpikat.fbfuse_worker_wrapper")
 
+
 class FbfWorkerWrapper(WorkerWrapper):
     """Wrapper around a client to an FbfWorkerServer
     instance.
     """
+
     def __init__(self, hostname, port):
         """
         @brief  Create a new wrapper around a client to a worker server
@@ -44,6 +46,8 @@ class FbfWorkerWrapper(WorkerWrapper):
     def prepare(self, *args, **kwargs):
         pass
 
+
 class FbfWorkerPool(WorkerPool):
+
     def make_wrapper(self, hostname, port):
         return FbfWorkerWrapper(hostname, port)

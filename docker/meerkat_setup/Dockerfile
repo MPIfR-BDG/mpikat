@@ -120,6 +120,7 @@ RUN  chmod +x psrdada_cvs_login &&\
     ./psrdada_cvs_login && \
     cvs -z3 -d:pserver:anonymous@psrdada.cvs.sourceforge.net:/cvsroot/psrdada co -P psrdada
 ENV PSRDADA_HOME $PSRHOME/psrdada
+COPY PsrdadaMakefile.am Makefile.am
 WORKDIR $PSRDADA_HOME
 RUN mkdir build/ && \
     ./bootstrap && \

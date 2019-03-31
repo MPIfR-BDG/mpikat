@@ -26,6 +26,7 @@ from katpoint import Antenna
 
 log = logging.getLogger("mpikat.delay_configuration_server")
 
+
 class DelayConfigurationServer(AsyncDeviceServer):
     """A server for maintining delay models used
     by FbfWorkerServers.
@@ -46,7 +47,7 @@ class DelayConfigurationServer(AsyncDeviceServer):
         """
         self._beam_manager = beam_manager
         self._reference_target = None
-        super(DelayConfigurationServer, self).__init__(ip,port)
+        super(DelayConfigurationServer, self).__init__(ip, port)
 
     def setup_sensors(self):
         """
@@ -62,12 +63,14 @@ class DelayConfigurationServer(AsyncDeviceServer):
             self.add_sensor(sensor)
             beam.register_observer(lambda beam, sensor=sensor:
                                    sensor.set_value(
-                                    beam.target.format_katcp()))
+                                       beam.target.format_katcp()))
 
-        antenna_map = {a.name:a.format_katcp() for a in self._beam_manager.antennas}
+        antenna_map = {a.name: a.format_katcp()
+                       for a in self._beam_manager.antennas}
         self._antennas_sensor = Sensor.string(
             "antennas",
-            description="JSON breakdown of the antennas (in KATPOINT format) associated with this delay engine",
+            description=("JSON breakdown of the antennas (in KATPOINT format)"
+                         " associated with this delay engine"),
             default=json.dumps(antenna_map),
             initial_status=Sensor.NOMINAL)
         self.add_sensor(self._antennas_sensor)
@@ -79,8 +82,9 @@ class DelayConfigurationServer(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._phase_reference_sensor)
 
-        reference_antenna = Antenna("reference,{ref.lat},{ref.lon},{ref.elev}".format(
-            ref=self._beam_manager.antennas[0].ref_observer))
+        reference_antenna = Antenna(
+            "reference,{ref.lat},{ref.lon},{ref.elev}".format(
+                ref=self._beam_manager.antennas[0].ref_observer))
         self._reference_antenna_sensor = Sensor.string(
             "reference-antenna",
             description="A KATPOINT antenna string denoting the reference antenna",

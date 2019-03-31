@@ -99,14 +99,15 @@ def make_mksend_header(params, outfile=None):
 class CustomMonitor(PipeMonitor):
     def __init__(self, *args, **kwargs):
         PipeMonitor.__init__(self, *args, **kwargs)
-	self.message_interval = 1.0
-	self.last_message_time = 0.0  		
+        self.message_interval = 1.0
+        self.last_message_time = 0.0
 
     def parse_line(self, line):
-	now = time.time()
-	if now - self.last_message_time > self.message_interval: 
-	    print(line.strip(), end="\n")
-            self.last_message_time = now        
+        now = time.time()
+        if now - self.last_message_time > self.message_interval:
+            print(line.strip(), end="\n")
+            self.last_message_time = now
+
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
@@ -127,7 +128,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     logging.basicConfig()
-    logging.getLogger('mpikat').setLevel(logging.INFO)		
+    logging.getLogger('mpikat').setLevel(logging.INFO)
 
     ip_range = ContiguousIpRange(args.base_ip, 7148, args.nbands)
 
@@ -139,7 +140,8 @@ if __name__ == "__main__":
         "heap_size": args.nchans * 1024,
         "timestep": 2097152,
         "feng_ids": ",".join(map(str, range(args.nants))),
-        "frequencies": ",".join(map(str, range(0, args.nbands * args.nchans, args.nchans))),
+        "frequencies": ",".join(map(str, range(
+            0, args.nbands * args.nchans, args.nchans))),
         "heap_group": args.nants,
         "port": 7148
     }
@@ -153,4 +155,3 @@ if __name__ == "__main__":
     monitor.start()
     proc.wait()
     print(proc.stderr.read())
-	
