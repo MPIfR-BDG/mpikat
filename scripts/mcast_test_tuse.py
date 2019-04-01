@@ -59,18 +59,11 @@ class R2Feng64Packet(C.BigEndianStructure):
         ("data", C.c_byte * (256 * 8 * 2 * 2))
     ]
 
-class HeapStartPacket(C.BigEndianStructure):
-    _fields_ = [
-        ("header", SpeadHeader),
-        ("descriptors", Descriptor * 7),
-        ("data", C.c_byte * 8192)
-    ]
-
 class HeapPacket(C.BigEndianStructure):
     _fields_ = [
         ("header", SpeadHeader),
         ("descriptors", Descriptor * 4),
-        ("data", C.c_byte * 8192)
+        ("data", C.c_byte * (9000-5*8))
     ]
 
 def get_ip_address(ifname):
@@ -126,15 +119,11 @@ class StatusCatcherThread(Thread):
                 if r:
                     log.debug("Data in socket... reading data")
                     data, _ = self._sock.recvfrom(1 << 17)
-                    print "Packet size = {}, header size = {}".format(
-                        len(data), len(data)-8192)
+                    print "Packet size = {}".format(len(data))
                     try:
-                        packet = HeapStartPacket.from_buffer_copy(data)
+                        packet = HeapPacket.from_buffer_copy(data)
                     except:
-                        try:
-                            packet = HeapPacket.from_buffer_copy(data)
-                        except:
-                            continue
+                        continue
                     print packet.header
                     for descriptor in packet.descriptors:
                         print "   {}".format(descriptor)
