@@ -7,7 +7,6 @@ import select
 import atexit
 import parser as spead_parser
 import sys
-import numpy as np
 import ctypes as C
 from threading import Thread, Lock, Event
 from Queue import Queue
