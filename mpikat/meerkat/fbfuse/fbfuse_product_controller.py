@@ -750,11 +750,13 @@ class FbfProductController(object):
         for ii, (server, ip_range) in enumerate(zip(self._servers, ip_splits)):
             chan0_idx = cm.nchans_per_worker * ii
             chan0_freq = fbottom + chan0_idx * cm.channel_bandwidth
-            future = server.prepare(ip_range.format_katcp(), cm.nchans_per_group,
-                                    chan0_idx, chan0_freq, cm.channel_bandwidth, mcast_to_beam_map,
-                                    self._feng_config[
-                                        'feng-antenna-map'], coherent_beam_config,
-                                    incoherent_beam_config, de_ip, de_port)
+            future = server.prepare(
+                ip_range.format_katcp(), cm.nchans_per_group,
+                chan0_idx, chan0_freq, cm.channel_bandwidth,
+                self._cbc_nbeams_sensor.value(), mcast_to_beam_map,
+                self._feng_config['feng-antenna-map'],
+                coherent_beam_config, incoherent_beam_config,
+                de_ip, de_port)
             prepare_futures.append(future)
 
         failure_count = 0
