@@ -923,7 +923,7 @@ def main():
     signal.signal(
         signal.SIGINT,
         lambda sig, frame: ioloop.add_callback_from_signal(
-        on_shutdown, ioloop, server))
+            on_shutdown, ioloop, server))
 
     def start_and_display():
         server.start()

@@ -59,8 +59,7 @@ class FbfMasterController(MasterController):
     VERSION_INFO = ("mpikat-fbf-api", 0, 1)
     BUILD_INFO = ("mpikat-fbf-implementation", 0, 1, "rc1")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
-    def __init__(self, ip, port, dummy=True,
-        ip_range = FBF_IP_RANGE):
+    def __init__(self, ip, port, dummy=True, ip_range=FBF_IP_RANGE):
         """
         @brief       Construct new FbfMasterController instance
 
@@ -164,11 +163,11 @@ class FbfMasterController(MasterController):
         """
 
         msg = ("Configuring new FBFUSE product",
-            "Product ID: {}".format(product_id),
-            "Antennas: {}".format(antennas_csv),
-            "Nchannels: {}".format(n_channels),
-            "Streams: {}".format(streams_json),
-            "Proxy name: {}".format(proxy_name))
+               "Product ID: {}".format(product_id),
+               "Antennas: {}".format(antennas_csv),
+               "Nchannels: {}".format(n_channels),
+               "Streams: {}".format(streams_json),
+               "Proxy name: {}".format(proxy_name))
         log.info("\n".join(msg))
         # Test if product_id already exists
         if product_id in self._products:
@@ -597,7 +596,7 @@ class FbfMasterController(MasterController):
 
     @request(Str(), Str())
     @return_reply()
-    def request_set_default_sb_configuration(self, req, product_id, sb_id):
+    def request_set_default_sb_configuration(self, req, product_id, sb_id, target):
         """
         @brief      Set the configuration of FBFUSE from the FBFUSE configuration server
 

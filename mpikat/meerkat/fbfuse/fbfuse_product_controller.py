@@ -294,7 +294,7 @@ class FbfProductController(object):
             "incoherent-beam-count",
             description="The number of incoherent beams that this FBF instance can currently produce",
             default=1,
-            initial_status=Sensor.UNKNOWN)
+            initial_status=Sensor.NOMINAL)
         self.add_sensor(self._ibc_nbeams_sensor)
 
         self._ibc_tscrunch_sensor = Sensor.integer(
@@ -689,7 +689,7 @@ class FbfProductController(object):
         self._beam_manager = BeamManager(
             self._cbc_nbeams_sensor.value(), cbc_antennas)
         self._delay_config_server = DelayConfigurationServer(
-            "127.0.0.1", 0, self._beam_manager)
+            self._parent.bind_address[0], 0, self._beam_manager)
         self._delay_config_server.start()
         self.log.info("Started delay engine at: {}".format(
             self._delay_config_server.bind_address))
