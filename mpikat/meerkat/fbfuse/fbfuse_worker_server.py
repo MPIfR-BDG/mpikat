@@ -903,13 +903,13 @@ def main():
                       help='Host interface to bind to')
     parser.add_option('-p', '--port', dest='port', type=int,
                       help='Port number to bind to')
+    parser.add_option('-c', '--capture-ip', dest='cap_ip', type=str,
+                      help='The interface to use for data capture')
     parser.add_option('', '--log_level', dest='log_level', type=str,
                       help='Port number of status server instance',
                       default="INFO")
     parser.add_option('', '--exec_mode', dest='exec_mode', type=str,
                       default="full", help='Set status server to exec_mode')
-    parser.add_option('-n', '--nodes', dest='nodes', type=str, default=None,
-                      help='Path to file containing list of available nodes')
     (opts, args) = parser.parse_args()
     FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
     logger = logging.getLogger('mpikat.fbfuse_worker_server')
@@ -918,8 +918,11 @@ def main():
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting FbfWorkerServer instance")
 
-    server = FbfWorkerServer(opts.host, opts.port, exec_mode=opts.exec_mode)
-    signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
+    server = FbfWorkerServer(opts.host, opts.port, opts.cap_ip,
+                             exec_mode=opts.exec_mode)
+    signal.signal(
+        signal.SIGINT,
+        lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
 
     def start_and_display():
