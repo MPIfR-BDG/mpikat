@@ -831,6 +831,11 @@ class FbfWorkerServer(AsyncDeviceServer):
                 self._mkrecv_ingest_proc.stdout,
                 MKRECV_STDOUT_KEYS)
         self._mkrecv_ingest_mon.start()
+
+        self._mkrecv_ingest_mon_err = PipeMonitor(
+                self._mkrecv_ingest_proc.stderr,
+                {})
+        self._mkrecv_ingest_mon_err.start()
         self._state_sensor.set_value(self.CAPTURING)
         return ("ok",)
 
@@ -869,6 +874,8 @@ class FbfWorkerServer(AsyncDeviceServer):
                 self._mksend_incoh_proc, "mksend (incoherent)")
             self._mksend_incoh_stdout_mon.stop()
             self._mkrecv_ingest_mon.join()
+            self._mkrecv_ingest_mon_err.stop()
+            self._mkrecv_ingest_mon_err.join()
             self._mksend_coh_stdout_mon.join()
             self._mksend_incoh_stdout_mon.join()
             self._state_sensor.set_value(self.IDLE)
