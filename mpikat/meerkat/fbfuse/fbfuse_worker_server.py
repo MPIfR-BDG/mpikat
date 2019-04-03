@@ -918,6 +918,7 @@ def main():
     parser.add_option('', '--exec_mode', dest='exec_mode', type=str,
                       default="full", help='Set status server to exec_mode')
     (opts, args) = parser.parse_args()
+    logging.getLogger('').setLevel(logging.ERROR)
     logger = logging.getLogger('mpikat')
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
