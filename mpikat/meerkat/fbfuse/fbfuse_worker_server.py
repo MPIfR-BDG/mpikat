@@ -550,6 +550,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                     if beam.startswith("ifbf"):
                         incoherent_beam = beam
                         incoherent_beam_group = group
+            log.debug("Group to coherent beam map: {}".format(group_to_coherent_beam_map))
 
             log.debug("Determined coherent beam to multicast mapping: {}".format(
                 coherent_beam_to_group_map))
