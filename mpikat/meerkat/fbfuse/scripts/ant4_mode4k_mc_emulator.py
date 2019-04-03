@@ -33,7 +33,7 @@ def setup_32beam_4ant(worker_addr, dc_addr):
         controlled=True))
     yield worker_client.start()
     print "Syncing worker server"
-    yield worker_client.until_synced()
+    yield worker_client.until_synced(timeout=4.0)
     print "done"
 
     coherent_beams_csv = ",".join(["cfbf{:05d}".format(ii) for ii in range(nbeams)])
@@ -72,7 +72,7 @@ def setup_32beam_4ant(worker_addr, dc_addr):
         json.dumps(feng_config),
         json.dumps(coherent_beam_config),
         json.dumps(incoherent_beam_config),
-        *dc_addr)
+        *dc_addr, timeout=300.0)
     if not response.reply.reply_ok():
         raise Exception("Error on prepare: {}".format(response.reply.arguments))
     else:
