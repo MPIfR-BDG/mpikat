@@ -919,13 +919,13 @@ def main():
     parser.add_option('', '--exec_mode', dest='exec_mode', type=str,
                       default="full", help='Set status server to exec_mode')
     (opts, args) = parser.parse_args()
-    logging.getLogger('').setLevel(logging.ERROR)
     logger = logging.getLogger('mpikat')
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
         level=opts.log_level.upper(),
         logger=logger)
     logger.setLevel(opts.log_level.upper())
+    logging.getLogger('katcp').setLevel(logging.ERROR)
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting FbfWorkerServer instance")
     server = FbfWorkerServer(opts.host, opts.port, opts.cap_ip,
