@@ -72,7 +72,7 @@ def setup_32beam_4ant(worker_addr, dc_addr):
         json.dumps(feng_config),
         json.dumps(coherent_beam_config),
         json.dumps(incoherent_beam_config),
-        *dc_client.bind_address)
+        *dc_addr)
     if not response.reply.reply_ok():
         raise Exception("Error on prepare: {}".format(response.reply.arguments))
     else:
