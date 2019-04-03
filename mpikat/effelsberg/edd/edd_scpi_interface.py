@@ -23,11 +23,11 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         """
         super(EddScpiInterface, self).__init__(interface, port, ioloop)
         self._mc = master_controller
-        self._config = None
+        self._config = {}
 
     @scpi_request(str)
     @raise_or_ok
-    def request_edd_cmdconfigfile(self, req, gitpath):
+    def request_eddgsdev_cmdconfigfile(self, req, gitpath):
         """
         @brief      Set the configuration file for the EDD
 
@@ -45,7 +45,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         page.close()
 
     @scpi_request()
-    def request_edd_configure(self, req):
+    def request_eddgsdev_configure(self, req):
         """
         @brief      Configure the EDD backend
 
@@ -53,14 +53,60 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:CONFIGURE'
         """
-        if not self._config:
+        if self._config == {}:
             raise EddScpiInterfaceError("No configuration set for EDD")
         else:
             self._ioloop.add_callback(self._make_coroutine_wrapper(req,
                 self._mc.configure, self._config))
 
     @scpi_request()
-    def request_edd_abort(self, req):
+    def request_eddgsdev_deconfigure(self, req):
+        """
+        @brief      Configure the EDD backend
+
+        @param      req   An ScpiRequst object
+
+        @note       Suports SCPI request: 'EDD:CONFIGURE'
+        """
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req,
+             self._mc.deconfigure))
+
+    @scpi_request(float)
+    @raise_or_ok
+    def request_eddgsdev_cmdfrequency(self, req, frequency):
+        """
+        @brief      Set the centre frequency
+
+        @param      req        An ScpiRequest object
+        @param      frequency  The centre frequency of the PAF band in Hz
+        """
+        self._config['frequency'] = frequency
+
+    @scpi_request(float)
+    @raise_or_ok
+    def request_eddgsdev_cmdintergrationtime(self, req, intergration_time):
+        """
+        @brief      Set the intergration time
+
+        @param      req        An ScpiRequest object
+        @param      frequency  The centre frequency of the PAF band in Hz
+        """
+        self._config['intergration_time'] = intergration_time
+
+    @scpi_request(float)
+    @raise_or_ok
+    def request_eddgsdev_cmdnchans(self, req, nchannels):
+        """
+        @brief      Set the intergration time
+
+        @param      req        An ScpiRequest object
+        @param      frequency  The centre frequency of the PAF band in Hz
+        """
+        self._config['nchannels'] = nchannels
+
+
+    @scpi_request()
+    def request_eddgsdev_abort(self, req):
         """
         @brief      Abort EDD backend processing
 
@@ -72,7 +118,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
             self._mc.capture_stop))
 
     @scpi_request()
-    def request_edd_start(self, req):
+    def request_eddgsdev_start(self, req):
         """
         @brief      Start the EDD backend processing
 
@@ -84,7 +130,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
                 self._mc.capture_start))
 
     @scpi_request()
-    def request_edd_stop(self, req):
+    def request_eddgsdev_stop(self, req):
         """
         @brief      Stop the EDD backend processing
 

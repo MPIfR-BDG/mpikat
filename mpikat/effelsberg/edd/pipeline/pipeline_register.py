@@ -19,26 +19,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
-
 import logging
-log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
+log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline_register")
 log.setLevel('DEBUG')
 
-try:
-    from GatedSpectrometerPipeline import GatedSpectrometerPipeline
-    from Mkrecv2Db2Dspsr import Mkrecv2Db2Dspsr
-except Exception as E:
-    log.error("Error importing pipeline: {}".format(E))
+PIPELINES = {}
 
-from pipeline_register import PIPELINES
+def register_pipeline(name):
+    def _register(cls):
+        PIPELINES[name] = cls
+        return cls
+    return _register
 
-#def main():
-#    logging.info("Starting pipeline instance")
-#    server = Mkrecv2Db2Dspsr()
-#    server.configure()
-#    server.start()
-#    server.stop()
-#    server.deconfigure()
-#
-#if __name__ == "__main__":
-#    main()
