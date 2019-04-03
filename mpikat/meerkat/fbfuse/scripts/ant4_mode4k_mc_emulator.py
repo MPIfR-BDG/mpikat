@@ -36,7 +36,7 @@ def setup_32beam_4ant(worker_addr, dc_addr):
     yield worker_client.until_synced()
     print "done"
 
-    coherent_beams_csv = ",".join(["cfbf{:05d}" for ii in range(nbeams)])
+    coherent_beams_csv = ",".join(["cfbf{:05d}".format(ii) for ii in range(nbeams)])
     feng_antenna_map = {antenna: ii for ii, antenna in enumerate(antennas)}
     coherent_beam_antennas = antennas
     incoherent_beam_antennas = antennas
