@@ -4,45 +4,45 @@ import logging
 log = logging.getLogger('mpikat.fbfuse_mksend_config')
 
 HEADER_TEMPLATE = """
-HEADER       DADA                # Distributed aquisition and data analysis
-HDR_VERSION  1.0                 # Version of this ASCII header
-HDR_SIZE     4096                # Size of the header in bytes
-DADA_VERSION 1.0                 # Version of the DADA Software
+HEADER       DADA
+HDR_VERSION  1.0
+HDR_SIZE     4096
+DADA_VERSION 1.0
 
 # DADA parameters
-OBS_ID       unset               # observation ID
-PRIMARY      unset               # primary node host name
-SECONDARY    unset               # secondary node host name
-FILE_NAME    unset               # full path of the data file
+OBS_ID       unset
+PRIMARY      unset
+SECONDARY    unset
+FILE_NAME    unset
 
-FILE_SIZE    10000000000         # requested size of data files
-FILE_NUMBER  0                   # number of data file
+FILE_SIZE    10000000000
+FILE_NUMBER  0
 
 # time of the rising edge of the first time sample
-UTC_START    unset               # yyyy-mm-dd-hh:mm:ss.fs (set by MKRECV)
-MJD_START    unset               # MJD equivalent to the start UTC (set by MKRECV)
+UTC_START    unset
+MJD_START    unset
 
-OBS_OFFSET   0                   # bytes offset from the start MJD/UTC
-OBS_OVERLAP  0                   # bytes by which neighbouring files overlap
+OBS_OFFSET   0
+OBS_OVERLAP  0
 
 # description of the source
-SOURCE                      # name of the astronomical source
-RA           unset               # Right Ascension of the source
-DEC          unset               # Declination of the source
+SOURCE       unset
+RA           unset
+DEC          unset
 
 # description of the instrument
-TELESCOPE    MeerKAT           # telescope name
-INSTRUMENT   CBF-Feng          # instrument name
-RECEIVER     unset             # Receiver name
-FREQ         {{frequency_mhz}} # observation frequency
-BW           {{bandwidth}}     # bandwidth in MHz
-TSAMP        {{tsamp_us}}         # sampling interval in microseconds
+TELESCOPE    MeerKAT
+INSTRUMENT   CBF-Feng
+RECEIVER     unset
+FREQ         {{frequency_mhz}}
+BW           {{bandwidth}}
+TSAMP        {{tsamp_us}}
 BYTES_PER_SECOND {{bytes_per_second}}
 
-NBIT         8             # number of bits per sample
-NDIM         2             # dimension of samples (2=complex, 1=real)
-NPOL         2             # number of polarizations observed
-NCHAN        {{nchan}}     # number of channels here
+NBIT         8
+NDIM         2
+NPOL         2
+NCHAN        {{nchan}}
 
 #MeerKAT specifics
 DADA_KEY     {{dada_key}}
@@ -61,7 +61,7 @@ IBV_MAX_POLL 10
 PACKET_SIZE  1500
 SAMPLE_CLOCK_START unset
 NTHREADS      16
-NHEAPS        {{nheaps}}
+NHEAPS        64
 NGROUPS_DATA  {{ngroups_data}}
 NGROUPS_TEMP  {{ngroups_temp}}
 NHEAPS_SWITCH 50
@@ -69,17 +69,17 @@ NHEAPS_SWITCH 50
 #MeerKat F-Engine
 NINDICES    3
 # The first index item is the running timestamp
-IDX1_ITEM   0         # First item of a SPEAD heap (timestamp)
-IDX1_STEP   {{timestamp_step}}   # The difference between successive timestamps
+IDX1_ITEM   0
+IDX1_STEP   {{timestamp_step}}
 
 # The second index should be the antenna/F-eng
-IDX2_ITEM   1                # Second item of a SPEAD heap (feng_id)
-IDX2_MASK   0xffffffffffff   # Mask used to extract the F-eng ID
+IDX2_ITEM   1
+IDX2_MASK   0xffffffffffff
 IDX2_LIST   {{ordered_feng_ids_csv}}
 
 # The third index should be the frequency partition
-IDX3_ITEM   2                # Third item of a SPEAD heap (frequency)
-IDX3_MASK   0xffffffffffff   # Mask used to extract the frequency
+IDX3_ITEM   2
+IDX3_MASK   0xffffffffffff
 IDX3_LIST   {{frequency_partition_ids_csv}}
 """
 
