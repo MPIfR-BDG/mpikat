@@ -64,7 +64,7 @@ ITEM2_SCI    unset
 ITEM3_ID     16643
 ITEM3_STEP   unset
 ITEM3_LIST   {{subband_idx}}
-ITEM3_INDEX  3
+ITEM3_INDEX  unset
 ITEM3_SCI    unset
 
 # This value is a required dummy item to encode "cbf_raw"

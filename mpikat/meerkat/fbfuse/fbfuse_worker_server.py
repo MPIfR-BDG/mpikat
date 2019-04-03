@@ -339,7 +339,7 @@ class FbfWorkerServer(AsyncDeviceServer):
 
     def _start_mksend_instance(self, config):
         log.info("Starting MKSEND instance with config={}".format(config))
-        cmdline = ["mksend", "--header", config]
+        cmdline = ["mksend", "--header", config, "--quiet"]
         log.debug("cmdline: {}".format(" ".join(cmdline)))
         if self._exec_mode == DRYRUN:
             log.warning(("In dry-run mode, replacing MKSEND call "
