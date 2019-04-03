@@ -141,7 +141,6 @@ class FbfWorkerServer(AsyncDeviceServer):
 
     @coroutine
     def stop(self):
-        yield self.deregister()
         yield super(FbfWorkerServer, self).stop()
 
     def setup_sensors(self):
