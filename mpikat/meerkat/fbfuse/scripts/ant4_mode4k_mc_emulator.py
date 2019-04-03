@@ -10,7 +10,7 @@ def setup_32beam_4ant(worker_addr, dc_addr):
     # Hardcoded numbers
     nbeams = 32
     tot_nchans = 4096
-    feng_groups = "spead://239.8.0.0+3:7147"
+    feng_groups = "spead://239.8.0.0+3:7148"
     chan0_idx = 0
     chan0_freq = 1240e6
     chan_bw = 856e6 / tot_nchans
@@ -43,8 +43,8 @@ def setup_32beam_4ant(worker_addr, dc_addr):
     nantennas = len(antennas)
     nchans_per_group = tot_nchans / nantennas / 4
     mcast_to_beam_map = {
-        "spead://239.11.1.0:7147": coherent_beams_csv,
-        "spead://239.11.1.150:7147": "ifbf00001"
+        "spead://239.11.1.0:7148": coherent_beams_csv,
+        "spead://239.11.1.150:7148": "ifbf00001"
     }
     feng_config = {
         "bandwidth": 856e6,

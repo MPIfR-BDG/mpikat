@@ -618,7 +618,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                 'interface': self._capture_interface,
                 'data_rate': incoh_data_rate,
                 'mcast_port': incoh_ip_range.port,
-                'mcast_destinations': str(incoh_ip_range.base_ip),
+                'mcast_destinations': [str(incoh_ip_range.base_ip),],
                 'sync_epoch': feng_config['sync-epoch'],
                 'sample_clock': sample_clock,
                 'heap_size': incoh_heap_size,
