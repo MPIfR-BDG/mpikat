@@ -42,7 +42,7 @@ HEAP_ID_START 1
 HEAP_ID_OFFSET 1
 HEAP_ID_STEP 8192
 NSCI         0
-NITEMS       2
+NITEMS       4
 
 # This item is a newly created timestamp
 ITEM1_ID     5632
@@ -54,26 +54,26 @@ ITEM1_SCI    0
 
 # This item is an index (beam) specfied as a list
 ITEM2_ID     21845
-ITEM2_STEP   0
+ITEM2_STEP   unset
 ITEM2_LIST   {{beam_ids | join(',')}}
 ITEM2_INDEX  2
-ITEM2_SCI    0
+ITEM2_SCI    unset
 
 
 # This item is an index (frequency) specified as a list
 ITEM3_ID     16643
-ITEM3_STEP   0
+ITEM3_STEP   unset
 ITEM3_LIST   {{subband_idx}}
 ITEM3_INDEX  3
-ITEM3_SCI    0
+ITEM3_SCI    unset
 
 # This value is a required dummy item to encode "cbf_raw"
 # (effectively this item is the data)
 ITEM4_ID     21846
-ITEM4_STEP   0
+ITEM4_STEP   unset
 ITEM4_LIST   unset
-ITEM4_INDEX  0
-ITEM4_SCI    0
+ITEM4_INDEX  unset
+ITEM4_SCI    unset
 HEAP_GROUP   {{heap_group}}
 """
 
