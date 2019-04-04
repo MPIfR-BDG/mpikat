@@ -18,6 +18,7 @@ class DummyDelayBufferManager(object):
         self.counting_semaphore_key = "delay_buffer_count"
         self._delay_model = delay_model_type(
             self._nbeams, self._nantennas)()
+        self._nreaders = 1
 
     def destroy(self):
         """
