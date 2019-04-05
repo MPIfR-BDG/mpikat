@@ -41,6 +41,7 @@ import threading
 import base64
 from katcp import Sensor, AsyncDeviceServer, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str
+import tempfile
 #from mpikat.core.master_controller import MasterController
 #from mpikat.katportalclient_wrapper import KatportalClientWrapper
 #from mpikat.utils import check_ntp_sync
@@ -52,12 +53,13 @@ PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
                    "deconfiguring", "error"]
 
+DADA_BUFFERS = ['dada', 'dadc']
+
 DEFAULT_CONFIG = {
         "base_output_dir": os.getcwd(),
         "dada_db_params":
         {
-            "args": "-n 8 -b 167772160 -p -l",
-            "key": "dada"
+            "args": "-n 8 -b 537919488 -p -l"  # The buffersize is 512MiB for the ADC data + 512/4*8 kiB for the side channel data
         },
         "dada_header_params":
         {
@@ -76,8 +78,113 @@ DEFAULT_CONFIG = {
             "resolution": 1,
             "dsb": 1
         },
-        "gated_cli_args": "--fft_length=1024 --nsidechannelitems=1 -a1 -b 8 --input_level 100 --output_level 100 --log_level=debug"
+        "gated_cli_args":
+        {
+            "fft_length": 1024,
+            "nbits": 8,
+            "naccumulate": 1,
+            "input_level": 100,
+            "output_level": 100
+        },
+        "mkrecv":
+        {
+            "polarization_0" :
+            {
+                "ibv_if": "10.10.1.10",
+                "mcast_sources": "225.0.0.152 225.0.0.153 225.0.0.154 225.0.0.155",
+                "port": "7148",
+                "dada_key": DADA_BUFFERS[0]
+            },
+             "polarization_1" :
+            {
+                "ibv_if": "10.10.1.11",
+                "mcast_sources": "225.0.0.156 225.0.0.157 225.0.0.158 225.0.0.159",
+                "port": "7148",
+                "dada_key": DADA_BUFFERS[1]
+            }
+        }
     }
+
+
+mkrecv_header = """
+# This header file contains the MKRECV configuration for capture of 1 polarisation
+# from the Effelsberg EDD system. It specifies all 4 mcast groups of one IF channel.
+HEADER       DADA                # Distributed aquisition and data analysis
+HDR_VERSION  1.0                 # Version of this ASCII header
+HDR_SIZE     4096                # Size of the header in bytes
+
+DADA_VERSION 1.0                 # Version of the DADA Software
+PIC_VERSION  1.0                 # Version of the PIC FPGA Software
+
+# DADA parameters
+OBS_ID       unset               # observation ID
+PRIMARY      unset               # primary node host name
+SECONDARY    unset               # secondary node host name
+FILE_NAME    unset               # full path of the data file
+
+FILE_SIZE    10000000000          # requested size of data files
+FILE_NUMBER  0                   # number of data file
+
+# time of the rising edge of the first time sample
+UTC_START    unset               # yyyy-mm-dd-hh:mm:ss.fs
+MJD_START    unset               # MJD equivalent to the start UTC
+
+OBS_OFFSET   0                   # bytes offset from the start MJD/UTC
+OBS_OVERLAP  0                   # bytes by which neighbouring files overlap
+
+# description of the source
+SOURCE       unset               # name of the astronomical source
+RA           unset               # Right Ascension of the source
+DEC          unset               # Declination of the source
+
+# description of the instrument
+TELESCOPE    Effelsberg       # telescope name
+INSTRUMENT   EDD              # instrument name
+RECEIVER     unset           # Frontend receiver
+FREQ         unset           # centre frequency in MHz
+BW           unset           # bandwidth of in MHz (-ve lower sb)
+TSAMP        unset       # sampling interval in microseconds
+
+BYTES_PER_SECOND  unset
+NBIT              unset             # number of bits per sample
+NDIM              1                 # 1=real, 2=complex
+NPOL              1                 # number of polarizations observed
+NCHAN             1                 # number of frequency channels
+RESOLUTION        1
+DSB
+
+#MeerKAT specifics
+#DADA_KEY     dada                    # The dada key to write to
+DADA_MODE    4                       # The mode, 4=full dada functionality
+ORDER        T                       # Here we are only capturing one polarisation, so data is time only
+SYNC_TIME    unset
+SAMPLE_CLOCK unset
+PACKET_SIZE 8400
+NTHREADS 32
+NHEAPS 32
+NGROUPS_DATA  4096
+NGROUPS_TEMP  2048
+NHEAPS_SWITCH 1024
+#MCAST_SOURCES 225.0.0.152,225.0.0.153,225.0.0.154,225.0.0.155
+PORT         7148
+UDP_IF       unset
+IBV_VECTOR   -1          # IBV forced into polling mode
+IBV_MAX_POLL 10
+BUFFER_SIZE 16777216
+#BUFFER_SIZE 1048576
+SAMPLE_CLOCK_START 0 # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock
+HEAP_SIZE   4096
+
+#SPEAD specifcation for EDD packetiser data stream
+NINDICES    1   # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
+# The first index item is the running timestamp
+IDX1_ITEM   0      # First item of a SPEAD heap
+IDX1_STEP   131072   # The difference between successive timestamps
+# Add side item to buffer
+SCI_LIST    7
+"""
+
+
 
 class EddConfigurationError(Exception):
     pass
@@ -97,7 +204,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
     CONTROL_MODES = ["KATCP", "SCPI"]
     KATCP, SCPI = CONTROL_MODES
 
- 
+
     def __init__(self, ip, port, scpi_ip, scpi_port):
         """@brief initialize the pipeline."""
         self.callbacks = set()
@@ -108,15 +215,13 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         self._scpi_port = scpi_port
         self._scpi_interface = None
         #self._volumes = ["/tmp/:/scratch/"]
-        self._dada_key = None
         self._config = None
         #self._source_config = None
         #self._dspsr = None
-        self._mkrecv_ingest_proc = None
         self._subprocesses = []
         #self.setup_sensors()
-	#super(GatedSpectrometerPipeline, self).__init__(ip, port, None)
-        super(GatedSpectrometerPipeline, self).__init__(ip, port) 
+        #super(GatedSpectrometerPipeline, self).__init__(ip, port, None)
+        super(GatedSpectrometerPipeline, self).__init__(ip, port)
 
     @property
     def sensors(self):
@@ -134,8 +239,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
     @state.setter
     def state(self, value):
-	self._state = value
-        #self._pipeline_sensor_status.set_value(str(value))
+        self._state = value
+        self._pipeline_sensor_status.set_value(self._state)
         self.notify()
 
     def start(self):
@@ -311,32 +416,53 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         """
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
-	self.state == "ready"
-	self._pipeline_sensor_status.set_value("ready")
-        return 
-	if self.state == "idle":
-            self.state = "configuring"
-            self._pipeline_config = json.loads(config_json)
-            self._config = DEFAULT_CONFIG 
-            #self._dada_key = self._pipeline_config["key"]
-            self._dada_key = "dada"
-            try:
-                self.deconfigure()
-            except Exception as error:
-                raise RuntimeError(str(error))
-            cmd = "dada_db -k {key} {args}".format(key=self._dada_key,
+        if self.state != "idle":
+            log.error('Cannot configure pipeline. Pipeline state {}.'.format(self.state))
+            return
+
+        self.state = "configuring"
+
+        # Merge retrieved config into default
+        def __updateConfig(oldo, new):
+            old = oldo.copy()
+            for k in new:
+                if isinstance(old[k], dict):
+                    old[k] = __updateConfig(old[k], new[k])
+                else:
+                    old[k] = new[k]
+            return old
+        cfg = json.loads(config_json)
+        self._config = __updateConfig(DEFAULT_CONFIG, cfg)
+
+        try:
+            self.deconfigure()
+        except Exception as error:
+            raise RuntimeError(str(error))
+
+        for i,k in enumerate(DADA_BUFFERS):
+            # configure dada buffer
+            cmd = "dada_db -k {key} {args}".format(key=k,
                                                    args=self._config["dada_db_params"]["args"])
-            # cmd = "dada_db -k {key} {args}".format(**
-            #                                       self._config["dada_db_params"])
             log.debug("Running command: {0}".format(cmd))
             self._create_ring_buffer = ExecuteCommand(
                 cmd, outpath=None, resident=False)
             self._create_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._create_ring_buffer._process.wait()
-            self.state = "ready"
-        else:
-            log.error('Cannot configure pipeline. Pipeline state {}.'.format(self.state))
+
+            log_level='debug'
+            # Configure + launch gated spectrometer
+            cmd = "gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --selected_sidechannel=0 --nbits={nbits} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_level={output_level} -o/dev/null --log_level={log_level}".format(dada_key=k, log_level=log_level, **self._config["gated_cli_args"])
+            # here should be a smarter system to parse the options from the
+            # controller to the program without redundant typing of options
+            log.debug("Command to run: {}".format(cmd))
+
+            gated_cli = ExecuteCommand(cmd, outpath=None, resident=True, env={"CUDA_VISIBLE_DEVICES":str(i)})
+            gated_cli.stdout_callbacks.add( self._decode_capture_stdout)
+            gated_cli.stderr_callbacks.add( self._handle_execution_stderr)
+            self._subprocesses.append(gated_cli)
+        self.state = "ready"
+
 
     @request()
     @return_reply()
@@ -370,32 +496,38 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
     @coroutine
     def capture_start(self, config_json=""):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
-        log.info("Starting EDD backend") 
-	self.state == "running"       
-	self._pipeline_sensor_status.set_value("running")
-	return
-	if self.state == "ready":
-            self.state = "starting"
+        log.info("Starting EDD backend")
+        if self.state != "ready":
+            log.error("pipleine state is not in state = ready, but in state = {} - cannot start the pipeline".format(self.state))
+            return
 
-            try:
-                cmd = "/root/psrdada_cpp/build/psrdada_cpp/effelsberg/edd/gated_spectrometer {}".format(self._config["gated_cli_args"])
-                # here should be a smarter system to parse the options from the
-                # controller to the program without redundant typing of options
-                log.debug("Command to run: {}".format(cmd))
+        self.state = "starting"
+        try:
+            mkrecvheader_file = tempfile.NamedTemporaryFile(delete=False)
+            log.debug("Creating mkrec header file: {}".format(mkrecvheader_file.name))
+            mkrecvheader_file.write(mkrecv_header)
+            mkrecvheader_file.close()
 
-                gated_cli = ExecuteCommand(cmd, outpath=None, resident=True)
-                gated_cli.stdout_callbacks.add( self._decode_capture_stdout)
-                gated_cli.stderr_callbacks.add( self._handle_execution_stderr)
+            self.mkrec_cmd = []
 
-                self._subprocesses.append(gated_cli)
-            except Exception as e:
-                log.error("Error starting pipeline: {}".format(e))
-                self.state = "error"
-            else:
-                self.state = "running"
+            cfg = self._config['mkrecv']['polarization_0']
+            cmd = "mkrecv_nt --header {mkrecv_header} --dada-key {dada_key} --ibv-if {ibv_if} --port {port} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, **cfg )
+            self.mkrec_cmd.append(ExecuteCommand(cmd, outpath=None, resident=True))
+
+            cfg = self._config['mkrecv']['polarization_1']
+            cmd = "mkrecv_nt --header {mkrecv_header} --dada-key {dada_key} --ibv-if {ibv_if} --port {port} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, **cfg )
+            self.mkrec_cmd.append(ExecuteCommand(cmd, outpath=None, resident=True))
+
+            for k in self.mkrec_cmd:
+                k.stdout_callbacks.add( self._decode_capture_stdout)
+                k.stderr_callbacks.add( self._handle_execution_stderr)
+
+            #self._subprocesses.append(self.mkrec_cmd)
+        except Exception as e:
+            log.error("Error starting pipeline: {}".format(e))
+            self.state = "error"
         else:
-            log.error(
-                "pipleine state is not in state = ready, but in state = {} - cannot start the pipeline".format(self._state))
+            self.state = "running"
 
     @request()
     @return_reply()
@@ -426,34 +558,43 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
     def capture_stop(self):
         """@brief stop the dada_junkdb and dspsr instances."""
         log.info("Stoping EDD backend")
-	self.state == "ready"   
-	self._pipeline_sensor_status.set_value("ready")
-        return
-        if self.state == 'running':
-            log.debug("Stopping")
-            self._timeout = 10
-            for proc in self._subprocesses:
-                proc.set_finish_event()
-                proc.finish()
-                log.debug(
-                    "Waiting {} seconds for proc to terminate...".format(self._timeout))
-                now = time.time()
-                while time.time() - now < self._timeout:
-                    retval = proc._process.poll()
-                    if retval is not None:
-                        log.debug(
-                            "Returned a return value of {}".format(retval))
-                        break
-                    else:
-                        time.sleep(0.5)
+        if self.state != 'running':
+            log.error("pipleine state is not in state = running but in state {}, nothing to stop".format(self.state))
+            return
+        log.debug("Stopping")
+
+        def __stopProcess(proc, timeout=10):
+            log.debug("Terminating process: {}".format(proc._command))
+            retval = proc._process.poll()
+            if retval is not None:
+                log.debug("Already terminated with return value of {}".format(retval))
+                return
+
+            proc.set_finish_event()
+            proc.finish()
+            log.debug("  Waiting {} seconds for process to terminate...".format(timeout))
+            now = time.time()
+            while time.time() - now < timeout:
+                retval = proc._process.poll()
+                if retval is not None:
+                    log.debug("Returned a return value of {}".format(retval))
+                    break
                 else:
-                    log.warning(
-                        "Failed to terminate proc in alloted time")
-                    log.info("Killing process")
-                    proc._process.kill()
-            self.state = "ready"
-        else:
-            log.error("pipleine state is not in state = running, nothing to stop")
+                    time.sleep(0.5)
+            if proc._process.poll() is None:
+                log.warning("Failed to terminate proc {} in alloted time".format(proc._command))
+                log.info("Killing process")
+                proc._process.kill()
+
+        # stop mkrec process
+        log.debug("Stopping mkrecv processes")
+        for proc in self.mkrec_cmd:
+            __stopProcess(proc)
+
+        log.debug("Stopping remaining processes ..")
+        for proc in self._subprocesses:
+            __stopProcess(proc)
+        self.state = "idle"
 
     @request()
     @return_reply()
@@ -484,18 +625,16 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
         log.info("Deconfiguring EDD backend")
-	self.state == "idle"   
-	self._pipeline_sensor_status.set_value("idle")
-        return
         self.state = "deconfiguring"
-        log.debug("Destroying dada buffer")
-        cmd = "dada_db -d -k {0}".format(self._dada_key)
-        log.debug("Running command: {0}".format(cmd))
-        self._destory_ring_buffer = ExecuteCommand(
-            cmd, outpath=None, resident=False)
-        self._destory_ring_buffer.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._destory_ring_buffer._process.wait()
+        log.debug("Destroying dada buffers")
+        for k in DADA_BUFFERS:
+            cmd = "dada_db -d -k {0}".format(k)
+            log.debug("Running command: {0}".format(cmd))
+            self._destory_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._destory_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._destory_ring_buffer._process.wait()
         self.state = "idle"
 
 
@@ -540,12 +679,13 @@ def main():
     signal.signal(
         signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
             on_shutdown, ioloop, server))
+
     def start_and_display():
-	log.info("Starting GatedSpectrometerPipeline server")
+        log.info("Starting GatedSpectrometerPipeline server")
         server.start()
-	log.debug("Started GatedSpectrometerPipeline server")
+        log.debug("Started GatedSpectrometerPipeline server")
         if opts.scpi_mode:
-	    log.debug("SCPI mode")
+            log.debug("SCPI mode")
             server.set_control_mode(server.SCPI)
         log.info(
             "Listening at {0}, Ctrl-C to terminate server".format(
