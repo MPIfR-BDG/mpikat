@@ -24,6 +24,7 @@ import time
 from subprocess import PIPE, Popen
 import threading
 import shlex
+import os
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.ExecuteCommand")
 
@@ -32,7 +33,7 @@ RUN = True
 
 class ExecuteCommand(object):
 
-    def __init__(self, command, outpath=None, resident=False):
+    def __init__(self, command, outpath=None, resident=False, env={}):
         self._command = command
         self._resident = resident
         self._outpath = outpath
@@ -49,6 +50,10 @@ class ExecuteCommand(object):
         self._stderr = None
         self._error = False
         self._finish_event = threading.Event()
+        # Subprocess inherits environment of mother with possible extensions
+        # /replacements
+        self._env = os.environ.copy()
+        self._env.update(env)
 
         if not self._resident:
             self._finish_event.set()
@@ -62,7 +67,9 @@ class ExecuteCommand(object):
                                       stderr=PIPE,
                                       bufsize=1,
                                       # shell=True,
-                                      universal_newlines=True)
+                                      universal_newlines=True,
+                                      env=self._env
+                                      )
             except Exception as error:
                 log.exception("Error while launching command: {}".format(
                     self._executable_command))
