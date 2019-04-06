@@ -489,10 +489,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             nbits = 8
             tsamp = 1.0 / (feng_config['bandwidth'] / feng_config['nchans'])
             sample_clock = feng_config['bandwidth'] * 2
-            # WARNING: This is only valid in 4k mode
-            log.warning("NOTE: Hardcoded timestamp step only valid in 4k mode")
             timestamp_step = feng_config['nchans'] * 2 * 256
-            # WARNING: Assumes contigous groups
             frequency_ids = [chan0_idx + nchans_per_group *
                              ii for ii in range(ngroups)]
             nantennas = len(feng_capture_order_info['order'])
