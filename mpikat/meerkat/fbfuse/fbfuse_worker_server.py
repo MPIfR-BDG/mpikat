@@ -477,7 +477,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             nantennas = len(feng_capture_order_info['order'])
             heap_size = nchans_per_group * PACKET_PAYLOAD_SIZE
             heap_group_size = ngroups * heap_size * nantennas
-            ngroups_data = MAX_DADA_BLOCK_SIZE / heap_group_size
+            ngroups_data = int(MAX_DADA_BLOCK_SIZE / heap_group_size)
             centre_frequency = (chan0_freq + feng_config['nchans']
                                 / 2.0 * chan_bw)
             if self._exec_mode == FULL:
@@ -636,7 +636,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             log.info("Creating all DADA buffers")
             # Create capture data DADA buffer
             capture_block_size = ngroups_data * heap_group_size
-            capture_block_count = AVAILABLE_CAPTURE_MEMORY / capture_block_size
+            capture_block_count = int(AVAILABLE_CAPTURE_MEMORY / capture_block_size)
             log.debug("Creating dada buffer for input with key '{}'".format(
                 "%s" % self._dada_input_key))
             input_make_db_future = self._make_db(
