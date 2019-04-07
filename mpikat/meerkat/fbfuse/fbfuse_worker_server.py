@@ -116,7 +116,7 @@ class FbfWorkerServer(AsyncDeviceServer):
               "starting", "capturing", "stopping", "error"]
     IDLE, PREPARING, READY, STARTING, CAPTURING, STOPPING, ERROR = STATES
 
-    def __init__(self, ip, port, capture_interface, exec_mode=FULL):
+    def __init__(self, ip, port, capture_interface, numa_node, exec_mode=FULL):
         """
         @brief       Construct new FbfWorkerServer instance
 
@@ -131,6 +131,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         self._delay_client = None
         self._delay_client = None
         self._delays = None
+        self._numa = numa_node
         self._exec_mode = exec_mode
         self._dada_input_key = "dada"
         self._dada_coh_output_key = "caca"
@@ -886,7 +887,8 @@ def main():
     parser.add_option('-c', '--capture-ip', dest='cap_ip', type=str,
                       help='The interface to use for data capture')
     parser.add_option('-n', '--numa', dest='numa', type=int,
-                      help='The ID of the current NUMA node (used for setting core affinities)')
+                      help=('The ID of the current NUMA node '
+                            '(used for setting core affinities)'))
     parser.add_option('', '--log_level', dest='log_level', type=str,
                       help='Port number of status server instance',
                       default="INFO")
@@ -903,7 +905,7 @@ def main():
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting FbfWorkerServer instance")
     server = FbfWorkerServer(opts.host, opts.port, opts.cap_ip,
-                             exec_mode=opts.exec_mode)
+                             opts.numa, exec_mode=opts.exec_mode)
     signal.signal(
         signal.SIGINT,
         lambda sig, frame: ioloop.add_callback_from_signal(
