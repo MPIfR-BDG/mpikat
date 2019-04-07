@@ -2,7 +2,7 @@ import jinja2
 import logging
 import time
 from subprocess import Popen, PIPE
-from mpikat.utils.pipe_moitor import PipeMonitor
+from mpikat.utils.pipe_monitor import PipeMonitor
 from mpikat.utils.process_tools import ProcessMonitor
 
 log = logging.getLogger('mpikat.fbfuse_mksend_config')

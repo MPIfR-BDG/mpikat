@@ -1,3 +1,4 @@
+import time
 import logging
 import posix_ipc
 import ctypes as C
@@ -81,7 +82,6 @@ if __name__ == "__main__":
     manager = DummyDelayBufferManager(opts.nantennas, opts.nbeams)
     manager.destroy()
     manager.make()
-
-
+    manager.write(time.time(), 3600.0, np.zeros(2 * opts.nantennas * opts.nbeams))
 
 

@@ -2,7 +2,7 @@ import jinja2
 import logging
 import time
 from subprocess import Popen, PIPE
-from mpikat.utils.pipe_moitor import PipeMonitor
+from mpikat.utils.pipe_monitor import PipeMonitor
 from mpikat.utils.process_tools import ProcessMonitor
 
 log = logging.getLogger('mpikat.fbfuse_mksend_config')
@@ -47,7 +47,7 @@ ITEM1_INDEX  1
 
 ITEM2_ID     21845
 ITEM2_LIST   {{beam_ids | join(',')}}
-{{'ITEM2_INDEX  2' if len(beam_ids) > 1 else ''}}
+{% if beam_ids | count > 1 %} ITEM2_INDEX 2 {% endif %}
 
 ITEM3_ID     16643
 ITEM3_LIST   {{subband_idx}}
@@ -76,7 +76,7 @@ def make_mksend_header(params, outfile=None):
     return rendered
 
 
-class MsendProcessManager(object):
+class MksendProcessManager(object):
     def __init__(self, header_file):
         self._header_file = header_file
         self._mksend_proc = None
