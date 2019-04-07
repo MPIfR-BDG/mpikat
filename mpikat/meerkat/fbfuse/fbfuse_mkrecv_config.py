@@ -95,7 +95,7 @@ class MkrecvProcessManager(object):
             ["mkrecv_nt", "--header", self._header_file, "--quiet"],
             stdout=PIPE, stderr=PIPE, shell=False, close_fds=True)
         self._proc_mon = ProcessMonitor(
-            self._mkrecv_proc, self.stop)
+            self._mkrecv_proc, lambda: None)
         self._proc_mon.start()
         self._stdout_mon = PipeMonitor(
             self._mkrecv_proc.stdout, self._stdout_parser)
