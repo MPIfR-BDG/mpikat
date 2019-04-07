@@ -24,6 +24,7 @@ import json
 import tornado
 import signal
 import time
+import os
 import coloredlogs
 from subprocess import Popen, PIPE, check_call
 from optparse import OptionParser
@@ -347,6 +348,9 @@ class FbfWorkerServer(AsyncDeviceServer):
         else:
             log.warning(("Current execution mode disables "
                          "DADA buffer reset"))
+
+    def set_affinity(self, pid, core_spec):
+        os.system("taskset -cp {} {}".format(core_spec, pid))
 
     @request(Str(), Int(), Int(), Float(), Float(), Int(), Str(), Str(),
              Str(), Str(), Str(), Int())
@@ -784,9 +788,18 @@ class FbfWorkerServer(AsyncDeviceServer):
             MKSEND_COHERENT_CONFIG_FILENAME)
         self._mksend_coh_proc.start()
 
+        if self._numa == 0:
+            self.set_affinity(self._mksend_coh_proc.pid, "7")
+        else:
+            self.set_affinity(self._mksend_coh_proc.pid, "15")
+
         self._mksend_incoh_proc = MksendProcessManager(
             MKSEND_INCOHERENT_CONFIG_FILENAME)
         self._mksend_incoh_proc.start()
+        if self._numa == 0:
+            self.set_affinity(self._mksend_incoh_proc.pid, "7")
+        else:
+            self.set_affinity(self._mksend_incoh_proc.pid, "15")
 
         # Start beamforming pipeline
         log.info("Starting PSRDADA_CPP beamforming pipeline")
@@ -796,10 +809,18 @@ class FbfWorkerServer(AsyncDeviceServer):
             stdout=PIPE, stderr=PIPE, shell=False, close_fds=True)
         log.debug("fbfuse started with PID = {}".format(
             self._psrdada_cpp_proc.pid))
+        if self._numa == 0:
+            self.set_affinity(self._psrdada_cpp_proc.pid, "6")
+        else:
+            self.set_affinity(self._psrdada_cpp_proc.pid, "14")
 
         # Create SPEAD receiver for incoming antenna voltages
         self._mkrecv_proc = MkrecvProcessManager(MKRECV_CONFIG_FILENAME)
         self._mkrecv_proc.start()
+        if self._numa == 0:
+            self.set_affinity(self._mkrecv_proc.pid, "0-5")
+        else:
+            self.set_affinity(self._mkrecv_proc.pid, "8-13")
         self._state_sensor.set_value(self.CAPTURING)
         return ("ok",)
 
@@ -864,6 +885,8 @@ def main():
                       help='Port number to bind to')
     parser.add_option('-c', '--capture-ip', dest='cap_ip', type=str,
                       help='The interface to use for data capture')
+    parser.add_option('-n', '--numa', dest='numa', type=int,
+                      help='The ID of the current NUMA node (used for setting core affinities)')
     parser.add_option('', '--log_level', dest='log_level', type=str,
                       help='Port number of status server instance',
                       default="INFO")

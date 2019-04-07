@@ -76,6 +76,13 @@ class MkrecvProcessManager(object):
         self._stderr_mon = None
         self._proc_mon = None
 
+    @property
+    def pid(self):
+        if not self._mksend_proc:
+            raise Exception("Process not yet started")
+        else:
+            return self._mkrecv_proc.pid
+
     def _stdout_parser(self, line):
         try:
             tokens = line.split()

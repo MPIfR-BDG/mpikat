@@ -47,7 +47,7 @@ ITEM1_INDEX  1
 
 ITEM2_ID     21845
 ITEM2_LIST   {{beam_ids | join(',')}}
-{% if beam_ids | count > 1 %}ITEM2_INDEX 2{% endif %}
+{% if beam_ids | count > 1 %} ITEM2_INDEX 2 {% endif %}
 
 ITEM3_ID     16643
 ITEM3_LIST   {{subband_idx}}
@@ -86,6 +86,13 @@ class MksendProcessManager(object):
 
     def _stdout_parser(self, line):
         return None
+
+    @property
+    def pid(self):
+        if not self._mksend_proc:
+            raise Exception("Process not yet started")
+        else:
+            return self._mksend_proc.pid
 
     def start(self):
         self._mksend_proc = Popen(
