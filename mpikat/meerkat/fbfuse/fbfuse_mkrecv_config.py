@@ -26,7 +26,7 @@ SAMPLE_CLOCK_START unset
 NTHREADS      16
 NHEAPS        64
 NGROUPS_DATA  {{ngroups_data}}
-NGROUPS_TEMP  {{ngroups_data/2}}
+NGROUPS_TEMP  {{ngroups_data//2}}
 LEVEL_DATA    50
 LEVEL_TEMP    50
 HEAP_SIZE     {{heap_size}}
