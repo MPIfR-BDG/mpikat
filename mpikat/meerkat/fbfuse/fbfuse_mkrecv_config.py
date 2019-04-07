@@ -102,7 +102,7 @@ class MkrecvProcessManager(object):
         self._stdout_mon.start()
         self._stderr_mon = PipeMonitor(
             self._mkrecv_proc.stderr, lambda line: log.error(line))
-        self._stderr_mon.stop()
+        self._stderr_mon.start()
 
     def stop(self, timeout=5):
         self._proc_mon.stop()
