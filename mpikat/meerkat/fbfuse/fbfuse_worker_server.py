@@ -32,10 +32,11 @@ from katcp import Sensor, AsyncDeviceServer, AsyncReply, KATCPClientResource
 from katcp.kattypes import request, return_reply, Int, Str, Float
 from mpikat.core.ip_manager import ip_range_from_stream
 from mpikat.core.utils import LoggingSensor, parse_csv_antennas
-from mpikat.utils.pipe_monitor import PipeMonitor
 from mpikat.meerkat.fbfuse import DelayBufferController
-from mpikat.meerkat.fbfuse.fbfuse_mkrecv_config import make_mkrecv_header
-from mpikat.meerkat.fbfuse.fbfuse_mksend_config import make_mksend_header
+from mpikat.meerkat.fbfuse.fbfuse_mkrecv_config import (
+    make_mkrecv_header, MkrecvProcessManager)
+from mpikat.meerkat.fbfuse.fbfuse_mksend_config import (
+    make_mksend_header, MksendProcessManager)
 from mpikat.meerkat.fbfuse.fbfuse_psrdada_cpp_wrapper import compile_psrdada_cpp
 from mpikat.utils.process_tools import process_watcher
 
@@ -43,6 +44,7 @@ log = logging.getLogger("mpikat.fbfuse_worker_server")
 
 PACKET_PAYLOAD_SIZE = 1024  # bytes
 AVAILABLE_CAPTURE_MEMORY = 137438953472  # bytes
+MAX_DADA_BLOCK_SIZE = 500e6 #bytes
 
 MKRECV_CONFIG_FILENAME = "mkrecv_feng.cfg"
 MKSEND_COHERENT_CONFIG_FILENAME = "mksend_coherent.cfg"
@@ -228,6 +230,15 @@ class FbfWorkerServer(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._psrdada_cpp_args_sensor)
 
+        # ALSO WANT THE FOLLOWING SENSORS
+        # MKRECV instance status
+        # coherent MKSEND instance status
+        # incoherent MKSEND instance status
+        # FBFUSE instance status
+        # mkrecv -> fbfuse buffer percentage
+        # fbfuse -> mksend coherent percentage
+        # fbfuse -> mksend incoherent percentage
+
     @property
     def capturing(self):
         return self.state == self.CAPTURING
@@ -336,32 +347,6 @@ class FbfWorkerServer(AsyncDeviceServer):
         else:
             log.warning(("Current execution mode disables "
                          "DADA buffer reset"))
-
-    def _start_mksend_instance(self, config):
-        log.info("Starting MKSEND instance with config={}".format(config))
-        cmdline = ["mksend", "--header", config, "--quiet"]
-        log.debug("cmdline: {}".format(" ".join(cmdline)))
-        if self._exec_mode == DRYRUN:
-            log.warning(("In dry-run mode, replacing MKSEND call "
-                         "with busy loop"))
-            cmdline = DUMMY_CMD
-        proc = Popen(cmdline, stdout=PIPE, stderr=PIPE, shell=False,
-                     close_fds=True)
-        log.debug("Started MKSEND instance with PID={}".format(proc.pid))
-        return proc
-
-    def _start_mkrecv_instance(self, config):
-        log.info("Starting MKRECV instance with config={}".format(config))
-        cmdline = ["mkrecv", "--header", config]
-        log.debug("cmdline: {}".format(" ".join(cmdline)))
-        if self._exec_mode in [DRYRUN, OUTPUT_ONLY]:
-            log.warning(("In {} mode, replacing MKRECV call "
-                         "with busy loop").format(self._exec_mode))
-            cmdline = DUMMY_CMD
-        proc = Popen(cmdline, stdout=PIPE, stderr=PIPE, shell=False,
-                     close_fds=True)
-        log.debug("Started MKRECV instance with PID={}".format(proc.pid))
-        return proc
 
     @request(Str(), Int(), Int(), Float(), Float(), Int(), Str(), Str(),
              Str(), Str(), Str(), Int())
@@ -483,35 +468,25 @@ class FbfWorkerServer(AsyncDeviceServer):
             capture_range = ip_range_from_stream(feng_groups)
             ngroups = capture_range.count
             partition_nchans = nchans_per_group * ngroups
+            worker_idx = chan0_idx / partition_nchans
             partition_bandwidth = partition_nchans * chan_bw
-            npol = 2
-            ndim = 2
-            nbits = 8
-            tsamp = 1.0 / (feng_config['bandwidth'] / feng_config['nchans'])
             sample_clock = feng_config['bandwidth'] * 2
             timestamp_step = feng_config['nchans'] * 2 * 256
             frequency_ids = [chan0_idx + nchans_per_group *
                              ii for ii in range(ngroups)]
             nantennas = len(feng_capture_order_info['order'])
-            heap_group_size = (ngroups * nchans_per_group * PACKET_PAYLOAD_SIZE
-                               * nantennas)
-            ngroups_data = 1024
-            ngroups_temp = 512
-            centre_frequency = chan0_freq + feng_config['nchans'] / 2.0 * chan_bw
+            heap_size = nchans_per_group * PACKET_PAYLOAD_SIZE
+            heap_group_size = ngroups * heap_size * nantennas
+            ngroups_data = MAX_DADA_BLOCK_SIZE / heap_group_size
+            centre_frequency = (chan0_freq + feng_config['nchans']
+                                / 2.0 * chan_bw)
             if self._exec_mode == FULL:
                 dada_mode = 4
             else:
-                dada_mode = 1
+                dada_mode = 0
             mkrecv_config = {
                 'dada_mode': dada_mode,
-                'frequency_mhz': centre_frequency / 1e6,
-                'bandwidth': partition_bandwidth,
-                'tsamp_us': tsamp * 1e6,
-                'bytes_per_second': partition_bandwidth * npol * ndim * nbits,
-                'nchan': partition_nchans,
                 'dada_key': self._dada_input_key,
-                'nantennas': nantennas,
-                'antennas_csv': antenna_capture_order_csv,
                 'sync_epoch': feng_config['sync-epoch'],
                 'sample_clock': sample_clock,
                 'mcast_sources': ",".join(
@@ -523,9 +498,8 @@ class FbfWorkerServer(AsyncDeviceServer):
                     map(str, feng_capture_order_info['order'])),
                 'frequency_partition_ids_csv': ",".join(
                     map(str, frequency_ids)),
-                'nheaps': ngroups_data * heap_group_size,
                 'ngroups_data': ngroups_data,
-                'ngroups_temp': ngroups_temp
+                'heap_size': heap_size
             }
             mkrecv_header = make_mkrecv_header(
                 mkrecv_config, outfile=MKRECV_CONFIG_FILENAME)
@@ -575,10 +549,10 @@ class FbfWorkerServer(AsyncDeviceServer):
             nbeams_per_group = nbeams / len(group_order)
             coh_data_rate = (partition_bandwidth / coherent_beam_config['tscrunch']
                              / coherent_beam_config['fscrunch'] * nbeams_per_group)
-            coh_heap_size = 1048576
+            coh_heap_size = 8192
             coh_timestamp_step = (coh_heap_size * coherent_beam_config['tscrunch']
                                   * coherent_beam_config['fscrunch'] * 2)
-
+            heap_id_start = worker_idx * len(group_order)
             log.debug("Determining MKSEND configuration for coherent beams")
             dada_mode = int(self._exec_mode == FULL)
             mksend_coh_config = {
@@ -591,6 +565,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                 'sync_epoch': feng_config['sync-epoch'],
                 'sample_clock': sample_clock,
                 'heap_size': coh_heap_size,
+                'heap_id_start': heap_id_start,
                 'timestamp_step': coh_timestamp_step,
                 'beam_ids': beam_order,
                 'subband_idx': chan0_idx,
@@ -598,15 +573,17 @@ class FbfWorkerServer(AsyncDeviceServer):
             }
             mksend_coh_header = make_mksend_header(
                 mksend_coh_config, outfile=MKSEND_COHERENT_CONFIG_FILENAME)
-            log.info("Determined MKSEND configuration for coherent beams:\n{}".format(
-                mksend_coh_header))
+            log.info(("Determined MKSEND configuration for coherent beams:\n{}"
+                      ).format(mksend_coh_header))
             self._mksend_coh_header_sensor.set_value(mksend_coh_header)
 
-            incoh_data_rate = (partition_bandwidth / incoherent_beam_config['tscrunch']
-                               / incoherent_beam_config['fscrunch'])
-            incoh_heap_size = 1048576
-            incoh_timestamp_step = (incoh_heap_size * incoherent_beam_config['tscrunch']
-                                    * incoherent_beam_config['fscrunch'] * 2)
+            incoh_data_rate = (
+                partition_bandwidth / incoherent_beam_config['tscrunch']
+                / incoherent_beam_config['fscrunch'])
+            incoh_heap_size = 8192
+            incoh_timestamp_step = (
+                incoh_heap_size * incoherent_beam_config['tscrunch']
+                * incoherent_beam_config['fscrunch'] * 2)
 
             log.debug("Determining MKSEND configuration for incoherent beams")
             dada_mode = int(self._exec_mode == FULL)
@@ -621,6 +598,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                 'sync_epoch': feng_config['sync-epoch'],
                 'sample_clock': sample_clock,
                 'heap_size': incoh_heap_size,
+                'heap_id_start': worker_idx,
                 'timestamp_step': incoh_timestamp_step,
                 'beam_ids': (0,),
                 'subband_idx': chan0_idx,
@@ -801,18 +779,14 @@ class FbfWorkerServer(AsyncDeviceServer):
             return ("fail", "FBF worker not in READY state")
         self._state_sensor.set_value(self.STARTING)
         # Create SPEAD transmitter for coherent beams
-        self._mksend_coh_proc = self._start_mksend_instance(
-            MKSEND_COHERENT_CONFIG_FILENAME)
-        self._mksend_coh_stdout_mon = PipeMonitor(
-            self._mksend_coh_proc.stdout, {})
-        self._mksend_coh_stdout_mon.start()
 
-        # Create SPEAD transmitter for incoherent beam
-        self._mksend_incoh_proc = self._start_mksend_instance(
+        self._mksend_coh_proc = MksendProcessManager(
+            MKSEND_COHERENT_CONFIG_FILENAME)
+        self._mksend_coh_proc.start()
+
+        self._mksend_incoh_proc = MksendProcessManager(
             MKSEND_INCOHERENT_CONFIG_FILENAME)
-        self._mksend_incoh_stdout_mon = PipeMonitor(
-            self._mksend_incoh_proc.stdout, {})
-        self._mksend_incoh_stdout_mon.start()
+        self._mksend_incoh_proc.start()
 
         # Start beamforming pipeline
         log.info("Starting PSRDADA_CPP beamforming pipeline")
@@ -824,17 +798,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             self._psrdada_cpp_proc.pid))
 
         # Create SPEAD receiver for incoming antenna voltages
-        self._mkrecv_ingest_proc = self._start_mkrecv_instance(
-            MKRECV_CONFIG_FILENAME)
-        self._mkrecv_ingest_mon = PipeMonitor(
-                self._mkrecv_ingest_proc.stdout,
-                MKRECV_STDOUT_KEYS)
-        self._mkrecv_ingest_mon.start()
-
-        self._mkrecv_ingest_mon_err = PipeMonitor(
-                self._mkrecv_ingest_proc.stderr,
-                {})
-        self._mkrecv_ingest_mon_err.start()
+        self._mkrecv_proc = MkrecvProcessManager(MKRECV_CONFIG_FILENAME)
+        self._mkrecv_proc.start()
         self._state_sensor.set_value(self.CAPTURING)
         return ("ok",)
 
@@ -859,24 +824,12 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         @coroutine
         def stop_processes():
-            # send SIGTERM to MKRECV
             self._state_sensor.set_value(self.STOPPING)
-            self._process_close_wrapper(
-                self._mkrecv_ingest_proc, "mkrecv")
-            self._mkrecv_ingest_mon.stop()
+            self._mkrecv_proc.stop()
             self._process_close_wrapper(
                 self._psrdada_cpp_proc, "fbfuse")
-            self._process_close_wrapper(
-                self._mksend_coh_proc, "mksend (coherent)")
-            self._mksend_coh_stdout_mon.stop()
-            self._process_close_wrapper(
-                self._mksend_incoh_proc, "mksend (incoherent)")
-            self._mksend_incoh_stdout_mon.stop()
-            self._mkrecv_ingest_mon.join()
-            self._mkrecv_ingest_mon_err.stop()
-            self._mkrecv_ingest_mon_err.join()
-            self._mksend_coh_stdout_mon.join()
-            self._mksend_incoh_stdout_mon.join()
+            self._mksend_incoh_proc.stop()
+            self._mksend_coh_proc.stop()
             self._state_sensor.set_value(self.IDLE)
             reset_tasks = []
             reset_tasks.append(self._reset_db(

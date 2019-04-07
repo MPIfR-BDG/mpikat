@@ -4,32 +4,19 @@ from threading import Thread, Event
 
 log = logging.getLogger('mpikat.pipe_monitor')
 
-DELIMETER = None
-
-# As an example this is what the stdout formatter for MKRECV requires
-FORMATS = {
-    "STAT": [("slot-size", int), ("heaps-completed", int),
-             ("heaps-discarded", int), ("heaps-needed", int),
-             ("payload-expected", int), ("payload-received", int)]
-}
-
 
 class PipeMonitor(Thread):
 
-    def __init__(self, stdout, formats, delimiter=None):
+    def __init__(self, pipe, parser):
         """
-        @brief   Wrapper for parsing the stdout from MKRECV processes.
+        @brief   Class for parsing output of subprocess pipes
 
-        @param   stdout   Stdout pipe from an MKRECV process.
-
-        @detail  MkrecvMonitor runs as a background thread that blocks on the MKRECV
-                 processes stdout pipe
+        @param   pipe   An OS pipe
         """
         Thread.__init__(self)
         self.setDaemon(True)
-        self._formats = formats
-        self._delimeter = delimiter
-        self._stdout = stdout
+        self._parser = parser
+        self._pipe = pipe
         self._params = {}
         self._watchers = set()
         self._last_update = time.time()
@@ -66,28 +53,25 @@ class PipeMonitor(Thread):
 
     def parse_line(self, line):
         """
-        @brief      Parse a line from an MKRECV processes stdout
+        @brief      Parse a line from a subprocesses pipe
 
         @param      line  The line
         """
         line = line.strip()
-        log.debug("Parsing line: '{}'".format(line))
         if len(line) == 0:
             return
-        split = line.split(self._delimeter)
-        key = split[0]
-        if key in self._formats:
-            log.debug("Using formatter for key: {}".format(key))
-            formatter = self._formats[key]
-            for (name, parser), value in zip(formatter, split[1:]):
-                self._params[name] = parser(value)
+        log.debug("Parsing line: '{}'".format(line))
+        updates = self._parser(line)
+        if not updates:
+            log.debug("No parameter updates parsed from line")
+            return
+        else:
+            self._params.update(updates)
             log.info("Parameters: {}".format(self._params))
             self.notify_watchers()
-        else:
-            log.debug("Invalid key: {}".format(key))
 
     def run(self):
-        for line in iter(self._stdout.readline, b''):
+        for line in iter(self._pipe.readline, b''):
             self._last_update = time.time()
             try:
                 self.parse_line(line)
@@ -104,7 +88,7 @@ class PipeMonitor(Thread):
 
     def is_blocked(self, idle_time=2.0):
         """
-        @brief      Check if there is a prolonged block on the stdout read
+        @brief      Check if there is a prolonged block on the pipe read
 
         @param      idle_time  The maximum time since an update after which blocking is assumed
 

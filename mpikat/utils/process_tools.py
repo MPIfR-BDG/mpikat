@@ -1,5 +1,6 @@
 import time
 import logging
+from threading import Thread, Event
 from tornado.gen import coroutine, sleep
 
 log = logging.getLogger('mpikat.process_tools')
@@ -42,3 +43,20 @@ def process_watcher(process, name=None, timeout=120):
             name, process.stdout.read()))
         log.debug("Process stderr {}:\n{}".format(
             name, process.stderr.read()))
+
+
+class ProcessMonitor(Thread):
+    def __init__(self, proc, exit_handler):
+        self._proc = proc
+        self._exit_handler = exit_handler
+        self._stop_event = Event()
+
+    def run(self):
+        while self._proc.poll() and not self._stop_event.is_set():
+            time.sleep(1)
+        if not self._stop_event.is_set():
+            self._exit_handler()
+
+    def stop(self):
+        self._stop_event.set()
+

@@ -25,21 +25,20 @@ import json
 import tornado
 import signal
 import time
-import numpy as np
-import ipaddress
-import mosaic
+import cPickle
 from threading import Lock
 from optparse import OptionParser
 from tornado.gen import Return, coroutine
-from katcp import Sensor, Message, AsyncDeviceServer, KATCPClientResource, AsyncReply
-from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
-from katportalclient import KATPortalClient
+from katcp import Sensor, AsyncReply
+from katcp.kattypes import request, return_reply, Int, Str, Float
 from katpoint import Antenna, Target
-from mpikat.core.master_controller import MasterController, ProductLookupError, ProductExistsError
+from mpikat.core.master_controller import (
+    MasterController, ProductLookupError, ProductExistsError)
 from mpikat.core.ip_manager import IpRangeManager, ip_range_from_stream
-from mpikat.core.utils import parse_csv_antennas, is_power_of_two, next_power_of_two, AntennaValidationError
+from mpikat.core.utils import parse_csv_antennas
 from mpikat.meerkat.katportalclient_wrapper import KatportalClientWrapper
-from mpikat.meerkat.fbfuse import FbfWorkerPool, BeamManager, FbfProductController
+from mpikat.meerkat.fbfuse import FbfWorkerPool, FbfProductController
+from mpikat.meerkat.test.utils import ANTENNAS as DEFAULT_ANTENNA_MODELS
 
 # ?halt message means shutdown everything and power off all machines
 
@@ -47,6 +46,9 @@ log = logging.getLogger("mpikat.fbfuse_master_controller")
 lock = Lock()
 
 FBF_IP_RANGE = "spead://239.11.1.0+127:7147"
+CONFIG_PICKLE_FILE = "/tmp/fbfuse_config.pickle"
+VALID_NCHANS = [1024, 4096, 32768]
+
 
 class FbfMasterController(MasterController):
     """This is the main KATCP interface for the FBFUSE
@@ -59,6 +61,7 @@ class FbfMasterController(MasterController):
     VERSION_INFO = ("mpikat-fbf-api", 0, 1)
     BUILD_INFO = ("mpikat-fbf-implementation", 0, 1, "rc1")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
+
     def __init__(self, ip, port, dummy=True, ip_range=FBF_IP_RANGE):
         """
         @brief       Construct new FbfMasterController instance
@@ -78,7 +81,7 @@ class FbfMasterController(MasterController):
         if self._dummy:
             for ii in range(64):
                 self._server_pool.add("127.0.0.1", 50000+ii)
-
+        self._last_configure_arguments = None
 
     def setup_sensors(self):
         """
@@ -161,7 +164,71 @@ class FbfMasterController(MasterController):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
+        @coroutine
+        def configure_coroutine_wrapper():
+            try:
+                yield self.configure(product_id, antennas_csv, n_channels,
+                                     streams_json, proxy_name)
+            except Exception as error:
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(configure_coroutine_wrapper)
+        raise AsyncReply
 
+    @request()
+    @return_reply()
+    def request_reconfigure(self, req):
+        """
+        @brief   Reconfigure the current instance either from in memory
+                 configuration information or from disk.
+        """
+        @coroutine
+        def reconfigure_coroutine_wrapper():
+            try:
+                yield self.reconfigure()
+            except Exception as error:
+                req.reply("fail", "Unable to reconfigure with error: {}".format(
+                    str(error)))
+            else:
+                req.reply("ok",)
+        self.ioloop.add_callback(reconfigure_coroutine_wrapper)
+        raise AsyncReply
+
+    @coroutine
+    def reconfigure(self):
+        """
+        @brief   Internal implementation of reconfigure
+        """
+        if self._last_configure_arguments:
+            log.info("Retreiving config information from memory")
+            args = self._last_configure_arguments
+        else:
+            log.info("Retreiving config information from disk")
+            with open(CONFIG_PICKLE_FILE, "r") as f:
+                args = cPickle.load(f)
+        product_id = args[0]
+        try:
+            yield self.deconfigure(product_id)
+        except Exception as e:
+            log.warning(("Unable to deconfigure prior product with ID"
+                         " '{}': {}").format(product_id, str(e)))
+        yield self.configure(*args)
+
+    @coroutine
+    def configure(self, product_id, antennas_csv, n_channels, streams_json, proxy_name):
+        """
+        @brief     Internal implementation of configure.
+
+        @detail    This function is used to break the configure logic from only being
+                   accessible through a KATCP request. For details for the parameters
+                   see the "request_configure" method implemented above
+        """
+        with open(CONFIG_PICKLE_FILE, "w") as f:
+            cPickle.dump((product_id, antennas_csv, n_channels,
+                          streams_json, proxy_name), f)
+        self._last_configure_arguments = (product_id, antennas_csv, n_channels,
+                                          streams_json, proxy_name)
         msg = ("Configuring new FBFUSE product",
                "Product ID: {}".format(product_id),
                "Antennas: {}".format(antennas_csv),
@@ -171,22 +238,18 @@ class FbfMasterController(MasterController):
         log.info("\n".join(msg))
         # Test if product_id already exists
         if product_id in self._products:
-            return ("fail", "FBF already has a configured product with ID: {}".format(product_id))
+            raise ProductExistsError("FBF already has a configured product with ID: {}".format(product_id))
         # Determine number of nodes required based on number of antennas in subarray
         # Note this is a poor way of handling this that may be updated later. In theory
         # there is a throughput measure as a function of bandwidth, polarisations and number
         # of antennas that allows one to determine the number of nodes to run. Currently we
         # just assume one antennas worth of data per NIC on our servers, so two antennas per
         # node.
-        try:
-            antennas = parse_csv_antennas(antennas_csv)
-        except AntennaValidationError as error:
-            return ("fail", str(error))
-
-        valid_n_channels = [1024, 4096, 32768]
-        if not n_channels in valid_n_channels:
-            return ("fail", "The provided number of channels ({}) is not valid. Valid options are {}".format(n_channels, valid_n_channels))
-
+        antennas = parse_csv_antennas(antennas_csv)
+        if n_channels not in VALID_NCHANS:
+            raise Exception(("The provided number of channels ({}) is not "
+                             "valid. Valid options are {}").format(
+                             n_channels, VALID_NCHANS))
         streams = json.loads(streams_json)
         try:
             streams['cam.http']['camdata']
@@ -196,71 +259,70 @@ class FbfMasterController(MasterController):
             # Need to keep this for future sensor lookups
             streams['cbf.antenna_channelised_voltage']
         except KeyError as error:
-            return ("fail", "JSON streams object does not contain required key: {}".format(str(error)))
+            raise KeyError(("JSON streams object does not contain "
+                            "required key: {}").format(str(error)))
 
         for key, value in streams['cbf.antenna_channelised_voltage'].items():
             if key.endswith('.antenna-channelised-voltage'):
                 instrument_name, _ = key.split('.')
                 feng_stream_name = key
                 feng_groups = value
-                log.debug("Parsed instrument name from streams: {}".format(instrument_name))
+                log.debug("Parsed instrument name from streams: {}".format(
+                    instrument_name))
                 break
         else:
-            return ("fail", "Could not determine instrument name (e.g. 'i0') from streams")
-
-        # TODO: change this request to @async_reply and make the whole thing a coroutine
-        @coroutine
-        def configure():
-            kpc = self._katportal_wrapper_type(streams['cam.http']['camdata'])
-            # Get all antenna observer strings
-            futures, observers = [],[]
-            for antenna in antennas:
-                log.debug("Fetching katpoint string for antenna {}".format(antenna))
-                futures.append(kpc.get_observer_string(antenna))
-            for ii,future in enumerate(futures):
-                try:
-                    observer = yield future
-                except Exception as error:
-                    log.error("Error on katportalclient call: {}".format(str(error)))
-                    req.reply("fail", "Error retrieving katpoint string for antenna {}".format(antennas[ii]))
-                    return
-                else:
-                    log.debug("Fetched katpoint antenna: {}".format(observer))
-                    observers.append(Antenna(observer))
-
-            # Get bandwidth, cfreq, sideband, f-eng mapping
-
-            #TODO: Also get sync-epoch
-
-            log.debug("Fetching F-engine and subarray configuration information")
-            bandwidth_future = kpc.get_bandwidth(feng_stream_name)
-            cfreq_future = kpc.get_cfreq(feng_stream_name)
-            sideband_future = kpc.get_sideband(feng_stream_name)
-            feng_antenna_map_future = kpc.get_antenna_feng_id_map(instrument_name, antennas)
-            sync_epoch_future = kpc.get_sync_epoch()
-            bandwidth = yield bandwidth_future
-            cfreq = yield cfreq_future
-            sideband = yield sideband_future
-            feng_antenna_map = yield feng_antenna_map_future
-            sync_epoch = yield sync_epoch_future
-            feng_config = {
-                'bandwidth': bandwidth,
-                'centre-frequency': cfreq,
-                'sideband': sideband,
-                'feng-antenna-map': feng_antenna_map,
-                'sync-epoch': sync_epoch,
-                'nchans': n_channels
-            }
-            for key, value in feng_config.items():
-                log.debug("{}: {}".format(key, value))
-            product = FbfProductController(self, product_id, observers, n_channels,
-                feng_groups, proxy_name, feng_config)
-            self._products[product_id] = product
-            self._update_products_sensor()
-            req.reply("ok",)
-            log.debug("Configured FBFUSE instance with ID: {}".format(product_id))
-        self.ioloop.add_callback(configure)
-        raise AsyncReply
+            raise Exception("Could not determine instrument name "
+                            "(e.g. 'i0') from streams")
+        kpc = self._katportal_wrapper_type(streams['cam.http']['camdata'])
+        # Get all antenna observer strings
+        futures, observers = [], []
+        for antenna in antennas:
+            log.debug("Fetching katpoint string for antenna {}".format(
+                antenna))
+            futures.append(kpc.get_observer_string(antenna))
+        for ii, future in enumerate(futures):
+            try:
+                observer = yield future
+            except Exception as error:
+                log.error("Error on katportalclient call: {}".format(
+                    str(error)))
+                log.warning("Falling back on default pointing model for "
+                            "antenna '{}'".format(antennas[ii]))
+                observer = DEFAULT_ANTENNA_MODELS[antennas[ii]]
+                observers.append(Antenna(observer))
+            else:
+                log.debug("Fetched katpoint antenna: {}".format(observer))
+                observers.append(Antenna(observer))
+        # Get bandwidth, cfreq, sideband, f-eng mapping
+        # TODO: Also get sync-epoch
+        log.debug("Fetching F-engine and subarray configuration information")
+        bandwidth_future = kpc.get_bandwidth(feng_stream_name)
+        cfreq_future = kpc.get_cfreq(feng_stream_name)
+        sideband_future = kpc.get_sideband(feng_stream_name)
+        feng_antenna_map_future = kpc.get_antenna_feng_id_map(
+            instrument_name, antennas)
+        sync_epoch_future = kpc.get_sync_epoch()
+        bandwidth = yield bandwidth_future
+        cfreq = yield cfreq_future
+        sideband = yield sideband_future
+        feng_antenna_map = yield feng_antenna_map_future
+        sync_epoch = yield sync_epoch_future
+        feng_config = {
+            'bandwidth': bandwidth,
+            'centre-frequency': cfreq,
+            'sideband': sideband,
+            'feng-antenna-map': feng_antenna_map,
+            'sync-epoch': sync_epoch,
+            'nchans': n_channels
+        }
+        for key, value in feng_config.items():
+            log.debug("{}: {}".format(key, value))
+        product = FbfProductController(
+            self, product_id, observers, n_channels,
+            feng_groups, proxy_name, feng_config)
+        self._products[product_id] = product
+        self._update_products_sensor()
+        log.debug("Configured FBFUSE instance with ID: {}".format(product_id))
 
     @request(Str())
     @return_reply()
@@ -278,22 +340,32 @@ class FbfMasterController(MasterController):
 
         @return     katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]
         """
+        try:
+            self.deconfigure()
+        except Exception as error:
+            return ("fail", str(error))
+        else:
+            return ("ok",)
+
+    def deconfigure(self, product_id):
+        """
+        @brief     Internal implementation of deconfigure.
+
+        @detail    This function is used to break the deconfigure logic from only being
+                   accessible through a KATCP request.
+        """
         log.info("Deconfiguring FBFUSE instace with ID '{}'".format(product_id))
         # Test if product exists
-        try:
-            product = self._get_product(product_id)
-        except ProductLookupError as error:
-            return ("fail", str(error))
+        product = self._get_product(product_id)
         try:
             product.deconfigure()
         except Exception as error:
-            log.exception("Encountered error while deconfiguring product '{}'".format(product_id))
+            log.exception(("Encountered error while deconfiguring product "
+                           "'{}': {}").format(product_id, str(error)))
             log.warning("Forcing product deconfigure. This action may have unintented consequences"
-                " if any worker servers are still allocated to the product")
+                        " if any worker servers are still allocated to the product")
         del self._products[product_id]
         self._update_products_sensor()
-        return ("ok",)
-
 
     @request(Str(), Str())
     @return_reply()
@@ -320,29 +392,6 @@ class FbfMasterController(MasterController):
             raise Return(("fail", str(error)))
         yield product.target_start(target)
         raise Return(("ok",))
-
-
-    # DELETE this
-
-    @request(Str())
-    @return_reply()
-    @coroutine
-    def request_target_stop(self, req, product_id):
-        """
-        @brief      Notify FBFUSE that the telescope has stopped observing a target
-
-        @param      product_id      This is a name for the data product, used to track which subarray is being deconfigured.
-                                    For example "array_1_bc856M4k".
-
-        @return     katcp reply object [[[ !target-start ok | (fail [error description]) ]]]
-        """
-        try:
-            product = self._get_product(product_id)
-        except ProductLookupError as error:
-            raise Return(("fail", str(error)))
-        yield product.target_stop()
-        raise Return(("ok",))
-
 
     @request(Str())
     @return_reply()
@@ -477,7 +526,7 @@ class FbfMasterController(MasterController):
         except ProductLookupError as error:
             return ("fail", str(error))
         else:
-            beam = product.reset_beams()
+            product.reset_beams()
             return ("ok", )
 
     @request(Str(), Str())
@@ -621,22 +670,28 @@ class FbfMasterController(MasterController):
         product.add_beam(target)
         return ("ok",)
 
+
 @coroutine
 def on_shutdown(ioloop, server):
     log.info("Shutting down server")
     yield server.stop()
     ioloop.stop()
 
+
 def main():
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
-    parser.add_option('-H', '--host', dest='host', type=str,
+    parser.add_option(
+        '-H', '--host', dest='host', type=str,
         help='Host interface to bind to')
-    parser.add_option('-p', '--port', dest='port', type=long,
+    parser.add_option(
+        '-p', '--port', dest='port', type=int,
         help='Port number to bind to')
-    parser.add_option('', '--log_level',dest='log_level',type=str,
+    parser.add_option(
+        '', '--log_level',dest='log_level',type=str,
         help='Port number of status server instance',default="INFO")
-    parser.add_option('', '--dummy',action="store_true", dest='dummy',
+    parser.add_option(
+        '', '--dummy',action="store_true", dest='dummy',
         help='Set status server to dummy')
     (opts, args) = parser.parse_args()
     logger = logging.getLogger('mpikat')
@@ -650,6 +705,7 @@ def main():
     server = FbfMasterController(opts.host, opts.port, dummy=opts.dummy)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
+
     def start_and_display():
         server.start()
         log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
@@ -657,6 +713,6 @@ def main():
     ioloop.add_callback(start_and_display)
     ioloop.start()
 
+
 if __name__ == "__main__":
     main()
-
