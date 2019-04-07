@@ -47,9 +47,11 @@ def process_watcher(process, name=None, timeout=120):
 
 class ProcessMonitor(Thread):
     def __init__(self, proc, exit_handler):
+        Thread.__init__(self)
         self._proc = proc
         self._exit_handler = exit_handler
         self._stop_event = Event()
+        self.daemon = True
 
     def run(self):
         while self._proc.poll() and not self._stop_event.is_set():
