@@ -92,14 +92,14 @@ class MksendProcessManager(object):
             ["mksend", "--header", self._header_file, "--quiet"],
             stdout=PIPE, stderr=PIPE, shell=False, close_fds=True)
         self._proc_mon = ProcessMonitor(
-            self._mksend_proc, self.stop)
+            self._mksend_proc, lambda: None)
         self._proc_mon.start()
         self._stdout_mon = PipeMonitor(
             self._mksend_proc.stdout, self._stdout_parser)
         self._stdout_mon.start()
         self._stderr_mon = PipeMonitor(
             self._mksend_proc.stderr, lambda line: log.error(line))
-        self._stderr_mon.stop()
+        self._stderr_mon.start()
 
     def stop(self, timeout=5):
         self._proc_mon.stop()
