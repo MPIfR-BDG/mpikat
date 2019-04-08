@@ -84,7 +84,8 @@ DEFAULT_CONFIG = {
             "nbits": 8,
             "naccumulate": 1,
             "input_level": 100,
-            "output_level": 100
+            "output_level": 100,
+            "null_output": False            # Write outptu to /dev/null for testing purposes
         },
         "mkrecv":
         {
@@ -439,6 +440,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         except Exception as error:
             raise RuntimeError(str(error))
 
+        output_filename_base = "GATED_RUN_{:.0f}_POL_".format(time.time())
         for i,k in enumerate(DADA_BUFFERS):
             # configure dada buffer
             cmd = "dada_db -k {key} {args}".format(key=k,
@@ -450,9 +452,16 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 self._decode_capture_stdout)
             self._create_ring_buffer._process.wait()
 
+            if self._config["gated_cli_args"]["null_output"]:
+                log.info("Null output selected! No outptu will be written!")
+                ofname = "/dev/null"
+            else:
+                ofname = output_filename_base + str(i) + ".dat"
+            log.info("Output polarisation {} to file {}".format(i, ofname))
+
             log_level='debug'
             # Configure + launch gated spectrometer
-            cmd = "gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --selected_sidechannel=0 --nbits={nbits} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_level={output_level} -o/dev/null --log_level={log_level}".format(dada_key=k, log_level=log_level, **self._config["gated_cli_args"])
+            cmd = "gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --selected_sidechannel=0 --nbits={nbits} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_level={output_level} -o {ofname} --log_level={log_level}".format(dada_key=k, log_level=log_level, ofname=ofname, **self._config["gated_cli_args"])
             # here should be a smarter system to parse the options from the
             # controller to the program without redundant typing of options
             log.debug("Command to run: {}".format(cmd))
