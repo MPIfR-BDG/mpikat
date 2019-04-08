@@ -57,31 +57,15 @@ DADA_BUFFERS = ['dada', 'dadc']
 
 DEFAULT_CONFIG = {
         "base_output_dir": os.getcwd(),
+        "nbits" : 8,
+        "samples_per_heap": 512,
         "dada_db_params":
         {
-            "args": "-n 8 -b 537919488 -p -l"  # The buffersize is 512MiB for the ADC data + 512/4*8 kiB for the side channel data
-        },
-        "dada_header_params":
-        {
-            "filesize": 32000000000,
-            "telescope": "Effelsberg",
-            "instrument": "asterix",
-            "frequency_mhz": 1370,
-            "receiver_name": "P200-3",
-            "mc_source": "239.2.1.154",
-            "bandwidth": -162.5,
-            "tsamp": 0.04923076923076923,
-            "nbit": 8,
-            "ndim": 2,
-            "npol": 2,
-            "nchan": 8,
-            "resolution": 1,
-            "dsb": 1
+            "args": "-n 8 -p -l"  # The buffersize is calculated from the samples_per heap and the bit depth 
         },
         "gated_cli_args":
         {
             "fft_length": 1024,
-            "nbits": 8,
             "naccumulate": 1,
             "input_level": 100,
             "output_level": 100,
@@ -94,7 +78,7 @@ DEFAULT_CONFIG = {
                 "ibv_if": "10.10.1.10",
                 "mcast_sources": "225.0.0.152 225.0.0.153 225.0.0.154 225.0.0.155",
                 "port": "7148",
-                "dada_key": DADA_BUFFERS[0]
+                "dada_key": DADA_BUFFERS[0]     # Ugly but simplest way to have global bugger def here
             },
              "polarization_1" :
             {
@@ -174,7 +158,7 @@ IBV_MAX_POLL 10
 BUFFER_SIZE 16777216
 #BUFFER_SIZE 1048576
 SAMPLE_CLOCK_START 0 # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock
-HEAP_SIZE   4096
+#HEAP_SIZE   4096
 
 #SPEAD specifcation for EDD packetiser data stream
 NINDICES    1   # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
@@ -441,10 +425,18 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             raise RuntimeError(str(error))
 
         output_filename_base = "GATED_RUN_{:.0f}_POL_".format(time.time())
+
+        logging.debug('Setting dada parameters according to bit depth')
+        bitdepth = self._config["nbits"]
+        # We store 512 mega samples in the buffer
+        nSamples = 512 * 1024 * 1024
+        heapSize =  self._config["samples_per_heap"] * bitdepth
+        bufferSize = nSamples * bitdepth / 8 + nSamples * 64 / 8 / heapSize
+
         for i,k in enumerate(DADA_BUFFERS):
             # configure dada buffer
-            cmd = "dada_db -k {key} {args}".format(key=k,
-                                                   args=self._config["dada_db_params"]["args"])
+            args ="-b {} {}".format(bufferSize, self._config["dada_db_params"]["args"])
+            cmd = "dada_db -k {key} {args}".format(key=k, args=args)
             log.debug("Running command: {0}".format(cmd))
             self._create_ring_buffer = ExecuteCommand(
                 cmd, outpath=None, resident=False)
@@ -461,7 +453,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
             log_level='debug'
             # Configure + launch gated spectrometer
-            cmd = "gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --selected_sidechannel=0 --nbits={nbits} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_level={output_level} -o {ofname} --log_level={log_level}".format(dada_key=k, log_level=log_level, ofname=ofname, **self._config["gated_cli_args"])
+            cmd = "gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --selected_sidechannel=0 --nbits={nbits} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_level={output_level} -o {ofname} --log_level={log_level}".format(dada_key=k, log_level=log_level, ofname=ofname, nbits=bitdepth, **self._config["gated_cli_args"])
             # here should be a smarter system to parse the options from the
             # controller to the program without redundant typing of options
             log.debug("Command to run: {}".format(cmd))
