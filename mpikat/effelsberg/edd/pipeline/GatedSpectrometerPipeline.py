@@ -352,6 +352,12 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
     def _handle_execution_stderr(self, stderr, callback):
         log.info(stderr)
 
+    def _handle_error_state(self, errorstate, caller):
+        """
+        Sets the error state.
+        """
+        log.error("Errror handle called. Errorstate = {} from {}".format(errorstate, caller))
+        self.state =  "error"
 
 
     @request(Str())
@@ -461,6 +467,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             gated_cli = ExecuteCommand(cmd, outpath=None, resident=True, env={"CUDA_VISIBLE_DEVICES":str(i)})
             gated_cli.stdout_callbacks.add( self._decode_capture_stdout)
             gated_cli.stderr_callbacks.add( self._handle_execution_stderr)
+            gated_cli.error_callbacks.add(self._handle_error_state)
             self._subprocesses.append(gated_cli)
         self.state = "ready"
 
@@ -520,6 +527,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             self.mkrec_cmd.append(ExecuteCommand(cmd, outpath=None, resident=True))
 
             for k in self.mkrec_cmd:
+                k.error_callbacks.add(self._handle_error_state)
                 k.stdout_callbacks.add( self._decode_capture_stdout)
                 k.stderr_callbacks.add( self._handle_execution_stderr)
 
