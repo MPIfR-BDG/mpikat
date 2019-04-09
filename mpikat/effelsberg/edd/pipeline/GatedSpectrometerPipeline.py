@@ -33,7 +33,6 @@ from tornado.ioloop import PeriodicCallback
 import os
 import time
 from astropy.time import Time
-from subprocess import PIPE, Popen
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
 from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
 import shlex
@@ -53,7 +52,9 @@ PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
                    "deconfiguring", "error"]
 
-DADA_BUFFERS = ['dada', 'dadc']
+#DADA_BUFFERS = ['dada', 'dadc']
+#Hotfix: disbale second buffer
+DADA_BUFFERS = ['dada']
 
 DEFAULT_CONFIG = {
         "base_output_dir": os.getcwd(),
@@ -79,15 +80,16 @@ DEFAULT_CONFIG = {
                 "ibv_if": "10.10.1.10",
                 "mcast_sources": "225.0.0.152 225.0.0.153 225.0.0.154 225.0.0.155",
                 "port": "7148",
-                "dada_key": DADA_BUFFERS[0]     # Ugly but simplest way to have global bugger def here
+                "dada_key": DADA_BUFFERS[0],     # Ugly but simplest way to have global bugger def here
+                "numa_node": 1                   # we only have on ethernet interface on numa node 1
             },
-             "polarization_1" :
-            {
-                "ibv_if": "10.10.1.11",
-                "mcast_sources": "225.0.0.156 225.0.0.157 225.0.0.158 225.0.0.159",
-                "port": "7148",
-                "dada_key": DADA_BUFFERS[1]
-            }
+#             "polarization_1" :
+#            {
+#                "ibv_if": "10.10.1.11",
+#                "mcast_sources": "225.0.0.156 225.0.0.157 225.0.0.158 225.0.0.159",
+#                "port": "7148",
+#                "dada_key": DADA_BUFFERS[1]
+#            }
         }
     }
 
@@ -101,11 +103,14 @@ IBV_MAX_POLL 10
 PORT         7148
 
 DADA_MODE    4                       # The mode, 4=full dada functionality
+FILE_SIZE    134217728 
+BYTES_PER_SECOND unset
 
 SAMPLE_CLOCK_START 0 # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock
 
 NTHREADS 32
 NHEAPS 64
+NGROUPS_TEMP 65536 
 
 #SPEAD specifcation for EDD packetiser data stream
 NINDICES    1   # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
@@ -381,17 +386,20 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
         logging.debug('Setting dada parameters according to bit depth')
         bitdepth = self._config["nbits"]
-        heapSize =  self._config["samples_per_heap"] * bitdepth / 8
+        self.heapSize =  self._config["samples_per_heap"] * bitdepth / 8
 
         # We store 512 mega samples in the buffer
         nSamples = self._config["samples_per_block"]
         nHeaps = nSamples / self._config["samples_per_heap"]
 
-        self.bufferSize = nHeaps * (heapSize + 64 / 8) 
+        self.input_bufferSize = nHeaps * (self.heapSize + 64 / 8) 
+        nSlices = nSamples / self._config['gated_cli_args']['fft_length'] /  self._config['gated_cli_args']['naccumulate']
+        nChannels = self._config['gated_cli_args']['fft_length'] / 2 + 1
+        self.output_bufferSize = nSlices * 2 * nChannels 
 
         def create_ring_buffer(bufferSize, key):
             args ="-b {} {}".format(bufferSize, self._config["dada_db_params"]["args"])
-            cmd = "dada_db -k {key} {args}".format(key=key, args=args)
+            cmd = "numactl --cpubind=1 --membind=1 dada_db -k {key} {args}".format(key=key, args=args)
             log.debug("Running command: {0}".format(cmd))
             _create_ring_buffer = ExecuteCommand(
                 cmd, outpath=None, resident=False)
@@ -403,8 +411,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         for i,k in enumerate(DADA_BUFFERS):
             ofname = k[::-1]
             # configure dada buffer
-            create_ring_buffer(self.bufferSize, k)
-            create_ring_buffer(self.bufferSize, ofname)
+            create_ring_buffer(self.input_bufferSize, k)
+            create_ring_buffer(self.output_bufferSize, ofname)
 
             #if self._config["gated_cli_args"]["null_output"]:
             #    log.info("Null output selected! No output will be written!")
@@ -417,19 +425,20 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             log_level='debug'
             # Configure + launch gated spectrometer
 
-            cmd = "gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={nbits} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=k, log_level=log_level, ofname=ofname, nbits=bitdepth, heapSize=heapSize, **self._config["gated_cli_args"])
+            cmd = "numactl --cpubind=1 --membind=1 gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={nbits} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=k, log_level=log_level, ofname=ofname, nbits=bitdepth, heapSize=self.heapSize, **self._config["gated_cli_args"])
             # here should be a smarter system to parse the options from the
             # controller to the program without redundant typing of options
             log.debug("Command to run: {}".format(cmd))
 
-            gated_cli = ExecuteCommand(cmd, outpath=None, resident=True, env={"CUDA_VISIBLE_DEVICES":str(i)})
+            #log.warning(" NOE XECUTION OF GATED SPECTROMETER FOR TESTING!!!")
+            gated_cli = ExecuteCommand(cmd, outpath=None, resident=True, env={"CUDA_VISIBLE_DEVICES":str(1)}) #HOTFIX set to numa node 1
             gated_cli.stdout_callbacks.add( self._decode_capture_stdout)
             gated_cli.stderr_callbacks.add( self._handle_execution_stderr)
             gated_cli.error_callbacks.add(self._handle_error_state)
             self._subprocesses.append(gated_cli)
 
-            cmd = "dada_dbdisk -k {key} -D {odir}".format(key=ofname, odir=odirname)
-            dadadiskcmd = ExecuteCommand(cmd, outpath=None, resident=True, env={"CUDA_VISIBLE_DEVICES":str(i)})
+            cmd = "numactl --cpubind=1 --membind=1 dada_dbdisk -k {key} -D {odir} -v".format(key=ofname, odir=odirname)
+            dadadiskcmd = ExecuteCommand(cmd, outpath=None, resident=True, env={"CUDA_VISIBLE_DEVICES":str(1)})
             dadadiskcmd.stdout_callbacks.add( self._decode_capture_stdout)
             dadadiskcmd.stderr_callbacks.add( self._handle_execution_stderr)
             self._subprocesses.append(dadadiskcmd)
@@ -481,6 +490,9 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             mkrecvheader_file = tempfile.NamedTemporaryFile(delete=False)
             log.debug("Creating mkrec header file: {}".format(mkrecvheader_file.name))
             mkrecvheader_file.write(mkrecv_header)
+
+            mkrecvheader_file.write("HEAP_SIZE {}\n".format(self.heapSize))
+
             mkrecvheader_file.write("\n#GATED_PARAMETERS\n")
             for k, v in self._config['gated_cli_args'].items():
                 mkrecvheader_file.write("{} {}\n".format(k, v))
@@ -496,12 +508,13 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             self.mkrec_cmd = []
 
             cfg = self._config['mkrecv']['polarization_0']
-            cmd = "mkrecv_nt --header {mkrecv_header} --dada-key {dada_key} --ibv-if {ibv_if} --port {port} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, **cfg )
+            cmd = "numactl --cpubind=1 --membind=1 mkrecv_nt --quiet --header {mkrecv_header} --dada-key {dada_key} --ibv-if {ibv_if} --port {port} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, **cfg )
             self.mkrec_cmd.append(ExecuteCommand(cmd, outpath=None, resident=True))
 
-            cfg = self._config['mkrecv']['polarization_1']
-            cmd = "mkrecv_nt --header {mkrecv_header} --dada-key {dada_key} --ibv-if {ibv_if} --port {port} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, **cfg )
-            self.mkrec_cmd.append(ExecuteCommand(cmd, outpath=None, resident=True))
+# Hotfix: Disbale second polarization 
+#            cfg = self._config['mkrecv']['polarization_1']
+#            cmd = "mkrecv_nt --quiet --header {mkrecv_header} --dada-key {dada_key} --ibv-if {ibv_if} --port {port} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, **cfg )
+#            self.mkrec_cmd.append(ExecuteCommand(cmd, outpath=None, resident=True))
 
             for k in self.mkrec_cmd:
                 k.error_callbacks.add(self._handle_error_state)
