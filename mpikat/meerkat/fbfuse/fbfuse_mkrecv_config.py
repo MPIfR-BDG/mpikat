@@ -1,9 +1,5 @@
 import jinja2
 import logging
-import time
-from subprocess import Popen, PIPE
-from mpikat.utils.pipe_monitor import PipeMonitor
-from mpikat.utils.process_tools import ProcessMonitor
 
 log = logging.getLogger('mpikat.fbfuse_mksend_config')
 
@@ -68,64 +64,12 @@ def make_mkrecv_header(params, outfile=None):
     return rendered
 
 
-class MkrecvProcessManager(object):
-    def __init__(self, header_file):
-        self._header_file = header_file
-        self._mkrecv_proc = None
-        self._stdout_mon = None
-        self._stderr_mon = None
-        self._proc_mon = None
-
-    @property
-    def pid(self):
-        if not self._mksend_proc:
-            raise Exception("Process not yet started")
-        else:
-            return self._mkrecv_proc.pid
-
-    def _stdout_parser(self, line):
-        try:
-            tokens = line.split()
-            if tokens[0] not in MKRECV_STDOUT_KEYS:
-                return None
-            else:
-                params = {}
-                parser = MKRECV_STDOUT_KEYS[tokens[0]]
-                for ii, (key, dtype) in enumerate(parser):
-                    params[key] = dtype(tokens[ii+1])
-                return params
-        except Exception:
-            log.exception("Error while parsing line: '{}'".format(line))
-
-    def start(self):
-        self._mkrecv_proc = Popen(
-            ["mkrecv_nt", "--header", self._header_file, "--quiet"],
-            stdout=PIPE, stderr=PIPE, shell=False, close_fds=True)
-        self._proc_mon = ProcessMonitor(
-            self._mkrecv_proc, lambda: None)
-        self._proc_mon.start()
-        self._stdout_mon = PipeMonitor(
-            self._mkrecv_proc.stdout, self._stdout_parser)
-        self._stdout_mon.start()
-        self._stderr_mon = PipeMonitor(
-            self._mkrecv_proc.stderr, lambda line: log.error(line))
-        self._stderr_mon.start()
-
-    def stop(self, timeout=5):
-        self._proc_mon.stop()
-        self._proc_mon.join()
-        self._stdout_mon.stop()
-        self._stdout_mon.join()
-        self._stderr_mon.stop()
-        self._stderr_mon.join()
-        start = time.time()
-        self._mkrecv_proc.terminate()
-        while self._mkrecv_proc.poll() is None:
-            time.sleep(0.2)
-            if (time.time() - start) > timeout:
-                self._mkrecv_proc.kill()
-
-
-
-
-
+def mkrecv_stdout_parser(line):
+    tokens = line.split()
+    params = {}
+    if tokens[0] in MKRECV_STDOUT_KEYS:
+        params = {}
+        parser = MKRECV_STDOUT_KEYS[tokens[0]]
+        for ii, (key, dtype) in enumerate(parser):
+            params[key] = dtype(tokens[ii+1])
+    return params

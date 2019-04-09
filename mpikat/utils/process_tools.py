@@ -1,7 +1,8 @@
 import time
 import logging
-from threading import Thread, Event
+from subprocess import Popen, PIPE
 from tornado.gen import coroutine, sleep
+from mpikat.utils.pipe_monitor import PipeMonitor
 
 log = logging.getLogger('mpikat.process_tools')
 
@@ -45,20 +46,43 @@ def process_watcher(process, name=None, timeout=120):
             name, process.stderr.read()))
 
 
-class ProcessMonitor(Thread):
-    def __init__(self, proc, exit_handler):
-        Thread.__init__(self)
-        self._proc = proc
-        self._exit_handler = exit_handler
-        self._stop_event = Event()
-        self.daemon = True
+class ManagedProcess(object):
+    def __init__(self, cmdlineargs, stdout_handler=None, stderr_handler=None):
+        self._proc = Popen(cmdlineargs, stdout=PIPE, stderr=PIPE,
+                           shell=False, close_fds=True)
+        self._stdout_handler = stdout_handler
+        self._stderr_handler = stderr_handler
+        self.stdout_monitor = None
+        self.stderr_monitor = None
+        self._start_monitors()
 
-    def run(self):
-        while self._proc.poll() and not self._stop_event.is_set():
-            time.sleep(1)
-        if not self._stop_event.is_set():
-            self._exit_handler()
+    def is_alive(self):
+        return self._proc.poll() is None
 
-    def stop(self):
-        self._stop_event.set()
+    def _start_monitors(self):
+        if self._stdout_handler:
+            self.stdout_monitor = PipeMonitor(
+                self._proc.stdout, self._stdout_handler)
+            self.stdout_monitor.start()
+        if self._stderr_handler:
+            self.stderr_monitor = PipeMonitor(
+                self._proc.stderr, self._stderr_handler)
+            self.stderr_monitor.start()
 
+    def _stop_monitors(self):
+        if self.stdout_monitor:
+            self.stdout_monitor.stop()
+            self.stdout_monitor.join()
+            self.stdout_monitor = None
+        if self.stderr_monitor:
+            self.stderr_monitor.stop()
+            self.stderr_monitor.join()
+            self.stderr_monitor = None
+
+    def terminate(self, timeout=5):
+        start = time.time()
+        self._stop_monitors()
+        while self._proc.poll() is None:
+            time.sleep(0.5)
+            if (time.time() - start) > timeout:
+                self._proc.kill()

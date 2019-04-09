@@ -35,11 +35,11 @@ from mpikat.core.ip_manager import ip_range_from_stream
 from mpikat.core.utils import LoggingSensor, parse_csv_antennas
 from mpikat.meerkat.fbfuse import DelayBufferController
 from mpikat.meerkat.fbfuse.fbfuse_mkrecv_config import (
-    make_mkrecv_header, MkrecvProcessManager)
+    make_mkrecv_header, mkrecv_stdout_parser)
 from mpikat.meerkat.fbfuse.fbfuse_mksend_config import (
-    make_mksend_header, MksendProcessManager)
+    make_mksend_header)
 from mpikat.meerkat.fbfuse.fbfuse_psrdada_cpp_wrapper import compile_psrdada_cpp
-from mpikat.utils.process_tools import process_watcher
+from mpikat.utils.process_tools import process_watcher, ManagedProcess
 
 log = logging.getLogger("mpikat.fbfuse_worker_server")
 
@@ -351,6 +351,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                          "DADA buffer reset"))
 
     def set_affinity(self, pid, core_spec):
+        log.debug("Setting affinity for PID {} to {}".format(pid, core_spec))
         os.system("taskset -cp {} {}".format(core_spec, pid))
 
     @request(Str(), Int(), Int(), Float(), Float(), Int(), Str(), Str(),
@@ -715,7 +716,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                 "--bandwidth", partition_bandwidth,
                 "--input_level", 32.0,
                 "--output_level", 32.0,
-                "--log_level", "debug"]
+                "--log_level", "info"]
             self._psrdada_cpp_args_sensor.set_value(
                 " ".join(map(str, self._psrdada_cpp_cmdline)))
             # SPEAD receiver does not get started until a capture init call
@@ -785,8 +786,8 @@ class FbfWorkerServer(AsyncDeviceServer):
         self._state_sensor.set_value(self.STARTING)
         # Create SPEAD transmitter for coherent beams
 
-        self._mksend_coh_proc = MksendProcessManager(
-            MKSEND_COHERENT_CONFIG_FILENAME)
+        self._mksend_coh_proc = ManagedProcess(
+            ["mksend", "--header", MKSEND_COHERENT_CONFIG_FILENAME, "--quiet"])
         self._mksend_coh_proc.start()
 
         if self._numa == 0:
@@ -794,8 +795,8 @@ class FbfWorkerServer(AsyncDeviceServer):
         else:
             self.set_affinity(self._mksend_coh_proc.pid, "15")
 
-        self._mksend_incoh_proc = MksendProcessManager(
-            MKSEND_INCOHERENT_CONFIG_FILENAME)
+        self._mksend_incoh_proc = ManagedProcess(
+            ["mksend", "--header", MKSEND_INCOHERENT_CONFIG_FILENAME, "--quiet"])
         self._mksend_incoh_proc.start()
         if self._numa == 0:
             self.set_affinity(self._mksend_incoh_proc.pid, "7")
@@ -816,8 +817,9 @@ class FbfWorkerServer(AsyncDeviceServer):
             self.set_affinity(self._psrdada_cpp_proc.pid, "14")
 
         # Create SPEAD receiver for incoming antenna voltages
-        self._mkrecv_proc = MkrecvProcessManager(MKRECV_CONFIG_FILENAME)
-        self._mkrecv_proc.start()
+        self._mkrecv_proc = ManagedProcess(
+            ["mkrecv_nt", "--header", MKRECV_CONFIG_FILENAME, "--quiet"],
+            stdout_handler=mkrecv_stdout_parser)
         if self._numa == 0:
             self.set_affinity(self._mkrecv_proc.pid, "0-5")
         else:
