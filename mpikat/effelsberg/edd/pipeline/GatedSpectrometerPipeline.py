@@ -58,7 +58,7 @@ DADA_BUFFERS = ['dada', 'dadc']
 DEFAULT_CONFIG = {
         "base_output_dir": os.getcwd(),
         "nbits" : 12,
-        "samples_per_heap": 512,  # this is from mksend / mkrecv configuration
+        "samples_per_heap": 4096,  # this is from mksend / mkrecv configuration
         "samples_per_block": 512*1024*1024, # 512 Mega sampels per buffer block to allow high res  spectra 
         "dada_db_params":
         {
@@ -102,8 +102,6 @@ PORT         7148
 
 DADA_MODE    4                       # The mode, 4=full dada functionality
 
-SYNC_TIME unset
-SAMPLE_CLOCK unset
 SAMPLE_CLOCK_START 0 # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock
 
 NTHREADS 32
@@ -389,7 +387,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         nSamples = self._config["samples_per_block"]
         nHeaps = nSamples / self._config["samples_per_heap"]
 
-        bufferSize = nHeaps * (heapSize + 64 / 8) 
+        self.bufferSize = nHeaps * (heapSize + 64 / 8) 
 
         def create_ring_buffer(bufferSize, key):
             args ="-b {} {}".format(bufferSize, self._config["dada_db_params"]["args"])
@@ -405,8 +403,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         for i,k in enumerate(DADA_BUFFERS):
             ofname = k[::-1]
             # configure dada buffer
-            create_ring_buffer(bufferSize, k)
-            create_ring_buffer(bufferSize, ofname)
+            create_ring_buffer(self.bufferSize, k)
+            create_ring_buffer(self.bufferSize, ofname)
 
             #if self._config["gated_cli_args"]["null_output"]:
             #    log.info("Null output selected! No output will be written!")
@@ -434,7 +432,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             dadadiskcmd = ExecuteCommand(cmd, outpath=None, resident=True, env={"CUDA_VISIBLE_DEVICES":str(i)})
             dadadiskcmd.stdout_callbacks.add( self._decode_capture_stdout)
             dadadiskcmd.stderr_callbacks.add( self._handle_execution_stderr)
-            self._subprocess.append(dadadiskcmd)
+            self._subprocesses.append(dadadiskcmd)
             # Allow crash here as only temporary solution of using disk
 #            dadadiskcmd.error_callbacks.add(self._handle_error_state)
 
@@ -487,8 +485,11 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             for k, v in self._config['gated_cli_args'].items():
                 mkrecvheader_file.write("{} {}\n".format(k, v))
 
+            mkrecvheader_file.write("\n#OTHER PARAMETERS\n")
             mkrecvheader_file.write("samples_per_block {}\n".format(self._config["samples_per_block"]))
+            #mkrecvheader_file.write("BUFFER_SIZE  {}\n".format(self.bufferSize))
 
+            mkrecvheader_file.write("\n#PARAMETERS ADDED AUTOMATICALLY BY MKRECV\n")
 
             mkrecvheader_file.close()
 
