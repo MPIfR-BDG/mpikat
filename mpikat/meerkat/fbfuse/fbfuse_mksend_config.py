@@ -1,9 +1,5 @@
 import jinja2
 import logging
-import time
-from subprocess import Popen, PIPE
-from mpikat.utils.pipe_monitor import PipeMonitor
-from mpikat.utils.process_tools import ProcessMonitor
 
 log = logging.getLogger('mpikat.fbfuse_mksend_config')
 
@@ -74,50 +70,3 @@ def make_mksend_header(params, outfile=None):
         with open(outfile, "w") as f:
             f.write(rendered)
     return rendered
-
-
-class MksendProcessManager(object):
-    def __init__(self, header_file):
-        self._header_file = header_file
-        self._mksend_proc = None
-        self._stdout_mon = None
-        self._stderr_mon = None
-        self._proc_mon = None
-
-    def _stdout_parser(self, line):
-        return None
-
-    @property
-    def pid(self):
-        if not self._mksend_proc:
-            raise Exception("Process not yet started")
-        else:
-            return self._mksend_proc.pid
-
-    def start(self):
-        self._mksend_proc = Popen(
-            ["mksend", "--header", self._header_file, "--quiet"],
-            stdout=PIPE, stderr=PIPE, shell=False, close_fds=True)
-        self._proc_mon = ProcessMonitor(
-            self._mksend_proc, lambda: None)
-        self._proc_mon.start()
-        self._stdout_mon = PipeMonitor(
-            self._mksend_proc.stdout, self._stdout_parser)
-        self._stdout_mon.start()
-        self._stderr_mon = PipeMonitor(
-            self._mksend_proc.stderr, lambda line: log.error(line))
-        self._stderr_mon.start()
-
-    def stop(self, timeout=5):
-        self._proc_mon.stop()
-        self._proc_mon.join()
-        self._stdout_mon.stop()
-        self._stdout_mon.join()
-        self._stderr_mon.stop()
-        self._stderr_mon.join()
-        start = time.time()
-        self._mksend_proc.terminate()
-        while self._mksend_proc.poll() is None:
-            time.sleep(0.2)
-            if (time.time() - start) > timeout:
-                self._mksend_proc.kill()
