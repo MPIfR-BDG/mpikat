@@ -65,6 +65,7 @@ def make_mkrecv_header(params, outfile=None):
 
 
 def mkrecv_stdout_parser(line):
+    log.debug(line)
     tokens = line.split()
     params = {}
     if tokens[0] in MKRECV_STDOUT_KEYS:

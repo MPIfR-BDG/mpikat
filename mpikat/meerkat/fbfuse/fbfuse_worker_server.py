@@ -44,7 +44,7 @@ from mpikat.utils.process_tools import process_watcher, ManagedProcess
 log = logging.getLogger("mpikat.fbfuse_worker_server")
 
 PACKET_PAYLOAD_SIZE = 1024  # bytes
-AVAILABLE_CAPTURE_MEMORY = 137438953472  # bytes
+AVAILABLE_CAPTURE_MEMORY = 137438953472/2  # bytes
 MAX_DADA_BLOCK_SIZE = 500e6 #bytes
 
 MKRECV_CONFIG_FILENAME = "mkrecv_feng.cfg"
@@ -788,8 +788,6 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         self._mksend_coh_proc = ManagedProcess(
             ["mksend", "--header", MKSEND_COHERENT_CONFIG_FILENAME, "--quiet"])
-        self._mksend_coh_proc.start()
-
         if self._numa == 0:
             self.set_affinity(self._mksend_coh_proc.pid, "7")
         else:
@@ -797,7 +795,6 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         self._mksend_incoh_proc = ManagedProcess(
             ["mksend", "--header", MKSEND_INCOHERENT_CONFIG_FILENAME, "--quiet"])
-        self._mksend_incoh_proc.start()
         if self._numa == 0:
             self.set_affinity(self._mksend_incoh_proc.pid, "7")
         else:

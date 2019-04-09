@@ -5,7 +5,7 @@ from tornado.testing import AsyncTestCase
 from katcp.testutils import mock_req, handle_mock_req
 from katpoint import Target
 from mpikat.meerkat.fbfuse import BaseFbfConfigurationAuthority
-from mpikat.meerkat.test.utils.antennas import ANTENNAS
+from mpikat.meerkat.test.antennas import ANTENNAS
 
 class SensorNotFoundError(Exception):
     pass

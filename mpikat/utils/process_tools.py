@@ -56,6 +56,10 @@ class ManagedProcess(object):
         self.stderr_monitor = None
         self._start_monitors()
 
+    @property
+    def pid(self):
+        return self._proc.pid	
+
     def is_alive(self):
         return self._proc.poll() is None
 

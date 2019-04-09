@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 import coloredlogs 
 from optparse import OptionParser
 from tornado.gen import coroutine
@@ -97,7 +98,14 @@ class ManualWorkerController(object):
         else:
             print "prepare done"
 
-	#yield worker_client.req.capture_start()
+	os.system("cp mkrecv_feng_cmc1.cfg mkrecv_feng.cfg")
+
+	yield worker_client.req.capture_start()
+
+	time.sleep(60)
+
+	yield worker_client.req.capture_stop()
+
 
 if __name__ == "__main__":
     usage = "usage: %prog [options]"
@@ -114,8 +122,9 @@ if __name__ == "__main__":
     logger = logging.getLogger('mpikat')
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
-        level="INFO",
+        level="DEBUG",
         logger=logger)
+    logging.getLogger('mpikat.fbfuse_delay_buffer_controller').setLevel("INFO")
     logging.getLogger('katcp').setLevel('INFO')
     ioloop = IOLoop.current()
     controller = ManualWorkerController(os.environ['FBF_CAPTURE_IP'], 1, "full", ioloop)
