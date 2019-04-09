@@ -59,6 +59,7 @@ DEFAULT_CONFIG = {
         "base_output_dir": os.getcwd(),
         "nbits" : 12,
         "samples_per_heap": 512,  # this is from mksend / mkrecv configuration
+        "samples_per_block": 512*1024*1024, # 512 Mega sampels per buffer block to allow high res  spectra 
         "dada_db_params":
         {
             "args": "-n 8 -p -l"  # The buffersize is calculated from the samples_per heap and the bit depth
@@ -437,7 +438,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         heapSize =  self._config["samples_per_heap"] * bitdepth / 8
 
         # We store 512 mega samples in the buffer
-        nSamples = 512 * 1024 * 1024
+        nSamples = self._config["samples_per_block"]
         nHeaps = nSamples / self._config["samples_per_heap"]
 
         bufferSize = nHeaps * (heapSize + 64 / 8) 
@@ -485,7 +486,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             dadadiskcmd = ExecuteCommand(cmd, outpath=None, resident=True, env={"CUDA_VISIBLE_DEVICES":str(i)})
             dadadiskcmd.stdout_callbacks.add( self._decode_capture_stdout)
             dadadiskcmd.stderr_callbacks.add( self._handle_execution_stderr)
-            dadadiskcmd.error_callbacks.add(self._handle_error_state)
+            # Allow crash here as only temporary solution of using disk
+#            dadadiskcmd.error_callbacks.add(self._handle_error_state)
 
         self.state = "ready"
 
@@ -535,6 +537,9 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             mkrecvheader_file.write("\n#GATED_PARAMETERS\n")
             for k, v in self._config['gated_cli_args'].items():
                 mkrecvheader_file.write("{} {}\n".format(k, v))
+
+            mkrecvheader_file.write("samples_per_block {}\n".format(self._config["samples_per_block"]))
+
 
             mkrecvheader_file.close()
 
@@ -657,6 +662,9 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         """@brief deconfigure the dspsr pipeline."""
         log.info("Deconfiguring EDD backend")
         self.state = "deconfiguring"
+
+        
+
         log.debug("Destroying dada buffers")
         for k in DADA_BUFFERS:
             cmd = "dada_db -d -k {0}".format(k)
