@@ -38,7 +38,7 @@ from mpikat.core.ip_manager import IpRangeManager, ip_range_from_stream
 from mpikat.core.utils import parse_csv_antennas
 from mpikat.meerkat.katportalclient_wrapper import KatportalClientWrapper
 from mpikat.meerkat.fbfuse import FbfWorkerPool, FbfProductController
-from mpikat.meerkat.test.utils.antennas import ANTENNAS as DEFAULT_ANTENNA_MODELS
+from mpikat.meerkat.test.antennas import ANTENNAS as DEFAULT_ANTENNA_MODELS
 
 # ?halt message means shutdown everything and power off all machines
 
