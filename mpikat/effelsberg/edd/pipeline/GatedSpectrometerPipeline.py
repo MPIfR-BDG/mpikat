@@ -57,11 +57,11 @@ DADA_BUFFERS = ['dada', 'dadc']
 
 DEFAULT_CONFIG = {
         "base_output_dir": os.getcwd(),
-        "nbits" : 8,
-        "samples_per_heap": 512,
+        "nbits" : 12,
+        "samples_per_heap": 512,  # this is from mksend / mkrecv configuration
         "dada_db_params":
         {
-            "args": "-n 8 -p -l"  # The buffersize is calculated from the samples_per heap and the bit depth 
+            "args": "-n 8 -p -l"  # The buffersize is calculated from the samples_per heap and the bit depth
         },
         "gated_cli_args":
         {
@@ -434,32 +434,43 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
         logging.debug('Setting dada parameters according to bit depth')
         bitdepth = self._config["nbits"]
+        heapSize =  self._config["samples_per_heap"] * bitdepth / 8
+
         # We store 512 mega samples in the buffer
         nSamples = 512 * 1024 * 1024
-        heapSize =  self._config["samples_per_heap"] * bitdepth
-        bufferSize = nSamples * bitdepth / 8 + nSamples * 64 / 8 / heapSize
+        nHeaps = nSamples / self._config["samples_per_heap"]
+
+        bufferSize = nHeaps * (heapSize + 64 / 8) 
+
+        def create_ring_buffer(bufferSize, key):
+            args ="-b {} {}".format(bufferSize, self._config["dada_db_params"]["args"])
+            cmd = "dada_db -k {key} {args}".format(key=key, args=args)
+            log.debug("Running command: {0}".format(cmd))
+            _create_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            _create_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            _create_ring_buffer._process.wait()
+
 
         for i,k in enumerate(DADA_BUFFERS):
+            ofname = k[::-1]
             # configure dada buffer
-            args ="-b {} {}".format(bufferSize, self._config["dada_db_params"]["args"])
-            cmd = "dada_db -k {key} {args}".format(key=k, args=args)
-            log.debug("Running command: {0}".format(cmd))
-            self._create_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._create_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._create_ring_buffer._process.wait()
+            create_ring_buffer(bufferSize, k)
+            create_ring_buffer(bufferSize, ofname)
 
-            if self._config["gated_cli_args"]["null_output"]:
-                log.info("Null output selected! No outptu will be written!")
-                ofname = "/dev/null"
-            else:
-                ofname = output_filename_base + str(i) + ".dat"
-            log.info("Output polarisation {} to file {}".format(i, ofname))
+            #if self._config["gated_cli_args"]["null_output"]:
+            #    log.info("Null output selected! No output will be written!")
+            #    ofname = "/dev/null"
+            #else:
+            odirname = output_filename_base + str(i) 
+            os.mkdir(odirname)
+            #log.info("Output polarisation {} to file {}".format(i, ofname))
 
             log_level='debug'
             # Configure + launch gated spectrometer
-            cmd = "gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --selected_sidechannel=0 --nbits={nbits} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_level={output_level} -o {ofname} --log_level={log_level}".format(dada_key=k, log_level=log_level, ofname=ofname, nbits=bitdepth, **self._config["gated_cli_args"])
+
+            cmd = "gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={nbits} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=k, log_level=log_level, ofname=ofname, nbits=bitdepth, heapSize=heapSize, **self._config["gated_cli_args"])
             # here should be a smarter system to parse the options from the
             # controller to the program without redundant typing of options
             log.debug("Command to run: {}".format(cmd))
@@ -469,6 +480,13 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             gated_cli.stderr_callbacks.add( self._handle_execution_stderr)
             gated_cli.error_callbacks.add(self._handle_error_state)
             self._subprocesses.append(gated_cli)
+
+            cmd = "dada_dbdisk -k {key} -D {odir}".format(key=ofname, odir=odirname)
+            dadadiskcmd = ExecuteCommand(cmd, outpath=None, resident=True, env={"CUDA_VISIBLE_DEVICES":str(i)})
+            dadadiskcmd.stdout_callbacks.add( self._decode_capture_stdout)
+            dadadiskcmd.stderr_callbacks.add( self._handle_execution_stderr)
+            dadadiskcmd.error_callbacks.add(self._handle_error_state)
+
         self.state = "ready"
 
 
@@ -514,6 +532,10 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             mkrecvheader_file = tempfile.NamedTemporaryFile(delete=False)
             log.debug("Creating mkrec header file: {}".format(mkrecvheader_file.name))
             mkrecvheader_file.write(mkrecv_header)
+            mkrecvheader_file.write("\n#GATED_PARAMETERS\n")
+            for k, v in self._config['gated_cli_args'].items():
+                mkrecvheader_file.write("{} {}\n".format(k, v))
+
             mkrecvheader_file.close()
 
             self.mkrec_cmd = []
@@ -639,11 +661,20 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         for k in DADA_BUFFERS:
             cmd = "dada_db -d -k {0}".format(k)
             log.debug("Running command: {0}".format(cmd))
-            self._destory_ring_buffer = ExecuteCommand(
+            _destory_ring_buffer = ExecuteCommand(
                 cmd, outpath=None, resident=False)
-            self._destory_ring_buffer.stdout_callbacks.add(
+            _destory_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
-            self._destory_ring_buffer._process.wait()
+            _destory_ring_buffer._process.wait()
+
+            cmd = "dada_db -d -k {0}".format(k[::-1])
+            log.debug("Running command: {0}".format(cmd))
+            _destory_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            _destory_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            _destory_ring_buffer._process.wait()
+
         self.state = "idle"
 
 
@@ -657,9 +688,9 @@ def on_shutdown(ioloop, server):
 def main():
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
-    parser.add_option('-H', '--host', dest='host', type=str,
+    parser.add_option('-H', '--host', dest='host', type=str, default='localhost',
                       help='Host interface to bind to')
-    parser.add_option('-p', '--port', dest='port', type=int,
+    parser.add_option('-p', '--port', dest='port', type=int, default=1235,
                       help='Port number to bind to')
     parser.add_option('', '--scpi-interface', dest='scpi_interface', type=str,
                       help='The interface to listen on for SCPI requests',
