@@ -1,5 +1,6 @@
 import time
 import logging
+import select
 from threading import Thread, Event
 
 log = logging.getLogger('mpikat.pipe_monitor')
@@ -7,7 +8,7 @@ log = logging.getLogger('mpikat.pipe_monitor')
 
 class PipeMonitor(Thread):
 
-    def __init__(self, pipe, parser):
+    def __init__(self, pipe, parser, sentinel=b'', timeout=1):
         """
         @brief   Class for parsing output of subprocess pipes
 
@@ -17,9 +18,12 @@ class PipeMonitor(Thread):
         self.setDaemon(True)
         self._parser = parser
         self._pipe = pipe
+        self._sentinel = sentinel
+        self._timeout = timeout
+        self._poll = select.poll()
+        self._poll.register(self._pipe)
         self._params = {}
         self._watchers = set()
-        self._last_update = time.time()
         self._stop_event = Event()
 
     def add_watcher(self, watcher):
@@ -71,27 +75,19 @@ class PipeMonitor(Thread):
             self.notify_watchers()
 
     def run(self):
-        for line in iter(self._pipe.readline, b''):
-            self._last_update = time.time()
-            try:
-                self.parse_line(line)
-            except Exception:
-                log.exception("Unable to parse line: '{}'".format(line))
-            if self._stop_event.is_set():
-                break
+        while not self._stop_event.is_set():
+            if self._poll.poll(self._timeout):
+                line = self._pipe.readline()
+                if line == self._sentinel:
+                    break
+                else:
+                    try:
+                        self.parse_line(line)
+                    except Exception:
+                        log.exception("Unable to parse line: '{}'".format(line))
 
     def stop(self):
         """
         @brief      Stop the thread
         """
         self._stop_event.set()
-
-    def is_blocked(self, idle_time=2.0):
-        """
-        @brief      Check if there is a prolonged block on the pipe read
-
-        @param      idle_time  The maximum time since an update after which blocking is assumed
-
-        @return     True if blocked, False otherwise.
-        """
-        return time.time() - self._last_update > idle_time

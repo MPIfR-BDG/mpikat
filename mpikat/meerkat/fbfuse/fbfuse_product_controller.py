@@ -706,7 +706,7 @@ class FbfProductController(object):
             self.log.debug("Allocating beams to {}".format(str(group)))
             key = str(group)
             for _ in range(self._cbc_nbeams_per_group.value()):
-                if not key in mcast_to_beam_map:
+                if key not in mcast_to_beam_map:
                     mcast_to_beam_map[str(group)] = []
                 value = idxs.pop(0)
                 self.log.debug(
@@ -836,7 +836,7 @@ class FbfProductController(object):
         @return     Returns the allocated Beam object
         """
         valid_states = [self.READY, self.CAPTURING, self.STARTING]
-        if not self.state in valid_states:
+        if self.state not in valid_states:
             raise FbfProductStateError(valid_states, self.state)
         return self._beam_manager.add_beam(target)
 
