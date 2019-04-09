@@ -1,15 +1,20 @@
 import json
 import logging
 import os
+import coloredlogs 
 from optparse import OptionParser
 from tornado.gen import coroutine
 from tornado.ioloop import IOLoop
 from katpoint import Antenna
 from katcp import Sensor, AsyncDeviceServer
 from katcp import KATCPClientResource
+from mpikat.meerkat.fbfuse.fbfuse_worker_server import FbfWorkerServer
+from mpikat.meerkat.fbfuse import (
+    BeamManager,
+    DelayConfigurationServer)
 from mpikat.core.utils import parse_csv_antennas
 from mpikat.core.ip_manager import ip_range_from_stream
-from mpikat.test.utils import ANTENNAS
+from mpikat.meerkat.test.utils import ANTENNAS
 
 class ManualWorkerController(object):
     def __init__(self, cap_ip, numa_node, exec_mode, ioloop):
@@ -72,25 +77,27 @@ class ManualWorkerController(object):
             "antennas": ",".join(incoherent_beam_antennas)
         }
 
-    worker_client = KATCPClientResource(dict(
-        name="worker-server-client",
-        address=self._worker_server.bind_address,
-        controlled=True))
-    yield worker_client.start()
-    yield worker_client.until_synced()
+        worker_client = KATCPClientResource(dict(
+            name="worker-server-client",
+            address=self._worker_server.bind_address,
+            controlled=True))
+        yield worker_client.start()
+        yield worker_client.until_synced()
 
-    print "preparing"
-    response = yield worker_client.req.prepare(
-        feng_groups, nchans_per_group, chan0_idx, chan0_freq,
-        chan_bw, nbeams, json.dumps(mcast_to_beam_map),
-        json.dumps(feng_config),
-        json.dumps(coherent_beam_config),
-        json.dumps(incoherent_beam_config),
-        *self._delay_config_server.bind_address, timeout=300.0)
-    if not response.reply.reply_ok():
-        raise Exception("Error on prepare: {}".format(response.reply.arguments))
-    else:
-        print "prepare done"
+        print "preparing"
+        response = yield worker_client.req.prepare(
+            feng_groups, nchans_per_group, chan0_idx, chan0_freq,
+            chan_bw, nbeams, json.dumps(mcast_to_beam_map),
+            json.dumps(feng_config),
+            json.dumps(coherent_beam_config),
+            json.dumps(incoherent_beam_config),
+            *self._delay_config_server.bind_address, timeout=300.0)
+        if not response.reply.reply_ok():
+            raise Exception("Error on prepare: {}".format(response.reply.arguments))
+        else:
+            print "prepare done"
+
+	#yield worker_client.req.capture_start()
 
 if __name__ == "__main__":
     usage = "usage: %prog [options]"
@@ -107,13 +114,15 @@ if __name__ == "__main__":
     logger = logging.getLogger('mpikat')
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
-        level=opts.log_level.upper(),
+        level="INFO",
         logger=logger)
     logging.getLogger('katcp').setLevel('INFO')
-    ioloop = tornado.ioloop.IOLoop.current()
+    ioloop = IOLoop.current()
     controller = ManualWorkerController(os.environ['FBF_CAPTURE_IP'], 1, "full", ioloop)
+    
     @coroutine
     def run():
         yield controller.start()
-        yield controller.setup(64, "m002,m003,m004,m005", 32, 4096, "spead://239.8.0.0+3:7148", 0, 0)
-
+        yield controller.setup(64, "m000,m001,m003,m004,m005,m006,m007,m008,m009,m010,m011,m012,m013,m015,m016,m018,m021,m022,m023,m024,m025,m026,m027,m028,m029,m030,m031,m033,m034,m035,m036,m040,m041,m042,m043,m044,m045,m046,m047,m049,m050,m051,m052,m053,m055,m056,m057,m058,m059,m060,m061,m062", 32, 1024, "spead://239.8.0.0+3:7148", 0, 0)
+    ioloop.add_callback(run)
+    ioloop.start()
