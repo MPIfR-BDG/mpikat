@@ -95,71 +95,19 @@ DEFAULT_CONFIG = {
 mkrecv_header = """
 # This header file contains the MKRECV configuration for capture of 1 polarisation
 # from the Effelsberg EDD system. It specifies all 4 mcast groups of one IF channel.
-HEADER       DADA                # Distributed aquisition and data analysis
-HDR_VERSION  1.0                 # Version of this ASCII header
-HDR_SIZE     4096                # Size of the header in bytes
-
-DADA_VERSION 1.0                 # Version of the DADA Software
-PIC_VERSION  1.0                 # Version of the PIC FPGA Software
-
-# DADA parameters
-OBS_ID       unset               # observation ID
-PRIMARY      unset               # primary node host name
-SECONDARY    unset               # secondary node host name
-FILE_NAME    unset               # full path of the data file
-
-FILE_SIZE    10000000000          # requested size of data files
-FILE_NUMBER  0                   # number of data file
-
-# time of the rising edge of the first time sample
-UTC_START    unset               # yyyy-mm-dd-hh:mm:ss.fs
-MJD_START    unset               # MJD equivalent to the start UTC
-
-OBS_OFFSET   0                   # bytes offset from the start MJD/UTC
-OBS_OVERLAP  0                   # bytes by which neighbouring files overlap
-
-# description of the source
-SOURCE       unset               # name of the astronomical source
-RA           unset               # Right Ascension of the source
-DEC          unset               # Declination of the source
-
-# description of the instrument
-TELESCOPE    Effelsberg       # telescope name
-INSTRUMENT   EDD              # instrument name
-RECEIVER     unset           # Frontend receiver
-FREQ         unset           # centre frequency in MHz
-BW           unset           # bandwidth of in MHz (-ve lower sb)
-TSAMP        unset       # sampling interval in microseconds
-
-BYTES_PER_SECOND  unset
-NBIT              unset             # number of bits per sample
-NDIM              1                 # 1=real, 2=complex
-NPOL              1                 # number of polarizations observed
-NCHAN             1                 # number of frequency channels
-RESOLUTION        1
-DSB
-
-#MeerKAT specifics
-#DADA_KEY     dada                    # The dada key to write to
-DADA_MODE    4                       # The mode, 4=full dada functionality
-ORDER        T                       # Here we are only capturing one polarisation, so data is time only
-SYNC_TIME    unset
-SAMPLE_CLOCK unset
 PACKET_SIZE 8400
-NTHREADS 32
-NHEAPS 32
-NGROUPS_DATA  4096
-NGROUPS_TEMP  2048
-NHEAPS_SWITCH 1024
-#MCAST_SOURCES 225.0.0.152,225.0.0.153,225.0.0.154,225.0.0.155
-PORT         7148
-UDP_IF       unset
 IBV_VECTOR   -1          # IBV forced into polling mode
 IBV_MAX_POLL 10
-BUFFER_SIZE 16777216
-#BUFFER_SIZE 1048576
+PORT         7148
+
+DADA_MODE    4                       # The mode, 4=full dada functionality
+
+SYNC_TIME unset
+SAMPLE_CLOCK unset
 SAMPLE_CLOCK_START 0 # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock
-#HEAP_SIZE   4096
+
+NTHREADS 32
+NHEAPS 64
 
 #SPEAD specifcation for EDD packetiser data stream
 NINDICES    1   # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
@@ -486,6 +434,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             dadadiskcmd = ExecuteCommand(cmd, outpath=None, resident=True, env={"CUDA_VISIBLE_DEVICES":str(i)})
             dadadiskcmd.stdout_callbacks.add( self._decode_capture_stdout)
             dadadiskcmd.stderr_callbacks.add( self._handle_execution_stderr)
+            self._subprocess.append(dadadiskcmd)
             # Allow crash here as only temporary solution of using disk
 #            dadadiskcmd.error_callbacks.add(self._handle_error_state)
 
