@@ -28,7 +28,7 @@ from tornado.testing import gen_test
 from katpoint import Antenna, Target
 from mpikat.meerkat.fbfuse import FbfWorkerServer, DelayConfigurationServer, BeamManager
 from mpikat.meerkat.fbfuse.fbfuse_worker_server import determine_feng_capture_order
-from mpikat.meerkat.test.utils import ANTENNAS
+from mpikat.meerkat.test.antennas import ANTENNAS
 from mpikat.test.utils import AsyncServerTester
 
 root_logger = logging.getLogger('mpikat')
