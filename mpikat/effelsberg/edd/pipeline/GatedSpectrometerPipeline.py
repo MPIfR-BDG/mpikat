@@ -61,14 +61,15 @@ DEFAULT_CONFIG = {
         "nbits" : 12,
         "samples_per_heap": 4096,  # this is from mksend / mkrecv configuration
         "samples_per_block": 512*1024*1024, # 512 Mega sampels per buffer block to allow high res  spectra 
+        "enabled_polarizations" : ["polarization_0"],
         "dada_db_params":
         {
             "args": "-n 8 -p -l"  # The buffersize is calculated from the samples_per heap and the bit depth
         },
         "gated_cli_args":
         {
-            "fft_length": 1024*1024,
-            "naccumulate": 256,
+            "fft_length": 1024,
+            "naccumulate": 512,
             "input_level": 100,
             "output_level": 100,
             "output_bit_depth": 32,
@@ -81,16 +82,17 @@ DEFAULT_CONFIG = {
                 "ibv_if": "10.10.1.10",
                 "mcast_sources": "225.0.0.152 225.0.0.153 225.0.0.154 225.0.0.155",
                 "port": "7148",
-                "dada_key": DADA_BUFFERS[0],     # Ugly but simplest way to have global bugger def here
+                "dada_key": 'dada',     # Ugly but simplest way to have global bugger def here
                 "numa_node": 1                   # we only have on ethernet interface on numa node 1
             },
-#             "polarization_1" :
-#            {
-#                "ibv_if": "10.10.1.11",
-#                "mcast_sources": "225.0.0.156 225.0.0.157 225.0.0.158 225.0.0.159",
-#                "port": "7148",
-#                "dada_key": DADA_BUFFERS[1]
-#            }
+             "polarization_1" :
+            {
+                "ibv_if": "10.10.1.11",
+                "mcast_sources": "225.0.0.156 225.0.0.157 225.0.0.158 225.0.0.159",
+                "port": "7148",
+                "dada_key": 'dadc',
+                "numa_node": 1                   # we only have on ethernet interface on numa node 1
+            }
         }
     }
 
@@ -108,15 +110,18 @@ BYTES_PER_SECOND unset
 
 SAMPLE_CLOCK_START 0 # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock
 
+SYNC_TIME   1550678891.0
+SAMPLE_CLOCK 2600000000
+
 NTHREADS 32
 NHEAPS 64
-NGROUPS_TEMP 65536 
+NGROUPS_TEMP 65536
 
 #SPEAD specifcation for EDD packetiser data stream
 NINDICES    1   # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
 # The first index item is the running timestamp
 IDX1_ITEM   0      # First item of a SPEAD heap
-IDX1_STEP   131072   # The difference between successive timestamps
+IDX1_STEP   4096 # The difference between successive timestamps
 # Add side item to buffer
 SCI_LIST    7
 """
@@ -156,6 +161,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         #self._source_config = None
         #self._dspsr = None
         self._subprocesses = []
+        self._dada_buffers = []
         #self.setup_sensors()
         #super(GatedSpectrometerPipeline, self).__init__(ip, port, None)
         super(GatedSpectrometerPipeline, self).__init__(ip, port)
@@ -374,7 +380,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 else:
                     old[k] = new[k]
             return old
-        cfg = json.loads(config_json)
+        cfg = config_json
+        #cfg = json.loads(config_json)
         self._config = __updateConfig(DEFAULT_CONFIG, cfg)
 
         try:
@@ -408,10 +415,14 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             _create_ring_buffer._process.wait()
 
 
-        for i,k in enumerate(DADA_BUFFERS):
-            ofname = k[::-1]
+        for i,k in enumerate(self._config['enabled_polarizations']):
+            bufferName = self._config['mkrecv'][k]['dada_key']
+            ofname = bufferName[::-1]
+            self._dada_buffers.append(bufferName)
+            self._dada_buffers.append(ofname)
+
             # configure dada buffer
-            create_ring_buffer(self.input_bufferSize, k)
+            create_ring_buffer(self.input_bufferSize, bufferName)
             create_ring_buffer(self.output_bufferSize, ofname)
 
             #if self._config["gated_cli_args"]["null_output"]:
@@ -425,7 +436,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             log_level='debug'
             # Configure + launch gated spectrometer
 
-            cmd = "numactl --cpubind=1 --membind=1 gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={nbits} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=k, log_level=log_level, ofname=ofname, nbits=bitdepth, heapSize=self.heapSize, **self._config["gated_cli_args"])
+            cmd = "numactl --cpubind=1 --membind=1 gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={nbits} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, log_level=log_level, ofname=ofname, nbits=bitdepth, heapSize=self.heapSize, **self._config["gated_cli_args"])
             # here should be a smarter system to parse the options from the
             # controller to the program without redundant typing of options
             log.debug("Command to run: {}".format(cmd))
@@ -500,8 +511,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             mkrecvheader_file.write("\n#OTHER PARAMETERS\n")
             mkrecvheader_file.write("samples_per_block {}\n".format(self._config["samples_per_block"]))
             mkrecvheader_file.write("n_channels {}\n".format(self._config["gated_cli_args"]["fft_length"] / 2 + 1 ))
-            mkrecvheader_file.write("integration_time {} # [s] fft_length * naccuulate / sampling_frequency (2.6GHz)\n".format(self._config["gated_cli_args"]["fft_length"] * self._config["gated_cli_args"]["naccumulate"] / 2.6E9 ))
-            mkrecvheader_file.write("FILE_SIZE {}\n".format(self.output_bufferSize))
+            mkrecvheader_file.write("integration_time {} # [s] fft_length * naccumulate / sampling_frequency (2.6GHz)\n".format(self._config["gated_cli_args"]["fft_length"] * self._config["gated_cli_args"]["naccumulate"] / 2.6E9 ))
+ #           mkrecvheader_file.write("FILE_SIZE {}\n".format(512*1024*1024))
 
             mkrecvheader_file.write("\n#PARAMETERS ADDED AUTOMATICALLY BY MKRECV\n")
 
@@ -509,14 +520,12 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
             self.mkrec_cmd = []
 
-            cfg = self._config['mkrecv']['polarization_0']
-            cmd = "numactl --cpubind=1 --membind=1 mkrecv_nt --quiet --header {mkrecv_header} --dada-key {dada_key} --ibv-if {ibv_if} --port {port} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, **cfg )
-            self.mkrec_cmd.append(ExecuteCommand(cmd, outpath=None, resident=True))
 
-# Hotfix: Disbale second polarization 
-#            cfg = self._config['mkrecv']['polarization_1']
-#            cmd = "mkrecv_nt --quiet --header {mkrecv_header} --dada-key {dada_key} --ibv-if {ibv_if} --port {port} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, **cfg )
-#            self.mkrec_cmd.append(ExecuteCommand(cmd, outpath=None, resident=True))
+            for i,k in enumerate(self._config['enabled_polarizations']):
+                cfg = self._config['mkrecv'][k]
+                cmd = "numactl --cpubind=1 --membind=1 mkrecv_nt --quiet --header {mkrecv_header} --dada-key {dada_key} --ibv-if {ibv_if} --port {port} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, **cfg )
+                self.mkrec_cmd.append(ExecuteCommand(cmd, outpath=None, resident=True))
+
 
             for k in self.mkrec_cmd:
                 k.error_callbacks.add(self._handle_error_state)
@@ -631,7 +640,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         
 
         log.debug("Destroying dada buffers")
-        for k in DADA_BUFFERS:
+        for k in self._dada_buffers:
             cmd = "dada_db -d -k {0}".format(k)
             log.debug("Running command: {0}".format(cmd))
             _destory_ring_buffer = ExecuteCommand(
@@ -640,14 +649,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 self._decode_capture_stdout)
             _destory_ring_buffer._process.wait()
 
-            cmd = "dada_db -d -k {0}".format(k[::-1])
-            log.debug("Running command: {0}".format(cmd))
-            _destory_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            _destory_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            _destory_ring_buffer._process.wait()
-
+        self._dada_buffers = []
         self.state = "idle"
 
 
