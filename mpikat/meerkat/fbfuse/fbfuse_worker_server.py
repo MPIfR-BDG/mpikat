@@ -21,7 +21,6 @@ SOFTWARE.
 """
 import logging
 import json
-import tornado
 import signal
 import time
 import os
@@ -29,6 +28,7 @@ import coloredlogs
 from subprocess import Popen, PIPE, check_call
 from optparse import OptionParser
 from tornado.gen import coroutine, sleep
+from tornado.ioloop import IOLoop, PeriodicCallback
 from katcp import Sensor, AsyncDeviceServer, AsyncReply, KATCPClientResource
 from katcp.kattypes import request, return_reply, Int, Str, Float
 from mpikat.core.ip_manager import ip_range_from_stream
@@ -137,6 +137,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         self._dada_coh_output_key = "caca"
         self._dada_incoh_output_key = "baba"
         self._capture_interface = capture_interface
+        self._capture_monitor = None
         super(FbfWorkerServer, self).__init__(ip, port)
 
     @coroutine
@@ -276,30 +277,6 @@ class FbfWorkerServer(AsyncDeviceServer):
     def _system_call_wrapper(self, cmd):
         log.debug("System call: '{}'".format(" ".join(cmd)))
         check_call(cmd)
-
-    @coroutine
-    def _process_close_wrapper(self, process, name, timeout=10.0):
-        log.info("Sending SIGTERM to {} process".format(name))
-        process.terminate()
-        log.info("Waiting {} seconds for {} process to terminate...".format(
-            name, timeout))
-        now = time.time()
-        while time.time() - now < timeout:
-            retval = process.poll()
-            if retval is not None:
-                log.warning(
-                    "{} process returned a return value of {}".format(
-                        name, retval))
-                break
-            else:
-                yield sleep(0.5)
-        else:
-            log.warning("{} process failed to terminate in alloted time".format(
-                name))
-            log.debug("Killing {} process".format(name))
-            process.kill()
-        log.debug("{} process stdout:\n{}".format(name, process.stdout.read()))
-        log.debug("{} process stderr:\n{}".format(name, process.stderr.read()))
 
     @coroutine
     def _make_db(self, key, block_size, nblocks, timeout=120):
@@ -781,8 +758,18 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !capture-init ok | (fail [error description]) ]]]
         """
+        try:
+            self.capture_start()
+        except Exception as error:
+            log.exception("Error during capture start")
+            return ("fail", str(error))
+        else:
+            return ("ok",)
+
+
+    def capture_start(self):
         if not self.ready:
-            return ("fail", "FBF worker not in READY state")
+            raise Exception("FBF worker not in READY state")
         self._state_sensor.set_value(self.STARTING)
         # Create SPEAD transmitter for coherent beams
 
@@ -803,11 +790,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         # Start beamforming pipeline
         log.info("Starting PSRDADA_CPP beamforming pipeline")
         log.debug(" ".join(map(str, self._psrdada_cpp_cmdline)))
-        self._psrdada_cpp_proc = Popen(
-            map(str, self._psrdada_cpp_cmdline),
-            stdout=PIPE, stderr=PIPE, shell=False, close_fds=True)
-        log.debug("fbfuse started with PID = {}".format(
-            self._psrdada_cpp_proc.pid))
+        self._psrdada_cpp_proc = ManagedProcess(self._psrdada_cpp_cmdline)
         if self._numa == 0:
             self.set_affinity(self._psrdada_cpp_proc.pid, "6")
         else:
@@ -821,8 +804,25 @@ class FbfWorkerServer(AsyncDeviceServer):
             self.set_affinity(self._mkrecv_proc.pid, "0-5")
         else:
             self.set_affinity(self._mkrecv_proc.pid, "8-13")
+
+        def exit_check_callback():
+            if not self._mkrecv_proc.is_alive():
+                log.error("mkrecv_nt exited unexpectedly")
+                self.ioloop.add_callback(self.capture_stop)
+            if not self._psrdada_cpp_proc.is_alive():
+                log.error("fbfuse pipeline exited unexpectedly")
+                self.ioloop.add_callback(self.capture_stop)
+            if not self._mksend_coh_proc.is_alive():
+                log.error("mksend coherent exited unexpectedly")
+                self.ioloop.add_callback(self.capture_stop)
+            if not self._mksend_incoh_proc.is_alive():
+                log.error("mksend incoherent exited unexpectedly")
+                self.ioloop.add_callback(self.capture_stop)
+            self._capture_monitor.stop()
+
+        self._capture_monitor = PeriodicCallback(exit_check_callback, 1000)
+        self._capture_monitor.start()
         self._state_sensor.set_value(self.CAPTURING)
-        return ("ok",)
 
     @request()
     @return_reply()
@@ -840,33 +840,40 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !capture-done ok | (fail [error description]) ]]]
         """
-        if not self.capturing and not self.error:
-            return ("ok",)
-
         @coroutine
-        def stop_processes():
-            self._state_sensor.set_value(self.STOPPING)
-            self._mkrecv_proc.stop()
-            self._process_close_wrapper(
-                self._psrdada_cpp_proc, "fbfuse")
-            self._mksend_incoh_proc.stop()
-            self._mksend_coh_proc.stop()
-            self._state_sensor.set_value(self.IDLE)
-            reset_tasks = []
-            reset_tasks.append(self._reset_db(
-                self._dada_input_key, timeout=7.0))
-            reset_tasks.append(self._reset_db(
-                self._dada_coh_output_key, timeout=4.0))
-            reset_tasks.append(self._reset_db(
-                self._dada_incoh_output_key, timeout=5.0))
-            for task in reset_tasks:
-                try:
-                    yield task
-                except Exception as error:
-                    log.warning("Error raised on DB reset: {}".format(str(error)))
-            req.reply("ok",)
-        self.ioloop.add_callback(stop_processes)
+        def capture_stop_wrapper():
+            try:
+                yield self.capture_stop()
+            except Exception as error:
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok",)
+        self.ioloop.add_callback(capture_stop_wrapper)
         raise AsyncReply
+
+    @coroutine
+    def capture_stop(self):
+        if not self.capturing and not self.error:
+            return
+        self._state_sensor.set_value(self.STOPPING)
+        self._capture_monitor.stop()
+        self._mkrecv_proc.terminate()
+        self._psrdada_cpp_proc.terminate()
+        self._mksend_incoh_proc.terminate()
+        self.__mksend_coh_proc.terminate()
+        reset_tasks = []
+        reset_tasks.append(self._reset_db(
+            self._dada_input_key, timeout=7.0))
+        reset_tasks.append(self._reset_db(
+            self._dada_coh_output_key, timeout=4.0))
+        reset_tasks.append(self._reset_db(
+            self._dada_incoh_output_key, timeout=5.0))
+        for task in reset_tasks:
+            try:
+                yield task
+            except Exception as error:
+                log.warning("Error raised on DB reset: {}".format(str(error)))
+        self._state_sensor.set_value(self.IDLE)
 
 
 @coroutine
@@ -901,7 +908,7 @@ def main():
         logger=logger)
     logger.setLevel(opts.log_level.upper())
     logging.getLogger('katcp').setLevel(logging.ERROR)
-    ioloop = tornado.ioloop.IOLoop.current()
+    ioloop = IOLoop.current()
     log.info("Starting FbfWorkerServer instance")
     server = FbfWorkerServer(opts.host, opts.port, opts.cap_ip,
                              opts.numa, exec_mode=opts.exec_mode)

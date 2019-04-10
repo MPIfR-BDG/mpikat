@@ -50,38 +50,41 @@ class ManagedProcess(object):
     def __init__(self, cmdlineargs, stdout_handler=None, stderr_handler=None):
         self._proc = Popen(cmdlineargs, stdout=PIPE, stderr=PIPE,
                            shell=False, close_fds=True)
-        self._stdout_handler = stdout_handler
-        self._stderr_handler = stderr_handler
+        if stdout_handler:
+            self._stdout_handler = stdout_handler
+        else:
+            self._stdout_handler = lambda line: log.debug(line)
+        if stderr_handler:
+            self._stderr_handler = stderr_handler
+        else:
+            self._stderr_handler = lambda line: log.error(line)
         self.stdout_monitor = None
         self.stderr_monitor = None
+        self.eop_monitor = None
         self._start_monitors()
 
     @property
     def pid(self):
-        return self._proc.pid	
+        return self._proc.pid
 
     def is_alive(self):
         return self._proc.poll() is None
 
     def _start_monitors(self):
-        if self._stdout_handler:
-            self.stdout_monitor = PipeMonitor(
-                self._proc.stdout, self._stdout_handler)
-            self.stdout_monitor.start()
-        if self._stderr_handler:
-            self.stderr_monitor = PipeMonitor(
-                self._proc.stderr, self._stderr_handler)
-            self.stderr_monitor.start()
+        self.stdout_monitor = PipeMonitor(
+            self._proc.stdout, self._stdout_handler)
+        self.stdout_monitor.start()
+        self.stderr_monitor = PipeMonitor(
+            self._proc.stderr, self._stderr_handler)
+        self.stderr_monitor.start()
 
     def _stop_monitors(self):
-        if self.stdout_monitor:
-            self.stdout_monitor.stop()
-            self.stdout_monitor.join()
-            self.stdout_monitor = None
-        if self.stderr_monitor:
-            self.stderr_monitor.stop()
-            self.stderr_monitor.join()
-            self.stderr_monitor = None
+        self.stdout_monitor.stop()
+        self.stdout_monitor.join()
+        self.stdout_monitor = None
+        self.stderr_monitor.stop()
+        self.stderr_monitor.join()
+        self.stderr_monitor = None
 
     def terminate(self, timeout=5):
         start = time.time()
