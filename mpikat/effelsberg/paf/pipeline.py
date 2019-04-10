@@ -1970,6 +1970,7 @@ class Search(Pipeline):
             refinfo = "{}_{}_{}".format(refinfo[0], refinfo[1], refinfo[2])
 
             # capture command
+            #os.environ["LD_PRELOAD"] = "libvma.so"
             command = ("{} -a {} -b {} -c {} -e {} -f {} -g {} -i {} -j {} "
                        "-k {} -l {} -m {} -n {} -o {} -p {} -q {} ").format(
                            self._input_main, self._input_keys[

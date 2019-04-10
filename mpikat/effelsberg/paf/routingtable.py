@@ -24,12 +24,16 @@ CONFIG2BEAMS = {"nbeam":           36,  # Expected number from configuration, th
                 "nbeam_per_nic":   2,
                 "nport_per_beam":  3,
                 "nchunk_per_port": 11,
+                #"nport_per_beam":  1,
+                #"nchunk_per_port": 33,
                 }
 
 CONFIG1BEAM = {"nbeam":           18,  # Expected number from configuration, the real number depends on the number of alive NiCs
                "nbeam_per_nic":   1,
                "nport_per_beam":  3,
                "nchunk_per_port": 16,
+               #"nport_per_beam":  1,
+               #"nchunk_per_port": 48,
                }
 
 PARAMIKO_BUFSZ = 102400
@@ -277,7 +281,7 @@ class RoutingTable(object):
             "cd {}/Code/Components/OSL/scripts/ade".format(TOSSIX_SCRIPT_ROOT))
 
         # Configure metadata and streaming
-        tossix.control("python osl_a_metadata_streaming.py")
+        #tossix.control("python osl_a_metadata_streaming.py")
         tossix.control(
             "python osl_a_abf_config_stream.py --param 'ade_bmf.stream10G.streamSetup={}'".format(self.fname.split("/")[-1]))
 
@@ -326,6 +330,6 @@ if __name__ == "__main__":
 
     routing_table = RoutingTable(
         destinations, nbeam, nchunk, nchunk_offset, center_freq)
-    time.sleep(10)
+    #time.sleep(10)
     print(routing_table.center_freq_stream())
     routing_table.upload_table()
