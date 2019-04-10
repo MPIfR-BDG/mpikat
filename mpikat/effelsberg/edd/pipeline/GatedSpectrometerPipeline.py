@@ -499,6 +499,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
             mkrecvheader_file.write("\n#OTHER PARAMETERS\n")
             mkrecvheader_file.write("samples_per_block {}\n".format(self._config["samples_per_block"]))
+            mkrecvheader_file.write("n_channels {}\n".format(self._config["gated_cli_args"]["fft_length"] / 2 + 1 ))
+            mkrecvheader_file.write("integration_time {} # [s] fft_length * naccuulate / sampling_frequency (2.6GHz)\n".format(self._config["gated_cli_args"]["fft_length"] * self._config["gated_cli_args"]["naccumulate"] / 2.6E9 ))
             #mkrecvheader_file.write("BUFFER_SIZE  {}\n".format(self.bufferSize))
 
             mkrecvheader_file.write("\n#PARAMETERS ADDED AUTOMATICALLY BY MKRECV\n")
