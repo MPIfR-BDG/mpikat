@@ -49,7 +49,7 @@ class ManualWorkerController(object):
         coherent_beam_antennas = antennas
         incoherent_beam_antennas = antennas
         nantennas = len(antennas)
-        nchans_per_group = tot_nchans / nantennas / 4
+        nchans_per_group = tot_nchans / subarray_size / 4
         nchans = ip_range_from_stream(feng_groups).count * nchans_per_group
 
         chan0_freq = 1240e6
@@ -65,7 +65,7 @@ class ManualWorkerController(object):
             "sideband": "upper",
             "feng-antenna-map": feng_antenna_map,
             "sync-epoch": 12353524243.0,
-            "nchans": nchans
+            "nchans": tot_nchans
         }
         coherent_beam_config = {
             "tscrunch": 16,
@@ -98,8 +98,6 @@ class ManualWorkerController(object):
         else:
             print "prepare done"
 
-	os.system("cp mkrecv_feng_cmc1.cfg mkrecv_feng.cfg")
-
 	yield worker_client.req.capture_start()
 
 	time.sleep(60)
@@ -108,6 +106,8 @@ class ManualWorkerController(object):
 
 
 if __name__ == "__main__":
+    import os
+    os.system("taskset -c 15 -p {}".format(os.getpid()))
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('', '--dc-ip', dest='dc_ip', type=str,
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     logger = logging.getLogger('mpikat')
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
-        level="DEBUG",
+        level="INFO",
         logger=logger)
     logging.getLogger('mpikat.fbfuse_delay_buffer_controller').setLevel("INFO")
     logging.getLogger('katcp').setLevel('INFO')
@@ -132,6 +132,6 @@ if __name__ == "__main__":
     @coroutine
     def run():
         yield controller.start()
-        yield controller.setup(64, "m000,m001,m003,m004,m005,m006,m007,m008,m009,m010,m011,m012,m013,m015,m016,m018,m021,m022,m023,m024,m025,m026,m027,m028,m029,m030,m031,m033,m034,m035,m036,m040,m041,m042,m043,m044,m045,m046,m047,m049,m050,m051,m052,m053,m055,m056,m057,m058,m059,m060,m061,m062", 32, 1024, "spead://239.8.0.0+3:7148", 0, 0)
+        yield controller.setup(64, "m001,m003,m004,m006,m007,m008,m010,m012,m013,m015,m016,m019,m020,m021,m022,m023,m024,m026,m027,m028,m029,m030,m031,m033,m035,m037,m039,m040,m043,m044,m046,m047,m048,m050,m052,m053,m054,m057,m061,m062", 32, 4096, "spead://239.8.0.0+3:7148", 0, 0)
     ioloop.add_callback(run)
     ioloop.start()

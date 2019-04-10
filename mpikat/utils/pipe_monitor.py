@@ -24,16 +24,13 @@ class PipeMonitor(Thread):
         self._stop_event = Event()
 
     def run(self):
-        while not self._stop_event.is_set():
-            if self._poll.poll(self._timeout):
-                line = self._pipe.readline()
-                if line == self._sentinel:
-                    break
-                else:
-                    try:
-                        self._handler(line)
-                    except Exception:
-                        log.exception("Error raised in pipe handler: '{}'".format(line))
+	for line in iter(self._pipe.readline, self._sentinel): 
+            try:
+                self._handler(line)
+            except Exception as error:
+                log.warning("Exception raised in pipe handler: '{}' with line '{}'".format(
+                    str(error), line))
+        
 
     def stop(self):
         """

@@ -48,16 +48,16 @@ def process_watcher(process, name=None, timeout=120):
 
 class ManagedProcess(object):
     def __init__(self, cmdlineargs, stdout_handler=None, stderr_handler=None):
-        self._proc = Popen(map(str, cmdlineargs), stdout=PIPE, stderr=PIPE,
+        self._proc = Popen(map(str, cmdlineargs), stdout=PIPE, stderr=PIPE, 
                            shell=False, close_fds=True)
         if stdout_handler:
             self._stdout_handler = stdout_handler
         else:
-            self._stdout_handler = lambda line: log.debug(line)
+            self._stdout_handler = lambda line: log.debug(line.strip())
         if stderr_handler:
             self._stderr_handler = stderr_handler
         else:
-            self._stderr_handler = lambda line: log.error(line)
+            self._stderr_handler = lambda line: log.error(line.strip())
         self.stdout_monitor = None
         self.stderr_monitor = None
         self.eop_monitor = None

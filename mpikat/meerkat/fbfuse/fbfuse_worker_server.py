@@ -25,6 +25,7 @@ import signal
 import time
 import os
 import coloredlogs
+from collections import deque 
 from subprocess import Popen, PIPE, check_call
 from optparse import OptionParser
 from tornado.gen import coroutine, sleep
@@ -44,7 +45,7 @@ from mpikat.utils.process_tools import process_watcher, ManagedProcess
 log = logging.getLogger("mpikat.fbfuse_worker_server")
 
 PACKET_PAYLOAD_SIZE = 1024  # bytes
-AVAILABLE_CAPTURE_MEMORY = 137438953472/2  # bytes
+AVAILABLE_CAPTURE_MEMORY = 137438953472/8  # bytes
 MAX_DADA_BLOCK_SIZE = 500e6 #bytes
 
 MKRECV_CONFIG_FILENAME = "mkrecv_feng.cfg"
@@ -56,12 +57,6 @@ DRYRUN, OUTPUT_ONLY, INPUT_OUTPUT, FULL = EXEC_MODES
 
 # For elegantly doing nothing instead of starting a process
 DUMMY_CMD = ["tail", "-f", "/dev/null"]
-
-MKRECV_STDOUT_KEYS = {
-    "STAT": [("slot-size", int), ("heaps-completed", int),
-             ("heaps-discarded", int), ("heaps-needed", int),
-             ("payload-expected", int), ("payload-received", int)]
-}
 
 
 def determine_feng_capture_order(antenna_to_feng_id_map,
@@ -461,6 +456,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             heap_size = nchans_per_group * PACKET_PAYLOAD_SIZE
             heap_group_size = ngroups * heap_size * nantennas
             ngroups_data = int(MAX_DADA_BLOCK_SIZE / heap_group_size)
+	    ngroups_data = 2**((ngroups_data).bit_length()-1)
             centre_frequency = (chan0_freq + feng_config['nchans']
                                 / 2.0 * chan_bw)
             if self._exec_mode == FULL:
@@ -531,7 +527,7 @@ class FbfWorkerServer(AsyncDeviceServer):
 
             nbeams_per_group = nbeams / len(group_order)
             coh_data_rate = (partition_bandwidth / coherent_beam_config['tscrunch']
-                             / coherent_beam_config['fscrunch'] * nbeams_per_group)
+                             / coherent_beam_config['fscrunch'] * nbeams_per_group * 8 * 1.1)
             coh_heap_size = 8192
             coh_timestamp_step = (coh_heap_size * coherent_beam_config['tscrunch']
                                   * coherent_beam_config['fscrunch'] * 2)
@@ -562,7 +558,7 @@ class FbfWorkerServer(AsyncDeviceServer):
 
             incoh_data_rate = (
                 partition_bandwidth / incoherent_beam_config['tscrunch']
-                / incoherent_beam_config['fscrunch'])
+                / incoherent_beam_config['fscrunch'] * 8 * 1.1)
             incoh_heap_size = 8192
             incoh_timestamp_step = (
                 incoh_heap_size * incoherent_beam_config['tscrunch']
@@ -632,7 +628,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             coh_output_samples = ngroups_data * \
                 256 / coherent_beam_config['tscrunch']
             coherent_block_size = nbeams * coh_output_channels * coh_output_samples
-            coherent_block_count = 8
+            coherent_block_count = 32 
             log.debug("Creating dada buffer for coherent beam output with key '{}'".format(
                 "%s" % self._dada_coh_output_key))
             coh_output_make_db_future = self._make_db(
@@ -645,7 +641,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             incoh_output_samples = (ngroups_data * 256) / \
                 incoherent_beam_config['tscrunch']
             incoherent_block_size = incoh_output_channels * incoh_output_samples
-            incoherent_block_count = 8
+            incoherent_block_count = 32
             log.debug("Creating dada buffer for incoherent beam output with key '{}'".format(
                 "%s" % self._dada_incoh_output_key))
             incoh_output_make_db_future = self._make_db(
@@ -772,38 +768,45 @@ class FbfWorkerServer(AsyncDeviceServer):
             raise Exception("FBF worker not in READY state")
         self._state_sensor.set_value(self.STARTING)
         # Create SPEAD transmitter for coherent beams
+	
+	if self._numa == 0:
+	    mksend_cpu_set = "7"
+            psrdada_cpp_cpu_set = "6"
+            mkrecv_cpu_set = "0-5"
+        else: 
+	    mksend_cpu_set = "14"
+            psrdada_cpp_cpu_set = "15"
+            mkrecv_cpu_set = "8-13"
 
         self._mksend_coh_proc = ManagedProcess(
-            ["mksend", "--header", MKSEND_COHERENT_CONFIG_FILENAME, "--quiet"])
-        if self._numa == 0:
-            self.set_affinity(self._mksend_coh_proc.pid, "7")
-        else:
-            self.set_affinity(self._mksend_coh_proc.pid, "15")
+            ["taskset", "-c", mksend_cpu_set, "mksend", "--header", 
+	      MKSEND_COHERENT_CONFIG_FILENAME, "--quiet"])
 
         self._mksend_incoh_proc = ManagedProcess(
-            ["mksend", "--header", MKSEND_INCOHERENT_CONFIG_FILENAME, "--quiet"])
-        if self._numa == 0:
-            self.set_affinity(self._mksend_incoh_proc.pid, "7")
-        else:
-            self.set_affinity(self._mksend_incoh_proc.pid, "15")
+            ["taskset", "-c", mksend_cpu_set, "mksend", "--header", 
+             MKSEND_INCOHERENT_CONFIG_FILENAME, "--quiet"])
 
         # Start beamforming pipeline
         log.info("Starting PSRDADA_CPP beamforming pipeline")
+        self._psrdada_cpp_cmdline = ["taskset", "-c", psrdada_cpp_cpu_set] + self._psrdada_cpp_cmdline
         log.debug(" ".join(map(str, self._psrdada_cpp_cmdline)))
         self._psrdada_cpp_proc = ManagedProcess(self._psrdada_cpp_cmdline)
-        if self._numa == 0:
-            self.set_affinity(self._psrdada_cpp_proc.pid, "6")
-        else:
-            self.set_affinity(self._psrdada_cpp_proc.pid, "14")
+
+	stats_buffer = deque(maxlen=10)
+	def mkrecv_stdout_handler(line):
+	    params = mkrecv_stdout_parser(line)
+            if params:
+                current = 100 * params['heaps-completed'] / float(params['slot-size'])
+                total = 100 * params['global-payload-received'] / float(params['global-payload-expected'])
+                stats_buffer.append(current)
+	        log.info("Capture percentages: {:9.5f}% (current) {:9.5f}% (accumulated) {:9.5f} (last 10 buffers)".format(
+		    current, total, sum(stats_buffer)/stats_buffer.maxlen))
 
         # Create SPEAD receiver for incoming antenna voltages
         self._mkrecv_proc = ManagedProcess(
-            ["mkrecv_nt", "--header", MKRECV_CONFIG_FILENAME, "--quiet"],
-            stdout_handler=mkrecv_stdout_parser)
-        if self._numa == 0:
-            self.set_affinity(self._mkrecv_proc.pid, "0-5")
-        else:
-            self.set_affinity(self._mkrecv_proc.pid, "8-13")
+            ["taskset", "-c", mkrecv_cpu_set, "mkrecv_nt", "--header",
+              MKRECV_CONFIG_FILENAME, "--quiet"],
+            stdout_handler=mkrecv_stdout_handler)
 
         def exit_check_callback():
             if not self._mkrecv_proc.is_alive():
@@ -860,7 +863,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         self._mkrecv_proc.terminate()
         self._psrdada_cpp_proc.terminate()
         self._mksend_incoh_proc.terminate()
-        self.__mksend_coh_proc.terminate()
+        self._mksend_coh_proc.terminate()
         reset_tasks = []
         reset_tasks.append(self._reset_db(
             self._dada_input_key, timeout=7.0))
