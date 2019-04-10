@@ -67,10 +67,11 @@ DEFAULT_CONFIG = {
         },
         "gated_cli_args":
         {
-            "fft_length": 1024,
-            "naccumulate": 1,
+            "fft_length": 1024*1024,
+            "naccumulate": 256,
             "input_level": 100,
             "output_level": 100,
+            "output_bit_depth": 32,
             "null_output": False            # Write outptu to /dev/null for testing purposes
         },
         "mkrecv":
@@ -103,7 +104,6 @@ IBV_MAX_POLL 10
 PORT         7148
 
 DADA_MODE    4                       # The mode, 4=full dada functionality
-FILE_SIZE    134217728 
 BYTES_PER_SECOND unset
 
 SAMPLE_CLOCK_START 0 # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock
@@ -395,7 +395,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         self.input_bufferSize = nHeaps * (self.heapSize + 64 / 8) 
         nSlices = nSamples / self._config['gated_cli_args']['fft_length'] /  self._config['gated_cli_args']['naccumulate']
         nChannels = self._config['gated_cli_args']['fft_length'] / 2 + 1
-        self.output_bufferSize = nSlices * 2 * nChannels 
+        self.output_bufferSize = nSlices * 2 * nChannels * self._config['gated_cli_args']['output_bit_depth'] / 8
 
         def create_ring_buffer(bufferSize, key):
             args ="-b {} {}".format(bufferSize, self._config["dada_db_params"]["args"])
@@ -425,7 +425,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             log_level='debug'
             # Configure + launch gated spectrometer
 
-            cmd = "numactl --cpubind=1 --membind=1 gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={nbits} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=k, log_level=log_level, ofname=ofname, nbits=bitdepth, heapSize=self.heapSize, **self._config["gated_cli_args"])
+            cmd = "numactl --cpubind=1 --membind=1 gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={nbits} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=k, log_level=log_level, ofname=ofname, nbits=bitdepth, heapSize=self.heapSize, **self._config["gated_cli_args"])
             # here should be a smarter system to parse the options from the
             # controller to the program without redundant typing of options
             log.debug("Command to run: {}".format(cmd))
@@ -501,7 +501,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             mkrecvheader_file.write("samples_per_block {}\n".format(self._config["samples_per_block"]))
             mkrecvheader_file.write("n_channels {}\n".format(self._config["gated_cli_args"]["fft_length"] / 2 + 1 ))
             mkrecvheader_file.write("integration_time {} # [s] fft_length * naccuulate / sampling_frequency (2.6GHz)\n".format(self._config["gated_cli_args"]["fft_length"] * self._config["gated_cli_args"]["naccumulate"] / 2.6E9 ))
-            #mkrecvheader_file.write("BUFFER_SIZE  {}\n".format(self.bufferSize))
+            mkrecvheader_file.write("FILE_SIZE {}\n".format(self.output_bufferSize))
 
             mkrecvheader_file.write("\n#PARAMETERS ADDED AUTOMATICALLY BY MKRECV\n")
 
