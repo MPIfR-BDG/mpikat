@@ -1,5 +1,6 @@
 import time
 import logging
+import os
 from subprocess import Popen, PIPE
 from tornado.gen import coroutine, sleep
 from mpikat.utils.pipe_monitor import PipeMonitor
@@ -47,7 +48,11 @@ def process_watcher(process, name=None, timeout=120):
 
 
 class ManagedProcess(object):
-    def __init__(self, cmdlineargs, stdout_handler=None, stderr_handler=None):
+    def __init__(self, cmdlineargs, env={}, stdout_handler=None, stderr_handler=None):
+        environ = os.environ.copy()
+        environ.update(env)
+        if isinstance(cmdlineargs, str):
+            cmdlineargs = cmdlineargs.split()
         self._proc = Popen(map(str, cmdlineargs), stdout=PIPE, stderr=PIPE, 
                            shell=False, close_fds=True)
         if stdout_handler:
