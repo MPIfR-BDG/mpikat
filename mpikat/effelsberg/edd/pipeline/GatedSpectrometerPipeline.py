@@ -21,7 +21,8 @@ SOFTWARE.
 """
 import logging
 from pipeline_register import register_pipeline
-from ExecuteCommand import ExecuteCommand
+from mpikat.utils.process_tools import ManagedProcess
+
 import tornado
 import signal
 import coloredlogs
@@ -69,7 +70,7 @@ DEFAULT_CONFIG = {
         {
             "ibv_if": "10.10.1.10",
             "mcast_sources": "225.0.0.162 225.0.0.163 225.0.0.164 225.0.0.165",
-            "mcast_dest": "225.0.0.182 225.0.0.183",        #two destinations, one for on, one for off
+            "mcast_dest": "225.0.0.182 225.0.0.183",        #two destinations gate on/off
             "port_rx": "7148",
             "port_tx": "7150",
             "dada_key": 'dada',              # output keysa are the reverse!
@@ -451,11 +452,13 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         def create_ring_buffer(bufferSize, blocks, key):
             cmd = "numactl --cpubind=1 --membind=1 dada_db -k {key} -n {blocks} -b {bufferSize} -p -l".format(key=key, blocks=blocks, bufferSize=bufferSize)
             log.debug("Running command: {0}".format(cmd))
-            _create_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            _create_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            _create_ring_buffer._process.wait()
+            p = ManagedProcess(cmd)
+            while p.is_alive():
+                # wait for buffer to be created
+                time.sleep(0.1)
+            #_create_ring_buffer.stdout_callbacks.add(
+            #    self._decode_capture_stdout)
+            #_create_ring_buffer._process.wait()
 
         for i,k in enumerate(self._config['enabled_polarizations']):
             bufferName = self._config[k]['dada_key']
@@ -477,10 +480,10 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
             if not self._config["null_output"]:
                 # Configure output
-                gated_cli = ExecuteCommand(cmd, outpath=None, resident=True, env={"CUDA_VISIBLE_DEVICES":str(1)}) #HOTFIX set to numa node 1
-                gated_cli.stdout_callbacks.add( self._decode_capture_stdout)
-                gated_cli.stderr_callbacks.add( self._handle_execution_stderr)
-                gated_cli.error_callbacks.add(self._handle_error_state)
+                gated_cli = ManagedProcess(cmd, env={"CUDA_VISIBLE_DEVICES":str(1)}) #HOTFIX set to numa node 1
+                #gated_cli.stdout_callbacks.add( self._decode_capture_stdout)
+                #gated_cli.stderr_callbacks.add( self._handle_execution_stderr)
+                #gated_cli.error_callbacks.add(self._handle_error_state)
                 self._subprocesses.append(gated_cli)
 
                 mksend_header_file = tempfile.NamedTemporaryFile(delete=False)
@@ -494,10 +497,10 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                         ofname=ofname, polarization=i, nChannels=nChannels,
                         rate=rate, heap_size=output_heapSize, **cfg)
 
-                mks = ExecuteCommand(cmd, outpath=None, resident=True, env={"CUDA_VISIBLE_DEVICES":str(1)})
-                mks.stdout_callbacks.add( self._decode_capture_stdout)
-                mks.stderr_callbacks.add( self._handle_execution_stderr)
-                mks.error_callbacks.add(self._handle_error_state)
+                mks = ManagedProcess(cmd)
+                #mks.stdout_callbacks.add( self._decode_capture_stdout)
+                #mks.stderr_callbacks.add( self._handle_execution_stderr)
+                #mks.error_callbacks.add(self._handle_error_state)
                 self._subprocesses.append(mks)
 
         self.state = "ready"
@@ -568,14 +571,14 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 --sync-epoch {sync_time} --sample-clock {sample_clock} \
                 --ibv-if {ibv_if} --port {port_rx} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name,
                         **cfg )
-                self.mkrec_cmd.append(ExecuteCommand(cmd, outpath=None, resident=True))
+                self.mkrec_cmd.append(ManagedProcess(cmd))
 
 
 
-            for k in self.mkrec_cmd:
-                k.error_callbacks.add(self._handle_error_state)
-                k.stdout_callbacks.add( self._decode_capture_stdout)
-                k.stderr_callbacks.add( self._handle_execution_stderr)
+            #for k in self.mkrec_cmd:
+            #    k.error_callbacks.add(self._handle_error_state)
+            #    k.stdout_callbacks.add( self._decode_capture_stdout)
+            #    k.stderr_callbacks.add( self._handle_execution_stderr)
 
             #self._subprocesses.append(self.mkrec_cmd)
         except Exception as e:
@@ -616,41 +619,20 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         """@brief stop the dada_junkdb and dspsr instances."""
         log.info("Stoping EDD backend")
         if self.state != 'running':
-            log.error("pipleine state is not in state = running but in state {}, nothing to stop".format(self.state))
-            return
+            log.warning("pipleine state is not in state = running but in state {}".format(self.state))
+            #return
         log.debug("Stopping")
 
-        def __stopProcess(proc, timeout=10):
-            log.debug("Terminating process: {}".format(proc._command))
-            retval = proc._process.poll()
-            if retval is not None:
-                log.debug("Already terminated with return value of {}".format(retval))
-                return
-
-            proc.set_finish_event()
-            proc.finish()
-            log.debug("  Waiting {} seconds for process to terminate...".format(timeout))
-            now = time.time()
-            while time.time() - now < timeout:
-                retval = proc._process.poll()
-                if retval is not None:
-                    log.debug("Returned a return value of {}".format(retval))
-                    break
-                else:
-                    time.sleep(0.5)
-            if proc._process.poll() is None:
-                log.warning("Failed to terminate proc {} in alloted time".format(proc._command))
-                log.info("Killing process")
-                proc._process.kill()
-
         # stop mkrec process
-        log.debug("Stopping mkrecv processes")
+        log.debug("Stopping mkrecv processes ...")
         for proc in self.mkrec_cmd:
-            __stopProcess(proc)
+            proc.terminate()
+        # This will terminate also the gated spectromenter automatically
 
-        log.debug("Stopping remaining processes ..")
+        log.debug("Stopping remaining processes ...")
         for proc in self._subprocesses:
-            __stopProcess(proc)
+            proc.terminate()
+
         self.state = "idle"
 
 
@@ -726,7 +708,7 @@ if __name__ == "__main__":
     (opts, args) = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
-    logger.setLevel(opts.log_level)
+    logger.setLevel(opts.log_level.upper())
 
     log.setLevel(opts.log_level.upper())
     coloredlogs.install(
