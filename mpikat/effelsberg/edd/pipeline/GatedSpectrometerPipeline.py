@@ -65,7 +65,7 @@ DEFAULT_CONFIG = {
         "output_level": 100,
 
         "null_output": False,                           # Disable sending of data for testing purposes
-        "dummy_input": True,                           # Disable sending of data for testing purposes
+        "dummy_input": True,                            # Disable sending of data for testing purposes
         "log_level": "debug",                           # Disable sending of data for testing purposes
 
         "polarization_0" :
@@ -146,22 +146,23 @@ HEAP_ID_OFFSET  1
 HEAP_ID_STEP    13
 
 NSCI            0
-NITEMS          5
+NITEMS          7
 ITEM1_ID        5632    # timestamp, slowest index
-ITEM1_INDEX     1
 
 ITEM2_ID        5633    # polarization
 
-ITEM2_ID        5633    # noise diode identifier
-ITEM2_LIST      0,1     # on/off value
-ITEM2_INDEX     2
+ITEM3_ID        5634    # noise diode status
+ITEM3_LIST      0,1
+ITEM3_INDEX     2
 
-ITEM3_ID        5634    # number of channels in dataset
+ITEM4_ID        5635    # number of channels in dataset
 
-ITEM4_ID        5635
-ITEM4_LIST      42      # number of samples ndiode on/off - currently dummy data but should be read from buffer in the future
+ITEM5_ID        5636
+ITEM5_LIST      42      # number of samples ndiode on/off - currently dummy data but should be read from buffer in the future
 
-ITEM5_ID        5636 # payload item (empty step, list, index and sci)
+ITEM6_ID        5637    # Integration time
+
+ITEM7_ID        5638    # payload item (empty step, list, index and sci)
 """
 
 
@@ -494,12 +495,15 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         rate = output_heapSize / (bufferTime / nSlices) * 8 # bps
         rate *= 1.10        # set rate to 110% of expected rate
 
+        integrationTime = bufferTime / nSlices 
+
         log.debug('Output parameters calculated from configuration:\n\
                 spectra per block:  {} \n\
                 nChannels:          {} \n\
                 buffer size:        {} byte \n\
+                integrationTime :   {} s \n\
                 heap size:          {} byte\n\
-                rate (110%):        {} bps'.format(nSlices, nChannels, output_bufferSize, output_heapSize, rate))
+                rate (110%):        {} bps'.format(nSlices, nChannels, output_bufferSize, integrationTime, output_heapSize, rate))
 
 
         self._subprocessMonitor = SubprocessMonitor()
@@ -533,8 +537,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
                 nhops = len(self._config[k]['mcast_dest'].split())
 
-                cmd = "numactl --cpubind={numa_node} --membind={numa_node} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {fft_length} --item2-list {polarization} --item3-list {nChannels} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name,
-                        ofname=ofname, polarization=i, nChannels=nChannels,
+                cmd = "numactl --cpubind={numa_node} --membind={numa_node} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {fft_length} --item2-list {polarization} --item4-list {nChannels} --item6-list {integrationTime} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name,
+                        ofname=ofname, polarization=i, nChannels=nChannels, integrationTime=integrationTime,
                         rate=rate, nhops=nhops, heap_size=output_heapSize, **cfg)
                 log.debug("Command to run: {}".format(cmd))
 
