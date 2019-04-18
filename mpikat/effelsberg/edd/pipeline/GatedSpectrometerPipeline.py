@@ -19,31 +19,26 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
-import logging
 from pipeline_register import register_pipeline
 from mpikat.utils.process_tools import ManagedProcess, command_watcher
 from mpikat.utils.process_monitor import SubprocessMonitor
-from mpikat.utils.db_monitor import DbMonitor 
-
-import threading
-import tornado
-import signal
-import coloredlogs
-from optparse import OptionParser
-#import tempfile
-import json
-from tornado.gen import Return, coroutine
-from tornado.ioloop import PeriodicCallback
-import os
-import time
-from astropy.time import Time
+from mpikat.utils.db_monitor import DbMonitor
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
 from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
-import shlex
-import threading
-import base64
+
 from katcp import Sensor, AsyncDeviceServer, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str
+
+import tornado
+from tornado.gen import coroutine
+
+import os
+import time
+import logging
+import signal
+from optparse import OptionParser
+import coloredlogs
+import json
 import tempfile
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.GatedSpectrometerPipeline")
@@ -58,12 +53,12 @@ POLARIZATIONS = ["polarization_0", "polarization_1"]
 DEFAULT_CONFIG = {
         "input_bit_depth" : 12,                         # Input bit-depth
         "samples_per_heap": 4096,                       # this needs to be consistent with the mkrecv configuration
-        "samples_per_block": 512*1024*1024,             # 512 Mega sampels per buffer block to allow high res  spectra
+        "samples_per_block": 512 * 1024 * 1024,             # 512 Mega sampels per buffer block to allow high res  spectra
         "enabled_polarizations" : ["polarization_0"],
         "sample_clock" : 2600000000,
         "sync_time" : 1554915838,
 
-        "fft_length": 1024*1024,
+        "fft_length": 1024 * 1024,
         "naccumulate": 512,
         "output_bit_depth": 32,
         "input_level": 100,
@@ -281,13 +276,13 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             self._input_buffer_fill_level_sensors[p] = Sensor.float(
                     "input-buffer-fill-level-{}".format(p),
                     description="Fill level of the input buffer for {}".format(p),
-                    params=[0,1]
+                    params=[0, 1]
                     )
             self.add_sensor(self._input_buffer_fill_level_sensors[p])
             self._output_buffer_fill_level_sensors[p] = Sensor.float(
                     "output-buffer-fill-level-{}".format(p),
                     description="Fill level of the output buffer for {}".format(p),
-                    params=[0,1]
+                    params=[0, 1]
                     )
             self.add_sensor(self._output_buffer_fill_level_sensors[p])
 
@@ -396,10 +391,11 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         self.ioloop.add_callback(configure_wrapper)
         raise AsyncReply
 
+
     @coroutine
     def _create_ring_buffer(self, bufferSize, blocks, key, numa_node):
          """
-         Create a ring buffer of given size with given key on specified numa node. 
+         Create a ring buffer of given size with given key on specified numa node.
          Adds and register an appropriate sensor to thw list
          """
          # always clear buffer first. Allow fail here
@@ -411,7 +407,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
          M = DbMonitor(key, self._buffer_status)
          M.start()
-         self._dada_buffers.append({'key':key, 'monitor':M})
+         self._dada_buffers.append({'key': key, 'monitor': M})
 
 
     def _buffer_status(self, status):
@@ -505,9 +501,9 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 heap size:          {} byte\n\
                 rate (110%):        {} bps'.format(nSlices, nChannels, output_bufferSize, output_heapSize, rate))
 
- 
+
         self._subprocessMonitor = SubprocessMonitor()
-        for i,k in enumerate(self._config['enabled_polarizations']):
+        for i, k in enumerate(self._config['enabled_polarizations']):
             numa_node = self._config[k]['numa_node']
 
             # configure dada buffer
@@ -518,17 +514,13 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             yield self._create_ring_buffer(output_bufferSize, 8, ofname, numa_node)
 
             # Configure + launch gated spectrometer
-            cmd = "numactl --cpubind={numa_node} --membind={numa_node} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={input_bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, **self._config)
             # here should be a smarter system to parse the options from the
             # controller to the program without redundant typing of options
+            cmd = "numactl --cpubind={numa_node} --membind={numa_node} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={input_bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, **self._config)
             log.debug("Command to run: {}".format(cmd))
 
-            # Configure output
-            gated_cli = ManagedProcess(cmd, env={"CUDA_VISIBLE_DEVICES":str(self._config[k]["cuda_device"])}) #HOTFIX set to numa node 1
+            gated_cli = ManagedProcess(cmd, env={"CUDA_VISIBLE_DEVICES": str(self._config[k]["cuda_device"])})
             self._subprocessMonitor.add(gated_cli, self._subprocess_error)
-            #gated_cli.stdout_callbacks.add( self._decode_capture_stdout)
-            #gated_cli.stderr_callbacks.add( self._handle_execution_stderr)
-            #gated_cli.error_callbacks.add(self._handle_error_state)
             self._subprocesses.append(gated_cli)
 
             if not self._config["null_output"]:
@@ -602,22 +594,16 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             mkrecvheader_file.write(mkrecv_header)
             # DADA may need this
             mkrecvheader_file.write("NBIT {}\n".format(self._config["input_bit_depth"]))
-
             mkrecvheader_file.write("HEAP_SIZE {}\n".format(self.input_heapSize))
-
-            #mkrecvheader_file.write("\n#GATED_PARAMETERS\n")
-            #for k, v in self._config['gated_cli_args'].items():
-            #    mkrecvheader_file.write("{} {}\n".format(k, v))
 
             mkrecvheader_file.write("\n#OTHER PARAMETERS\n")
             mkrecvheader_file.write("samples_per_block {}\n".format(self._config["samples_per_block"]))
-            #mkrecvheader_file.write("n_channels {}\n".format(self._config["gated_cli_args"]["fft_length"] / 2 + 1 ))
-            #mkrecvheader_file.write("integration_time {} # [s] fft_length * naccumulate / sampling_frequency (2.6GHz)\n".format(self._config["gated_cli_args"]["fft_length"] * self._config["gated_cli_args"]["naccumulate"] / 2.6E9 ))
+
             mkrecvheader_file.write("\n#PARAMETERS ADDED AUTOMATICALLY BY MKRECV\n")
             mkrecvheader_file.close()
 
             self.mkrec_cmd = []
-            for i,k in enumerate(self._config['enabled_polarizations']):
+            for i, k in enumerate(self._config['enabled_polarizations']):
                 cfg = self._config.copy()
                 cfg.update(self._config[k])
                 if not self._config['dummy_input']:
@@ -674,7 +660,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         log.info("Stoping EDD backend")
         if self.state != 'running':
             log.warning("pipleine state is not in state = running but in state {}".format(self.state))
-            #return
+            # return
         log.debug("Stopping")
         self._subprocessMonitor.stop()
 
