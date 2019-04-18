@@ -6,10 +6,11 @@ from mpikat.utils.pipe_monitor import PipeMonitor
 log = logging.getLogger('mpikat.db_monitor')
 
 class DbMonitor(object):
-    def __init__(self, key):
+    def __init__(self, key, callback):
         self._key = key
         self._dbmon_proc = None
         self._mon_thread = None
+        self._callback = callback
 
     def _stdout_parser(self, line):
         line = line.strip()
@@ -18,14 +19,15 @@ class DbMonitor(object):
             free, full, clear, written, read = values[5:]
             fraction = float(full)/(full + free)
             params = {
+                "key": self._key,
                 "fraction-full": fraction,
                 "written": written,
                 "read": read
                 }
-            return params
         except Exception as error:
-            log.warning("Unable to parse line with error".format(str(error)))
+            log.warning("Unable to parse line {} with error".format(line, str(error)))
             return None
+        self._callback(params)
 
     def start(self):
         self._dbmon_proc = Popen(
