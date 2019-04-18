@@ -21,8 +21,11 @@ SOFTWARE.
 """
 import logging
 from pipeline_register import register_pipeline
-from mpikat.utils.process_tools import ManagedProcess
+from mpikat.utils.process_tools import ManagedProcess, process_watcher
+from mpikat.utils.process_monitor import SubprocessMonitor
+from mpikat.utils.db_monitor import DbMonitor 
 
+import threading
 import tornado
 import signal
 import coloredlogs
@@ -50,6 +53,8 @@ PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
                    "deconfiguring", "error"]
 
+POLARIZATIONS = ["polarization_0", "polarization_1"]
+
 DEFAULT_CONFIG = {
         "input_bit_depth" : 12,                         # Input bit-depth
         "samples_per_heap": 4096,                       # this needs to be consistent with the mkrecv configuration
@@ -65,6 +70,8 @@ DEFAULT_CONFIG = {
         "output_level": 100,
 
         "null_output": False,                           # Disable sending of data for testing purposes
+        "dummy_input": True,                           # Disable sending of data for testing purposes
+        "log_level": "debug",                           # Disable sending of data for testing purposes
 
         "polarization_0" :
         {
@@ -74,7 +81,8 @@ DEFAULT_CONFIG = {
             "port_rx": "7148",
             "port_tx": "7150",
             "dada_key": 'dada',              # output keysa are the reverse!
-            "numa_node": 1                   # we only have on ethernet interface on numa node 1
+            "numa_node": 0,                   # we only have on ethernet interface on numa node 1
+            "cuda_device": 0,               # probably the information about the numa layout / device number should be stored / generated ? in a dedicated class
         },
          "polarization_1" :
         {
@@ -84,7 +92,8 @@ DEFAULT_CONFIG = {
             "port_rx": "7148",
             "port_tx": "7150",
             "dada_key": 'dadc',
-            "numa_node": 1                   # we only have on ethernet interface on numa node 1
+            "numa_node": 1,                   # we only have on ethernet interface on numa node 1
+            "cuda_device": 1,
         }
     }
 
@@ -160,6 +169,7 @@ ITEM4_INDEX     2
 
 ITEM5_ID        5636 # payload item (empty step, list, index and sci)
 """
+
 
 
 @register_pipeline("GatedSpectrometerPipeline")
@@ -266,6 +276,24 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._pipeline_sensor_status)
 
+        self._input_buffer_fill_level_sensors = {}
+        self._output_buffer_fill_level_sensors = {}
+        for p in POLARIZATIONS:
+            self._input_buffer_fill_level_sensors[p] = Sensor.float(
+                    "input-buffer-fill-level-{}".format(p),
+                    description="Fill level of the input buffer for {}".format(p),
+                    params=[0,1]
+                    )
+            self.add_sensor(self._input_buffer_fill_level_sensors[p])
+            self._output_buffer_fill_level_sensors[p] = Sensor.float(
+                    "output-buffer-fill-level-{}".format(p),
+                    description="Fill level of the output buffer for {}".format(p),
+                    params=[0,1]
+                    )
+            self.add_sensor(self._output_buffer_fill_level_sensors[p])
+
+
+
 
     @property
     def katcp_control_mode(self):
@@ -335,11 +363,12 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         log.info(stderr)
 
 
-    def _handle_error_state(self, errorstate, caller):
+    def _subprocess_error(self, proc):
         """
-        Sets the error state.
+        Sets the error state because proc has ended.
         """
-        log.error("Errror handle called. Errorstate = {} from {}".format(errorstate, caller))
+        log.error("Errror handle called because subprocess {} ended with return code {}".format(proc.pid, proc.returncode))
+        self._subprocessMonitor.stop()
         self.state =  "error"
 
 
@@ -367,6 +396,37 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 req.reply("ok")
         self.ioloop.add_callback(configure_wrapper)
         raise AsyncReply
+
+
+    def _create_ring_buffer(self, bufferSize, blocks, key, numa_node):
+         """
+         Create a ring buffer of given size with given key on specified numa node. 
+         Adds and register an appropriate sensor to thw list
+         """
+         cmd = "numactl --cpubind={numa_node} --membind={numa_node} dada_db -k {key} -n {blocks} -b {bufferSize} -p -l".format(key=key, blocks=blocks, bufferSize=bufferSize, numa_node=numa_node)
+         log.debug("Running command: {0}".format(cmd))
+         p = ManagedProcess(cmd)
+         while p.is_alive():
+             # wait for buffer to be created
+             time.sleep(0.1)
+         #_create_ring_buffer.stdout_callbacks.add(
+         #    self._decode_capture_stdout)
+         #_create_ring_buffer._process.wait()
+
+         M = DbMonitor(key, self._buffer_status)
+         #M.start()
+         self._dada_buffers.append({'key':key, 'monitor':M})
+
+
+    def _buffer_status(self, status):
+        """
+        Process a change in the buffer status
+        """
+        for p in POLARIZATIONS:
+            if status['key'] == self._config[p]['dada_key']:
+                self._input_buffer_fill_level_sensors[p].set_value(status['fraction-full'])
+            elif status['key'] == self._config[p]['dada_key'][::-1]:
+                self._output_buffer_fill_level_sensors[p].set_value(status['fraction-full'])
 
 
     @coroutine
@@ -449,43 +509,33 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 heap size:          {} byte\n\
                 rate (110%):        {} bps'.format(nSlices, nChannels, output_bufferSize, output_heapSize, rate))
 
-        def create_ring_buffer(bufferSize, blocks, key):
-            cmd = "numactl --cpubind=1 --membind=1 dada_db -k {key} -n {blocks} -b {bufferSize} -p -l".format(key=key, blocks=blocks, bufferSize=bufferSize)
-            log.debug("Running command: {0}".format(cmd))
-            p = ManagedProcess(cmd)
-            while p.is_alive():
-                # wait for buffer to be created
-                time.sleep(0.1)
-            #_create_ring_buffer.stdout_callbacks.add(
-            #    self._decode_capture_stdout)
-            #_create_ring_buffer._process.wait()
-
+ 
+        self._subprocessMonitor = SubprocessMonitor()
         for i,k in enumerate(self._config['enabled_polarizations']):
-            bufferName = self._config[k]['dada_key']
-            ofname = bufferName[::-1]
-            self._dada_buffers.append(bufferName)
-            self._dada_buffers.append(ofname)
+            numa_node = self._config[k]['numa_node']
 
             # configure dada buffer
-            create_ring_buffer(input_bufferSize, 64, bufferName)
-            create_ring_buffer(output_bufferSize, 8, ofname)
+            bufferName = self._config[k]['dada_key']
+            self._create_ring_buffer(input_bufferSize, 64, bufferName, numa_node)
 
-            log_level='debug'
+            ofname = bufferName[::-1]
+            self._create_ring_buffer(output_bufferSize, 8, ofname, numa_node)
 
             # Configure + launch gated spectrometer
-            cmd = "numactl --cpubind=1 --membind=1 gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={input_bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, log_level=log_level, ofname=ofname, heapSize=self.input_heapSize, **self._config)
+            cmd = "numactl --cpubind={numa_node} --membind={numa_node} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={input_bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, **self._config)
             # here should be a smarter system to parse the options from the
             # controller to the program without redundant typing of options
             log.debug("Command to run: {}".format(cmd))
 
-            if not self._config["null_output"]:
-                # Configure output
-                gated_cli = ManagedProcess(cmd, env={"CUDA_VISIBLE_DEVICES":str(1)}) #HOTFIX set to numa node 1
-                #gated_cli.stdout_callbacks.add( self._decode_capture_stdout)
-                #gated_cli.stderr_callbacks.add( self._handle_execution_stderr)
-                #gated_cli.error_callbacks.add(self._handle_error_state)
-                self._subprocesses.append(gated_cli)
+            # Configure output
+            gated_cli = ManagedProcess(cmd, env={"CUDA_VISIBLE_DEVICES":str(self._config[k]["cuda_device"])}) #HOTFIX set to numa node 1
+            self._subprocessMonitor.add(gated_cli, self._subprocess_error)
+            #gated_cli.stdout_callbacks.add( self._decode_capture_stdout)
+            #gated_cli.stderr_callbacks.add( self._handle_execution_stderr)
+            #gated_cli.error_callbacks.add(self._handle_error_state)
+            self._subprocesses.append(gated_cli)
 
+            if not self._config["null_output"]:
                 mksend_header_file = tempfile.NamedTemporaryFile(delete=False)
                 mksend_header_file.write(mksend_header)
                 mksend_header_file.close()
@@ -498,11 +548,10 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                         rate=rate, heap_size=output_heapSize, **cfg)
 
                 mks = ManagedProcess(cmd)
-                #mks.stdout_callbacks.add( self._decode_capture_stdout)
-                #mks.stderr_callbacks.add( self._handle_execution_stderr)
-                #mks.error_callbacks.add(self._handle_error_state)
+                self._subprocessMonitor.add(mks, self._subprocess_error)
                 self._subprocesses.append(mks)
 
+        self._subprocessMonitor.start()
         self.state = "ready"
 
 
@@ -567,20 +616,21 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             for i,k in enumerate(self._config['enabled_polarizations']):
                 cfg = self._config.copy()
                 cfg.update(self._config[k])
-                cmd = "numactl --cpubind=1 --membind=1 mkrecv_nt --quiet --header {mkrecv_header} --dada-key {dada_key} \
-                --sync-epoch {sync_time} --sample-clock {sample_clock} \
-                --ibv-if {ibv_if} --port {port_rx} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name,
-                        **cfg )
-                self.mkrec_cmd.append(ManagedProcess(cmd))
+                if not self._config['dummy_input']:
+                    cmd = "numactl --cpubind={numa_node} --membind={numa_node} mkrecv_nt --quiet --header {mkrecv_header} --dada-key {dada_key} \
+                    --sync-epoch {sync_time} --sample-clock {sample_clock} \
+                    --ibv-if {ibv_if} --port {port_rx} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name,
+                            **cfg )
+                else:
+                    log.warning("Creating Dummy input instead of listening to network!")
+                    cmd = "dada_junkdb -c 1 -R 1000 -t 3600 -k {dada_key} {mkrecv_header}".format(mkrecv_header=mkrecvheader_file.name,
+                            **cfg )
 
 
+                mk = ManagedProcess(cmd)
+                self.mkrec_cmd.append(mk)
+                self._subprocessMonitor.add(mk, self._subprocess_error)
 
-            #for k in self.mkrec_cmd:
-            #    k.error_callbacks.add(self._handle_error_state)
-            #    k.stdout_callbacks.add( self._decode_capture_stdout)
-            #    k.stderr_callbacks.add( self._handle_execution_stderr)
-
-            #self._subprocesses.append(self.mkrec_cmd)
         except Exception as e:
             log.error("Error starting pipeline: {}".format(e))
             self.state = "error"
@@ -622,6 +672,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             log.warning("pipleine state is not in state = running but in state {}".format(self.state))
             #return
         log.debug("Stopping")
+        self._subprocessMonitor.stop()
 
         # stop mkrec process
         log.debug("Stopping mkrecv processes ...")
@@ -667,13 +718,14 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         """@brief deconfigure the dspsr pipeline."""
         log.info("Deconfiguring EDD backend")
         self.state = "deconfiguring"
+        self._subprocessMonitor.stop()
 
         log.debug("Destroying dada buffers")
         for k in self._dada_buffers:
-            cmd = "dada_db -d -k {0}".format(k)
+            k['monitor'].stop()
+            cmd = "dada_db -d -k {0}".format(k['key'])
             log.debug("Running command: {0}".format(cmd))
-            _destory_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
+            _destory_ring_buffer = ManagedProcess(cmd)
             _destory_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             _destory_ring_buffer._process.wait()
