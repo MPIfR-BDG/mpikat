@@ -97,17 +97,19 @@ class ManagedProcess(object):
 
     def _stop_monitors(self):
         self.stdout_monitor.stop()
-        self.stdout_monitor.join()
+        #self.stdout_monitor.join()
         self.stdout_monitor = None
         self.stderr_monitor.stop()
-        self.stderr_monitor.join()
+        #self.stderr_monitor.join()
         self.stderr_monitor = None
 
     def terminate(self, timeout=5):
         start = time.time()
         self._stop_monitors()
+        log.debug("Trying to terminate process ...")
         while self._proc.poll() is None:
             time.sleep(0.5)
             if (time.time() - start) > timeout:
+                log.debug("Reached timeout - Killing process")
                 self._proc.kill()
-
+                break
