@@ -17,7 +17,7 @@ class ProcessException(Exception):
 
 
 @coroutine
-def process_watcher(process, name=None, timeout=120):
+def process_watcher(process, name=None, timeout=120, allow_fail=False):
     if name is None:
         name = ""
     else:
@@ -29,7 +29,7 @@ def process_watcher(process, name=None, timeout=120):
         if (time.time() - start) > timeout:
             process.kill()
             raise ProcessTimeout
-    if process.returncode != 0:
+    if process.returncode != 0 and not allow_fail:
         message = "Process returned non-zero returncode: {} {}".format(
             process.returncode, name)
         log.error(message)
@@ -45,6 +45,14 @@ def process_watcher(process, name=None, timeout=120):
             name, process.stdout.read()))
         log.debug("Process stderr {}:\n{}".format(
             name, process.stderr.read()))
+
+
+@coroutine
+def command_watcher(cmd, **kwargs):
+    if isinstance(cmd, str):
+        cmd = cmd.split()
+    proc = Popen(map(str, cmd), stdout=PIPE, stderr=PIPE, shell=False, close_fds=True)
+    yield process_watcher(proc, name=" ".join(cmd), **kwargs)
 
 
 class ManagedProcess(object):
