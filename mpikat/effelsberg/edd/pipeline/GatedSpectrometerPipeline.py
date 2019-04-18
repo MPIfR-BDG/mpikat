@@ -21,7 +21,7 @@ SOFTWARE.
 """
 import logging
 from pipeline_register import register_pipeline
-from mpikat.utils.process_tools import ManagedProcess, process_watcher
+from mpikat.utils.process_tools import ManagedProcess, command_watcher
 from mpikat.utils.process_monitor import SubprocessMonitor
 from mpikat.utils.db_monitor import DbMonitor 
 
@@ -77,12 +77,12 @@ DEFAULT_CONFIG = {
         {
             "ibv_if": "10.10.1.10",
             "mcast_sources": "225.0.0.162 225.0.0.163 225.0.0.164 225.0.0.165",
-            "mcast_dest": "225.0.0.182 225.0.0.183",        #two destinations gate on/off
+            "mcast_dest": "225.0.0.172 225.0.0.173",        #two destinations gate on/off
             "port_rx": "7148",
-            "port_tx": "7150",
-            "dada_key": 'dada',              # output keysa are the reverse!
-            "numa_node": 0,                   # we only have on ethernet interface on numa node 1
-            "cuda_device": 0,               # probably the information about the numa layout / device number should be stored / generated ? in a dedicated class
+            "port_tx": "7152",
+            "dada_key": 'dada',             # output keysa are the reverse!
+            "numa_node": 1,                 # we only have on ethernet interface on numa node 1
+            "cuda_device": 1,               # probably the information about the numa layout / device number should be stored / generated ? in a dedicated class
         },
          "polarization_1" :
         {
@@ -90,7 +90,7 @@ DEFAULT_CONFIG = {
             "mcast_sources": "225.0.0.166 225.0.0.167 225.0.0.168 225.0.0.169",
             "mcast_dest": "225.0.0.184 225.0.0.185",        #two destinations, one for on, one for off
             "port_rx": "7148",
-            "port_tx": "7150",
+            "port_tx": "7152",
             "dada_key": 'dadc',
             "numa_node": 1,                   # we only have on ethernet interface on numa node 1
             "cuda_device": 1,
@@ -164,8 +164,7 @@ ITEM2_INDEX     2
 ITEM3_ID        5634    # number of channels in dataset
 
 ITEM4_ID        5635
-ITEM4_LIST      42,23   # number of samples ndiode on/off - currently dummy data but should be read from buffer in the future
-ITEM4_INDEX     2
+ITEM4_LIST      42      # number of samples ndiode on/off - currently dummy data but should be read from buffer in the future
 
 ITEM5_ID        5636 # payload item (empty step, list, index and sci)
 """
@@ -397,24 +396,21 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         self.ioloop.add_callback(configure_wrapper)
         raise AsyncReply
 
-
+    @coroutine
     def _create_ring_buffer(self, bufferSize, blocks, key, numa_node):
          """
          Create a ring buffer of given size with given key on specified numa node. 
          Adds and register an appropriate sensor to thw list
          """
+         # always clear buffer first. Allow fail here
+         yield command_watcher("dada_db -d -k {key}".format(key=key), allow_fail=True)
+
          cmd = "numactl --cpubind={numa_node} --membind={numa_node} dada_db -k {key} -n {blocks} -b {bufferSize} -p -l".format(key=key, blocks=blocks, bufferSize=bufferSize, numa_node=numa_node)
          log.debug("Running command: {0}".format(cmd))
-         p = ManagedProcess(cmd)
-         while p.is_alive():
-             # wait for buffer to be created
-             time.sleep(0.1)
-         #_create_ring_buffer.stdout_callbacks.add(
-         #    self._decode_capture_stdout)
-         #_create_ring_buffer._process.wait()
+         yield command_watcher(cmd)
 
          M = DbMonitor(key, self._buffer_status)
-         #M.start()
+         M.start()
          self._dada_buffers.append({'key':key, 'monitor':M})
 
 
@@ -516,10 +512,10 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
             # configure dada buffer
             bufferName = self._config[k]['dada_key']
-            self._create_ring_buffer(input_bufferSize, 64, bufferName, numa_node)
+            yield self._create_ring_buffer(input_bufferSize, 64, bufferName, numa_node)
 
             ofname = bufferName[::-1]
-            self._create_ring_buffer(output_bufferSize, 8, ofname, numa_node)
+            yield self._create_ring_buffer(output_bufferSize, 8, ofname, numa_node)
 
             # Configure + launch gated spectrometer
             cmd = "numactl --cpubind={numa_node} --membind={numa_node} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={input_bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, **self._config)
@@ -543,13 +539,19 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 cfg = self._config.copy()
                 cfg.update(self._config[k])
 
-                cmd = "numactl --cpubind={numa_node} --membind={numa_node} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {fft_length} --item2-list {polarization} --item3-list {nChannels} --rate {rate} --heap-size {heap_size} {mcast_dest}".format(mksend_header=mksend_header_file.name,
+                nhops = len(self._config[k]['mcast_dest'].split())
+
+                cmd = "numactl --cpubind={numa_node} --membind={numa_node} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {fft_length} --item2-list {polarization} --item3-list {nChannels} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name,
                         ofname=ofname, polarization=i, nChannels=nChannels,
-                        rate=rate, heap_size=output_heapSize, **cfg)
+                        rate=rate, nhops=nhops, heap_size=output_heapSize, **cfg)
+                log.debug("Command to run: {}".format(cmd))
 
                 mks = ManagedProcess(cmd)
                 self._subprocessMonitor.add(mks, self._subprocess_error)
                 self._subprocesses.append(mks)
+            else:
+                log.warning("Selected null output. Not sending data!")
+
 
         self._subprocessMonitor.start()
         self.state = "ready"
@@ -598,6 +600,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             mkrecvheader_file = tempfile.NamedTemporaryFile(delete=False)
             log.debug("Creating mkrec header file: {}".format(mkrecvheader_file.name))
             mkrecvheader_file.write(mkrecv_header)
+            # DADA may need this
+            mkrecvheader_file.write("NBIT {}\n".format(self._config["input_bit_depth"]))
 
             mkrecvheader_file.write("HEAP_SIZE {}\n".format(self.input_heapSize))
 
