@@ -72,6 +72,10 @@ class ManagedProcess(object):
     def pid(self):
         return self._proc.pid
 
+    @property
+    def returncode(self):
+        return self._proc.returncode
+
     def is_alive(self):
         return self._proc.poll() is None
 
@@ -98,3 +102,4 @@ class ManagedProcess(object):
             time.sleep(0.5)
             if (time.time() - start) > timeout:
                 self._proc.kill()
+
