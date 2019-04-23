@@ -145,7 +145,7 @@ HEAP_ID_START   1
 HEAP_ID_OFFSET  1
 HEAP_ID_STEP    13
 
-NSCI            0
+NSCI            1
 NITEMS          7
 ITEM1_ID        5632    # timestamp, slowest index
 
@@ -158,7 +158,7 @@ ITEM3_INDEX     2
 ITEM4_ID        5635    # number of channels in dataset
 
 ITEM5_ID        5636
-ITEM5_LIST      42      # number of samples ndiode on/off - currently dummy data but should be read from buffer in the future
+ITEM5_SCI       1       # number of input ehaps with ndiode on/off
 
 ITEM6_ID        5637    # Integration time
 
@@ -488,7 +488,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         # calculate output buffer parameters
         nSlices = self._config["samples_per_block"] / self._config['fft_length'] /  self._config['naccumulate']
         nChannels = self._config['fft_length'] / 2 + 1
-        output_bufferSize = nSlices * 2 * nChannels * self._config['output_bit_depth'] / 8
+        # on / off spectrum  + one side channel item per spectrum
+        output_bufferSize = 2 * nChannels * self._config['output_bit_depth'] / 8 + 2 * 8
 
         output_heapSize = nChannels * self._config['output_bit_depth'] / 8
         bufferTime = float(self._config["samples_per_block"])  / self._config["sample_clock"]
@@ -515,7 +516,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             yield self._create_ring_buffer(input_bufferSize, 64, bufferName, numa_node)
 
             ofname = bufferName[::-1]
-            yield self._create_ring_buffer(output_bufferSize, 8, ofname, numa_node)
+            # we write nSlice blocks on each go
+            yield self._create_ring_buffer(output_bufferSize, 8 * nSlices, ofname, numa_node)
 
             # Configure + launch gated spectrometer
             # here should be a smarter system to parse the options from the
