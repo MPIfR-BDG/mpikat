@@ -17,6 +17,7 @@ PORT          {{mcast_port}}
 IBV_IF        {{interface}}
 IBV_VECTOR    -1
 IBV_MAX_POLL  10
+BUFFER_SIZE   33554432
 PACKET_SIZE   1500
 SAMPLE_CLOCK_START unset
 NTHREADS      6

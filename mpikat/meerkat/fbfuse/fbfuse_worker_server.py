@@ -45,8 +45,8 @@ from mpikat.utils.process_tools import process_watcher, ManagedProcess
 log = logging.getLogger("mpikat.fbfuse_worker_server")
 
 PACKET_PAYLOAD_SIZE = 1024  # bytes
-AVAILABLE_CAPTURE_MEMORY = 137438953472/8  # bytes
-MAX_DADA_BLOCK_SIZE = 500e6 #bytes
+AVAILABLE_CAPTURE_MEMORY = 137438953472/2  # bytes
+MAX_DADA_BLOCK_SIZE = 1e9 #bytes
 
 MKRECV_CONFIG_FILENAME = "mkrecv_feng.cfg"
 MKSEND_COHERENT_CONFIG_FILENAME = "mksend_coherent.cfg"
@@ -456,7 +456,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             heap_size = nchans_per_group * PACKET_PAYLOAD_SIZE
             heap_group_size = ngroups * heap_size * nantennas
             ngroups_data = int(MAX_DADA_BLOCK_SIZE / heap_group_size)
-	    ngroups_data = 2**((ngroups_data).bit_length()-1)
+	    #ngroups_data = 2**((ngroups_data).bit_length()-1)
+            ngroups_data = 2**((ngroups_data-1).bit_length())  
             centre_frequency = (chan0_freq + feng_config['nchans']
                                 / 2.0 * chan_bw)
             if self._exec_mode == FULL:
@@ -520,7 +521,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             group_order = []
             for group in sorted(group_to_coherent_beam_map.keys()):
                 beams = group_to_coherent_beam_map[group]
-                group_order.append(str(coh_group_range.base_ip))
+                group_order.append(str(ip_range_from_stream(group).base_ip))
                 for beam in beams:
                     beam_idx = int(beam.lstrip("cfbf"))
                     beam_order.append(beam_idx)
@@ -529,8 +530,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             coh_data_rate = (partition_bandwidth / coherent_beam_config['tscrunch']
                              / coherent_beam_config['fscrunch'] * nbeams_per_group * 8 * 1.1)
             coh_heap_size = 8192
-            coh_timestamp_step = (coh_heap_size * coherent_beam_config['tscrunch']
-                                  * coherent_beam_config['fscrunch'] * 2)
+	    nsamps_per_coh_heap = coh_heap_size / (partition_nchans * coherent_beam_config['fscrunch'])
+            coh_timestamp_step = coherent_beam_config['tscrunch'] * nsamps_per_coh_heap * 2 * feng_config["nchans"] 
             heap_id_start = worker_idx * len(group_order)
             log.debug("Determining MKSEND configuration for coherent beams")
             dada_mode = int(self._exec_mode == FULL)
@@ -560,10 +561,8 @@ class FbfWorkerServer(AsyncDeviceServer):
                 partition_bandwidth / incoherent_beam_config['tscrunch']
                 / incoherent_beam_config['fscrunch'] * 8 * 1.1)
             incoh_heap_size = 8192
-            incoh_timestamp_step = (
-                incoh_heap_size * incoherent_beam_config['tscrunch']
-                * incoherent_beam_config['fscrunch'] * 2)
-
+            nsamps_per_incoh_heap = incoh_heap_size / (partition_nchans * incoherent_beam_config['fscrunch'])
+            incoh_timestamp_step = incoherent_beam_config['tscrunch'] * nsamps_per_incoh_heap * 2 * feng_config["nchans"]
             log.debug("Determining MKSEND configuration for incoherent beams")
             dada_mode = int(self._exec_mode == FULL)
             incoh_ip_range = ip_range_from_stream(incoherent_beam_group)
@@ -689,7 +688,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                 "--bandwidth", partition_bandwidth,
                 "--input_level", 32.0,
                 "--output_level", 32.0,
-                "--log_level", "info"]
+                "--log_level", "debug"]
             self._psrdada_cpp_args_sensor.set_value(
                 " ".join(map(str, self._psrdada_cpp_cmdline)))
             # SPEAD receiver does not get started until a capture init call

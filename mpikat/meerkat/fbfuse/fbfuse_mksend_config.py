@@ -18,7 +18,7 @@ DADA_MODE    {{dada_mode}}
 DADA_KEY     {{dada_key}}
 NETWORK_MODE 1
 
-IBV_IF       {{interface}}
+UDP_IF       {{interface}}
 NHOPS        6
 RATE         {{data_rate}}
 PORT         {{mcast_port}}
@@ -43,7 +43,7 @@ ITEM1_INDEX  1
 
 ITEM2_ID     21845
 ITEM2_LIST   {{beam_ids | join(',')}}
-{% if beam_ids | count > 1 %} ITEM2_INDEX 2 {% endif %}
+{% if beam_ids | count > 1 %}ITEM2_INDEX 2{% endif %}
 
 ITEM3_ID     16643
 ITEM3_LIST   {{subband_idx}}
