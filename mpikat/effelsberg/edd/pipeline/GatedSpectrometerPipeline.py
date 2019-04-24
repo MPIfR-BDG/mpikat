@@ -23,6 +23,7 @@ from pipeline_register import register_pipeline
 from mpikat.utils.process_tools import ManagedProcess, command_watcher
 from mpikat.utils.process_monitor import SubprocessMonitor
 from mpikat.utils.db_monitor import DbMonitor
+from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
 from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
 
 from katcp import Sensor, AsyncDeviceServer, AsyncReply
@@ -270,22 +271,24 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._pipeline_sensor_status)
 
-        self._input_buffer_fill_level_sensors = {}
-        self._output_buffer_fill_level_sensors = {}
+        self._polarization_sensors = {}
         for p in POLARIZATIONS:
-            self._input_buffer_fill_level_sensors[p] = Sensor.float(
+            self._polarization_sensors[p] = {}
+            self._polarization_sensors[p]["mkrecv_sensors"] = MkrecvSensors(p)
+            for s in self._polarization_sensors[p]["mkrecv_sensors"].sensors.itervalues():
+                self.add_sensor(s)
+            self._polarization_sensors[p]["input-buffer"] = Sensor.float(
                     "input-buffer-fill-level-{}".format(p),
                     description="Fill level of the input buffer for {}".format(p),
                     params=[0, 1]
                     )
-            self.add_sensor(self._input_buffer_fill_level_sensors[p])
-            self._output_buffer_fill_level_sensors[p] = Sensor.float(
+            self.add_sensor(self._polarization_sensors[p]["input-buffer"])
+            self._polarization_sensors[p]["output-buffer"] = Sensor.float(
                     "output-buffer-fill-level-{}".format(p),
                     description="Fill level of the output buffer for {}".format(p),
                     params=[0, 1]
                     )
-            self.add_sensor(self._output_buffer_fill_level_sensors[p])
-
+            self.add_sensor(self._polarization_sensors[p]["output-buffer"])
 
 
 
@@ -348,7 +351,6 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             self._scpi_interface.stop()
         self._control_mode_sensor.set_value(self._control_mode)
 
-
     def _decode_capture_stdout(self, stdout, callback):
         log.debug('{}'.format(str(stdout)))
 
@@ -405,20 +407,21 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
          log.debug("Running command: {0}".format(cmd))
          yield command_watcher(cmd)
 
-         M = DbMonitor(key, self._buffer_status)
+         M = DbMonitor(key, self._buffer_status_handle)
          M.start()
          self._dada_buffers.append({'key': key, 'monitor': M})
 
 
-    def _buffer_status(self, status):
+    def _buffer_status_handle(self, status):
         """
         Process a change in the buffer status
         """
         for p in POLARIZATIONS:
             if status['key'] == self._config[p]['dada_key']:
-                self._input_buffer_fill_level_sensors[p].set_value(status['fraction-full'])
+                self._polarization_sensors[p]["input-buffer"].set_value(status['fraction-full'])
             elif status['key'] == self._config[p]['dada_key'][::-1]:
-                self._output_buffer_fill_level_sensors[p].set_value(status['fraction-full'])
+                self._polarization_sensors[p]["output-buffer"].set_value(status['fraction-full'])
+
 
 
     @coroutine
@@ -616,13 +619,14 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                     --sync-epoch {sync_time} --sample-clock {sample_clock} \
                     --ibv-if {ibv_if} --port {port_rx} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name,
                             **cfg )
+                    mk = ManagedProcess(cmd, stdout_handler=self._polarization_sensors[k]["mkrecv_sensors"].stdout_handler)
                 else:
                     log.warning("Creating Dummy input instead of listening to network!")
                     cmd = "dada_junkdb -c 1 -R 1000 -t 3600 -k {dada_key} {mkrecv_header}".format(mkrecv_header=mkrecvheader_file.name,
                             **cfg )
 
+                    mk = ManagedProcess(cmd)
 
-                mk = ManagedProcess(cmd)
                 self.mkrec_cmd.append(mk)
                 self._subprocessMonitor.add(mk, self._subprocess_error)
 
