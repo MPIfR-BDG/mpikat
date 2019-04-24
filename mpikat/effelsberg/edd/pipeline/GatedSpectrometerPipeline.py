@@ -23,7 +23,6 @@ from pipeline_register import register_pipeline
 from mpikat.utils.process_tools import ManagedProcess, command_watcher
 from mpikat.utils.process_monitor import SubprocessMonitor
 from mpikat.utils.db_monitor import DbMonitor
-from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
 from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
 
 from katcp import Sensor, AsyncDeviceServer, AsyncReply
@@ -65,8 +64,8 @@ DEFAULT_CONFIG = {
         "output_level": 100,
 
         "null_output": False,                           # Disable sending of data for testing purposes
-        "dummy_input": True,                            # Disable sending of data for testing purposes
-        "log_level": "debug",                           # Disable sending of data for testing purposes
+        "dummy_input": True,                            # Use dummy input instead of mkrecv process.
+        "log_level": "debug",
 
         "polarization_0" :
         {
@@ -496,7 +495,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         rate = output_heapSize / (bufferTime / nSlices) * 8 # bps
         rate *= 1.10        # set rate to 110% of expected rate
 
-        integrationTime = bufferTime / nSlices 
+        integrationTime = bufferTime / nSlices
 
         log.debug('Output parameters calculated from configuration:\n\
                 spectra per block:  {} \n\
