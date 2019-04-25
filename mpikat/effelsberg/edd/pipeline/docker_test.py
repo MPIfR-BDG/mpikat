@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 import signal
 import tornado
+from tornado import gen
 import logging
 from optparse import OptionParser
-from . import PipelineServer
+from mpikat.effelsberg.edd.pipeline.pipeline_server import PipelineServer
 #from reynard.effelsberg.servers import StatusServer,EffCAMServer, JsonStatusServer
 #from reynard.effelsberg.servers import 
-from reynard.pipelines import PIPELINE_REGISTRY
+from mpikat.effelsberg.edd.pipeline.pipeline import PIPELINE_REGISTRY
 
 log = logging.getLogger("reynard.basic_server")
 
@@ -14,7 +15,7 @@ class Config(object):
     VOLUMES = [("root","/"),]
     NODES = [("localhost",1235),]
 
-@tornado.gen.coroutine
+@gen.coroutine
 def on_shutdown(ioloop, server):
     log.info("Shutting down server")
     yield server.stop()

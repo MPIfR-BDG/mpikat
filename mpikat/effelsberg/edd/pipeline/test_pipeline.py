@@ -2,8 +2,8 @@ import logging
 import json
 import tempfile
 from docker.errors import APIError
-from reynard.pipelines import Pipeline, reynard_pipeline
-from reynard.dada import render_dada_header, make_dada_key_string
+from pipeline import Pipeline, reynard_pipeline
+from dada import render_dada_header, make_dada_key_string
 
 log = logging.getLogger("reynard.TestPipeline")
 
@@ -36,10 +36,10 @@ class EddTestPipeline(Pipeline):
 
     def _configure(self, config, sensors):
         log.debug("running configure")
-
-        self._docker.run("jasonwhk/tempo2", "ls -larth", 
-                remove=True, 
-                ipc_mode = "host")
+        self._docker.run("hello_world", name = "jason_test", remove=True,ipc_mode = "host")
+        #self._docker.run("jasonwhk/tempo2", "ls -larth", 
+   #             remove=True, 
+   #             ipc_mode = "host")
 #        self._config = config
 #        self._dada_key = config["key"]
 #        self._duration = config["runtime"]
