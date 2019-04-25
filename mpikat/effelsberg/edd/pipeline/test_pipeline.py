@@ -36,7 +36,7 @@ class EddTestPipeline(Pipeline):
 
     def _configure(self, config, sensors):
         log.debug("running configure")
-        self._docker.run("hello_world", name = "jason_test", remove=True,ipc_mode = "host")
+        self._docker.run("hello-world", name = "jason_test", remove=True,ipc_mode = "host")
         #self._docker.run("jasonwhk/tempo2", "ls -larth", 
    #             remove=True, 
    #             ipc_mode = "host")
