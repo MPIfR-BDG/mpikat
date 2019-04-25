@@ -86,29 +86,29 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         """
         self._config['frequency'] = frequency
 
-    @scpi_request(float)
+    @scpi_request(int)
     @raise_or_ok
-    def request_eddgsdev_cmdinputpower(self, req, input_power):
+    def request_eddgsdev_cmdinputlevel(self, req, input_level):
         """
-        @brief      Set the input_power 
+        @brief      Set the input_level
 
         @param      req        An ScpiRequest object
         @param      frequency  The input_power
         """
-        self._config['input_power'] = input_power
+        self._config['input_level'] = input_level
 
-    @scpi_request(float)
+    @scpi_request(int)
     @raise_or_ok
-    def request_eddgsdev_cmdoutputpower(self, req, output_power):
+    def request_eddgsdev_cmdoutputlevel(self, req, output_level):
         """
-        @brief      Set the output_power 
+        @brief      Set the output_level
 
         @param      req        An ScpiRequest object
         @param      frequency  The output_power
         """
-        self._config['output_power'] = output_power
+        self._config['output_level'] = output_level
 
-    @scpi_request(float)
+    @scpi_request(int)
     @raise_or_ok
     def request_eddgsdev_cmdintergrationtime(self, req, intergration_time):
         """
@@ -119,7 +119,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         """
         self._config['intergration_time'] = intergration_time
 
-    @scpi_request(float)
+    @scpi_request(int)
     @raise_or_ok
     def request_eddgsdev_cmdnchans(self, req, nchannels):
         """
@@ -130,7 +130,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         """
         self._config['nchannels'] = nchannels
 
-    @scpi_request(float)
+    @scpi_request(int)
     @raise_or_ok
     def request_eddgsdev_cmdfftlength(self, req, fft_length):
         """
@@ -141,16 +141,28 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         """
         self._config['fft_length'] = fft_length
 
-    @scpi_request(float)
+    @scpi_request(int)
     @raise_or_ok
-    def request_eddgsdev_cmdaccumulationfactor(self, req, accumulation_factor):
+    def request_eddgsdev_cmdnaccumulate(self, req, naccumulate):
         """
         @brief      Set the accumulation factor
 
         @param      req        An ScpiRequest object
         @param      frequency  The accumulation factor of the FFT
         """
-        self._config['accumulation_factor'] = accumulation_factor
+        self._config['naccumulate'] = naccumulate
+
+    @scpi_request(int)
+    @raise_or_ok
+    def request_eddgsdev_cmdnbits(self, req, nbits):
+        """
+        @brief      Set the number of bits
+
+        @param      req        An ScpiRequest object
+        @param      bits  the number of bits for the incoming data
+        """
+        self._config['nbits'] = nbits
+
 
     @scpi_request()
     def request_eddgsdev_abort(self, req):
