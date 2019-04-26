@@ -121,7 +121,8 @@ class FbfConfigurationManager(object):
             bandwidth = self.total_bandwidth
             nchans = self.total_nchans
         else:
-            nchans = self._sanitise_user_nchans(int(bandwidth/self.total_bandwidth * self.total_nchans))
+            nchans = self._sanitise_user_nchans(
+                int(bandwidth/self.total_bandwidth * self.total_nchans))
             bandwidth = self.total_bandwidth * nchans/float(self.total_nchans)
         if not nantennas or nantennas > self.total_nantennas:
             nantennas = self.total_nantennas
@@ -141,24 +142,33 @@ class FbfConfigurationManager(object):
 
         if total_output_rate > MAX_OUTPUT_RATE:
             nbeams_after_total_rate_limit = int(MAX_OUTPUT_RATE/rate_per_beam)
-            log.info("The requested configuration exceeds the maximum FBFUSE "
-                "output rate, limiting nbeams to {}".format(nbeams_after_total_rate_limit))
+            log.info(
+                "The requested configuration exceeds the maximum FBFUSE "
+                "output rate, limiting nbeams to {}".format(
+                    nbeams_after_total_rate_limit))
         else:
             nbeams_after_total_rate_limit = requested_nbeams
 
         if rate_per_beam > MAX_OUTPUT_RATE_PER_MCAST_GROUP:
-            raise FbfConfigurationError("Data rate per beam is greater than"
+            raise FbfConfigurationError(
+                "Data rate per beam is greater than"
                 " the data rate per multicast group")
 
         min_num_workers = self._get_minimum_required_workers(nchans)
-        log.info("Minimum number of workers required to support "
+        log.info(
+            "Minimum number of workers required to support "
             "the input data rate: {}".format(min_num_workers))
 
+        num_workers_available = min_num_workers
+
+        # Note: This code may be reinstanted if worker sets are ever supported
+        """
         num_workers_available = self.nworkers
         if min_num_workers > num_workers_available:
             raise FbfConfigurationError("Requested configuration requires at minimum {} "
                 "workers, but only {} available".format(
                 min_num_workers, num_workers_available))
+        """
         num_worker_sets_available = num_workers_available // min_num_workers
         log.info("Number of available worker sets: {}".format(num_worker_sets_available))
 
@@ -200,7 +210,8 @@ class FbfConfigurationManager(object):
             nbeams_after_mcast_limit))
 
         max_nbeams_per_group = int(MAX_OUTPUT_RATE_PER_MCAST_GROUP / rate_per_beam)
-        valid_nbeam_per_mcast = self._valid_nbeams_per_group(max_nbeams_per_group, granularity,
+        valid_nbeam_per_mcast = self._valid_nbeams_per_group(
+            max_nbeams_per_group, granularity,
             nworker_sets=num_worker_sets_to_be_used)
         log.info("Valid numbers of beams per multicast group: {}".format(valid_nbeam_per_mcast))
 
@@ -224,7 +235,8 @@ class FbfConfigurationManager(object):
         # Final check should be over the number of beams
         final_nbeams = num_mcast_required * max_valid_nbeam_per_mcast
         if final_nbeams % num_worker_sets_to_be_used !=0:
-            raise Exception("Error during configuration, expected number of "
+            raise Exception(
+                "Error during configuration, expected number of "
                 "beams ({}) to be a multiple of number of worker sets ({})".format(
                     final_nbeams, num_worker_sets_to_be_used))
         num_beams_per_worker_set = final_nbeams / num_worker_sets_to_be_used

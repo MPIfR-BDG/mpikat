@@ -590,11 +590,8 @@ class FbfProductController(object):
         ibc_group_rate = (mcast_config['used_bandwidth'] / config['incoherent-beam-tscrunch']
                           / config['coherent-beams-fscrunch'] * 8)
         self._ibc_mcast_group_data_rate_sensor.set_value(ibc_group_rate)
-
-
-
         self._servers = self._parent._server_pool.allocate(
-            mcast_config['num_workers_total'])
+            min(nworkers_available, mcast_config['num_workers_total']))
         server_str = ",".join(["{s.hostname}:{s.port}".format(
             s=server) for server in self._servers])
         self._servers_sensor.set_value(server_str)
