@@ -25,7 +25,7 @@ import signal
 import time
 import os
 import coloredlogs
-from collections import deque 
+from collections import deque
 from subprocess import Popen, PIPE, check_call
 from optparse import OptionParser
 from tornado.gen import coroutine, sleep
@@ -456,8 +456,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             heap_size = nchans_per_group * PACKET_PAYLOAD_SIZE
             heap_group_size = ngroups * heap_size * nantennas
             ngroups_data = int(MAX_DADA_BLOCK_SIZE / heap_group_size)
-	    #ngroups_data = 2**((ngroups_data).bit_length()-1)
-            ngroups_data = 2**((ngroups_data-1).bit_length())  
+            #ngroups_data = 2**((ngroups_data).bit_length()-1)
+            ngroups_data = 2**((ngroups_data-1).bit_length())
             centre_frequency = (chan0_freq + feng_config['nchans']
                                 / 2.0 * chan_bw)
             if self._exec_mode == FULL:
@@ -530,8 +530,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             coh_data_rate = (partition_bandwidth / coherent_beam_config['tscrunch']
                              / coherent_beam_config['fscrunch'] * nbeams_per_group * 8 * 1.1)
             coh_heap_size = 8192
-	    nsamps_per_coh_heap = coh_heap_size / (partition_nchans * coherent_beam_config['fscrunch'])
-            coh_timestamp_step = coherent_beam_config['tscrunch'] * nsamps_per_coh_heap * 2 * feng_config["nchans"] 
+            nsamps_per_coh_heap = coh_heap_size / (partition_nchans * coherent_beam_config['fscrunch'])
+            coh_timestamp_step = coherent_beam_config['tscrunch'] * nsamps_per_coh_heap * 2 * feng_config["nchans"]
             heap_id_start = worker_idx * len(group_order)
             log.debug("Determining MKSEND configuration for coherent beams")
             dada_mode = int(self._exec_mode == FULL)
@@ -627,7 +627,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             coh_output_samples = ngroups_data * \
                 256 / coherent_beam_config['tscrunch']
             coherent_block_size = nbeams * coh_output_channels * coh_output_samples
-            coherent_block_count = 32 
+            coherent_block_count = 32
             log.debug("Creating dada buffer for coherent beam output with key '{}'".format(
                 "%s" % self._dada_coh_output_key))
             coh_output_make_db_future = self._make_db(
@@ -761,28 +761,27 @@ class FbfWorkerServer(AsyncDeviceServer):
         else:
             return ("ok",)
 
-
     def capture_start(self):
         if not self.ready:
             raise Exception("FBF worker not in READY state")
         self._state_sensor.set_value(self.STARTING)
         # Create SPEAD transmitter for coherent beams
-	
-	if self._numa == 0:
-	    mksend_cpu_set = "7"
+
+        if self._numa == 0:
+            mksend_cpu_set = "7"
             psrdada_cpp_cpu_set = "6"
             mkrecv_cpu_set = "0-5"
-        else: 
-	    mksend_cpu_set = "14"
+        else:
+            mksend_cpu_set = "14"
             psrdada_cpp_cpu_set = "15"
             mkrecv_cpu_set = "8-13"
 
         self._mksend_coh_proc = ManagedProcess(
-            ["taskset", "-c", mksend_cpu_set, "mksend", "--header", 
-	      MKSEND_COHERENT_CONFIG_FILENAME, "--quiet"])
+            ["taskset", "-c", mksend_cpu_set, "mksend", "--header",
+             MKSEND_COHERENT_CONFIG_FILENAME, "--quiet"])
 
         self._mksend_incoh_proc = ManagedProcess(
-            ["taskset", "-c", mksend_cpu_set, "mksend", "--header", 
+            ["taskset", "-c", mksend_cpu_set, "mksend", "--header",
              MKSEND_INCOHERENT_CONFIG_FILENAME, "--quiet"])
 
         # Start beamforming pipeline
@@ -791,20 +790,21 @@ class FbfWorkerServer(AsyncDeviceServer):
         log.debug(" ".join(map(str, self._psrdada_cpp_cmdline)))
         self._psrdada_cpp_proc = ManagedProcess(self._psrdada_cpp_cmdline)
 
-	stats_buffer = deque(maxlen=10)
-	def mkrecv_stdout_handler(line):
-	    params = mkrecv_stdout_parser(line)
+        stats_buffer = deque(maxlen=10)
+
+        def mkrecv_stdout_handler(line):
+            params = mkrecv_stdout_parser(line)
             if params:
                 current = 100 * params['heaps-completed'] / float(params['slot-size'])
                 total = 100 * params['global-payload-received'] / float(params['global-payload-expected'])
                 stats_buffer.append(current)
-	        log.info("Capture percentages: {:9.5f}% (current) {:9.5f}% (accumulated) {:9.5f} (last 10 buffers)".format(
-		    current, total, sum(stats_buffer)/stats_buffer.maxlen))
+                log.info("Capture percentages: {:9.5f}% (current) {:9.5f}% (accumulated) {:9.5f} (last 10 buffers)".format(
+                    current, total, sum(stats_buffer)/stats_buffer.maxlen))
 
         # Create SPEAD receiver for incoming antenna voltages
         self._mkrecv_proc = ManagedProcess(
             ["taskset", "-c", mkrecv_cpu_set, "mkrecv_nt", "--header",
-              MKRECV_CONFIG_FILENAME, "--quiet"],
+             MKRECV_CONFIG_FILENAME, "--quiet"],
             stdout_handler=mkrecv_stdout_handler)
 
         def exit_check_callback():
@@ -875,7 +875,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                 yield task
             except Exception as error:
                 log.warning("Error raised on DB reset: {}".format(str(error)))
-        self._state_sensor.set_value(self.IDLE)
+        self._state_sensor.set_value(self.READY)
 
 
 @coroutine
@@ -929,3 +929,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
