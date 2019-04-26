@@ -71,6 +71,8 @@ def mkrecv_stdout_parser(line):
     log.debug(line)
     tokens = line.split()
     params = {}
+    if len(tokens) == 0:
+        return None
     if tokens[0] in MKRECV_STDOUT_KEYS:
         params = {}
         parser = MKRECV_STDOUT_KEYS[tokens[0]]
