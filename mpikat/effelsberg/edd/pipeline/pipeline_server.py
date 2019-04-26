@@ -5,7 +5,7 @@ from katcp.kattypes import request, return_reply, Str
 from mpikat.effelsberg.edd.pipeline.pipeline import PIPELINE_STATES
 from utils import doc_inherit, unpack_dict, pack_dict
 
-log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline_server")
+log = logging.getLogger("mpikat")
 
 
 class PipelineServer(AsyncDeviceServer):

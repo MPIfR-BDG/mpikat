@@ -10,7 +10,7 @@ import urllib2
 import json
 from threading import Thread, Event, Lock
 
-log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipelines")
+log = logging.getLogger("mpikat")
 
 PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
