@@ -21,9 +21,9 @@ SOFTWARE.
 """
 
 import logging
-from tornado.gen import coroutine
+from tornado.gen import coroutine, Return
 from katcp import KATCPClientResource
-from mpikat.core.worker_pool import WorkerPool, WorkerWrapper
+from mpikat.core.worker_pool import WorkerPool, WorkerWrapper, WorkerRequestError
 
 log = logging.getLogger("mpikat.fbfuse_worker_wrapper")
 
@@ -44,8 +44,9 @@ class FbfWorkerWrapper(WorkerWrapper):
 
     @coroutine
     def prepare(self, *args, **kwargs):
-        pass
-
+        response = yield self._client.req.prepare(*args, **kwargs)
+        if not response.reply.reply_ok():
+            raise WorkerRequestError(response.reply.arguments[1])
 
 class FbfWorkerPool(WorkerPool):
 
