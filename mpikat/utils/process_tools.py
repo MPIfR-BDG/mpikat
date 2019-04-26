@@ -48,7 +48,7 @@ def process_watcher(process, name=None, timeout=120):
 
 class ManagedProcess(object):
     def __init__(self, cmdlineargs, stdout_handler=None, stderr_handler=None):
-        self._proc = Popen(map(str, cmdlineargs), stdout=PIPE, stderr=PIPE, 
+        self._proc = Popen(map(str, cmdlineargs), stdout=PIPE, stderr=PIPE,
                            shell=False, close_fds=True)
         if stdout_handler:
             self._stdout_handler = stdout_handler
@@ -79,17 +79,15 @@ class ManagedProcess(object):
         self.stderr_monitor.start()
 
     def _stop_monitors(self):
-        self.stdout_monitor.stop()
         self.stdout_monitor.join()
         self.stdout_monitor = None
-        self.stderr_monitor.stop()
         self.stderr_monitor.join()
         self.stderr_monitor = None
 
     def terminate(self, timeout=5):
         start = time.time()
-        self._stop_monitors()
         while self._proc.poll() is None:
             time.sleep(0.5)
             if (time.time() - start) > timeout:
                 self._proc.kill()
+        self._stop_monitors()
