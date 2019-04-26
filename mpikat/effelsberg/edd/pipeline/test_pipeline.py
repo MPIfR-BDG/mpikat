@@ -5,7 +5,7 @@ from docker.errors import APIError
 from pipeline import Pipeline, reynard_pipeline
 from dada import render_dada_header, make_dada_key_string
 
-log = logging.getLogger("reynard.TestPipeline")
+log = logging.getLogger("mpikat.effelsberg.edd.pipeline.TestPipeline")
 
 #
 # NOTE: For this to run properly the host /tmp/
