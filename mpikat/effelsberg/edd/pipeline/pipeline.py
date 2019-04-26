@@ -319,7 +319,7 @@ class DockerHelper(object):
                 args, kwargs))
         if "name" in kwargs:
             kwargs["name"] = kwargs["name"] + self._salt
-            log.debug("Docker container name = ".format(kwargs["name"]))
+            log.debug("Docker container name = {}".format(kwargs["name"]))
         try:
             return self._client.containers.run(*args, **kwargs)
         except Exception as error:
