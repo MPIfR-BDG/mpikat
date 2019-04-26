@@ -57,7 +57,7 @@ class ManagedProcess(object):
         if stderr_handler:
             self._stderr_handler = stderr_handler
         else:
-            self._stderr_handler = lambda line: log.error(line.strip())
+            self._stderr_handler = lambda line: log.warning(line.strip())
         self.stdout_monitor = None
         self.stderr_monitor = None
         self.eop_monitor = None
