@@ -31,17 +31,20 @@ log = logging.getLogger('mpikat.katportalclient_wrapper')
 
 class KatportalClientWrapper(object):
     def __init__(self, host, callback=None):
-        self._client = KATPortalClient(host,
+        self._client = KATPortalClient(
+            host,
             on_update_callback=callback,
             logger=logging.getLogger('katcp'))
 
     @coroutine
     def _query(self, component, sensor):
-        log.debug("Querying sensor '{}' on component '{}'".format(sensor, component))
+        log.debug("Querying sensor '{}' on component '{}'".format(
+            sensor, component))
         sensor_name = yield self._client.sensor_subarray_lookup(
             component=component, sensor=sensor, return_katcp_name=False)
         log.debug("Found sensor name: {}".format(sensor_name))
-        sensor_sample = yield self._client.sensor_value(sensor_name,
+        sensor_sample = yield self._client.sensor_value(
+            sensor_name,
             include_value_ts=False)
         log.debug("Sensor value: {}".format(sensor_sample))
         raise Return(sensor_sample)
@@ -52,8 +55,21 @@ class KatportalClientWrapper(object):
         raise Return(sensor_sample.value)
 
     @coroutine
+    def get_observer_strings(self, antennas):
+        query = "^({})_observer".format("|".join(antennas))
+        log.debug("Regex query '{}'".format(query))
+        sensor_samples = yield self._client.sensor_values(
+            query, include_value_ts=False)
+        log.debug("Sensor value: {}".format(sensor_samples))
+        antennas = {}
+        for key, value in sensor_samples.items():
+            antennas[key.strip("_observer")] = value.value
+        raise Return(antennas)
+
+    @coroutine
     def get_antenna_feng_id_map(self, instrument_name, antennas):
-        sensor_sample = yield self._query('cbf', '{}.input-labelling'.format(instrument_name))
+        sensor_sample = yield self._query('cbf', '{}.input-labelling'.format(
+            instrument_name))
         labels = eval(sensor_sample.value)
         mapping = {}
         for input_label, input_index, _, _ in labels:
@@ -64,17 +80,20 @@ class KatportalClientWrapper(object):
 
     @coroutine
     def get_bandwidth(self, stream):
-        sensor_sample = yield self._query('sub', 'streams.{}.bandwidth'.format(stream))
+        sensor_sample = yield self._query('sub', 'streams.{}.bandwidth'.format(
+            stream))
         raise Return(sensor_sample.value)
 
     @coroutine
     def get_cfreq(self, stream):
-        sensor_sample = yield self._query('sub', 'streams.{}.centre-frequency'.format(stream))
+        sensor_sample = yield self._query(
+            'sub', 'streams.{}.centre-frequency'.format(stream))
         raise Return(sensor_sample.value)
 
     @coroutine
     def get_sideband(self, stream):
-        sensor_sample = yield self._query('sub', 'streams.{}.sideband'.format(stream))
+        sensor_sample = yield self._query(
+            'sub', 'streams.{}.sideband'.format(stream))
         raise Return(sensor_sample.value)
 
     @coroutine
@@ -128,10 +147,13 @@ class FbfKatportalMonitor(KatportalClientWrapper):
         yield self._client.connect()
         self._namespace = 'namespace_' + str(uuid.uuid4())
         result = yield self._client.subscribe(self._namespace)
-        proxy_name = yield self._client.sensor_subarray_lookup(component='fbfuse',
+        proxy_name = yield self._client.sensor_subarray_lookup(
+            component='fbfuse',
             sensor=None, return_katcp_name=False)
-        beam_pattern = "{}_fbfmc_{}_coherent_beam_cfbf*".format(proxy_name, self._product_id)
-        yield self._client.set_sampling_strategies(self._namespace, beam_pattern, 'event')
+        beam_pattern = "{}_fbfmc_{}_coherent_beam_cfbf*".format(
+            proxy_name, self._product_id)
+        yield self._client.set_sampling_strategies(
+            self._namespace, beam_pattern, 'event')
 
     @coroutine
     def unsubscribe_from_beams(self):
@@ -139,7 +161,7 @@ class FbfKatportalMonitor(KatportalClientWrapper):
 
     def on_update_callback(self, msg_dict):
         log.debug("Received update: {}".format(msg_dict))
-        if not 'msg_data' in msg_dict:
+        if 'msg_data' not in msg_dict:
             return
         reading = msg_dict['msg_data']
         t = reading['timestamp']
@@ -181,16 +203,9 @@ if __name__ == "__main__":
     log = logging.getLogger('mpikat.katportalclient_wrapper')
     log.setLevel(logging.DEBUG)
     ioloop = tornado.ioloop.IOLoop.current()
-    x = FbfKatportalMonitor(host, "array_1")
+    x = KatportalClientWrapper(host)
     @coroutine
-    def sb_callback():
-        yield x.subscribe_to_beams()
-        config = yield x.get_sb_config()
-        print config
-    ioloop.run_sync(sb_callback)
-
-
-
-
-
-
+    def run():
+        sensors = yield x.get_observer_strings(["m{:03d}".format(i) for i in range(64)])
+        print sensors
+    ioloop.run_sync(run)

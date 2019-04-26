@@ -275,24 +275,24 @@ class FbfMasterController(MasterController):
                             "(e.g. 'i0') from streams")
         kpc = self._katportal_wrapper_type(streams['cam.http']['camdata'])
         # Get all antenna observer strings
-        futures, observers = [], []
-        for antenna in antennas:
-            log.debug("Fetching katpoint string for antenna {}".format(
-                antenna))
-            futures.append(kpc.get_observer_string(antenna))
-        for ii, future in enumerate(futures):
-            try:
-                observer = yield future
-            except Exception as error:
-                log.error("Error on katportalclient call: {}".format(
+        log.debug("Fetching katpoint string for antennas: {}".format(
+            antennas))
+        try:
+            response = yield kpc.get_observer_strings(antennas)
+        except Exception as error:
+            log.exception("Error on katportalclient call: {}".format(
                     str(error)))
-                log.warning("Falling back on default pointing model for "
-                            "antenna '{}'".format(antennas[ii]))
-                observer = DEFAULT_ANTENNA_MODELS[antennas[ii]]
-                observers.append(Antenna(observer))
+            response = {}
+        observers = []
+        for antenna in antennas:
+            if antenna in response:
+                observer = response[antenna]
             else:
-                log.debug("Fetched katpoint antenna: {}".format(observer))
-                observers.append(Antenna(observer))
+                log.warning("Falling back on default pointing model for "
+                            "antenna '{}'".format(antenna))
+                observer = DEFAULT_ANTENNA_MODELS[antenna]
+            log.debug("Fetched katpoint antenna: {}".format(observer))
+            observers.append(Antenna(observer))
         # Get bandwidth, cfreq, sideband, f-eng mapping
         # TODO: Also get sync-epoch
         log.debug("Fetching F-engine and subarray configuration information")
