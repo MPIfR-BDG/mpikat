@@ -10,7 +10,7 @@ import urllib2
 import json
 from threading import Thread, Event, Lock
 
-log = logging.getLogger("reynard.pipelines")
+log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipelines")
 
 PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
@@ -314,7 +314,7 @@ class DockerHelper(object):
         #needs to be changed to match setup on target systems
         #should be done via config file
         kwargs["user"] = "50000:50000"
-        log.debug(
+        log.info(
             "Running Docker containers with args: {0}, {1}".format(
                 args, kwargs))
         if "name" in kwargs:

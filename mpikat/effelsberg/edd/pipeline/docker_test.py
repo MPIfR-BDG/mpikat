@@ -9,7 +9,7 @@ from mpikat.effelsberg.edd.pipeline.pipeline_server import PipelineServer
 #from reynard.effelsberg.servers import 
 from mpikat.effelsberg.edd.pipeline.pipeline import PIPELINE_REGISTRY
 
-log = logging.getLogger("reynard.basic_server")
+log = logging.getLogger("mpikat.effelsberg.edd.pipeline.docker_test")
 
 class Config(object):
     VOLUMES = [("root","/"),]
