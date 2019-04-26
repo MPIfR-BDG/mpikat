@@ -6,6 +6,7 @@ from pipeline import Pipeline, reynard_pipeline
 from dada import render_dada_header, make_dada_key_string
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.TestPipeline")
+log.setLevel('DEBUG')
 
 #
 # NOTE: For this to run properly the host /tmp/
