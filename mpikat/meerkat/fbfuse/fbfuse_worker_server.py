@@ -407,18 +407,22 @@ class FbfWorkerServer(AsyncDeviceServer):
             feng_config = json.loads(feng_config)
         except Exception as error:
             return ("fail", "Unable to parse F-eng config with error: {}".format(str(error)))
+        log.debug("F-eng config: {}".format(feng_config))
         try:
             mcast_to_beam_map = json.loads(mcast_to_beam_map)
         except Exception as error:
             return ("fail", "Unable to parse multicast beam mapping with error: {}".format(str(error)))
+        log.debug("Beam mapping: {}".format(mcast_to_beam_map))
         try:
             coherent_beam_config = json.loads(coherent_beam_config)
         except Exception as error:
             return ("fail", "Unable to parse coherent beam config with error: {}".format(str(error)))
+        log.debug("Coherent beam config: {}".format(coherent_beam_config))
         try:
             incoherent_beam_config = json.loads(incoherent_beam_config)
         except Exception as error:
             return ("fail", "Unable to parse incoherent beam config with error: {}".format(str(error)))
+        log.debug("Incoherent beam config: {}".format(incoherent_beam_config))
 
         @coroutine
         def configure():
