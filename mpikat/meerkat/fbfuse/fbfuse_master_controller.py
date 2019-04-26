@@ -341,7 +341,7 @@ class FbfMasterController(MasterController):
         @return     katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]
         """
         try:
-            self.deconfigure()
+            self.deconfigure(product_id)
         except Exception as error:
             return ("fail", str(error))
         else:
