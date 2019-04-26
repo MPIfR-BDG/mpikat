@@ -497,7 +497,9 @@ class FbfWorkerServer(AsyncDeviceServer):
             coherent_beam_to_group_map = {}
             group_to_coherent_beam_map = {}
             for group, beams in mcast_to_beam_map.items():
-                for beam in beams.split(","):
+                if isinstance(beams, str):
+                    beams = beams.split(",")
+                for beam in beams:
                     if beam.startswith("cfbf"):
                         if group not in group_to_coherent_beam_map:
                             group_to_coherent_beam_map[group] = []
