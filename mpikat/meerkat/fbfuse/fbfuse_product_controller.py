@@ -763,9 +763,8 @@ class FbfProductController(object):
                 ip_range.format_katcp(), cm.nchans_per_group,
                 chan0_idx, chan0_freq, cm.channel_bandwidth,
                 self._cbc_nbeams_sensor.value(), mcast_to_beam_map,
-                self._feng_config['feng-antenna-map'],
-                coherent_beam_config, incoherent_beam_config,
-                de_ip, de_port)
+                self._feng_config, coherent_beam_config,
+                incoherent_beam_config, de_ip, de_port)
             prepare_futures.append(future)
 
         failure_count = 0
