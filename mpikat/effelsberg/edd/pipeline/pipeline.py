@@ -11,7 +11,7 @@ import json
 from threading import Thread, Event, Lock
 
 log = logging.getLogger("mpikat")
-
+log.setLevel('DEBUG')
 PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
                    "deconfiguring", "failed"]
