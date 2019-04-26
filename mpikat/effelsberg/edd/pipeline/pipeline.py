@@ -11,7 +11,7 @@ import json
 from threading import Thread, Event, Lock
 
 log = logging.getLogger("mpikat")
-log.setLevel('DEBUG')
+
 PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
                    "deconfiguring", "failed"]
@@ -314,7 +314,7 @@ class DockerHelper(object):
         #needs to be changed to match setup on target systems
         #should be done via config file
         kwargs["user"] = "50000:50000"
-        log.info(
+        log.debug(
             "Running Docker containers with args: {0}, {1}".format(
                 args, kwargs))
         if "name" in kwargs:
