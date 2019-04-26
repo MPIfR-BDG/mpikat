@@ -35,6 +35,7 @@ from mpikat.meerkat.fbfuse import (
     FbfConfigurationManager)
 
 N_FENG_STREAMS_PER_WORKER = 4
+COH_ANTENNA_GRANULARITY = 4
 FBF_TRANSMISSION_PORT = 7148
 
 log = logging.getLogger("mpikat.fbfuse_product_controller")
@@ -488,6 +489,22 @@ class FbfProductController(object):
         self.reset_sb_configuration()
         self._state_sensor.set_value(self.ERROR)
 
+    def _sanitise_coh_beam_ants(self, coherent_beam_antennas):
+        antennas = parse_csv_antennas(coherent_beam_antennas)
+        remainder = len(antennas) % COH_ANTENNA_GRANULARITY
+        if remainder != 0:
+            log.warning(
+                "Requested a non-mulitple-of-{} number of "
+                "antennas for the coherent beam".format(
+                    COH_ANTENNA_GRANULARITY))
+            log.warning(
+                "Dropping antennas {} from the coherent beam".format(
+                    antennas[-remainder:])
+                )
+            return ",".join(antennas[:len(antennas) - remainder])
+        else:
+            return coherent_beam_antennas
+
     def set_sb_configuration(self, config_dict):
         """
         @brief  Set the schedule block configuration for this product
@@ -541,8 +558,11 @@ class FbfProductController(object):
         config = deepcopy(self._default_sb_config)
         config.update(config_dict)
         self.log.info("Configuring using: {}".format(config))
+        config['coherent-beams-antennas'] = self._sanitise_coh_beam_ants(
+            config['coherent-beams-antennas'])
         requested_cbc_antenna = parse_csv_antennas(
             config['coherent-beams-antennas'])
+        requested_nantennas = len(requested_cbc_antenna)
         if not self._verify_antennas(requested_cbc_antenna):
             raise Exception(
                 "Requested coherent beam antennas are not a subset of the available antennas")
@@ -557,12 +577,9 @@ class FbfProductController(object):
             self._ibc_mcast_group.format_katcp())
         largest_ip_range = self._parent._ip_pool.largest_free_range()
         nworkers_available = self._parent._server_pool.navailable()
-        cm = FbfConfigurationManager(len(self._katpoint_antennas),
-                                     self._feng_config[
-                                         'bandwidth'], self._n_channels,
-                                     nworkers_available, largest_ip_range)
-        requested_nantennas = len(parse_csv_antennas(
-            config['coherent-beams-antennas']))
+        cm = FbfConfigurationManager(
+            len(self._katpoint_antennas), self._feng_config['bandwidth'],
+            self._n_channels, nworkers_available, largest_ip_range)
         mcast_config = cm.get_configuration(
             config['coherent-beams-tscrunch'],
             config['coherent-beams-fscrunch'],

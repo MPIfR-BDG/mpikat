@@ -32,9 +32,33 @@ MAX_OUTPUT_RATE_PER_MCAST_GROUP = 7.0e9 # bits/s
 MIN_MCAST_GROUPS = 16
 MIN_NBEAMS = 16
 MIN_ANTENNAS = 4
+NBEAM_GRANULARITY = 32
+
+
+def lcm(x, y):
+    """This function takes two
+    integers and returns the L.C.M."""
+
+    # choose the greater number
+    if x > y:
+        greater = x
+    else:
+        greater = y
+    while(True):
+        if((greater % x == 0) and (greater % y == 0)):
+            lcm = greater
+            break
+        greater += 1
+    return lcm
+
+
+def next_multiple(value, multiple):
+    return ((value + multiple - 1) // multiple) * multiple
+
 
 class FbfConfigurationError(Exception):
     pass
+
 
 class FbfConfigurationManager(object):
     def __init__(self, total_nantennas, total_bandwidth, total_nchans, nworkers, nips):
@@ -87,12 +111,13 @@ class FbfConfigurationManager(object):
     def _valid_nbeams_per_group(self, max_nbeams_per_group, granularity, nworker_sets=1):
         valid = []
         for ii in range(1, max_nbeams_per_group+1):
-            if ((ii%granularity == 0) or (granularity%ii == 0)) and (ii%nworker_sets == 0):
+            if ((ii % granularity == 0) or (granularity % ii == 0)) and (ii % nworker_sets == 0):
                 valid.append(ii)
         if not valid:
-            raise Exception("No valid beam counts for the selected granularity "
-                "(max per group: {}, granularity: {}, nworker_sets: {})".format(
-                    max_nbeams_per_group, granularity, nworker_sets))
+            raise Exception(
+                ("No valid beam counts for the selected granularity "
+                 "(max per group: {}, granularity: {}, nworker_sets: {})"
+                 ).format(max_nbeams_per_group, granularity, nworker_sets))
         else:
             return valid
 
@@ -232,8 +257,13 @@ class FbfConfigurationManager(object):
             log.debug("Testing {} beams per group".format(max_valid_nbeam_per_mcast))
             num_mcast_required = int(ceil(nbeams_after_mcast_limit / max_valid_nbeam_per_mcast))
             log.debug("{} groups required".format(num_mcast_required))
+
         # Final check should be over the number of beams
-        final_nbeams = num_mcast_required * max_valid_nbeam_per_mcast
+        log.info("Finding common multiples for the total beam and beam per multicast granularity")
+        group_corrected_nbeams = num_mcast_required * max_valid_nbeam_per_mcast
+        final_nbeams = next_multiple(group_corrected_nbeams, lcm(
+            NBEAM_GRANULARITY, max_valid_nbeam_per_mcast))
+        final_num_mcast = final_nbeams // max_valid_nbeam_per_mcast
         if final_nbeams % num_worker_sets_to_be_used !=0:
             raise Exception(
                 "Error during configuration, expected number of "
@@ -243,7 +273,7 @@ class FbfConfigurationManager(object):
         config = {
             "num_beams":final_nbeams,
             "num_chans":nchans,
-            "num_mcast_groups":num_mcast_required,
+            "num_mcast_groups":final_num_mcast,
             "num_beams_per_mcast_group":max_valid_nbeam_per_mcast,
             "num_workers_per_set":min_num_workers,
             "num_worker_sets":num_worker_sets_to_be_used,
