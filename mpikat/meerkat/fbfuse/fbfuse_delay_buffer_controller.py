@@ -372,6 +372,14 @@ class DelayBufferController(object):
         except Exception:
             log.exception("Failure while updating delays")
 
+    def write_delay_model(self, epoch, duration, delays):
+        self._delay_model.epoch = epoch
+        self._delay_model.duration = duration
+        self._delay_model.delays[:] = np.array(delays).astype('float32').ravel()
+        self._shared_buffer_mmap.seek(0)
+        self._shared_buffer_mmap.write(C.string_at(
+            C.addressof(self._delay_model), C.sizeof(self._delay_model)))
+
     def update_delays(self, epoch=None):
         """
         @brief    Calculate updated delays based on the currently set targets and

@@ -29,6 +29,7 @@ from katcp import Sensor
 
 log = logging.getLogger('mpikat.katportalclient_wrapper')
 
+
 class KatportalClientWrapper(object):
     def __init__(self, host, callback=None):
         self._client = KATPortalClient(

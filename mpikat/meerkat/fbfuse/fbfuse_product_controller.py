@@ -460,9 +460,18 @@ class FbfProductController(object):
         except Exception as error:
             self.log.warning(
                 "Received error while attempting capture stop: {}".format(str(error)))
+        futures = []
+        for server in self._servers:
+            futures.append(server.deconfigure())
+        for ii, future in enumerate(futures):
+            try:
+                yield future
+            except Exception as error:
+                log.exception(
+                    "Unable to deconfigure server {}: {}".format(
+                        self._servers[ii], str(error)))
         self._parent._server_pool.deallocate(self._servers)
         self._servers = []
-
         if self._ibc_mcast_group:
             self._parent._ip_pool.free(self._ibc_mcast_group)
         if self._cbc_mcast_groups:
@@ -581,6 +590,9 @@ class FbfProductController(object):
         ibc_group_rate = (mcast_config['used_bandwidth'] / config['incoherent-beam-tscrunch']
                           / config['coherent-beams-fscrunch'] * 8)
         self._ibc_mcast_group_data_rate_sensor.set_value(ibc_group_rate)
+
+
+
         self._servers = self._parent._server_pool.allocate(
             mcast_config['num_workers_total'])
         server_str = ",".join(["{s.hostname}:{s.port}".format(
@@ -796,16 +808,17 @@ class FbfProductController(object):
             raise FbfProductStateError([self.READY], self.state)
         self._state_sensor.set_value(self.STARTING)
         self.log.debug("Product moved to 'starting' state")
-        """
         futures = []
         for server in self._servers:
-            futures.append(server.req.start_capture())
-        for future in futures:
+            futures.append(server.capture_start())
+        for ii, future in enumerate(futures):
             try:
-                response = yield future
-            except:
-                pass
-        """
+                yield future
+            except Exception as error:
+                log.exception(
+                    "Error when calling capture_start on server {}: {}".format(
+                        self._servers[ii], str(error)))
+                # What should be done with this server? Pop it from the list?
         self._state_sensor.set_value(self.CAPTURING)
         self.log.debug("Product moved to 'capturing' state")
 
@@ -822,10 +835,17 @@ class FbfProductController(object):
             return
         self._state_sensor.set_value(self.STOPPING)
         self.target_stop()
+        futures = []
         for server in self._servers:
-            # yield server.req.deconfigure()
-            pass
-        self._state_sensor.set_value(self.IDLE)
+            futures.append(server.capture_stop())
+        for ii, future in enumerate(futures):
+            try:
+                yield future
+            except Exception as error:
+                log.exception(
+                    "Error when calling capture_stop on server {}: {}".format(
+                        self._servers[ii], str(error)))
+        self._state_sensor.set_value(self.READY)
 
     def add_beam(self, target):
         """

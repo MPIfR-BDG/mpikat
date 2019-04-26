@@ -43,10 +43,26 @@ class FbfWorkerWrapper(WorkerWrapper):
         super(FbfWorkerWrapper, self).__init__(hostname, port)
 
     @coroutine
-    def prepare(self, *args, **kwargs):
-        response = yield self._client.req.prepare(*args, **kwargs)
+    def _make_request(self, req, *args, **kwargs):
+        response = yield req(*args, **kwargs)
         if not response.reply.reply_ok():
             raise WorkerRequestError(response.reply.arguments[1])
+
+    @coroutine
+    def prepare(self, *args, **kwargs):
+        yield self._make_request(self._client.req.prepare, *args, **kwargs)
+
+    @coroutine
+    def capture_start(self, *args, **kwargs):
+        yield self._make_request(self._client.req.capture_start, *args, **kwargs)
+
+    @coroutine
+    def capture_stop(self, *args, **kwargs):
+        yield self._make_request(self._client.req.capture_stop, *args, **kwargs)
+
+    @coroutine
+    def deconfigure(self, *args, **kwargs):
+        yield self._make_request(self._client.req.deconfigure, *args, **kwargs)
 
 class FbfWorkerPool(WorkerPool):
 
