@@ -722,6 +722,7 @@ class FbfProductController(object):
                 self.log.debug(
                     "--> Allocated {} to {}".format(value, key))
                 mcast_to_beam_map[key].append(value)
+        mcast_to_beam_map[self._ibc_mcast_group.format_katcp()] = ["ifbf00000",]
         self._cbc_mcast_groups_mapping_sensor.set_value(
             json.dumps(mcast_to_beam_map))
         for beam in self._beam_manager.get_beams():
