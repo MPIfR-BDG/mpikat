@@ -785,7 +785,7 @@ class FbfProductController(object):
                 json.dumps(self._feng_config),
                 json.dumps(coherent_beam_config),
                 json.dumps(incoherent_beam_config),
-                de_ip, de_port)
+                de_ip, de_port, timeout=300.0)
             prepare_futures.append(future)
 
         failure_count = 0
