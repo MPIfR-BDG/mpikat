@@ -35,6 +35,7 @@ from mpikat.meerkat.fbfuse import (
     FbfConfigurationManager)
 
 N_FENG_STREAMS_PER_WORKER = 4
+FBF_TRANSMISSION_PORT = 7148
 
 log = logging.getLogger("mpikat.fbfuse_product_controller")
 
@@ -713,14 +714,14 @@ class FbfProductController(object):
         idxs = [beam.idx for beam in self._beam_manager.get_beams()]
         for group in groups:
             self.log.debug("Allocating beams to {}".format(str(group)))
-            key = group.format_katcp()
+            key = "spead://{}:{}".format(str(group), FBF_TRANSMISSION_PORT)
             for _ in range(self._cbc_nbeams_per_group.value()):
                 if key not in mcast_to_beam_map:
                     mcast_to_beam_map[key] = []
                 value = idxs.pop(0)
                 self.log.debug(
                     "--> Allocated {} to {}".format(value, key))
-                mcast_to_beam_map[str(group)].append(value)
+                mcast_to_beam_map[key].append(value)
         self._cbc_mcast_groups_mapping_sensor.set_value(
             json.dumps(mcast_to_beam_map))
         for beam in self._beam_manager.get_beams():
