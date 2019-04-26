@@ -44,7 +44,8 @@ class ManualWorkerController(object):
         self._delay_config_server.start()
         antennas_json = self._delay_config_server._antennas_sensor.value()
         antennas = json.loads(antennas_json)
-        coherent_beams_csv = ",".join(["cfbf{:05d}".format(ii) for ii in range(nbeams)])
+        coherent_beams = ["cfbf{:05d}".format(ii) for ii in range(nbeams)]
+        coherent_beams_csv = ",".join(coherent_beams)
         feng_antenna_map = {antenna: ii for ii, antenna in enumerate(antennas)}
         coherent_beam_antennas = antennas
         incoherent_beam_antennas = antennas
@@ -56,15 +57,17 @@ class ManualWorkerController(object):
         chan_bw = 856e6 / tot_nchans
 
         mcast_to_beam_map = {
-            "spead://239.11.1.0:7148": coherent_beams_csv,
             "spead://239.11.1.150:7148": "ifbf00001"
         }
+        for ii in range(8):
+            mcast_to_beam_map["spead://239.11.1.{}:7148".format(ii)] = ",".join(coherent_beams[4*ii:4*(ii+1)])
+
         feng_config = {
             "bandwidth": 856e6,
             "centre-frequency": 1200e6,
             "sideband": "upper",
             "feng-antenna-map": feng_antenna_map,
-            "sync-epoch": 12353524243.0,
+            "sync-epoch": 1554907897.0,
             "nchans": tot_nchans
         }
         coherent_beam_config = {
@@ -98,12 +101,13 @@ class ManualWorkerController(object):
         else:
             print "prepare done"
 
-	yield worker_client.req.capture_start()
+        yield worker_client.req.capture_start()
 
-	time.sleep(60)
+	#time.sleep(20)
 
-	yield worker_client.req.capture_stop()
-
+        #print "ATTEMPTING CAPTURE STOP" 
+	#yield worker_client.req.capture_stop()
+	#print "CAPTURE stopped"
 
 if __name__ == "__main__":
     import os
@@ -132,6 +136,6 @@ if __name__ == "__main__":
     @coroutine
     def run():
         yield controller.start()
-        yield controller.setup(64, "m001,m003,m004,m006,m007,m008,m010,m012,m013,m015,m016,m019,m020,m021,m022,m023,m024,m026,m027,m028,m029,m030,m031,m033,m035,m037,m039,m040,m043,m044,m046,m047,m048,m050,m052,m053,m054,m057,m061,m062", 32, 4096, "spead://239.8.0.0+3:7148", 0, 0)
+        yield controller.setup(4, "m011,m044,m056,m058", 32, 4096, "spead://239.8.0.12+3:7148", 3072, 3)
     ioloop.add_callback(run)
     ioloop.start()
