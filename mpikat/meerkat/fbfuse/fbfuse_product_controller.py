@@ -713,13 +713,13 @@ class FbfProductController(object):
         idxs = [beam.idx for beam in self._beam_manager.get_beams()]
         for group in groups:
             self.log.debug("Allocating beams to {}".format(str(group)))
-            key = str(group)
+            key = group.format_katcp()
             for _ in range(self._cbc_nbeams_per_group.value()):
                 if key not in mcast_to_beam_map:
-                    mcast_to_beam_map[str(group)] = []
+                    mcast_to_beam_map[key] = []
                 value = idxs.pop(0)
                 self.log.debug(
-                    "--> Allocated {} to {}".format(value, str(group)))
+                    "--> Allocated {} to {}".format(value, key))
                 mcast_to_beam_map[str(group)].append(value)
         self._cbc_mcast_groups_mapping_sensor.set_value(
             json.dumps(mcast_to_beam_map))
