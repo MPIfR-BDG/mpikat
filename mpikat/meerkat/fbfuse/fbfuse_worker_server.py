@@ -494,7 +494,10 @@ class FbfWorkerServer(AsyncDeviceServer):
             coh_ip_range = ip_range_from_stream(
                 coherent_beam_config['destination'])
             nbeams = coherent_beam_config['nbeams']
-            nbeams_per_group = nbeams / len(coh_ip_range)
+            nbeams_per_group = nbeams / coh_ip_range.count
+            msg = "nbeams is not a mutliple of the IP range"
+            assert nbeams % coh_ip_range.count == 0, msg
+
             """
             Note on data rates:
             For both the coherent and incoherent beams, we set the sending
@@ -514,7 +517,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             coh_timestamp_step = (coherent_beam_config['tscrunch']
                                   * nsamps_per_coh_heap
                                   * 2 * feng_config["nchans"])
-            heap_id_start = worker_idx * len(coh_ip_range)
+            heap_id_start = worker_idx * coh_ip_range.count
             log.debug("Determining MKSEND configuration for coherent beams")
             dada_mode = int(self._exec_mode == FULL)
             coherent_mcast_dest = coherent_beam_config['destination'].lstrip(
