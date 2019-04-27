@@ -325,8 +325,8 @@ class FbfWorkerServer(AsyncDeviceServer):
         log.debug("Setting affinity for PID {} to {}".format(pid, core_spec))
         os.system("taskset -cp {} {}".format(core_spec, pid))
 
-    @request(Str(), Int(), Int(), Float(), Float(), Int(), Str(), Str(),
-             Str(), Str(), Str(), Int())
+    @request(Str(), Int(), Int(), Float(), Float(), Str(), Str(),
+             Str(), Str(), Int())
     @return_reply()
     def request_prepare(self, req, feng_groups, nchans_per_group,
                         chan0_idx, chan0_freq, chan_bw, feng_config,
