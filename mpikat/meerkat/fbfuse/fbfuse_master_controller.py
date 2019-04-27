@@ -340,12 +340,16 @@ class FbfMasterController(MasterController):
 
         @return     katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]
         """
-        try:
-            yield self.deconfigure(product_id)
-        except Exception as error:
-            return ("fail", str(error))
-        else:
-            return ("ok",)
+        @coroutine
+        def deconfigure_wrapper():
+            try:
+                yield self.deconfigure(product_id)
+            except Exception as error:
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok",)
+        self.ioloop.add_callback(deconfigure_wrapper)
+        raise AsyncReply
 
     @coroutine
     def deconfigure(self, product_id):
@@ -419,8 +423,6 @@ class FbfMasterController(MasterController):
         @coroutine
         def start():
             try:
-                log.debug("Calling capture start on {} product".format(
-                    product_id))
                 product.capture_start()
             except Exception as error:
                 req.reply("fail", str(error))
@@ -484,10 +486,15 @@ class FbfMasterController(MasterController):
             product = self._get_product(product_id)
         except ProductLookupError as error:
             return ("fail", str(error))
+
         @coroutine
         def stop():
-            product.capture_stop()
-            req.reply("ok",)
+            try:
+                yield product.capture_stop()
+            except Exception as error:
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok",)
         self.ioloop.add_callback(stop)
         raise AsyncReply
 
