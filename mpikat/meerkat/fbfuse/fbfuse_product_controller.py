@@ -605,8 +605,9 @@ class FbfProductController(object):
         self._ibc_fscrunch_sensor.set_value(config['incoherent-beam-fscrunch'])
         self._ibc_antennas_sensor.set_value(config['incoherent-beam-antennas'])
         # This doesn't really belong here
-        ibc_group_rate = (mcast_config['used_bandwidth'] / config['incoherent-beam-tscrunch']
-                          / config['coherent-beams-fscrunch'] * 8)
+        ibc_group_rate = (
+            mcast_config['used_bandwidth'] / config['incoherent-beam-tscrunch']
+            / config['coherent-beams-fscrunch'] * 8)
         self._ibc_mcast_group_data_rate_sensor.set_value(ibc_group_rate)
         self._servers = self._parent._server_pool.allocate(
             min(nworkers_available, mcast_config['num_workers_total']))
@@ -625,7 +626,8 @@ class FbfProductController(object):
 
     @coroutine
     def get_ca_target_configuration(self, target):
-        def ca_target_update_callback(received_timestamp, timestamp, status, value):
+        def ca_target_update_callback(received_timestamp, timestamp, status,
+                                      value):
             # TODO, should we really reset all the beams or should we have
             # a mechanism to only update changed beams
             config_dict = json.loads(value)
@@ -643,15 +645,16 @@ class FbfProductController(object):
                 self.add_tiling(target, nbeams, freq, overlap, epoch)
         yield self._ca_client.until_synced()
         try:
-            response = yield self._ca_client.req.target_configuration_start(self._proxy_name, target.format_katcp())
+            response = yield self._ca_client.req.target_configuration_start(
+                self._proxy_name, target.format_katcp())
         except Exception as error:
-            self.log.error(
-                "Request for target configuration to CA failed with error: {}".format(str(error)))
+            self.log.error(("Request for target configuration to CA "
+                            "failed with error: {}").format(str(error)))
             raise error
         if not response.reply.reply_ok():
             error = Exception(response.reply.arguments[1])
-            self.log.error(
-                "Request for target configuration to CA failed with error: {}".format(str(error)))
+            self.log.error(("Request for target configuration to CA "
+                            "failed with error: {}").format(str(error)))
             raise error
         yield self._ca_client.until_synced()
         sensor = self._ca_client.sensor[
@@ -668,8 +671,8 @@ class FbfProductController(object):
         if self._ca_client:
             yield self.get_ca_target_configuration(target)
         else:
-            self.log.warning(
-                "No configuration authority is set, using default beam configuration")
+            self.log.warning("No configuration authority is set, "
+                             "using default beam configuration")
 
     @coroutine
     def target_stop(self):
@@ -691,22 +694,19 @@ class FbfProductController(object):
         self.log.info("Preparing FBFUSE product")
         self._state_sensor.set_value(self.PREPARING)
         self.log.debug("Product moved to 'preparing' state")
-        # Here we need to parse the streams and assign beams to streams:
-        #mcast_addrs, mcast_port = parse_stream(self._streams['cbf.antenna_channelised_voltage']['i0.antenna-channelised-voltage'])
 
         if not self._ca_client:
-            self.log.warning(
-                "No configuration authority found, using default configuration parameters")
+            self.log.warning("No configuration authority found, "
+                             "using default configuration parameters")
             cm = self.set_sb_configuration(self._default_sb_config)
         else:
-            # TODO: get the schedule block ID into this call from somewhere
-            # (configure?)
             try:
                 config = yield self.get_ca_sb_configuration(sb_id)
                 cm = self.set_sb_configuration(config)
             except Exception as error:
                 self.log.error(
-                    "Configuring from CA failed with error: {}".format(str(error)))
+                    "Configuring from CA failed with error: {}".format(
+                        str(error)))
                 self.log.warning("Reverting to default configuration")
                 cm = self.set_sb_configuration(self._default_sb_config)
 
@@ -739,18 +739,19 @@ class FbfProductController(object):
                 self.log.debug(
                     "--> Allocated {} to {}".format(value, key))
                 mcast_to_beam_map[key].append(value)
-        mcast_to_beam_map[self._ibc_mcast_group.format_katcp()] = ["ifbf00000",]
+        mcast_to_beam_map[self._ibc_mcast_group.format_katcp()] = ["ifbf00000", ]
         self._cbc_mcast_groups_mapping_sensor.set_value(
             json.dumps(mcast_to_beam_map))
         for beam in self._beam_manager.get_beams():
             sensor = Sensor.string(
                 "coherent-beam-{}".format(beam.idx),
-                description="R.A. (deg), declination (deg) and source name for coherent beam with ID {}".format(
-                    beam.idx),
+                description=("R.A. (deg), declination (deg) and source name "
+                             "for coherent beam with ID {}").format(beam.idx),
                 default=self._beam_to_sensor_string(beam),
                 initial_status=Sensor.UNKNOWN)
             beam.register_observer(lambda beam, sensor=sensor:
-                                   sensor.set_value(self._beam_to_sensor_string(beam)))
+                                   sensor.set_value(
+                                    self._beam_to_sensor_string(beam)))
             self._beam_sensors.append(sensor)
             self.add_sensor(sensor)
         self._parent.mass_inform(Message.inform('interface-changed'))
@@ -759,33 +760,42 @@ class FbfProductController(object):
         ip_splits = self._streams.split(N_FENG_STREAMS_PER_WORKER)
 
         # This is assuming lower sideband and bandwidth is always +ve
-        fbottom = self._feng_config[
-            'centre-frequency'] - self._feng_config['bandwidth'] / 2.
+        fbottom = (self._feng_config['centre-frequency']
+                   - self._feng_config['bandwidth'] / 2.)
 
         coherent_beam_config = {
             'tscrunch': self._cbc_tscrunch_sensor.value(),
             'fscrunch': self._cbc_fscrunch_sensor.value(),
-            'antennas': self._cbc_antennas_sensor.value()
+            'antennas': self._cbc_antennas_sensor.value(),
+            'nbeams': self._cbc_nbeams_sensor.value(),
+            'destination': self._cbc_mcast_groups.format_katcp()
         }
 
         incoherent_beam_config = {
             'tscrunch': self._ibc_tscrunch_sensor.value(),
             'fscrunch': self._ibc_fscrunch_sensor.value(),
-            'antennas': self._ibc_antennas_sensor.value()
+            'antennas': self._ibc_antennas_sensor.value(),
+            'destination': self._ibc_mcast_groups.format_katcp()
         }
+
+        # Here can choose band priority based on number of available servers
 
         prepare_futures = []
         for ii, (server, ip_range) in enumerate(zip(self._servers, ip_splits)):
             chan0_idx = cm.nchans_per_worker * ii
             chan0_freq = fbottom + chan0_idx * cm.channel_bandwidth
             future = server.prepare(
-                ip_range.format_katcp(), cm.nchans_per_group,
-                chan0_idx, chan0_freq, cm.channel_bandwidth,
-                self._cbc_nbeams_sensor.value(), json.dumps(mcast_to_beam_map),
+                ip_range.format_katcp(),
+                cm.nchans_per_group,
+                chan0_idx,
+                chan0_freq,
+                cm.channel_bandwidth,
                 json.dumps(self._feng_config),
                 json.dumps(coherent_beam_config),
                 json.dumps(incoherent_beam_config),
-                de_ip, de_port, timeout=300.0)
+                de_ip,
+                de_port,
+                timeout=300.0)
             prepare_futures.append(future)
 
         failure_count = 0

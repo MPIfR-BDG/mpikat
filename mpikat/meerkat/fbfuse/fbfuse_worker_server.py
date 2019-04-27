@@ -22,13 +22,12 @@ SOFTWARE.
 import logging
 import json
 import signal
-import time
 import os
 import coloredlogs
 from collections import deque
 from subprocess import Popen, PIPE, check_call
 from optparse import OptionParser
-from tornado.gen import coroutine, sleep
+from tornado.gen import coroutine
 from tornado.ioloop import IOLoop, PeriodicCallback
 from katcp import Sensor, AsyncDeviceServer, AsyncReply, KATCPClientResource
 from katcp.kattypes import request, return_reply, Int, Str, Float
@@ -39,14 +38,15 @@ from mpikat.meerkat.fbfuse.fbfuse_mkrecv_config import (
     make_mkrecv_header, mkrecv_stdout_parser)
 from mpikat.meerkat.fbfuse.fbfuse_mksend_config import (
     make_mksend_header)
-from mpikat.meerkat.fbfuse.fbfuse_psrdada_cpp_wrapper import compile_psrdada_cpp
+from mpikat.meerkat.fbfuse.fbfuse_psrdada_cpp_wrapper import (
+    compile_psrdada_cpp)
 from mpikat.utils.process_tools import process_watcher, ManagedProcess
 
 log = logging.getLogger("mpikat.fbfuse_worker_server")
 
 PACKET_PAYLOAD_SIZE = 1024  # bytes
 AVAILABLE_CAPTURE_MEMORY = 137438953472/2  # bytes
-MAX_DADA_BLOCK_SIZE = 1e9 #bytes
+MAX_DADA_BLOCK_SIZE = 1e9  # bytes
 
 MKRECV_CONFIG_FILENAME = "mkrecv_feng.cfg"
 MKSEND_COHERENT_CONFIG_FILENAME = "mksend_coherent.cfg"
@@ -123,7 +123,6 @@ class FbfWorkerServer(AsyncDeviceServer):
         """
         self._dc_ip = None
         self._dc_port = None
-        self._delay_client = None
         self._delay_client = None
         self._delays = None
         self._numa = numa_node
@@ -329,9 +328,10 @@ class FbfWorkerServer(AsyncDeviceServer):
     @request(Str(), Int(), Int(), Float(), Float(), Int(), Str(), Str(),
              Str(), Str(), Str(), Int())
     @return_reply()
-    def request_prepare(self, req, feng_groups, nchans_per_group, chan0_idx,
-                        chan0_freq, chan_bw, nbeams, mcast_to_beam_map, feng_config,
-                        coherent_beam_config, incoherent_beam_config, dc_ip, dc_port):
+    def request_prepare(self, req, feng_groups, nchans_per_group,
+                        chan0_idx, chan0_freq, chan_bw, feng_config,
+                        coherent_beam_config, incoherent_beam_config,
+                        dc_ip, dc_port):
         """
         @brief      Prepare FBFUSE to receive and process data from a subarray
 
@@ -406,22 +406,20 @@ class FbfWorkerServer(AsyncDeviceServer):
         try:
             feng_config = json.loads(feng_config)
         except Exception as error:
-            return ("fail", "Unable to parse F-eng config with error: {}".format(str(error)))
+            return ("fail", ("Unable to parse F-eng config with "
+                             "error: {}").format(str(error)))
         log.debug("F-eng config: {}".format(feng_config))
-        try:
-            mcast_to_beam_map = json.loads(mcast_to_beam_map)
-        except Exception as error:
-            return ("fail", "Unable to parse multicast beam mapping with error: {}".format(str(error)))
-        log.debug("Beam mapping: {}".format(mcast_to_beam_map))
         try:
             coherent_beam_config = json.loads(coherent_beam_config)
         except Exception as error:
-            return ("fail", "Unable to parse coherent beam config with error: {}".format(str(error)))
+            return ("fail", ("Unable to parse coherent beam "
+                             "config with error: {}").format(str(error)))
         log.debug("Coherent beam config: {}".format(coherent_beam_config))
         try:
             incoherent_beam_config = json.loads(incoherent_beam_config)
         except Exception as error:
-            return ("fail", "Unable to parse incoherent beam config with error: {}".format(str(error)))
+            return ("fail", ("Unable to parse incoherent beam "
+                             "config with error: {}").format(str(error)))
         log.debug("Incoherent beam config: {}".format(incoherent_beam_config))
 
         @coroutine
@@ -439,10 +437,13 @@ class FbfWorkerServer(AsyncDeviceServer):
                 feng_config['feng-antenna-map'], coherent_beam_config,
                 incoherent_beam_config)
             log.debug("Capture order info: {}".format(feng_capture_order_info))
+            feng_to_antenna_map = {}
             feng_to_antenna_map = {
-                value: key for key, value in feng_config['feng-antenna-map'].items()}
+                value: key for key, value in
+                feng_config['feng-antenna-map'].items()}
             antenna_capture_order_csv = ",".join(
-                [feng_to_antenna_map[feng_id] for feng_id in feng_capture_order_info['order']])
+                [feng_to_antenna_map[feng_id] for feng_id in
+                 feng_capture_order_info['order']])
             self._antenna_capture_order_sensor.set_value(
                 antenna_capture_order_csv)
 
@@ -460,7 +461,6 @@ class FbfWorkerServer(AsyncDeviceServer):
             heap_size = nchans_per_group * PACKET_PAYLOAD_SIZE
             heap_group_size = ngroups * heap_size * nantennas
             ngroups_data = int(MAX_DADA_BLOCK_SIZE / heap_group_size)
-            #ngroups_data = 2**((ngroups_data).bit_length()-1)
             ngroups_data = 2**((ngroups_data-1).bit_length())
             centre_frequency = (chan0_freq + feng_config['nchans']
                                 / 2.0 * chan_bw)
@@ -491,71 +491,50 @@ class FbfWorkerServer(AsyncDeviceServer):
             log.info("Determined MKRECV configuration:\n{}".format(
                 mkrecv_header))
 
-            log.debug("Parsing beam to multicast mapping")
-            incoherent_beam = None
-            incoherent_beam_group = None
-            coherent_beam_to_group_map = {}
-            group_to_coherent_beam_map = {}
-            for group, beams in mcast_to_beam_map.items():
-                if isinstance(beams, str):
-                    beams = beams.split(",")
-                for beam in beams:
-                    if beam.startswith("cfbf"):
-                        if group not in group_to_coherent_beam_map:
-                            group_to_coherent_beam_map[group] = []
-                        coherent_beam_to_group_map[beam] = group
-                        group_to_coherent_beam_map[group].append(beam)
-                    if beam.startswith("ifbf"):
-                        incoherent_beam = beam
-                        incoherent_beam_group = group
-            log.debug("Group to coherent beam map: {}".format(group_to_coherent_beam_map))
-
-            log.debug("Determined coherent beam to multicast mapping: {}".format(
-                coherent_beam_to_group_map))
-            if incoherent_beam:
-                log.debug("Incoherent beam will be sent to: {}".format(
-                    incoherent_beam_group))
-            else:
-                log.debug("No incoherent beam specified")
-
-            log.debug("Determining multicast port from first transmission group")
-            first_coh_group = group_to_coherent_beam_map.keys()[0]
-            coh_group_range = ip_range_from_stream(first_coh_group)
-            log.debug("Using multicast port {}".format(coh_group_range.port))
-
-            beam_order = []
-            group_order = []
-            for group in sorted(group_to_coherent_beam_map.keys()):
-                beams = group_to_coherent_beam_map[group]
-                group_order.append(str(ip_range_from_stream(group).base_ip))
-                for beam in beams:
-                    beam_idx = int(beam.lstrip("cfbf"))
-                    beam_order.append(beam_idx)
-
-            nbeams_per_group = nbeams / len(group_order)
-            coh_data_rate = (partition_bandwidth / coherent_beam_config['tscrunch']
-                             / coherent_beam_config['fscrunch'] * nbeams_per_group * 8 * 1.1)
+            coh_ip_range = ip_range_from_stream(
+                coherent_beam_config['destination'])
+            nbeams = coherent_beam_config['nbeams']
+            nbeams_per_group = nbeams / len(coh_ip_range)
+            """
+            Note on data rates:
+            For both the coherent and incoherent beams, we set the sending
+            rate in MKSEND equal to 110% of the required data rate. This
+            is a fudge to ensure that we send rapidly enough that MKSEND
+            does not limit performance while at the same time ensuring that
+            the burst rate out of the instrument is limited. This number
+            may need to be tuned.
+            """
+            coh_data_rate = (partition_bandwidth
+                             / coherent_beam_config['tscrunch']
+                             / coherent_beam_config['fscrunch']
+                             * nbeams_per_group * 8 * 1.1)
             coh_heap_size = 8192
-            nsamps_per_coh_heap = coh_heap_size / (partition_nchans * coherent_beam_config['fscrunch'])
-            coh_timestamp_step = coherent_beam_config['tscrunch'] * nsamps_per_coh_heap * 2 * feng_config["nchans"]
-            heap_id_start = worker_idx * len(group_order)
+            nsamps_per_coh_heap = (coh_heap_size / (partition_nchans
+                                   * coherent_beam_config['fscrunch']))
+            coh_timestamp_step = (coherent_beam_config['tscrunch']
+                                  * nsamps_per_coh_heap
+                                  * 2 * feng_config["nchans"])
+            heap_id_start = worker_idx * len(coh_ip_range)
             log.debug("Determining MKSEND configuration for coherent beams")
             dada_mode = int(self._exec_mode == FULL)
+            coherent_mcast_dest = coherent_beam_config['destination'].lstrip(
+                "spead://").split(":")[0]
             mksend_coh_config = {
                 'dada_key': self._dada_coh_output_key,
                 'dada_mode': dada_mode,
                 'interface': self._capture_interface,
                 'data_rate': coh_data_rate,
-                'mcast_port': coh_group_range.port,
-                'mcast_destinations': group_order,
+                'mcast_port': coh_ip_range.port,
+                'mcast_destinations': coherent_mcast_dest,
                 'sync_epoch': feng_config['sync-epoch'],
                 'sample_clock': sample_clock,
                 'heap_size': coh_heap_size,
                 'heap_id_start': heap_id_start,
                 'timestamp_step': coh_timestamp_step,
-                'beam_ids': beam_order,
+                'beam_ids': "0:{}".format(nbeams),
+                'multibeam': True,
                 'subband_idx': chan0_idx,
-                'heap_group': len(group_to_coherent_beam_map[first_coh_group])
+                'heap_group': nbeams_per_group
             }
             mksend_coh_header = make_mksend_header(
                 mksend_coh_config, outfile=MKSEND_COHERENT_CONFIG_FILENAME)
@@ -567,24 +546,31 @@ class FbfWorkerServer(AsyncDeviceServer):
                 partition_bandwidth / incoherent_beam_config['tscrunch']
                 / incoherent_beam_config['fscrunch'] * 8 * 1.1)
             incoh_heap_size = 8192
-            nsamps_per_incoh_heap = incoh_heap_size / (partition_nchans * incoherent_beam_config['fscrunch'])
-            incoh_timestamp_step = incoherent_beam_config['tscrunch'] * nsamps_per_incoh_heap * 2 * feng_config["nchans"]
+            nsamps_per_incoh_heap = (incoh_heap_size / (partition_nchans
+                                     * incoherent_beam_config['fscrunch']))
+            incoh_timestamp_step = (incoherent_beam_config['tscrunch']
+                                    * nsamps_per_incoh_heap * 2
+                                    * feng_config["nchans"])
             log.debug("Determining MKSEND configuration for incoherent beams")
             dada_mode = int(self._exec_mode == FULL)
-            incoh_ip_range = ip_range_from_stream(incoherent_beam_group)
+            incoh_ip_range = ip_range_from_stream(
+                incoherent_beam_config['destination'])
+            coherent_mcast_dest = incoherent_beam_config['destination'].lstrip(
+                "spead://").split(":")[0]
             mksend_incoh_config = {
                 'dada_key': self._dada_incoh_output_key,
                 'dada_mode': dada_mode,
                 'interface': self._capture_interface,
                 'data_rate': incoh_data_rate,
                 'mcast_port': incoh_ip_range.port,
-                'mcast_destinations': [str(incoh_ip_range.base_ip),],
+                'mcast_destinations': coherent_mcast_dest,
                 'sync_epoch': feng_config['sync-epoch'],
                 'sample_clock': sample_clock,
                 'heap_size': incoh_heap_size,
                 'heap_id_start': worker_idx,
                 'timestamp_step': incoh_timestamp_step,
-                'beam_ids': (0,),
+                'beam_ids': 0,
+                'multibeam': False,
                 'subband_idx': chan0_idx,
                 'heap_group': 1
             }
@@ -620,7 +606,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             log.info("Creating all DADA buffers")
             # Create capture data DADA buffer
             capture_block_size = ngroups_data * heap_group_size
-            capture_block_count = int(AVAILABLE_CAPTURE_MEMORY / capture_block_size)
+            capture_block_count = int(AVAILABLE_CAPTURE_MEMORY
+                                      / capture_block_size)
             log.debug("Creating dada buffer for input with key '{}'".format(
                 "%s" % self._dada_input_key))
             input_make_db_future = self._make_db(
@@ -632,23 +619,26 @@ class FbfWorkerServer(AsyncDeviceServer):
                 coherent_beam_config['fscrunch']
             coh_output_samples = ngroups_data * \
                 256 / coherent_beam_config['tscrunch']
-            coherent_block_size = nbeams * coh_output_channels * coh_output_samples
+            coherent_block_size = (nbeams * coh_output_channels
+                                   * coh_output_samples)
             coherent_block_count = 32
-            log.debug("Creating dada buffer for coherent beam output with key '{}'".format(
-                "%s" % self._dada_coh_output_key))
+            log.debug(("Creating dada buffer for coherent beam output "
+                       "with key '{}'").format(
+                       "%s" % self._dada_coh_output_key))
             coh_output_make_db_future = self._make_db(
                 self._dada_coh_output_key, coherent_block_size,
                 coherent_block_count)
 
             # Create incoherent beam output DADA buffer
-            incoh_output_channels = (
-                ngroups * nchans_per_group) / incoherent_beam_config['fscrunch']
-            incoh_output_samples = (ngroups_data * 256) / \
-                incoherent_beam_config['tscrunch']
+            incoh_output_channels = ((ngroups * nchans_per_group)
+                                     / incoherent_beam_config['fscrunch'])
+            incoh_output_samples = ((ngroups_data * 256)
+                                    / incoherent_beam_config['tscrunch'])
             incoherent_block_size = incoh_output_channels * incoh_output_samples
             incoherent_block_count = 32
-            log.debug("Creating dada buffer for incoherent beam output with key '{}'".format(
-                "%s" % self._dada_incoh_output_key))
+            log.debug(("Creating dada buffer for incoherent beam "
+                       "output with key '{}'").format(
+                       "%s" % self._dada_incoh_output_key))
             incoh_output_make_db_future = self._make_db(
                 self._dada_incoh_output_key, incoherent_block_size,
                 incoherent_block_count)
@@ -667,9 +657,13 @@ class FbfWorkerServer(AsyncDeviceServer):
             # etc. This means that the configurations need to be unique by NUMA node... [Note: no
             # they don't, we can use the container IPC channel which isolates
             # the IPC namespaces.]
+            #
+            # Here we recreate the beam keys as they are handled by the BeamManager
+            # instance in the product controller
+            #
+            beam_idxs = ["cfbf%05d"%(i) for i in range(nbeams)]
             self._delay_buf_ctrl = DelayBufferController(
-                self._delay_client,
-                coherent_beam_to_group_map.keys(),
+                self._delay_client, beam_idxs,
                 coherent_beam_antenna_capture_order, 1)
             yield self._delay_buf_ctrl.start()
 
@@ -792,7 +786,8 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         # Start beamforming pipeline
         log.info("Starting PSRDADA_CPP beamforming pipeline")
-        self._psrdada_cpp_cmdline = ["taskset", "-c", psrdada_cpp_cpu_set] + self._psrdada_cpp_cmdline
+        psrdada_cpp_taskset = ["taskset", "-c", psrdada_cpp_cpu_set]
+        self._psrdada_cpp_cmdline = psrdada_cpp_taskset + self._psrdada_cpp_cmdline
         log.debug(" ".join(map(str, self._psrdada_cpp_cmdline)))
         self._psrdada_cpp_proc = ManagedProcess(self._psrdada_cpp_cmdline)
 
@@ -911,7 +906,8 @@ def main():
     (opts, args) = parser.parse_args()
     logger = logging.getLogger('mpikat')
     coloredlogs.install(
-        fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
+        fmt=("[ %(levelname)s - %(asctime)s - %(name)s -"
+             "%(filename)s:%(lineno)s] %(message)s"),
         level=opts.log_level.upper(),
         logger=logger)
     logger.setLevel(opts.log_level.upper())
@@ -928,12 +924,11 @@ def main():
     def start_and_display():
         server.start()
         log.info(
-            "Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
+            "Listening at {0}, Ctrl-C to terminate server".format(
+                server.bind_address))
     ioloop.add_callback(start_and_display)
     ioloop.start()
 
 
 if __name__ == "__main__":
     main()
-
-
