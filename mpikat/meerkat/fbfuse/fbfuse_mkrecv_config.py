@@ -40,13 +40,19 @@ IDX3_LIST   {{frequency_partition_ids_csv}}
 """
 
 MKRECV_STDOUT_KEYS = {
-    "STAT": [("slot-size", int), ("heaps-completed", int),
-             ("heaps-discarded", int), ("heaps-needed", int),
-             ("payload-expected", int), ("payload-received", int),
+    "STAT": [("slot-size", int),
+             ("heaps-completed", int),
+             ("heaps-discarded", int),
+             ("heaps-needed", int),
+             ("payload-expected", int),
+             ("payload-received", int),
              ("global-heaps-completed", int),
-             ("global-heaps-discarded", int), ("global-heaps-needed", int),
-             ("global-payload-expected", int), ("global-payload-received", int)]
+             ("global-heaps-discarded", int),
+             ("global-heaps-needed", int),
+             ("global-payload-expected", int),
+             ("global-payload-received", int)]
 }
+
 
 class MkrecvHeaderException(Exception):
     pass

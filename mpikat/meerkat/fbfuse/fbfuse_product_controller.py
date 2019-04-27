@@ -775,7 +775,7 @@ class FbfProductController(object):
             'tscrunch': self._ibc_tscrunch_sensor.value(),
             'fscrunch': self._ibc_fscrunch_sensor.value(),
             'antennas': self._ibc_antennas_sensor.value(),
-            'destination': self._ibc_mcast_groups.format_katcp()
+            'destination': self._ibc_mcast_group.format_katcp()
         }
 
         # Here can choose band priority based on number of available servers
