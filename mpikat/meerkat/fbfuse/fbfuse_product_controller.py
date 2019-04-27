@@ -455,6 +455,7 @@ class FbfProductController(object):
             "Configuration authority returned: {}".format(config_dict))
         raise Return(config_dict)
 
+    @coroutine
     def reset_sb_configuration(self):
         self.log.debug("Reseting schedule block configuration")
         try:
@@ -485,8 +486,9 @@ class FbfProductController(object):
             self._delay_config_server = None
         self._beam_manager = None
 
+    @coroutine
     def set_error_state(self, message):
-        self.reset_sb_configuration()
+        yield self.reset_sb_configuration()
         self._state_sensor.set_value(self.ERROR)
 
     def _sanitise_coh_beam_ants(self, coherent_beam_antennas):
@@ -505,6 +507,7 @@ class FbfProductController(object):
         else:
             return coherent_beam_antennas
 
+    @coroutine
     def set_sb_configuration(self, config_dict):
         """
         @brief  Set the schedule block configuration for this product
@@ -553,7 +556,7 @@ class FbfProductController(object):
             return self._current_configuration
         else:
             self._previous_sb_config = config_dict
-        self.reset_sb_configuration()
+        yield self.reset_sb_configuration()
         self.log.info("Setting schedule block configuration")
         config = deepcopy(self._default_sb_config)
         config.update(config_dict)
@@ -622,7 +625,7 @@ class FbfProductController(object):
         self._cbc_mcast_groups_sensor.set_value(
             self._cbc_mcast_groups.format_katcp())
         self._current_configuration = cm
-        return cm
+        raise Return(cm)
 
     @coroutine
     def get_ca_target_configuration(self, target):
@@ -698,17 +701,17 @@ class FbfProductController(object):
         if not self._ca_client:
             self.log.warning("No configuration authority found, "
                              "using default configuration parameters")
-            cm = self.set_sb_configuration(self._default_sb_config)
+            cm = yield self.set_sb_configuration(self._default_sb_config)
         else:
             try:
                 config = yield self.get_ca_sb_configuration(sb_id)
-                cm = self.set_sb_configuration(config)
+                cm = yield self.set_sb_configuration(config)
             except Exception as error:
                 self.log.error(
                     "Configuring from CA failed with error: {}".format(
                         str(error)))
                 self.log.warning("Reverting to default configuration")
-                cm = self.set_sb_configuration(self._default_sb_config)
+                cm = yield self.set_sb_configuration(self._default_sb_config)
 
         cbc_antennas_names = parse_csv_antennas(
             self._cbc_antennas_sensor.value())
@@ -814,6 +817,7 @@ class FbfProductController(object):
             self._state_sensor.set_value(self.READY)
             self.log.info("Successfully prepared FBFUSE product")
 
+    @coroutine
     def deconfigure(self):
         """
         @brief  Deconfigure the product. To be called on a subarray deconfigure.
@@ -822,7 +826,7 @@ class FbfProductController(object):
                 and ensure the release of all resource allocations.
         """
         try:
-            self.reset_sb_configuration()
+            yield self.reset_sb_configuration()
         except Exception as error:
             if self._servers:
                 log.error("Warning servers are still allocated to this"
@@ -830,6 +834,7 @@ class FbfProductController(object):
             raise error
         self.teardown_sensors()
 
+    @coroutine
     def capture_start(self):
         if not self.ready:
             raise FbfProductStateError([self.READY], self.state)
@@ -849,6 +854,7 @@ class FbfProductController(object):
         self._state_sensor.set_value(self.CAPTURING)
         self.log.debug("Product moved to 'capturing' state")
 
+    @coroutine
     def capture_stop(self):
         """
         @brief      Stops the beamformer servers streaming.
@@ -864,7 +870,7 @@ class FbfProductController(object):
         self.target_stop()
         futures = []
         for server in self._servers:
-            futures.append(server.capture_stop())
+            futures.append(server.capture_stop(timeout=60.0))
         for ii, future in enumerate(futures):
             try:
                 yield future
@@ -908,7 +914,7 @@ class FbfProductController(object):
         @returns    The created Tiling object
         """
         valid_states = [self.READY, self.CAPTURING, self.STARTING]
-        if not self.state in valid_states:
+        if self.state not in valid_states:
             raise FbfProductStateError(valid_states, self.state)
         tiling = self._beam_manager.add_tiling(
             target, number_of_beams, reference_frequency, overlap)
@@ -926,6 +932,6 @@ class FbfProductController(object):
         @note   All tiling will be lost on this call and must be remade for subsequent observations
         """
         valid_states = [self.READY, self.CAPTURING, self.STARTING]
-        if not self.state in valid_states:
+        if self.state not in valid_states:
             raise FbfProductStateError(valid_states, self.state)
         self._beam_manager.reset()

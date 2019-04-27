@@ -341,12 +341,13 @@ class FbfMasterController(MasterController):
         @return     katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]
         """
         try:
-            self.deconfigure(product_id)
+            yield self.deconfigure(product_id)
         except Exception as error:
             return ("fail", str(error))
         else:
             return ("ok",)
 
+    @coroutine
     def deconfigure(self, product_id):
         """
         @brief     Internal implementation of deconfigure.
@@ -358,7 +359,7 @@ class FbfMasterController(MasterController):
         # Test if product exists
         product = self._get_product(product_id)
         try:
-            product.deconfigure()
+            yield product.deconfigure()
         except Exception as error:
             log.exception(("Encountered error while deconfiguring product "
                            "'{}': {}").format(product_id, str(error)))
@@ -414,9 +415,12 @@ class FbfMasterController(MasterController):
             product = self._get_product(product_id)
         except ProductLookupError as error:
             return ("fail", str(error))
+
         @coroutine
         def start():
             try:
+                log.debug("Calling capture start on {} product".format(
+                    product_id))
                 product.capture_start()
             except Exception as error:
                 req.reply("fail", str(error))
