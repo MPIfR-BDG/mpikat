@@ -553,7 +553,7 @@ class FbfProductController(object):
         if self._previous_sb_config == config_dict:
             self.log.info(
                 "Configuration is unchanged, proceeding with existing configuration")
-            return self._current_configuration
+            raise Return(self._current_configuration)
         else:
             self._previous_sb_config = config_dict
         yield self.reset_sb_configuration()
@@ -865,7 +865,7 @@ class FbfProductController(object):
                     starting again.
         """
         if not self.capturing and not self.error:
-            return
+            raise Return(None)
         self._state_sensor.set_value(self.STOPPING)
         self.target_stop()
         futures = []
