@@ -423,7 +423,7 @@ class FbfMasterController(MasterController):
         @coroutine
         def start():
             try:
-                product.capture_start()
+                yield product.capture_start()
             except Exception as error:
                 req.reply("fail", str(error))
             else:
