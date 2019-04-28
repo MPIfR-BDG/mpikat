@@ -39,6 +39,7 @@ class WorkerDeallocationError(Exception):
 class WorkerRequestError(Exception):
     pass
 
+
 class WorkerPool(object):
     """Wrapper class for managing server
     allocation and deallocation to subarray/products
@@ -52,7 +53,7 @@ class WorkerPool(object):
         self._allocated = set()
 
     def make_wrapper(self, hostname, port):
-        raise NotImplemented
+        raise NotImplementedError
 
     def add(self, hostname, port):
         """
@@ -63,7 +64,7 @@ class WorkerPool(object):
         """
         log.debug("Adding {}:{} to worker pool".format(hostname, port))
         wrapper = self.make_wrapper(hostname, port)
-        if not wrapper in self._servers:
+        if wrapper not in self._servers:
             wrapper.start()
             log.debug("Adding {} to server set".format(wrapper))
             self._servers.add(wrapper)
@@ -106,6 +107,7 @@ class WorkerPool(object):
             log.debug("{} servers available".format(len(available_servers)))
             available_servers.sort(
                 key=lambda server: server.priority, reverse=True)
+            available_servers = [i for i in available_servers if i.is_connected()]
             if len(available_servers) < count:
                 raise WorkerAllocationError("Cannot allocate {0} servers, only {1} available".format(
                     count, len(available_servers)))
@@ -138,9 +140,13 @@ class WorkerPool(object):
         """
         @brief   Return list of available servers
         """
-        return list(self._servers.difference(self._allocated))
+        available_servers = [i for i in list(
+            self._servers.difference(
+                self._allocated)) if i.is_connected()]
+        return available_servers
 
     def navailable(self):
+
         return len(self.available())
 
     def used(self):
@@ -196,8 +202,13 @@ class WorkerWrapper(object):
         self._client.start()
         self._started = True
 
+    def is_connected(self):
+        return self._client.is_connected()
+
     def __repr__(self):
-        return "<{} @ {}:{}>".format(self.__class__.__name__, self.hostname, self.port)
+        return "<{} @ {}:{} (connected = {})>".format(
+            self.__class__.__name__,
+            self.hostname, self.port, self.is_connected())
 
     def __hash__(self):
         # This has override is required to allow these wrappers

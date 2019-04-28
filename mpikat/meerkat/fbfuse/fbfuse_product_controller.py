@@ -465,7 +465,7 @@ class FbfProductController(object):
                 "Received error while attempting capture stop: {}".format(str(error)))
         futures = []
         for server in self._servers:
-            futures.append(server.deconfigure())
+            futures.append(server.deconfigure(timeout=30.0))
         for ii, future in enumerate(futures):
             try:
                 yield future
