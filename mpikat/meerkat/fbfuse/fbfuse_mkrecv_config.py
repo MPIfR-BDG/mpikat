@@ -61,7 +61,8 @@ class MkrecvHeaderException(Exception):
 
 
 class MkrecvStdoutHandler(object):
-    def __init__(self, logging_interval=10.0, window_size=10, warning_level=98.0):
+    def __init__(self, logging_interval=10.0,
+                 window_size=10, warning_level=99.95):
         self._logging_interval = logging_interval
         self._window_size = window_size
         self._warning_level = warning_level
@@ -89,21 +90,26 @@ class MkrecvStdoutHandler(object):
             log.info("MKRECV capture started")
             self._has_started = True
 
-        if self._current_percentage < self._warning_level:
+        if self._average_percentage < self._warning_level:
             if not self._warning_state:
                 log.warning(("Capture percentage dropped below "
                              "{}% tolerance: {:9.5f}%".format(
                                 self._warning_level,
-                                self._current_percentage)))
+                                self._average_percentage)))
                 self._warning_state = True
         else:
             if self._warning_state:
                 log.info("Capture percentage recovered to non-warning levels")
                 self._warning_state = False
 
+        if self._warning_state:
+            log_func = log.warning
+        else:
+            log_func = log.info
+
         now = time.time()
         if (now - self._last_log) > self._logging_interval:
-            log.info(("Capture percentages: "
+            log_func(("Capture percentages: "
                       "{:9.5f}% (snap-shot) "
                       "{:9.5f}% (accumulated) "
                       "{:9.5f} (last {} buffers)").format(
