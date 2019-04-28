@@ -24,7 +24,6 @@ import json
 import signal
 import os
 import coloredlogs
-from collections import deque
 from subprocess import Popen, PIPE, check_call
 from optparse import OptionParser
 from tornado.gen import coroutine
@@ -35,7 +34,7 @@ from mpikat.core.ip_manager import ip_range_from_stream
 from mpikat.core.utils import LoggingSensor, parse_csv_antennas
 from mpikat.meerkat.fbfuse import DelayBufferController
 from mpikat.meerkat.fbfuse.fbfuse_mkrecv_config import (
-    make_mkrecv_header, mkrecv_stdout_parser)
+    make_mkrecv_header, MkrecvStdoutHandler)
 from mpikat.meerkat.fbfuse.fbfuse_mksend_config import (
     make_mksend_header)
 from mpikat.meerkat.fbfuse.fbfuse_psrdada_cpp_wrapper import (
@@ -294,7 +293,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                          "DADA buffer creation/destruction"))
 
     @coroutine
-    def _destroy_db(self, key, timeout=5.0):
+    def _destroy_db(self, key, timeout=20.0):
         log.debug("Destroying DADA buffer with key={}".format(key))
         if self._exec_mode == FULL:
             cmdline = map(str, ["dada_db", "-k", key, "-d"])
@@ -730,10 +729,14 @@ class FbfWorkerServer(AsyncDeviceServer):
         @coroutine
         def deconfigure():
             log.info("Destroying allocated DADA buffers")
-            yield self._destroy_db(self._dada_input_key)
-            yield self._destroy_db(self._dada_coh_output_key)
-            yield self._destroy_db(self._dada_incoh_output_key)
-            log.info("Destroying delay buffer controller")
+            try:
+                yield self._destroy_db(self._dada_input_key)
+                yield self._destroy_db(self._dada_coh_output_key)
+                yield self._destroy_db(self._dada_incoh_output_key)
+            except Exception as error:
+                log.warning("Error while destroying DADA buffers: {}".format(
+                    str(error)))
+            log.debug("Destroying delay buffer controller")
             del self._delay_buf_ctrl
             self._delay_buf_ctrl = None
             self._state_sensor.set_value(self.IDLE)
@@ -794,22 +797,11 @@ class FbfWorkerServer(AsyncDeviceServer):
         log.debug(" ".join(map(str, self._psrdada_cpp_cmdline)))
         self._psrdada_cpp_proc = ManagedProcess(self._psrdada_cpp_cmdline)
 
-        stats_buffer = deque(maxlen=10)
-
-        def mkrecv_stdout_handler(line):
-            params = mkrecv_stdout_parser(line)
-            if params:
-                current = 100 * params['heaps-completed'] / float(params['slot-size'])
-                total = 100 * params['global-payload-received'] / float(params['global-payload-expected'])
-                stats_buffer.append(current)
-                log.info("Capture percentages: {:9.5f}% (current) {:9.5f}% (accumulated) {:9.5f} (last 10 buffers)".format(
-                    current, total, sum(stats_buffer)/stats_buffer.maxlen))
-
         # Create SPEAD receiver for incoming antenna voltages
         self._mkrecv_proc = ManagedProcess(
             ["taskset", "-c", mkrecv_cpu_set, "mkrecv_nt", "--header",
              MKRECV_CONFIG_FILENAME, "--quiet"],
-            stdout_handler=mkrecv_stdout_handler)
+            stdout_handler=MkrecvStdoutHandler())
 
         def exit_check_callback():
             if not self._mkrecv_proc.is_alive():

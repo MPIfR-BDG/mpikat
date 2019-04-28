@@ -1,5 +1,7 @@
 import jinja2
 import logging
+import time
+from collections import deque
 
 log = logging.getLogger('mpikat.fbfuse_mksend_config')
 
@@ -56,6 +58,58 @@ MKRECV_STDOUT_KEYS = {
 
 class MkrecvHeaderException(Exception):
     pass
+
+
+class MkrecvStdoutHandler(object):
+    def __init__(self, logging_interval=10.0, window_size=10, warning_level=98.0):
+        self._logging_interval = logging_interval
+        self._window_size = window_size
+        self._warning_level = warning_level
+        self._last_log = 0.0
+        self._stats_buffer = deque(maxlen=self._window_size)
+        self._current_percentage = 0.0
+        self._average_percentage = 0.0
+        self._total_percentage = 0.0
+        self._has_started = False
+        self._warning_state = False
+
+    def __call__(self, line):
+        params = mkrecv_stdout_parser(line)
+        if not params:
+            return
+        self._current_percentage = (100 * params['heaps-completed']
+                                    / float(params['slot-size']))
+        self._total_percentage = (100 * params['global-payload-received']
+                                  / float(params['global-payload-expected']))
+        self._stats_buffer.append(self._current_percentage)
+        self._average_percentage = (
+            sum(self._stats_buffer)/len(self._stats_buffer))
+
+        if not self._has_started:
+            log.info("MKRECV capture started")
+            self._has_started = True
+
+        if self._current_percentage < self._warning_level:
+            if not self._warning_state:
+                log.warning(("Capture percentage dropped below "
+                             "{}% tolerance: {:9.5f}%".format(
+                                self._warning_level,
+                                self._current_percentage)))
+                self._warning_state = True
+        else:
+            if self._warning_state:
+                log.info("Capture percentage recovered to non-warning levels")
+                self._warning_state = False
+
+        now = time.time()
+        if (now - self._last_log) > self._logging_interval:
+            log.info(("Capture percentages: "
+                      "{:9.5f}% (snap-shot) "
+                      "{:9.5f}% (accumulated) "
+                      "{:9.5f} (last {} buffers)").format(
+              self._current_percentage, self._total_percentage,
+              self._average_percentage, self._window_size))
+            self._last_log = now
 
 
 def make_mkrecv_header(params, outfile=None):
