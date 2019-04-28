@@ -861,10 +861,14 @@ class FbfWorkerServer(AsyncDeviceServer):
         log.info("Stopping capture")
         self._state_sensor.set_value(self.STOPPING)
         self._capture_monitor.stop()
+        log.info("Stopping MKRECV instance")
         self._mkrecv_proc.terminate()
+        log.info("Stopping PSRDADA_CPP instance")
         self._psrdada_cpp_proc.terminate()
+        log.info("Stopping MKSEND instances")
         self._mksend_incoh_proc.terminate()
         self._mksend_coh_proc.terminate()
+        log.info("Resetting DADA buffers")
         reset_tasks = []
         reset_tasks.append(self._reset_db(
             self._dada_input_key, timeout=7.0))
