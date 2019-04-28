@@ -352,18 +352,6 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         @param      chan_bw             The channel bandwidth in Hz
 
-        @param      nbeams              The total number of beams to be produced
-
-        @param      mcast_to_beam_map   A JSON mapping between output multicast addresses and beam IDs. This is the sole
-                                        authority for the number of beams that will be produced and their indexes. The map
-                                        is in the form:
-
-                                        @code
-                                           {
-                                              "spead://239.11.2.150:7147":"cfbf00001,cfbf00002,cfbf00003,cfbf00004",
-                                              "spead://239.11.2.151:7147":"ifbf00001"
-                                           }
-
         @param      feng_config    JSON dictionary containing general F-engine parameters.
 
                                         @code
@@ -382,7 +370,9 @@ class FbfWorkerServer(AsyncDeviceServer):
                                               {
                                                 'tscrunch':16,
                                                 'fscrunch':1,
-                                                'antennas':'m007,m008,m009'
+                                                'nbeams': 400,
+                                                'antennas':'m007,m008,m009',
+                                                'destination': 'spead://239.11.1.0+127:7148'
                                               }
                                            @endcode
 
@@ -392,7 +382,8 @@ class FbfWorkerServer(AsyncDeviceServer):
                                               {
                                                 'tscrunch':16,
                                                 'fscrunch':1,
-                                                'antennas':'m007,m008,m009'
+                                                'antennas':'m007,m008,m009',
+                                                'destination': 'spead://239.11.1.150:7148'
                                               }
                                            @endcode
 
@@ -405,21 +396,27 @@ class FbfWorkerServer(AsyncDeviceServer):
         try:
             feng_config = json.loads(feng_config)
         except Exception as error:
-            return ("fail", ("Unable to parse F-eng config with "
-                             "error: {}").format(str(error)))
-        log.debug("F-eng config: {}".format(feng_config))
+            msg = ("Unable to parse F-eng config with "
+                   "error: {}").format(str(error))
+            log.error("Prepare failed: {}".format(msg))
+            return ("fail", msg)
+        log.info("F-eng config: {}".format(feng_config))
         try:
             coherent_beam_config = json.loads(coherent_beam_config)
         except Exception as error:
-            return ("fail", ("Unable to parse coherent beam "
-                             "config with error: {}").format(str(error)))
-        log.debug("Coherent beam config: {}".format(coherent_beam_config))
+            msg = ("Unable to parse coherent beam "
+                   "config with error: {}").format(str(error))
+            log.error("Prepare failed: {}".format(msg))
+            return ("fail", msg)
+        log.info("Coherent beam config: {}".format(coherent_beam_config))
         try:
             incoherent_beam_config = json.loads(incoherent_beam_config)
         except Exception as error:
-            return ("fail", ("Unable to parse incoherent beam "
-                             "config with error: {}").format(str(error)))
-        log.debug("Incoherent beam config: {}".format(incoherent_beam_config))
+            msg = ("Unable to parse incoherent beam "
+                   "config with error: {}").format(str(error))
+            log.error("Prepare failed: {}".format(msg))
+            return ("fail", msg)
+        log.info("Incoherent beam config: {}".format(incoherent_beam_config))
 
         @coroutine
         def configure():
@@ -431,11 +428,11 @@ class FbfWorkerServer(AsyncDeviceServer):
                 controlled=True))
             self._delay_client.start()
 
-            log.debug("Determining F-engine capture order")
+            log.info("Determining F-engine capture order")
             feng_capture_order_info = determine_feng_capture_order(
                 feng_config['feng-antenna-map'], coherent_beam_config,
                 incoherent_beam_config)
-            log.debug("Capture order info: {}".format(feng_capture_order_info))
+            log.info("F-engine capture order info: {}".format(feng_capture_order_info))
             feng_to_antenna_map = {}
             feng_to_antenna_map = {
                 value: key for key, value in
@@ -695,6 +692,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                 " ".join(map(str, self._psrdada_cpp_cmdline)))
             # SPEAD receiver does not get started until a capture init call
             self._state_sensor.set_value(self.READY)
+            log.info("Prepare request successful")
             req.reply("ok",)
 
         @coroutine
@@ -726,6 +724,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         # Call self.stop?
 
         # Need to delete all allocated DADA buffers:
+        log.info("Received deconfigure request")
         @coroutine
         def deconfigure():
             log.info("Destroying allocated DADA buffers")
@@ -736,10 +735,11 @@ class FbfWorkerServer(AsyncDeviceServer):
             except Exception as error:
                 log.warning("Error while destroying DADA buffers: {}".format(
                     str(error)))
-            log.debug("Destroying delay buffer controller")
+            log.info("Destroying delay buffers")
             del self._delay_buf_ctrl
             self._delay_buf_ctrl = None
             self._state_sensor.set_value(self.IDLE)
+            log.info("Deconfigure request successful")
             req.reply("ok",)
         self.ioloop.add_callback(deconfigure)
         raise AsyncReply
@@ -759,12 +759,14 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !capture-init ok | (fail [error description]) ]]]
         """
+        log.info("Received capture-start request")
         try:
             self.capture_start()
         except Exception as error:
             log.exception("Error during capture start")
             return ("fail", str(error))
         else:
+            log.info("Capture-start successful")
             return ("ok",)
 
     def capture_start(self):
@@ -838,13 +840,16 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !capture-done ok | (fail [error description]) ]]]
         """
+        log.info("Received capture-stop request")
         @coroutine
         def capture_stop_wrapper():
             try:
                 yield self.capture_stop()
             except Exception as error:
+                log.exception("Capture-stop request failed")
                 req.reply("fail", str(error))
             else:
+                log.info("Capture-stop request successful")
                 req.reply("ok",)
         self.ioloop.add_callback(capture_stop_wrapper)
         raise AsyncReply
@@ -853,6 +858,7 @@ class FbfWorkerServer(AsyncDeviceServer):
     def capture_stop(self):
         if not self.capturing and not self.error:
             return
+        log.info("Stopping capture")
         self._state_sensor.set_value(self.STOPPING)
         self._capture_monitor.stop()
         self._mkrecv_proc.terminate()

@@ -164,14 +164,17 @@ class FbfMasterController(MasterController):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
+        log.info("Received configure request")
         @coroutine
         def configure_coroutine_wrapper():
             try:
                 yield self.configure(product_id, antennas_csv, n_channels,
                                      streams_json, proxy_name)
             except Exception as error:
+                log.error("Configure request failed: {}".format(str(error)))
                 req.reply("fail", str(error))
             else:
+                log.info("Configure request successful")
                 req.reply("ok")
         self.ioloop.add_callback(configure_coroutine_wrapper)
         raise AsyncReply
@@ -183,14 +186,17 @@ class FbfMasterController(MasterController):
         @brief   Reconfigure the current instance either from in memory
                  configuration information or from disk.
         """
+        log.info("Received reconfigure request")
         @coroutine
         def reconfigure_coroutine_wrapper():
             try:
                 yield self.reconfigure()
             except Exception as error:
+                log.error("Reconfigure request failed: {}".format(str(error)))
                 req.reply("fail", "Unable to reconfigure with error: {}".format(
                     str(error)))
             else:
+                log.info("Reconfigure request successful")
                 req.reply("ok",)
         self.ioloop.add_callback(reconfigure_coroutine_wrapper)
         raise AsyncReply
@@ -340,13 +346,17 @@ class FbfMasterController(MasterController):
 
         @return     katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]
         """
+        log.info("Received deconfigure request")
         @coroutine
         def deconfigure_wrapper():
             try:
                 yield self.deconfigure(product_id)
             except Exception as error:
+                log.error("Deconfigure request failed: {}".format(
+                    str(error)))
                 req.reply("fail", str(error))
             else:
+                log.info("Deconfigure request successful")
                 req.reply("ok",)
         self.ioloop.add_callback(deconfigure_wrapper)
         raise AsyncReply
@@ -386,16 +396,25 @@ class FbfMasterController(MasterController):
 
         @return     katcp reply object [[[ !target-start ok | (fail [error description]) ]]]
         """
-        log.info("Received new target: {}".format(target))
+        log.info("Received target-start request for target: {}".format(target))
         try:
             product = self._get_product(product_id)
         except ProductLookupError as error:
+            log.error("target-start request failed with error: {}".format(
+                str(error)))
             raise Return(("fail", str(error)))
         try:
             target = Target(target)
         except Exception as error:
+            log.exception("Target could not be parsed: {}".format(
+                str(error)))
             raise Return(("fail", str(error)))
-        yield product.target_start(target)
+        try:
+            yield product.target_start(target)
+        except Exception as error:
+            log.exception("Target start failed with error: {}".format(
+                str(error)))
+        log.info("Target-start request successful")
         raise Return(("ok",))
 
     @request(Str())
@@ -415,9 +434,11 @@ class FbfMasterController(MasterController):
 
         @return     katcp reply object [[[ !start-beams ok | (fail [error description]) ]]]
         """
+        log.info("Received capture-start request")
         try:
             product = self._get_product(product_id)
         except ProductLookupError as error:
+            log.error("Capture-start request failed: {}".format(str(error)))
             return ("fail", str(error))
 
         @coroutine
@@ -425,8 +446,10 @@ class FbfMasterController(MasterController):
             try:
                 yield product.capture_start()
             except Exception as error:
+                log.exception("Capture-start request failed: {}".format(str(error)))
                 req.reply("fail", str(error))
             else:
+                log.info("Capture-start request successful")
                 req.reply("ok",)
         self.ioloop.add_callback(start)
         raise AsyncReply
@@ -462,15 +485,21 @@ class FbfMasterController(MasterController):
         # Note: the state of the product won't be updated until the start call hits the top of the
         # event loop. It may be preferable to keep a self.starting_future object and yield on it
         # in capture-start if it exists. The current implementation may or may not be a bug...
+        log.info("Received provision-beams request")
         try:
             product = self._get_product(product_id)
         except ProductLookupError as error:
+            log.error("Provision-beams request failed: {}".format(
+                str(error)))
             return ("fail", str(error))
         # This check needs to happen here as this call
         # should return immediately
         if not product.idle:
-            return ("fail", "Can only provision beams on an idle FBF product")
-        self.ioloop.add_callback(lambda : product.prepare(sb_id))
+            msg = "Can only provision beams on an idle FBF product"
+            log.error("Provision-beams request failed: {}".format(msg))
+            return ("fail", msg)
+        self.ioloop.add_callback(lambda: product.prepare(sb_id))
+        log.info("Provision-beams request successful")
         return ("ok",)
 
     @request(Str())
@@ -482,9 +511,12 @@ class FbfMasterController(MasterController):
         @param      product_id      This is a name for the data product, used to track which subarray is being deconfigured.
                                     For example "array_1_bc856M4k".
         """
+        log.info("Received capture-stop request")
         try:
             product = self._get_product(product_id)
         except ProductLookupError as error:
+            log.error("Capture-stop request failed: {}".format(
+                str(error)))
             return ("fail", str(error))
 
         @coroutine
@@ -492,8 +524,11 @@ class FbfMasterController(MasterController):
             try:
                 yield product.capture_stop()
             except Exception as error:
+                log.exception("Capture-stop request failed: {}".format(
+                    str(error)))
                 req.reply("fail", str(error))
             else:
+                log.info("Capture-stop request successful")
                 req.reply("ok",)
         self.ioloop.add_callback(stop)
         raise AsyncReply
@@ -509,11 +544,20 @@ class FbfMasterController(MasterController):
                    at schedule block and target boundaries. The configuration authority
                    must be a valid KATCP server.
         """
+        log.info("Received set-configuration-authority request")
         try:
             product = self._get_product(product_id)
         except ProductLookupError as error:
+            log.error("Set-configuration-authority request failed: {}".format(
+                str(error)))
             return ("fail", str(error))
-        product.set_configuration_authority(hostname, port)
+        try:
+            product.set_configuration_authority(hostname, port)
+        except Exception as error:
+            log.exception("Set-configuration-authority request failed: {}".format(
+                str(error)))
+            return ("fail", str(error))
+        log.info("Set-configuration-authority request successful")
         return ("ok",)
 
     @request(Str())
