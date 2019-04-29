@@ -145,8 +145,10 @@ class WorkerPool(object):
                 self._allocated)) if i.is_connected()]
         return available_servers
 
-    def navailable(self):
+    def list_all(self):
+        return list(self._servers)
 
+    def navailable(self):
         return len(self.available())
 
     def used(self):

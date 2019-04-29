@@ -743,10 +743,10 @@ def main():
         '-p', '--port', dest='port', type=int,
         help='Port number to bind to')
     parser.add_option(
-        '', '--log_level',dest='log_level',type=str,
+        '', '--log_level', dest='log_level',type=str,
         help='Port number of status server instance',default="INFO")
     parser.add_option(
-        '', '--dummy',action="store_true", dest='dummy',
+        '', '--dummy', action="store_true", dest='dummy',
         help='Set status server to dummy')
     (opts, args) = parser.parse_args()
     logger = logging.getLogger('mpikat')
@@ -758,12 +758,14 @@ def main():
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting FbfMasterController instance")
     server = FbfMasterController(opts.host, opts.port, dummy=opts.dummy)
-    signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
-        on_shutdown, ioloop, server))
+    signal.signal(
+        signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
+            on_shutdown, ioloop, server))
 
     def start_and_display():
         server.start()
-        log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
+        log.info("Listening at {0}, Ctrl-C to terminate server".format(
+            server.bind_address))
 
     ioloop.add_callback(start_and_display)
     ioloop.start()

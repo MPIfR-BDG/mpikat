@@ -21,9 +21,6 @@ SOFTWARE.
 """
 import logging
 import json
-import tornado
-import time
-from tornado.gen import Return, coroutine
 from tornado.ioloop import PeriodicCallback
 from katcp import Sensor, AsyncDeviceServer
 from katcp.kattypes import request, return_reply, Int, Str
@@ -201,13 +198,25 @@ class MasterController(AsyncDeviceServer):
     @return_reply(Int())
     def request_worker_server_list(self, req):
         """
-        @brief   List all control servers and provide minimal metadata
+        @brief   List all control servers regardless of if they are reachable
+        """
+        for server in self._server_pool.list_all():
+            req.inform("{}".format(server))
+        return ("ok", len(self._server_pool.list_all()))
+
+    @request()
+    @return_reply(Int())
+    def request_worker_server_status(self, req):
+        """
+        @brief   List all used and available worker servers and
+                 provide minimal metadata
         """
         for server in self._server_pool.used():
             req.inform("{} allocated".format(server))
         for server in self._server_pool.available():
             req.inform("{} free".format(server))
-        return ("ok", len(self._server_pool.used()) + len(self._server_pool.available()))
+        return ("ok", len(self._server_pool.used()) + len(
+            self._server_pool.available()))
 
     @request()
     @return_reply(Int())
