@@ -62,10 +62,12 @@ class MkrecvHeaderException(Exception):
 
 class MkrecvStdoutHandler(object):
     def __init__(self, logging_interval=10.0,
-                 window_size=10, warning_level=99.95):
+                 window_size=10, warning_level=99.8,
+                 callback=None):
         self._logging_interval = logging_interval
         self._window_size = window_size
         self._warning_level = warning_level
+        self._callback = callback
         self._last_log = 0.0
         self._stats_buffer = deque(maxlen=self._window_size)
         self._current_percentage = 0.0
@@ -116,6 +118,10 @@ class MkrecvStdoutHandler(object):
               self._current_percentage, self._total_percentage,
               self._average_percentage, self._window_size))
             self._last_log = now
+            if self._callback:
+                self._callback(
+                    self._current_percentage, self._total_percentage,
+                    self._average_percentage, self._window_size)
 
 
 def make_mkrecv_header(params, outfile=None):

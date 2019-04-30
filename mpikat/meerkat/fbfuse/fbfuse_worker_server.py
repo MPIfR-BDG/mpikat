@@ -40,6 +40,7 @@ from mpikat.meerkat.fbfuse.fbfuse_mksend_config import (
 from mpikat.meerkat.fbfuse.fbfuse_psrdada_cpp_wrapper import (
     compile_psrdada_cpp)
 from mpikat.utils.process_tools import process_watcher, ManagedProcess
+from mpikat.utils.db_monitor import DbMonitor
 
 log = logging.getLogger("mpikat.fbfuse_worker_server")
 
@@ -226,14 +227,43 @@ class FbfWorkerServer(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._psrdada_cpp_args_sensor)
 
-        # ALSO WANT THE FOLLOWING SENSORS
-        # MKRECV instance status
-        # coherent MKSEND instance status
-        # incoherent MKSEND instance status
-        # FBFUSE instance status
-        # mkrecv -> fbfuse buffer percentage
-        # fbfuse -> mksend coherent percentage
-        # fbfuse -> mksend incoherent percentage
+        self._mkrecv_heap_loss = Sensor.float(
+            "feng-heap-loss",
+            description=("The percentage if F-engine heaps lost "
+                         "(within MKRECV statistics window)"),
+            default=0.0,
+            initial_status=Sensor.UNKNOWN,
+            units="%")
+        self.add_sensor(self._mkrecv_heap_loss)
+
+        self._ingress_buffer_percentage = Sensor.float(
+            "ingress-buffer-fill-level",
+            description=("The percentage fill level for the capture"
+                         "buffer between MKRECV and PSRDADA_CPP"),
+            default=0.0,
+            initial_status=Sensor.UNKNOWN,
+            units="%")
+        self.add_sensor(self._ingress_buffer_percentage)
+
+        self._cb_egress_buffer_percentage = Sensor.float(
+            "cb-egress-buffer-fill-level",
+            description=("The percentage fill level for the transmission"
+                         "buffer between PSRDADA_CPP and MKSEND (for "
+                         "coherent beams)"),
+            default=0.0,
+            initial_status=Sensor.UNKNOWN,
+            units="%")
+        self.add_sensor(self._cb_egress_buffer_percentage)
+
+        self._ib_egress_buffer_percentage = Sensor.float(
+            "ib-egress-buffer-fill-level",
+            description=("The percentage fill level for the transmission"
+                         "buffer between PSRDADA_CPP and MKSEND (for "
+                         "incoherent beams)"),
+            default=0.0,
+            initial_status=Sensor.UNKNOWN,
+            units="%")
+        self.add_sensor(self._ib_egress_buffer_percentage)
 
     @property
     def capturing(self):
@@ -342,7 +372,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         @param      req                 A katcp request object
 
         @param      feng_groups         The contiguous range of multicast groups to capture F-engine data from,
-                                        the parameter is formatted in stream notation, e.g.: spead://239.11.1.150+3:7147
+                                        the parameter is formatted in stream notation, e.g.: spead://239.11.1.150+3:7148
 
         @param      nchans_per_group    The number of frequency channels per multicast group
 
@@ -799,11 +829,15 @@ class FbfWorkerServer(AsyncDeviceServer):
         log.debug(" ".join(map(str, self._psrdada_cpp_cmdline)))
         self._psrdada_cpp_proc = ManagedProcess(self._psrdada_cpp_cmdline)
 
+        def update_heap_loss_sensor(curr, total, avg, window):
+            self._mkrecv_heap_loss.set_value(100.0 - avg)
+
         # Create SPEAD receiver for incoming antenna voltages
         self._mkrecv_proc = ManagedProcess(
             ["taskset", "-c", mkrecv_cpu_set, "mkrecv_nt", "--header",
              MKRECV_CONFIG_FILENAME, "--quiet"],
-            stdout_handler=MkrecvStdoutHandler())
+            stdout_handler=MkrecvStdoutHandler(
+                callback=update_heap_loss_sensor))
 
         def exit_check_callback():
             if not self._mkrecv_proc.is_alive():
@@ -822,6 +856,24 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         self._capture_monitor = PeriodicCallback(exit_check_callback, 1000)
         self._capture_monitor.start()
+
+        # start DB monitors
+        self._ingress_buffer_monitor = DbMonitor(
+            self._dada_input_key,
+            callback=lambda params:
+            self._ingress_buffer_percentage.set_value(
+                params["fraction-full"]))
+        self._cb_egress_buffer_monitor = DbMonitor(
+            self._dada_input_key,
+            callback=lambda params:
+            self._cb_egress_buffer_percentage.set_value(
+                params["fraction-full"]))
+        self._ib_egress_buffer_monitor = DbMonitor(
+            self._dada_input_key,
+            callback=lambda params:
+            self._ib_egress_buffer_percentage.set_value(
+                params["fraction-full"]))
+
         self._state_sensor.set_value(self.CAPTURING)
 
     @request()
@@ -861,6 +913,9 @@ class FbfWorkerServer(AsyncDeviceServer):
         log.info("Stopping capture")
         self._state_sensor.set_value(self.STOPPING)
         self._capture_monitor.stop()
+        self._ingress_buffer_monitor.stop()
+        self._cb_egress_buffer_monitor.stop()
+        self._ib_egress_buffer_monitor.stop()
         log.info("Stopping MKRECV instance")
         self._mkrecv_proc.terminate()
         log.info("Stopping PSRDADA_CPP instance")

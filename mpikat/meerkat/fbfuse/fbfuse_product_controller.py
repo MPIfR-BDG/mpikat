@@ -614,6 +614,8 @@ class FbfProductController(object):
         self._ibc_mcast_group_data_rate_sensor.set_value(ibc_group_rate)
         self._servers = self._parent._server_pool.allocate(
             min(nworkers_available, mcast_config['num_workers_total']))
+        self._servers = sorted(
+            self._servers, key=lambda server: server.hostname)
         server_str = ",".join(["{s.hostname}:{s.port}".format(
             s=server) for server in self._servers])
         self._servers_sensor.set_value(server_str)
@@ -802,12 +804,13 @@ class FbfProductController(object):
             prepare_futures.append(future)
 
         failure_count = 0
-        for future in prepare_futures:
+        for ii, future in enumerate(prepare_futures):
             try:
                 yield future
             except Exception as error:
                 log.error(
-                    "Failed to configure server with error: {}".format(str(error)))
+                    "Failed to configure server {} with error: {}".format(
+                        self._servers[ii], str(error)))
                 failure_count += 1
 
         if failure_count > 0:

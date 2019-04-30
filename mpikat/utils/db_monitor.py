@@ -5,9 +5,11 @@ from mpikat.utils.pipe_monitor import PipeMonitor
 
 log = logging.getLogger('mpikat.db_monitor')
 
+
 class DbMonitor(object):
-    def __init__(self, key):
+    def __init__(self, key, callback):
         self._key = key
+        self._callback = callback
         self._dbmon_proc = None
         self._mon_thread = None
 
@@ -22,6 +24,8 @@ class DbMonitor(object):
                 "written": written,
                 "read": read
                 }
+            if self._callback:
+                self._callback(params)
             return params
         except Exception as error:
             log.warning("Unable to parse line with error".format(str(error)))
@@ -38,9 +42,8 @@ class DbMonitor(object):
         self._mon_thread.start()
 
     def stop(self):
-        self._mon_thread.stop()
-        self._mon_thread.join()
         self._dbmon_proc.terminate()
+        self._mon_thread.join()
 
 
 if __name__ == "__main__":
