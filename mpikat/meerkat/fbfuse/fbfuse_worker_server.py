@@ -233,7 +233,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                          "(within MKRECV statistics window)"),
             default=0.0,
             initial_status=Sensor.UNKNOWN,
-            units="%")
+            unit="%")
         self.add_sensor(self._mkrecv_heap_loss)
 
         self._ingress_buffer_percentage = Sensor.float(
@@ -242,7 +242,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                          "buffer between MKRECV and PSRDADA_CPP"),
             default=0.0,
             initial_status=Sensor.UNKNOWN,
-            units="%")
+            unit="%")
         self.add_sensor(self._ingress_buffer_percentage)
 
         self._cb_egress_buffer_percentage = Sensor.float(
@@ -252,7 +252,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                          "coherent beams)"),
             default=0.0,
             initial_status=Sensor.UNKNOWN,
-            units="%")
+            unit="%")
         self.add_sensor(self._cb_egress_buffer_percentage)
 
         self._ib_egress_buffer_percentage = Sensor.float(
@@ -262,7 +262,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                          "incoherent beams)"),
             default=0.0,
             initial_status=Sensor.UNKNOWN,
-            units="%")
+            unit="%")
         self.add_sensor(self._ib_egress_buffer_percentage)
 
     @property
@@ -863,17 +863,19 @@ class FbfWorkerServer(AsyncDeviceServer):
             callback=lambda params:
             self._ingress_buffer_percentage.set_value(
                 params["fraction-full"]))
+        self._ingress_buffer_monitor.start()
         self._cb_egress_buffer_monitor = DbMonitor(
             self._dada_input_key,
             callback=lambda params:
             self._cb_egress_buffer_percentage.set_value(
                 params["fraction-full"]))
+        self._cb_egress_buffer_monitor.start()
         self._ib_egress_buffer_monitor = DbMonitor(
             self._dada_input_key,
             callback=lambda params:
             self._ib_egress_buffer_percentage.set_value(
                 params["fraction-full"]))
-
+        self._ib_egress_buffer_monitor.start()
         self._state_sensor.set_value(self.CAPTURING)
 
     @request()
