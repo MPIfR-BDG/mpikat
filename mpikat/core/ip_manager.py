@@ -114,12 +114,13 @@ class IpRangeManager(object):
         return self._ip_range.format_katcp()
 
     def _free_ranges(self):
-        state_ranges = {True:[], False:[]}
+        state_ranges = {True: [], False: []}
+
         def find_state_range(idx, state):
             start_idx = idx
             while idx < len(self._allocated):
                 if self._allocated[idx] == state:
-                    idx+=1
+                    idx += 1
                 else:
                     state_ranges[state].append((start_idx, idx-start_idx))
                     return find_state_range(idx, not state)
@@ -142,8 +143,8 @@ class IpRangeManager(object):
         log.debug("Allocating {} contiguous multicast groups".format(n))
         ranges = self._free_ranges()
         best_fit = None
-        for start,span in ranges:
-            if span<n:
+        for start, span in ranges:
+            if span < n:
                 continue
             elif best_fit is None:
                 best_fit = (start, span)
@@ -152,13 +153,15 @@ class IpRangeManager(object):
         if best_fit is None:
             raise IpRangeAllocationError("Could not allocate contiguous range of {} addresses".format(n))
         else:
-            start,span = best_fit
+            start, span = best_fit
             for ii in range(n):
                 offset = start+ii
                 self._allocated[offset] = True
-            allocated_range = ContiguousIpRange(str(self._ip_range.base_ip + start), self._ip_range.port, n)
+            allocated_range = ContiguousIpRange(
+                str(self._ip_range.base_ip + start), self._ip_range.port, n)
             self._allocated_ranges.add(allocated_range)
-            log.debug("Allocated range: {}".format(allocated_range.format_katcp()))
+            log.debug("Allocated range: {}".format(
+                allocated_range.format_katcp()))
             return allocated_range
 
     def free(self, ip_range):

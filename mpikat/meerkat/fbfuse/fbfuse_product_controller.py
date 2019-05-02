@@ -485,6 +485,12 @@ class FbfProductController(object):
             self._delay_config_server.stop()
             self._delay_config_server = None
         self._beam_manager = None
+        try:
+            self._parent._feng_subscription_manager.unsubscribe(
+                self._product_id)
+        except Exception as error:
+            log.warning("Could not unsubscribe F-eng mappings: {}".format(
+                str(error)))
 
     @coroutine
     def set_error_state(self, message):
@@ -785,8 +791,23 @@ class FbfProductController(object):
 
         # Here can choose band priority based on number of available servers
 
+        # Here we create a pamming of nodes to multicast groups
+        manager = self._parent._feng_subscription_manager
+        mapping, unused_servers, unused_ip_slits = manager.subscribe(
+            ip_splits, self._servers, self._product_id)
+        for server in unused_servers:
+            self._servers.remove(server)
+        self._parent._server_pool.deallocate(unused_servers)
+        server_str = ",".join(["{s.hostname}:{s.port}".format(
+            s=server) for server in self._servers])
+        self._servers_sensor.set_value(server_str)
+        for ip_split in unused_ip_slits:
+            log.warning(
+                "Unable to allocate partition: {}".format(
+                    ip_split.format_katcp()))
+
         prepare_futures = []
-        for ii, (server, ip_range) in enumerate(zip(self._servers, ip_splits)):
+        for ii, (server, ip_range) in enumerate(mapping):
             chan0_idx = cm.nchans_per_worker * ii
             chan0_freq = fbottom + chan0_idx * cm.channel_bandwidth
             future = server.prepare(

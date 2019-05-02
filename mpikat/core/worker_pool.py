@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 import logging
+import socket
 from threading import Lock
 from tornado.gen import coroutine, Return
 from katcp import KATCPClientResource
@@ -62,6 +63,7 @@ class WorkerPool(object):
         @params hostname The hostname for the worker server
         @params port     The port number that the worker server serves on
         """
+        hostname, _, _ = socket.gethostbyaddr(hostname)
         log.debug("Adding {}:{} to worker pool".format(hostname, port))
         wrapper = self.make_wrapper(hostname, port)
         if wrapper not in self._servers:
@@ -79,6 +81,7 @@ class WorkerPool(object):
         @params hostname The hostname for the worker server
         @params port     The port number that the worker server serves on
         """
+        hostname, _, _ = socket.gethostbyaddr(hostname)
         log.debug("Removing {}:{} from worker pool".format(hostname, port))
         wrapper = self.make_wrapper(hostname, port)
         if wrapper in self._allocated:
@@ -179,7 +182,6 @@ class WorkerWrapper(object):
             name="worker-server-client",
             address=(hostname, port),
             controlled=True))
-        self.hostname = hostname
         self.port = port
         self.priority = 0  # Currently no priority mechanism is implemented
         self._started = False
