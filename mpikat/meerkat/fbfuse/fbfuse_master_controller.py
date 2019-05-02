@@ -100,8 +100,10 @@ class FengToFbfMapper(object):
         self._subscription_sets = {}
 
     def validate_ip_ranges(self, ip_ranges):
+        log.debug("Validating IP ranges")
         for ip_range in ip_ranges:
             if ip_range.count != 4:
+                log.error("Count for IP range was not 4")
                 raise Exception(
                     "All stream must span 4 consecutive multicast groups")
 
@@ -113,13 +115,18 @@ class FengToFbfMapper(object):
         return self._h2l_map[worker.hostname]
 
     def validate_workers(self, workers):
+        log.debug("Validating worker servers")
         for worker in workers:
             if worker.hostname not in self._h2l_map:
+                log.error(("Could not determine leaf switch ID "
+                           "for worker server: {}").format(
+                           worker.hostname))
                 raise Exception(
                     "Worker '{}' does not map to a leaf switch".format(
                         worker))
 
     def subscribe(self, ordered_ip_ranges, available_workers, subarray_id):
+        log.debug("Determining safe F-engine subscriptions")
         available_workers = available_workers[:]
         self.validate_workers(available_workers)
         self.validate_ip_ranges(ordered_ip_ranges)
@@ -132,6 +139,8 @@ class FengToFbfMapper(object):
         all_indexes = []
         mapping = []
         for ip_range in ordered_ip_ranges:
+            log.debug("Attempting to allocate range: {}".format(
+                ip_range.format_katcp()))
             for worker in available_workers:
                 leaf_idx = self.worker_to_leaf(worker)
                 can_subscribe = True
@@ -148,10 +157,14 @@ class FengToFbfMapper(object):
                     all_indexes.extend(indexes)
                     available_workers.remove(worker)
                     used_workers.append(worker)
+                    log.info("Allocated {} to {}".format(
+                        ip_range.format_katcp(), worker))
                     break
                 else:
                     continue
             else:
+                log.warning("Unable to allocate {}".format(
+                    ip_range.format_katcp()))
                 unallocated_ranges.append(ip_range)
         self._subscription_sets[subarray_id] = all_indexes
         return mapping, available_workers, unallocated_ranges
