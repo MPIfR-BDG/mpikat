@@ -25,9 +25,7 @@ import json
 import tornado
 import signal
 import time
-import struct
 import cPickle
-import numpy as np
 from threading import Lock
 from optparse import OptionParser
 from tornado.gen import Return, coroutine
@@ -41,6 +39,8 @@ from mpikat.core.utils import parse_csv_antennas
 from mpikat.meerkat.katportalclient_wrapper import KatportalClientWrapper
 from mpikat.meerkat.fbfuse import FbfWorkerPool, FbfProductController
 from mpikat.meerkat.test.antennas import ANTENNAS as DEFAULT_ANTENNA_MODELS
+from mpikar.meerkat.fbfuse.fbfuse_feng_subscription_manager import (
+    FengToFbfMapper,)
 
 # ?halt message means shutdown everything and power off all machines
 
@@ -50,130 +50,6 @@ lock = Lock()
 FBF_IP_RANGE = "spead://239.11.1.0+127:7147"
 CONFIG_PICKLE_FILE = "/tmp/fbfuse_config.pickle"
 VALID_NCHANS = [1024, 4096, 32768]
-NSPINES = 16
-NLEAVES = 4
-MAX_SUBS_PER_LEAF = 4
-HOST_TO_LEAF_MAP = {
-    "fbfpn00.mpifr-be.mkat.karoo.kat.ac.za": 0,
-    "fbfpn01.mpifr-be.mkat.karoo.kat.ac.za": 0,
-    "fbfpn02.mpifr-be.mkat.karoo.kat.ac.za": 0,
-    "fbfpn03.mpifr-be.mkat.karoo.kat.ac.za": 0,
-    "fbfpn04.mpifr-be.mkat.karoo.kat.ac.za": 0,
-    "fbfpn05.mpifr-be.mkat.karoo.kat.ac.za": 0,
-    "fbfpn06.mpifr-be.mkat.karoo.kat.ac.za": 0,
-    "fbfpn07.mpifr-be.mkat.karoo.kat.ac.za": 0,
-    "fbfpn08.mpifr-be.mkat.karoo.kat.ac.za": 1,
-    "fbfpn09.mpifr-be.mkat.karoo.kat.ac.za": 1,
-    "fbfpn10.mpifr-be.mkat.karoo.kat.ac.za": 1,
-    "fbfpn11.mpifr-be.mkat.karoo.kat.ac.za": 1,
-    "fbfpn12.mpifr-be.mkat.karoo.kat.ac.za": 1,
-    "fbfpn13.mpifr-be.mkat.karoo.kat.ac.za": 1,
-    "fbfpn14.mpifr-be.mkat.karoo.kat.ac.za": 1,
-    "fbfpn15.mpifr-be.mkat.karoo.kat.ac.za": 1,
-    "fbfpn16.mpifr-be.mkat.karoo.kat.ac.za": 2,
-    "fbfpn17.mpifr-be.mkat.karoo.kat.ac.za": 2,
-    "fbfpn18.mpifr-be.mkat.karoo.kat.ac.za": 2,
-    "fbfpn19.mpifr-be.mkat.karoo.kat.ac.za": 2,
-    "fbfpn20.mpifr-be.mkat.karoo.kat.ac.za": 2,
-    "fbfpn21.mpifr-be.mkat.karoo.kat.ac.za": 2,
-    "fbfpn22.mpifr-be.mkat.karoo.kat.ac.za": 2,
-    "fbfpn23.mpifr-be.mkat.karoo.kat.ac.za": 2,
-    "fbfpn24.mpifr-be.mkat.karoo.kat.ac.za": 3,
-    "fbfpn25.mpifr-be.mkat.karoo.kat.ac.za": 3,
-    "fbfpn26.mpifr-be.mkat.karoo.kat.ac.za": 3,
-    "fbfpn27.mpifr-be.mkat.karoo.kat.ac.za": 3,
-    "fbfpn28.mpifr-be.mkat.karoo.kat.ac.za": 3,
-    "fbfpn29.mpifr-be.mkat.karoo.kat.ac.za": 3,
-    "fbfpn30.mpifr-be.mkat.karoo.kat.ac.za": 3,
-    "fbfpn31.mpifr-be.mkat.karoo.kat.ac.za": 3
-}
-
-
-class FengToFbfMapper(object):
-    def __init__(self, nspines=NSPINES, nleaves=NLEAVES,
-                 max_subs_per_leaf=MAX_SUBS_PER_LEAF,
-                 host_to_leaf_map=HOST_TO_LEAF_MAP):
-        self._h2l_map = host_to_leaf_map
-        self._nspines = nspines
-        self._max_subs_per_leaf = max_subs_per_leaf
-        self._subscriptions = np.zeros((nspines, nleaves))
-        self._subscription_sets = {}
-
-    def validate_ip_ranges(self, ip_ranges):
-        log.debug("Validating IP ranges")
-        for ip_range in ip_ranges:
-            if ip_range.count != 4:
-                log.error("Count for IP range was not 4")
-                raise Exception(
-                    "All stream must span 4 consecutive multicast groups")
-
-    def group_to_spine(self, group):
-        subnet = struct.unpack("B"*4, group.packed)[-1]
-        return subnet % self._nspines
-
-    def worker_to_leaf(self, worker):
-        return self._h2l_map[worker.hostname]
-
-    def validate_workers(self, workers):
-        log.debug("Validating worker servers")
-        for worker in workers:
-            if worker.hostname not in self._h2l_map:
-                log.error(("Could not determine leaf switch ID "
-                           "for worker server: {}").format(
-                           worker.hostname))
-                raise Exception(
-                    "Worker '{}' does not map to a leaf switch".format(
-                        worker))
-
-    def subscribe(self, ordered_ip_ranges, available_workers, subarray_id):
-        log.debug("Determining safe F-engine subscriptions")
-        available_workers = available_workers[:]
-        self.validate_workers(available_workers)
-        self.validate_ip_ranges(ordered_ip_ranges)
-        if subarray_id in self._subscription_sets:
-            raise Exception(
-                "Subarray {} already has a subscription mapping".format(
-                    subarray_id))
-        used_workers = []
-        unallocated_ranges = []
-        all_indexes = []
-        mapping = []
-        for ip_range in ordered_ip_ranges:
-            log.debug("Attempting to allocate range: {}".format(
-                ip_range.format_katcp()))
-            for worker in available_workers:
-                leaf_idx = self.worker_to_leaf(worker)
-                can_subscribe = True
-                indexes = []
-                for group in ip_range:
-                    spine_idx = self.group_to_spine(group)
-                    indexes.append((spine_idx, leaf_idx))
-                    if self._subscriptions[spine_idx, leaf_idx] >= self._max_subs_per_leaf:
-                        can_subscribe = False
-                if can_subscribe:
-                    for x, y in indexes:
-                        self._subscriptions[x, y] += 1
-                    mapping.append((worker, ip_range))
-                    all_indexes.extend(indexes)
-                    available_workers.remove(worker)
-                    used_workers.append(worker)
-                    log.info("Allocated {} to {}".format(
-                        ip_range.format_katcp(), worker))
-                    break
-                else:
-                    continue
-            else:
-                log.warning("Unable to allocate {}".format(
-                    ip_range.format_katcp()))
-                unallocated_ranges.append(ip_range)
-        self._subscription_sets[subarray_id] = all_indexes
-        return mapping, available_workers, unallocated_ranges
-
-    def unsubscribe(self, subarray_id):
-        for x, y in self._subscription_sets[subarray_id]:
-            self._subscriptions[x, y] -= 1
-        del self._subscription_sets[subarray_id]
-
 
 class FbfMasterController(MasterController):
     """This is the main KATCP interface for the FBFUSE
@@ -869,15 +745,16 @@ def main():
         '-p', '--port', dest='port', type=int,
         help='Port number to bind to')
     parser.add_option(
-        '', '--log_level', dest='log_level',type=str,
-        help='Port number of status server instance',default="INFO")
+        '', '--log_level', dest='log_level', type=str,
+        help='Port number of status server instance', default="INFO")
     parser.add_option(
         '', '--dummy', action="store_true", dest='dummy',
         help='Set status server to dummy')
     (opts, args) = parser.parse_args()
     logger = logging.getLogger('mpikat')
     coloredlogs.install(
-        fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
+        fmt=("[ %(levelname)s - %(asctime)s - %(name)s - "
+             "%(filename)s:%(lineno)s] %(message)s"),
         level=opts.log_level.upper(),
         logger=logger)
     logging.getLogger('katcp').setLevel('INFO')

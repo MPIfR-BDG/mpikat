@@ -791,11 +791,13 @@ class FbfProductController(object):
 
         # Here can choose band priority based on number of available servers
 
-        # Here we create a pamming of nodes to multicast groups
+        # Here we create a mapping of nodes to multicast groups
         manager = self._parent._feng_subscription_manager
         mapping, unused_servers, unused_ip_slits = manager.subscribe(
             ip_splits, self._servers, self._product_id)
         for server in unused_servers:
+            log.warning("Worker {} is unused and will be deallocated".format(
+                server))
             self._servers.remove(server)
         self._parent._server_pool.deallocate(unused_servers)
         server_str = ",".join(["{s.hostname}:{s.port}".format(
