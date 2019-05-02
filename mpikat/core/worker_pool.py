@@ -182,6 +182,7 @@ class WorkerWrapper(object):
             name="worker-server-client",
             address=(hostname, port),
             controlled=True))
+        self.hostname = hostname
         self.port = port
         self.priority = 0  # Currently no priority mechanism is implemented
         self._started = False
