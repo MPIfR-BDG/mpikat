@@ -39,7 +39,7 @@ from mpikat.core.utils import parse_csv_antennas
 from mpikat.meerkat.katportalclient_wrapper import KatportalClientWrapper
 from mpikat.meerkat.fbfuse import FbfWorkerPool, FbfProductController
 from mpikat.meerkat.test.antennas import ANTENNAS as DEFAULT_ANTENNA_MODELS
-from mpikar.meerkat.fbfuse.fbfuse_feng_subscription_manager import (
+from mpikat.meerkat.fbfuse.fbfuse_feng_subscription_manager import (
     FengToFbfMapper,)
 
 # ?halt message means shutdown everything and power off all machines
