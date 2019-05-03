@@ -7,7 +7,7 @@ log = logging.getLogger('mpikat.db_monitor')
 
 
 class DbMonitor(object):
-    def __init__(self, key, callback):
+    def __init__(self, key, callback=None):
         self._key = key
         self._callback = callback
         self._dbmon_proc = None
@@ -24,6 +24,7 @@ class DbMonitor(object):
                 "written": written,
                 "read": read
                 }
+            log.debug("{} params: {}".format(self._key, params))
             if self._callback:
                 self._callback(params)
             return params

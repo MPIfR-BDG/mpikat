@@ -857,12 +857,14 @@ class FbfWorkerServer(AsyncDeviceServer):
         self._capture_monitor = PeriodicCallback(exit_check_callback, 1000)
         self._capture_monitor.start()
 
+      
+        def dada_callback(params):
+	    self._ingress_buffer_percentage.set_value(params["fraction-full"])
+
         # start DB monitors
         self._ingress_buffer_monitor = DbMonitor(
             self._dada_input_key,
-            callback=lambda params:
-            self._ingress_buffer_percentage.set_value(
-                params["fraction-full"]))
+            callback=dada_callback)
         self._ingress_buffer_monitor.start()
         self._cb_egress_buffer_monitor = DbMonitor(
             self._dada_input_key,
