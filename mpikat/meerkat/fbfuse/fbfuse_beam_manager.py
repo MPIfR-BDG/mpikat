@@ -27,8 +27,10 @@ log = logging.getLogger("mpikat.fbfuse_ca_server")
 
 DEFAULT_KATPOINT_TARGET = "unset, radec, 0, 0"
 
+
 class BeamAllocationError(Exception):
     pass
+
 
 class Beam(object):
     """Wrapper class for a single beam to be produced
@@ -137,8 +139,11 @@ class Tiling(object):
         @param      antennas  The antennas to use when calculating the beam shape.
                               Note these are the antennas in katpoint CSV format.
         """
+        log.debug("Creating PSF simulator at reference frequency {} Hz".format(self.reference_frequency))
         psfsim = mosaic.PsfSim(antennas, self.reference_frequency)
+        log.debug("Generating beam shape for target position {} at epoch {}".format(self.target, epoch))
         beam_shape = psfsim.get_beam_shape(self.target, epoch)
+        log.debug("Generating tiling of {} beams with an overlap of {}".format(self.nbeams, self.overlap))
         tiling = mosaic.generate_nbeams_tiling(beam_shape, self.nbeams, self.overlap)
         for ii in range(tiling.beam_num):
             ra, dec = tiling.coordinates[ii]
