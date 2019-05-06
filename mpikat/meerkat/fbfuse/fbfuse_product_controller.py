@@ -947,7 +947,7 @@ class FbfProductController(object):
         try:
             tiling.generate(self._katpoint_antennas, epoch)
         except Exception as error:
-            self.log.error(
+            self.log.exception(
                 "Failed to generate tiling pattern with error: {}".format(str(error)))
         return tiling
 
