@@ -36,7 +36,6 @@ from mpikat.meerkat.fbfuse import (
 
 N_FENG_STREAMS_PER_WORKER = 4
 COH_ANTENNA_GRANULARITY = 4
-FBF_TRANSMISSION_PORT = 7148
 
 log = logging.getLogger("mpikat.fbfuse_product_controller")
 
@@ -740,9 +739,10 @@ class FbfProductController(object):
         mcast_to_beam_map = {}
         groups = [ip for ip in self._cbc_mcast_groups]
         idxs = [beam.idx for beam in self._beam_manager.get_beams()]
+
         for group in groups:
             self.log.debug("Allocating beams to {}".format(str(group)))
-            key = "spead://{}:{}".format(str(group), FBF_TRANSMISSION_PORT)
+            key = "spead://{}:{}".format(str(group), self._cbc_mcast_groups.port)
             for _ in range(self._cbc_nbeams_per_group.value()):
                 if key not in mcast_to_beam_map:
                     mcast_to_beam_map[key] = []
