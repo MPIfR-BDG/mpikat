@@ -24,8 +24,10 @@ import os
 import time
 from katcp import Sensor
 
+
 class AntennaValidationError(Exception):
     pass
+
 
 def is_power_of_two(n):
     """
@@ -35,11 +37,41 @@ def is_power_of_two(n):
     """
     return n != 0 and ((n & (n - 1)) == 0)
 
+
 def next_power_of_two(n):
     """
     @brief  Round a number up to the next power of two
     """
-    return 2**(n-1).bit_length()
+    return 2**(n - 1).bit_length()
+
+
+def prime_factors(n):
+    i = 2
+    factors = []
+    while i * i <= n:
+        if n % i:
+            i += 1
+        else:
+            n //= i
+            factors.append(i)
+    if n > 1:
+        factors.append(n)
+    return factors
+
+
+def lcm(*values):
+    factors = [prime_factors(value) for value in values]
+    factor_set = set(sum(factors))
+    product = 1
+    for factor in sorted(list(factor_set)):
+        count = max(factors_i.count(factor) for factors_i in factors)
+        product *= factor**count
+    return product
+
+
+def next_multiple(value, multiple):
+    return ((value + multiple - 1) // multiple) * multiple
+
 
 def parse_csv_antennas(antennas_csv):
     antennas = antennas_csv.split(",")
@@ -51,7 +83,9 @@ def parse_csv_antennas(antennas_csv):
         raise AntennaValidationError("Not all provided antennas were unqiue")
     return names
 
+
 class LoggingSensor(Sensor):
+
     def __init__(self, *args, **kwargs):
         self.logger = None
         super(LoggingSensor, self).__init__(*args, **kwargs)
@@ -65,14 +99,17 @@ class LoggingSensor(Sensor):
     def set_logger(self, logger):
         self.logger = logger
 
+
 def check_ntp_sync_timedatectl():
     with open(os.devnull) as fnull:
-        output = subprocess.check_output(['timedatectl','status'], stdout=fnull, stderr=fnull)
+        output = subprocess.check_output(
+            ['timedatectl', 'status'], stdout=fnull, stderr=fnull)
     for line in output.splitlines():
         if line.startswith("NTP synchronized"):
             if line.split(":")[-1].strip().lower() == "yes":
                 return True
     return False
+
 
 def check_ntp_sync_ntpstat():
     try:
@@ -82,6 +119,7 @@ def check_ntp_sync_ntpstat():
         return False
     else:
         return True
+
 
 def check_ntp_sync():
     methods = [check_ntp_sync_timedatectl,
@@ -96,6 +134,7 @@ def check_ntp_sync():
 
 
 class Timer(object):
+
     def __init__(self):
         self.reset()
 
@@ -104,4 +143,3 @@ class Timer(object):
 
     def elapsed(self):
         return time.time() - self._start
-
