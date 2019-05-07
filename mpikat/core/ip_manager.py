@@ -24,8 +24,10 @@ import ipaddress
 
 log = logging.getLogger('mpikat.ip_manager')
 
+
 class IpRangeAllocationError(Exception):
     pass
+
 
 class ContiguousIpRange(object):
     def __init__(self, base_ip, port, count):
@@ -79,7 +81,8 @@ class ContiguousIpRange(object):
         splits = []
         while allocated < self._count:
             available = min(self._count-allocated, n)
-            splits.append(ContiguousIpRange(str(self._base_ip+allocated), self._port, available))
+            splits.append(ContiguousIpRange(str(self._base_ip+allocated),
+                          self._port, available))
             allocated+=available
         return splits
 
@@ -88,7 +91,8 @@ class ContiguousIpRange(object):
         @brief  Return a description of this IP range in a KATCP friendly format,
                 e.g. 'spead://239.11.1.150+15:7147'
         """
-        return "spead://{}+{}:{}".format(str(self._base_ip), self._count-1, self._port)
+        return "spead://{}+{}:{}".format(str(self._base_ip),
+                                         self._count-1, self._port)
 
 
 class IpRangeManager(object):
@@ -104,7 +108,8 @@ class IpRangeManager(object):
         self._allocated_ranges = set()
 
     def __repr__(self):
-        return "<{} {}>".format(self.__class__.__name__, self._ip_range.format_katcp())
+        return "<{} {}>".format(self.__class__.__name__,
+                                self._ip_range.format_katcp())
 
     def format_katcp(self):
         """
@@ -151,7 +156,8 @@ class IpRangeManager(object):
             elif (span-n) < (best_fit[1]-n):
                 best_fit = (start, span)
         if best_fit is None:
-            raise IpRangeAllocationError("Could not allocate contiguous range of {} addresses".format(n))
+            raise IpRangeAllocationError(
+                "Could not allocate contiguous range of {} addresses".format(n))
         else:
             start, span = best_fit
             for ii in range(n):
