@@ -45,28 +45,19 @@ def next_power_of_two(n):
     return 2**(n - 1).bit_length()
 
 
-def prime_factors(n):
-    i = 2
-    factors = []
-    while i * i <= n:
-        if n % i:
-            i += 1
-        else:
-            n //= i
-            factors.append(i)
-    if n > 1:
-        factors.append(n)
-    return factors
+def gcd(x, y):
+    """This function implements the Euclidian algorithm
+    to find G.C.D. of two numbers"""
+    while(y):
+        x, y = y, x % y
+    return x
 
 
-def lcm(*values):
-    factors = [prime_factors(value) for value in values]
-    factor_set = set(sum(factors))
-    product = 1
-    for factor in sorted(list(factor_set)):
-        count = max(factors_i.count(factor) for factors_i in factors)
-        product *= factor**count
-    return product
+def lcm(x, y):
+    """This function takes two
+    integers and returns the L.C.M."""
+    lcm = (x * y) // gcd(x, y)
+    return lcm
 
 
 def next_multiple(value, multiple):
