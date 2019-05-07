@@ -145,7 +145,7 @@ class Tiling(object):
         beam_shape = psfsim.get_beam_shape(self.target, epoch)
         log.debug("Generating tiling of {} beams with an overlap of {}".format(self.nbeams, self.overlap))
         tiling = mosaic.generate_nbeams_tiling(beam_shape, self.nbeams, self.overlap)
-        for ii in range(tiling.beam_num):
+        for ii in range(min(tiling.beam_num, self.nbeams)):
             ra, dec = tiling.coordinates[ii]
             self._beams[ii].target = Target('{},radec,{},{}'.format(self.target.name, ra, dec))
 
@@ -195,7 +195,6 @@ class BeamManager(object):
         self._free_beams = [beam for beam in self._beams]
         self._allocated_beams = []
         self._tilings = []
-        self._dynamic_tilings = []
 
     def add_beam(self, target):
         """

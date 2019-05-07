@@ -21,40 +21,18 @@ SOFTWARE.
 """
 import logging
 from math import floor, ceil
-from mpikat.core.utils import next_power_of_two
+from mpikat.core.utils import next_power_of_two, lcm, next_multiple
 
 log = logging.getLogger('mpikat.fbfuse_config_manager')
 
 FBF_BEAM_NBITS = 8
 MAX_OUTPUT_RATE = 300.0e9 # bits/s -- This is an artifical limit based on the original FBF design
-MAX_OUTPUT_RATE_PER_WORKER = 30.0e9 # bits/s
+MAX_OUTPUT_RATE_PER_WORKER = 7.0e9 # bits/s
 MAX_OUTPUT_RATE_PER_MCAST_GROUP = 7.0e9 # bits/s
 MIN_MCAST_GROUPS = 16
 MIN_NBEAMS = 16
 MIN_ANTENNAS = 4
 NBEAM_GRANULARITY = 32
-
-
-def lcm(x, y):
-    """This function takes two
-    integers and returns the L.C.M."""
-
-    # choose the greater number
-    if x > y:
-        greater = x
-    else:
-        greater = y
-    while(True):
-        if((greater % x == 0) and (greater % y == 0)):
-            lcm = greater
-            break
-        greater += 1
-    return lcm
-
-
-def next_multiple(value, multiple):
-    return ((value + multiple - 1) // multiple) * multiple
-
 
 class FbfConfigurationError(Exception):
     pass
@@ -284,6 +262,4 @@ class FbfConfigurationManager(object):
         }
         log.info("Final coniguration: {}".format(config))
         return config
-
-
 

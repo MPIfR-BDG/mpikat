@@ -25,7 +25,6 @@ SAMPLE_CLOCK_START unset
 NTHREADS      6
 NHEAPS        64
 NGROUPS_DATA  {{ngroups_data}}
-NGROUPS_TEMP  {{ngroups_data//2}}
 LEVEL_DATA    50
 LEVEL_TEMP    50
 HEAP_SIZE     {{heap_size}}
@@ -33,6 +32,7 @@ HEAP_SIZE     {{heap_size}}
 NINDICES    3
 IDX1_ITEM   0
 IDX1_STEP   {{timestamp_step}}
+IDX1_MODULO {{timestamp_modulus}}
 
 IDX2_ITEM   1
 IDX2_LIST   {{ordered_feng_ids_csv}}

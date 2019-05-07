@@ -31,7 +31,7 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 from katcp import Sensor, AsyncDeviceServer, AsyncReply, KATCPClientResource
 from katcp.kattypes import request, return_reply, Int, Str, Float
 from mpikat.core.ip_manager import ip_range_from_stream
-from mpikat.core.utils import LoggingSensor, parse_csv_antennas
+from mpikat.core.utils import LoggingSensor, parse_csv_antennas, lcm
 from mpikat.meerkat.fbfuse import DelayBufferController
 from mpikat.meerkat.fbfuse.fbfuse_mkrecv_config import (
     make_mkrecv_header, MkrecvStdoutHandler)
@@ -490,40 +490,8 @@ class FbfWorkerServer(AsyncDeviceServer):
             ngroups_data = 2**((ngroups_data-1).bit_length())
             centre_frequency = (chan0_freq + feng_config['nchans']
                                 / 2.0 * chan_bw)
-            if self._exec_mode == FULL:
-                dada_mode = 4
-            else:
-                dada_mode = 0
-            mkrecv_config = {
-                'dada_mode': dada_mode,
-                'dada_key': self._dada_input_key,
-                'sync_epoch': feng_config['sync-epoch'],
-                'sample_clock': sample_clock,
-                'mcast_sources': ",".join(
-                    [str(group) for group in capture_range]),
-                'mcast_port': capture_range.port,
-                'interface': self._capture_interface,
-                'timestamp_step': timestamp_step,
-                'ordered_feng_ids_csv': ",".join(
-                    map(str, feng_capture_order_info['order'])),
-                'frequency_partition_ids_csv': ",".join(
-                    map(str, frequency_ids)),
-                'ngroups_data': ngroups_data,
-                'heap_size': heap_size
-            }
-            mkrecv_header = make_mkrecv_header(
-                mkrecv_config, outfile=MKRECV_CONFIG_FILENAME)
-            self._mkrecv_header_sensor.set_value(mkrecv_header)
-            log.info("Determined MKRECV configuration:\n{}".format(
-                mkrecv_header))
 
-            coh_ip_range = ip_range_from_stream(
-                coherent_beam_config['destination'])
-            nbeams = coherent_beam_config['nbeams']
-            nbeams_per_group = nbeams / coh_ip_range.count
-            msg = "nbeams is not a mutliple of the IP range"
-            assert nbeams % coh_ip_range.count == 0, msg
-
+            # Coherent beam data rates
             """
             Note on data rates:
             For both the coherent and incoherent beams, we set the sending
@@ -543,6 +511,56 @@ class FbfWorkerServer(AsyncDeviceServer):
             coh_timestamp_step = (coherent_beam_config['tscrunch']
                                   * nsamps_per_coh_heap
                                   * 2 * feng_config["nchans"])
+
+            # Incoherent beam data rates
+            incoh_data_rate = (
+                partition_bandwidth / incoherent_beam_config['tscrunch']
+                / incoherent_beam_config['fscrunch'] * 8 * 1.1)
+            incoh_heap_size = 8192
+            nsamps_per_incoh_heap = (incoh_heap_size / (partition_nchans
+                                     * incoherent_beam_config['fscrunch']))
+            incoh_timestamp_step = (incoherent_beam_config['tscrunch']
+                                    * nsamps_per_incoh_heap * 2
+                                    * feng_config["nchans"])
+
+            timestamp_modulus = lcm(timestamp_step,
+                                    lcm(incoh_timestamp_step,
+                                        coh_timestamp_step))
+
+            if self._exec_mode == FULL:
+                dada_mode = 4
+            else:
+                dada_mode = 0
+            mkrecv_config = {
+                'dada_mode': dada_mode,
+                'dada_key': self._dada_input_key,
+                'sync_epoch': feng_config['sync-epoch'],
+                'sample_clock': sample_clock,
+                'mcast_sources': ",".join(
+                    [str(group) for group in capture_range]),
+                'mcast_port': capture_range.port,
+                'interface': self._capture_interface,
+                'timestamp_step': timestamp_step,
+                'timestamp_modulus': timestamp_modulus,
+                'ordered_feng_ids_csv': ",".join(
+                    map(str, feng_capture_order_info['order'])),
+                'frequency_partition_ids_csv': ",".join(
+                    map(str, frequency_ids)),
+                'ngroups_data': ngroups_data,
+                'heap_size': heap_size
+            }
+            mkrecv_header = make_mkrecv_header(
+                mkrecv_config, outfile=MKRECV_CONFIG_FILENAME)
+            self._mkrecv_header_sensor.set_value(mkrecv_header)
+            log.info("Determined MKRECV configuration:\n{}".format(
+                mkrecv_header))
+
+            coh_ip_range = ip_range_from_stream(
+                coherent_beam_config['destination'])
+            nbeams = coherent_beam_config['nbeams']
+            nbeams_per_group = nbeams / coh_ip_range.count
+            msg = "nbeams is not a mutliple of the IP range"
+            assert nbeams % coh_ip_range.count == 0, msg
             heap_id_start = worker_idx * coh_ip_range.count
             log.debug("Determining MKSEND configuration for coherent beams")
             dada_mode = int(self._exec_mode == FULL)
@@ -571,15 +589,6 @@ class FbfWorkerServer(AsyncDeviceServer):
                       ).format(mksend_coh_header))
             self._mksend_coh_header_sensor.set_value(mksend_coh_header)
 
-            incoh_data_rate = (
-                partition_bandwidth / incoherent_beam_config['tscrunch']
-                / incoherent_beam_config['fscrunch'] * 8 * 1.1)
-            incoh_heap_size = 8192
-            nsamps_per_incoh_heap = (incoh_heap_size / (partition_nchans
-                                     * incoherent_beam_config['fscrunch']))
-            incoh_timestamp_step = (incoherent_beam_config['tscrunch']
-                                    * nsamps_per_incoh_heap * 2
-                                    * feng_config["nchans"])
             log.debug("Determining MKSEND configuration for incoherent beams")
             dada_mode = int(self._exec_mode == FULL)
             incoh_ip_range = ip_range_from_stream(
@@ -857,7 +866,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         self._capture_monitor = PeriodicCallback(exit_check_callback, 1000)
         self._capture_monitor.start()
 
-      
+
         def dada_callback(params):
 	    self._ingress_buffer_percentage.set_value(params["fraction-full"])
 
