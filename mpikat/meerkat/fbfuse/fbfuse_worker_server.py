@@ -491,20 +491,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             centre_frequency = (chan0_freq + feng_config['nchans']
                                 / 2.0 * chan_bw)
 
-            # Coherent beam data rates
-            """
-            Note on data rates:
-            For both the coherent and incoherent beams, we set the sending
-            rate in MKSEND equal to 110% of the required data rate. This
-            is a fudge to ensure that we send rapidly enough that MKSEND
-            does not limit performance while at the same time ensuring that
-            the burst rate out of the instrument is limited. This number
-            may need to be tuned.
-            """
-            coh_data_rate = (partition_bandwidth
-                             / coherent_beam_config['tscrunch']
-                             / coherent_beam_config['fscrunch']
-                             * nbeams_per_group * 8 * 1.1)
+            # Coherent beam timestamps
             coh_heap_size = 8192
             nsamps_per_coh_heap = (coh_heap_size / (partition_nchans
                                    * coherent_beam_config['fscrunch']))
@@ -512,10 +499,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                                   * nsamps_per_coh_heap
                                   * 2 * feng_config["nchans"])
 
-            # Incoherent beam data rates
-            incoh_data_rate = (
-                partition_bandwidth / incoherent_beam_config['tscrunch']
-                / incoherent_beam_config['fscrunch'] * 8 * 1.1)
+            # Incoherent beam timestamps
             incoh_heap_size = 8192
             nsamps_per_incoh_heap = (incoh_heap_size / (partition_nchans
                                      * incoherent_beam_config['fscrunch']))
@@ -561,6 +545,19 @@ class FbfWorkerServer(AsyncDeviceServer):
             nbeams_per_group = nbeams / coh_ip_range.count
             msg = "nbeams is not a mutliple of the IP range"
             assert nbeams % coh_ip_range.count == 0, msg
+            """
+            Note on data rates:
+            For both the coherent and incoherent beams, we set the sending
+            rate in MKSEND equal to 110% of the required data rate. This
+            is a fudge to ensure that we send rapidly enough that MKSEND
+            does not limit performance while at the same time ensuring that
+            the burst rate out of the instrument is limited. This number
+            may need to be tuned.
+            """
+            coh_data_rate = (partition_bandwidth
+                             / coherent_beam_config['tscrunch']
+                             / coherent_beam_config['fscrunch']
+                             * nbeams_per_group * 8 * 1.1)
             heap_id_start = worker_idx * coh_ip_range.count
             log.debug("Determining MKSEND configuration for coherent beams")
             dada_mode = int(self._exec_mode == FULL)
@@ -590,6 +587,9 @@ class FbfWorkerServer(AsyncDeviceServer):
             self._mksend_coh_header_sensor.set_value(mksend_coh_header)
 
             log.debug("Determining MKSEND configuration for incoherent beams")
+            incoh_data_rate = (
+                partition_bandwidth / incoherent_beam_config['tscrunch']
+                / incoherent_beam_config['fscrunch'] * 8 * 1.1)
             dada_mode = int(self._exec_mode == FULL)
             incoh_ip_range = ip_range_from_stream(
                 incoherent_beam_config['destination'])
