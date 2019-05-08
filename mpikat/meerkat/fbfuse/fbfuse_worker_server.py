@@ -724,8 +724,8 @@ class FbfWorkerServer(AsyncDeviceServer):
                 "--delay_key_root", delay_buffer_key,
                 "--cfreq", centre_frequency,
                 "--bandwidth", partition_bandwidth,
-                "--input_level", 32.0,
-                "--output_level", 32.0,
+                "--input_level", 10.0,
+                "--output_level", 10.0,
                 "--log_level", "debug"]
             self._psrdada_cpp_args_sensor.set_value(
                 " ".join(map(str, self._psrdada_cpp_cmdline)))
