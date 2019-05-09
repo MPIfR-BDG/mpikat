@@ -556,7 +556,7 @@ class IGUIConnection(object):
 
 class KATCPToIGUIConverter(object):
 
-    def __init__(self, host, port, igui_host, igui_user, igui_pass, igui_rx_id, nodename, numa):
+    def __init__(self, host, port, igui_host, igui_user, igui_pass, igui_device_id):
         """
         @brief      Class for katcp to igui converter.
 
@@ -576,11 +576,8 @@ class KATCPToIGUIConverter(object):
         self.igui_host = igui_host
         self.igui_user = igui_user
         self.igui_pass = igui_pass
-        self.nodename = nodename
-        self.numa = numa
         self.igui_group_id = None
-        #self.igui_device_id = igui_device_id
-        self.igui_rx_id = igui_rx_id
+        self.igui_device_id = igui_device_id
         self.igui_connection = IGUIConnection(
             self.igui_host, self.igui_user, self.igui_pass)
         self.igui_task_id = None
@@ -627,20 +624,21 @@ class KATCPToIGUIConverter(object):
         self.igui_rxmap = self.igui_connection.build_igui_representation()
         #log.debug(self.igui_rxmap)
         # Here we do a look up to find the parent of this device
-        # Now instead, we use the rx_id directly, create device automatically
-        #with the naming convention hostname-worker-numa#
+        for rx in self.igui_rxmap:
+            log.debug(rx.id)
+            if self.igui_device_id in rx.devices._by_id.keys():
+                log.debug(self.igui_device_id)
+                log.debug(rx.id)
+                self.igui_rx_id = rx.id
+                log.debug("Found Rx parent: {}".format(self.igui_rx_id))
+                break
+        else:
+            log.debug("Device '{}' is not a child of any receiver".format(
+                self.igui_device_id))
+            raise IGUIMappingException(
+                "Device '{}' is not a child of any receiver".format(self.igui_device_id))
 
-        self.rx = self.igui_rxmap.by_id()
-        try:
-            log.debug("looking for device named {} from the database".format(self.nodename + "_worker_" + self.numa))
-            self.igui_rxmap.by_id(self.igui_rx_id).devices.by_name(self.nodename + "_worker_" + self.numa)
-        except KeyError:
-            log.debug("device not found, let's add a device")
-            paras = (self.nodename + "_worker_" + self.numa, "None", "N")
-            result = json.loads(self.igui_connection.create_device(self.rx, paras))
-            log.debug("device id = {}".format(result[0]["device_id"]))
-            self.igui_device_id = result[0]["device_id"]
-
+        #log.debug("iGUI representation:\n{}".format(self.igui_rxmap))
         self.rc.start()
         self.ic = self.rc._inspecting_client
         self.ioloop = self.rc.ioloop
@@ -716,10 +714,9 @@ class KATCPToIGUIConverter(object):
             task = device.tasks.by_id(self.igui_task_id)
 
         if (sensor.name[-3:] == 'PNG'):  # or some image type that we finally agreed on
-            #Crazy long sensor logging here
-            #log.debug(sensor.name)
-            #log.debug(sensor.value)
-            #log.debug(len(sensor.value))
+            log.debug(sensor.name)
+            log.debug(sensor.value)
+            log.debug(len(sensor.value))
             self.igui_connection.set_task_blob(task, reading.value)
         else:
             self.igui_connection.set_task_value(task, sensor.value)
@@ -751,30 +748,22 @@ def main():
                       help='The username for the iGUI connection')
     parser.add_option('', '--igui_pass', dest='igui_pass', type=str,
                       help='The password for the IGUI connection')
-    parser.add_option('', '--igui_rx_id', dest='igui_rx_id', type=str,
-                      help='The iGUI receiver ID for the managed device')
-    parser.add_option('', '--igui_nodename', dest='igui_nodename', type=str,
-                      help='The nodename for the managed device')
-    parser.add_option('', '--igui_numa', dest='igui_numa', type=str,
-                      help='The numa number for the managed device')
+    parser.add_option('', '--igui_device_id', dest='igui_device_id', type=str,
+                      help='The iGUI device ID for the managed device')
     parser.add_option('', '--log_level', dest='log_level', type=str,
                       help='Logging level', default="INFO")
 
     (opts, args) = parser.parse_args()
     FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
-    logger = logging.getLogger('mpikat')
+    logger = logging.getLogger('r2rm')
     logging.basicConfig(format=FORMAT)
     logger.setLevel(opts.log_level.upper())
     logging.getLogger('katcp').setLevel('INFO')
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting KATCPToIGUIConverter instance")
-    #client = KATCPToIGUIConverter(opts.host, opts.port,
-    #                              opts.igui_host, opts.igui_user,
-    #                              opts.igui_pass, opts.igui_device_id)
     client = KATCPToIGUIConverter(opts.host, opts.port,
                                   opts.igui_host, opts.igui_user,
-                                  opts.igui_pass, opts.igui_rx_id, opts.nodename, opts.numa)
-
+                                  opts.igui_pass, opts.igui_device_id)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, client))
 
