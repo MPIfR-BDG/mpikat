@@ -132,6 +132,12 @@ class FbfWorkerServer(AsyncDeviceServer):
         self._dada_incoh_output_key = "baba"
         self._capture_interface = capture_interface
         self._capture_monitor = None
+
+        self._input_level = 10.0
+        self._output_level = 10.0
+        self._partition_bandwidth = None
+        self._centre_frequency = None
+
         super(FbfWorkerServer, self).__init__(ip, port)
 
     @coroutine
@@ -354,6 +360,24 @@ class FbfWorkerServer(AsyncDeviceServer):
         log.debug("Setting affinity for PID {} to {}".format(pid, core_spec))
         os.system("taskset -cp {} {}".format(core_spec, pid))
 
+    @request(Float(), Float())
+    @return_reply
+    def request_set_levels(self, req, input_level, output_level):
+        """
+        @brief    Set the input and output levels for FBFUSE
+
+        @param      req             A katcp request object
+
+        @param    input_level  The standard deviation of the data
+                               from the F-engines.
+
+        @param    output_level  The standard deviation of the data
+                                output from FBFUSE.
+        """
+        self._input_level = input_level
+        self._output_level = output_level
+        return ("ok",)
+
     @request(Str(), Int(), Int(), Float(), Float(), Str(), Str(),
              Str(), Str(), Int())
     @return_reply()
@@ -479,6 +503,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             partition_nchans = nchans_per_group * ngroups
             worker_idx = chan0_idx / partition_nchans
             partition_bandwidth = partition_nchans * chan_bw
+            self._partition_bandwidth = partition_bandwidth
             sample_clock = feng_config['bandwidth'] * 2
             timestamp_step = feng_config['nchans'] * 2 * 256
             frequency_ids = [chan0_idx + nchans_per_group *
@@ -490,6 +515,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             ngroups_data = 2**((ngroups_data-1).bit_length())
             centre_frequency = (chan0_freq + feng_config['nchans']
                                 / 2.0 * chan_bw)
+            self._centre_frequency = centre_frequency
 
             # Coherent beam timestamps
             coh_heap_size = 8192
@@ -699,7 +725,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             # Here we recreate the beam keys as they are handled by the BeamManager
             # instance in the product controller
             #
-            beam_idxs = ["cfbf%05d"%(i) for i in range(nbeams)]
+            beam_idxs = ["cfbf%05d" % (i) for i in range(nbeams)]
             self._delay_buf_ctrl = DelayBufferController(
                 self._delay_client, beam_idxs,
                 coherent_beam_antenna_capture_order, 1)
@@ -713,23 +739,6 @@ class FbfWorkerServer(AsyncDeviceServer):
             yield input_make_db_future
             yield coh_output_make_db_future
             yield incoh_output_make_db_future
-
-            delay_buffer_key = self._delay_buf_ctrl.shared_buffer_key
-            # Start beamformer instance
-            self._psrdada_cpp_cmdline = [
-                "fbfuse",
-                "--input_key", self._dada_input_key,
-                "--cb_key", self._dada_coh_output_key,
-                "--ib_key", self._dada_incoh_output_key,
-                "--delay_key_root", delay_buffer_key,
-                "--cfreq", centre_frequency,
-                "--bandwidth", partition_bandwidth,
-                "--input_level", 10.0,
-                "--output_level", 10.0,
-                "--log_level", "debug"]
-            self._psrdada_cpp_args_sensor.set_value(
-                " ".join(map(str, self._psrdada_cpp_cmdline)))
-            # SPEAD receiver does not get started until a capture init call
             self._state_sensor.set_value(self.READY)
             log.info("Prepare request successful")
             req.reply("ok",)
@@ -833,10 +842,24 @@ class FbfWorkerServer(AsyncDeviceServer):
 
         # Start beamforming pipeline
         log.info("Starting PSRDADA_CPP beamforming pipeline")
-        psrdada_cpp_taskset = ["taskset", "-c", psrdada_cpp_cpu_set]
-        self._psrdada_cpp_cmdline = psrdada_cpp_taskset + self._psrdada_cpp_cmdline
-        log.debug(" ".join(map(str, self._psrdada_cpp_cmdline)))
-        self._psrdada_cpp_proc = ManagedProcess(self._psrdada_cpp_cmdline)
+        delay_buffer_key = self._delay_buf_ctrl.shared_buffer_key
+        # Start beamformer instance
+        psrdada_cpp_cmdline = [
+            "taskset", "-c", psrdada_cpp_cpu_set,
+            "fbfuse",
+            "--input_key", self._dada_input_key,
+            "--cb_key", self._dada_coh_output_key,
+            "--ib_key", self._dada_incoh_output_key,
+            "--delay_key_root", delay_buffer_key,
+            "--cfreq", self._centre_frequency,
+            "--bandwidth", self._partition_bandwidth,
+            "--input_level", self._input_level,
+            "--output_level", self._output_level,
+            "--log_level", "info"]
+        self._psrdada_cpp_args_sensor.set_value(
+            " ".join(map(str, psrdada_cpp_cmdline)))
+        log.debug(" ".join(map(str, psrdada_cpp_cmdline)))
+        self._psrdada_cpp_proc = ManagedProcess(psrdada_cpp_cmdline)
 
         def update_heap_loss_sensor(curr, total, avg, window):
             self._mkrecv_heap_loss.set_value(100.0 - avg)
@@ -866,9 +889,8 @@ class FbfWorkerServer(AsyncDeviceServer):
         self._capture_monitor = PeriodicCallback(exit_check_callback, 1000)
         self._capture_monitor.start()
 
-
         def dada_callback(params):
-	    self._ingress_buffer_percentage.set_value(params["fraction-full"])
+            self._ingress_buffer_percentage.set_value(params["fraction-full"])
 
         # start DB monitors
         self._ingress_buffer_monitor = DbMonitor(

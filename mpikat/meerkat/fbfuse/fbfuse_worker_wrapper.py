@@ -64,6 +64,11 @@ class FbfWorkerWrapper(WorkerWrapper):
     def deconfigure(self, *args, **kwargs):
         yield self._make_request(self._client.req.deconfigure, *args, **kwargs)
 
+    @coroutine
+    def set_levels(self, *args, **kwargs):
+        yield self._make_request(self._client.req.set_levels, *args, **kwargs)
+
+
 class FbfWorkerPool(WorkerPool):
 
     def make_wrapper(self, hostname, port):

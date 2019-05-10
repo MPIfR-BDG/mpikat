@@ -860,6 +860,22 @@ class FbfProductController(object):
         self.teardown_sensors()
 
     @coroutine
+    def set_levels(self, input_level, output_level):
+        if not self.ready:
+            raise FbfProductStateError([self.READY], self.state)
+        futures = []
+        for server in self._servers:
+            futures.append(server.set_levels(
+                input_level, output_level))
+        for ii, future in enumerate(futures):
+            try:
+                yield future
+            except Exception as error:
+                log.exception(
+                    "Error when setting levels on server {}: {}".format(
+                        self._servers[ii], str(error)))
+
+    @coroutine
     def capture_start(self):
         if not self.ready:
             raise FbfProductStateError([self.READY], self.state)

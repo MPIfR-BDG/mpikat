@@ -562,6 +562,47 @@ class FbfMasterController(MasterController):
         log.info("Set-configuration-authority request successful")
         return ("ok",)
 
+    @request(Str(), Float(), Float())
+    @return_reply()
+    def request_set_levels(self, req, product_id, input_level, output_level):
+        """
+        @brief    Set the input and output levels for FBFUSE
+
+        @param      req             A katcp request object
+
+        @param      product_id      This is a name for the data product, used
+                                    to track which subarray is being
+                                    deconfigured. For example "array_1_bc856M4k".
+
+        @param    input_level  The standard deviation of the data
+                               from the F-engines.
+
+        @param    output_level  The standard deviation of the data
+                                output from FBFUSE.
+        """
+        log.info("Received set-levels request")
+        try:
+            product = self._get_product(product_id)
+        except ProductLookupError as error:
+            log.error("set-levels request failed: {}".format(
+                str(error)))
+            return ("fail", str(error))
+
+        @coroutine
+        def set_levels_wrapper():
+            try:
+                yield product.set_levels(input_level, output_level)
+            except Exception as error:
+                log.exception("set-levels request failed: {}".format(
+                    str(error)))
+                req.reply("fail", str(error))
+            else:
+                log.info("set-levels request successful")
+                req.reply("ok",)
+
+        self.ioloop.add_callback(set_levels_wrapper)
+        raise AsyncReply
+
     @request(Str())
     @return_reply()
     def request_reset_beams(self, req, product_id):

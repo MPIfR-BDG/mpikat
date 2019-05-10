@@ -28,6 +28,8 @@ from mpikat.core.utils import check_ntp_sync
 
 NTP_CALLBACK_PERIOD = 60 * 5 * 1000  # 5 minutes (in milliseconds)
 
+log = logging.getLogger("mpikat.master_controller")
+
 
 class ProductLookupError(Exception):
     pass
@@ -39,9 +41,6 @@ class ProductExistsError(Exception):
 
 class ServerDeallocationError(Exception):
     pass
-
-
-log = logging.getLogger("mpikat.master_controller")
 
 
 class MasterController(AsyncDeviceServer):

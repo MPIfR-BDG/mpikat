@@ -27,6 +27,7 @@ import socket
 import os
 import struct
 import ctypes as C
+import numpy as np
 from collections import OrderedDict
 from mmap import mmap
 from threading import Thread, Event
