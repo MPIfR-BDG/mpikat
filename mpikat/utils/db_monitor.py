@@ -43,7 +43,7 @@ class DbMonitor(object):
         self._mon_thread.start()
 
     def stop(self):
-        self._dbmon_proc.terminate()
+        self._dbmon_proc.kill()
         self._mon_thread.join()
 
 
