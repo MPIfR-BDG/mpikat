@@ -361,7 +361,7 @@ class FbfWorkerServer(AsyncDeviceServer):
         os.system("taskset -cp {} {}".format(core_spec, pid))
 
     @request(Float(), Float())
-    @return_reply
+    @return_reply()
     def request_set_levels(self, req, input_level, output_level):
         """
         @brief    Set the input and output levels for FBFUSE
