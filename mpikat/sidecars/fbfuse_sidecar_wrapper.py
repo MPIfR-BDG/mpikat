@@ -3,6 +3,15 @@ import igui_sidecar as s
 import signal
 import logging
 import tornado
+from optparse import OptionParser
+log = logging.getLogger("mpikat.katcp_to_igui_sidecar")
+
+
+@tornado.gen.coroutine
+def on_shutdown(ioloop, client):
+    log.info("Shutting down client")
+    ioloop.stop()
+
 
 def main():
     usage = "usage: %prog [options]"
@@ -33,33 +42,35 @@ def main():
     logger.setLevel(opts.log_level.upper())
     logging.getLogger('katcp').setLevel('INFO')
     ioloop = tornado.ioloop.IOLoop.current()
-    log.info("Starting KATCPToIGUIConverter instance")
-    
-    x =s.IGUIConnection(opts.igui_host, opts.igui_user, opts.igui_pass)
-    x.login()
-    icom_id="5f137055751811e8991a0242ac120002"
-    y=x.build_igui_representation()
+    log.info("Connecting to the IGUI database")
+    connection = s.IGUIConnection(
+        opts.igui_host, opts.igui_user, opts.igui_pass)
+    connection.login()
+    igui_rep = connection.build_igui_representation()
     rx_id = opts.igui_rx_id
     #rx_id = "8880b3e7d92711e8902a0242ac130002"
-    rx=y.by_id(rx_id)
-    #print rx.id
-    hostname = "fbfnn00"
-    numa = 0
-    device_name = opts.igui_nodename+"_worker_"+opts.numa
+    rx = igui_rep.by_id(rx_id)
+    device_name = opts.igui_nodename + "_worker_" + opts.igui_numa
 
     try:
-        print "looking for device named []".format(device_name)
-        y.by_id(rx_id).devices.by_name(device_name)
+        log.debug("looking for device named {}".format(device_name))
+        igui_rep.by_id(rx_id).devices.by_name(device_name)
     except KeyError as error:
-        print "device not found, let's add a device"
+        log.debug("device not found, let's add a device")
         paras = (device_name, "None", "N")
-        result = json.loads(x.create_device(rx, paras))
+        result = json.loads(connection.create_device(rx, paras))
         igui_device_id = result[0]["device_id"]
-        print result[0]["device_id"]
-    client = KATCPToIGUIConverter(opts.host, opts.port,
-                                  opts.igui_host, opts.igui_user,
-                                  opts.igui_pass, igui_device_id)
-    
+        log.debug("new device id for {} = {}".format(
+            device_name, result[0]["device_id"]))
+    else:
+        log.debug("found device named {}".format(device_name))
+        igui_device_id = igui_rep.by_id(rx_id).devices.by_name(device_name).id
+    log.info("Starting KATCPToIGUIConverter instance")
+
+    client = s.KATCPToIGUIConverter(opts.host, opts.port,
+                                    opts.igui_host, opts.igui_user,
+                                    opts.igui_pass, igui_device_id)
+
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, client))
 
@@ -69,6 +80,6 @@ def main():
 
     ioloop.add_callback(start_and_display)
     ioloop.start()
-    
+
 if __name__ == "__main__":
     main()
