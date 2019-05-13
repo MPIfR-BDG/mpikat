@@ -145,8 +145,9 @@ class Tiling(object):
         beam_shape = psfsim.get_beam_shape(self.target, epoch)
         log.debug("Generating tiling of {} beams with an overlap of {}".format(self.nbeams, self.overlap))
         tiling = mosaic.generate_nbeams_tiling(beam_shape, self.nbeams, self.overlap)
+        coordinates = tiling.get_equatorial_coordinates()
         for ii in range(min(tiling.beam_num, self.nbeams)):
-            ra, dec = tiling.coordinates[ii]
+            ra, dec = coordinates[ii]
             self._beams[ii].target = Target('{},radec,{},{}'.format(self.target.name, ra, dec))
 
     def __repr__(self):
