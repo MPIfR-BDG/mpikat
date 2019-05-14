@@ -494,12 +494,6 @@ class FbfMasterController(MasterController):
             log.error("Provision-beams request failed: {}".format(
                 str(error)))
             return ("fail", str(error))
-        # This check needs to happen here as this call
-        # should return immediately
-        if not product.idle:
-            msg = "Can only provision beams on an idle FBF product"
-            log.error("Provision-beams request failed: {}".format(msg))
-            return ("fail", msg)
         self.ioloop.add_callback(lambda: product.prepare(sb_id))
         log.info("Provision-beams request successful")
         return ("ok",)
