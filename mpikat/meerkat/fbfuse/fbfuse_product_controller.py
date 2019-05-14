@@ -803,6 +803,7 @@ class FbfProductController(object):
 
         # Here we create a mapping of nodes to multicast groups
         manager = self._parent._feng_subscription_manager
+        manager.unsubscribe(self._product_id)
         mapping, unused_servers, unused_ip_slits = manager.subscribe(
             ip_splits, self._servers, self._product_id)
         for server in unused_servers:
