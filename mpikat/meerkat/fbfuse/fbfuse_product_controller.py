@@ -712,11 +712,6 @@ class FbfProductController(object):
         @detail     This method evaluates the current configuration creates a new DelayEngine
                     and passes a prepare call to all allocated servers.
         """
-        try:
-            yield self.deconfigure()
-        except Exception as error:
-            log.exception("Error while attempting deconfigure: {}".format(
-                str(error)))
         self.log.info("Preparing FBFUSE product")
         self._state_sensor.set_value(self.PREPARING)
         self.log.debug("Product moved to 'preparing' state")
