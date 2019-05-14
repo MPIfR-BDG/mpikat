@@ -139,16 +139,22 @@ class Tiling(object):
         @param      antennas  The antennas to use when calculating the beam shape.
                               Note these are the antennas in katpoint CSV format.
         """
-        log.debug("Creating PSF simulator at reference frequency {} Hz".format(self.reference_frequency))
+        log.debug("Creating PSF simulator at reference frequency {} Hz".format(
+            self.reference_frequency))
         psfsim = mosaic.PsfSim(antennas, self.reference_frequency)
-        log.debug("Generating beam shape for target position {} at epoch {}".format(self.target, epoch))
+        log.debug(("Generating beam shape for target position {} "
+                   "at epoch {}").format(self.target, epoch))
         beam_shape = psfsim.get_beam_shape(self.target, epoch)
-        log.debug("Generating tiling of {} beams with an overlap of {}".format(self.nbeams, self.overlap))
-        tiling = mosaic.generate_nbeams_tiling(beam_shape, self.nbeams, self.overlap)
+        log.debug("Generating tiling of {} beams with an overlap of {}".format(
+            self.nbeams, self.overlap))
+        margin = max(int(self.nbeams * 0.25), 16)
+        tiling = mosaic.generate_nbeams_tiling(
+            beam_shape, self.nbeams, self.overlap, margin)
         coordinates = tiling.get_equatorial_coordinates()
         for ii in range(min(tiling.beam_num, self.nbeams)):
             ra, dec = coordinates[ii]
-            self._beams[ii].target = Target('{},radec,{},{}'.format(self.target.name, ra, dec))
+            self._beams[ii].target = Target('{},radec,{},{}'.format(
+                self.target.name, ra, dec))
 
     def __repr__(self):
         return ", ".join([repr(beam) for beam in self._beams])
