@@ -712,8 +712,11 @@ class FbfProductController(object):
         @detail     This method evaluates the current configuration creates a new DelayEngine
                     and passes a prepare call to all allocated servers.
         """
-        if not self.idle:
-            raise FbfProductStateError([self.IDLE], self.state)
+        try:
+            yield self.deconfigure()
+        except Exception as error:
+            log.exception("Error while attempting deconfigure: {}".format(
+                str(error)))
         self.log.info("Preparing FBFUSE product")
         self._state_sensor.set_value(self.PREPARING)
         self.log.debug("Product moved to 'preparing' state")
@@ -871,6 +874,7 @@ class FbfProductController(object):
                           " product that cannot be freed for future use.")
             raise error
         self.teardown_sensors()
+        self._state_sensor.set_value(self.IDLE)
 
     @coroutine
     def set_levels(self, input_level, output_level):
