@@ -848,7 +848,7 @@ class FbfProductController(object):
                         self._servers[ii], str(error)))
                 failure_count += 1
 
-        if failure_count == len(self._servers):
+        if (failure_count == len(self._servers)) and not (len(self._servers) == 0):
             self._state_sensor.set_value(self.ERROR)
             self.log.info("Failed to prepare FBFUSE product")
         else:

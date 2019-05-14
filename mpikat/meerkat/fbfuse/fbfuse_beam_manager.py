@@ -197,7 +197,8 @@ class BeamManager(object):
         beam_shape = psfsim.get_beam_shape(target, epoch)
         png = StringIO.StringIO()
         beam_shape.plot_psf(png, shape_overlay=True)
-        return png
+        png.seek(0)
+        return png.read()
 
     def reset(self):
         """
