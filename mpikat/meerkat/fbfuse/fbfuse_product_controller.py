@@ -362,6 +362,14 @@ class FbfProductController(object):
             default="",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._delay_config_server_sensor)
+
+        self._psf_png_sensor = Sensor.string(
+            "psf_PNG",
+            description="The PSF of the boresight beam for the coherent setup",
+            default="",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._psf_png_sensor)
+
         self._parent.mass_inform(Message.inform('interface-changed'))
 
     def teardown_sensors(self):
@@ -635,7 +643,7 @@ class FbfProductController(object):
         raise Return(cm)
 
     @coroutine
-    def get_ca_target_configuration(self, target):
+    def get_ca_target_configuration(self, boresight_target):
         def ca_target_update_callback(received_timestamp, timestamp, status,
                                       value):
             # TODO, should we really reset all the beams or should we have
@@ -653,10 +661,15 @@ class FbfProductController(object):
                 overlap = float(tiling.get('overlap', 0.5))
                 epoch = float(tiling.get('epoch', time.time()))
                 self.add_tiling(target, nbeams, freq, overlap, epoch)
+            # Here we generate a plot from the PSF
+            png = self._beam_manager.generate_psf_png(
+                boresight_target, self._katpoint_antennas,
+                self._cfreq_sensor.value(), time.time())
+            self._psf_png_sensor.set_value(png)
         yield self._ca_client.until_synced()
         try:
             response = yield self._ca_client.req.target_configuration_start(
-                self._proxy_name, target.format_katcp())
+                self._proxy_name, boresight_target.format_katcp())
         except Exception as error:
             self.log.error(("Request for target configuration to CA "
                             "failed with error: {}").format(str(error)))

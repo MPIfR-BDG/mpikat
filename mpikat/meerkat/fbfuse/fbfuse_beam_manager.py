@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 import logging
+import StringIO
 import mosaic
 from katpoint import Target
 
@@ -190,6 +191,13 @@ class BeamManager(object):
     @property
     def antennas(self):
         return self._antennas
+
+    def generate_psf_png(self, target, antennas, reference_frequency, epoch):
+        psfsim = mosaic.PsfSim(antennas, reference_frequency)
+        beam_shape = psfsim.get_beam_shape(target, epoch)
+        png = StringIO.StringIO()
+        beam_shape.plot_psf(png, shape_overlay=True)
+        return png
 
     def reset(self):
         """
