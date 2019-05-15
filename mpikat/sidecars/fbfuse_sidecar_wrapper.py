@@ -30,8 +30,6 @@ def main():
                       help='The iGUI receiver ID for the managed device')
     parser.add_option('', '--igui_device_name', dest='igui_device_name', type=str,
                       help='The device name for the IGUI device')
-    parser.add_option('', '--igui_numa', dest='igui_numa', type=str,
-                      help='The numa number for the managed device')
     parser.add_option('', '--log_level', dest='log_level', type=str,
                       help='Logging level', default="INFO")
 
