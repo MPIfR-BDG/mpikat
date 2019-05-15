@@ -487,7 +487,6 @@ class FbfWorkerServer(AsyncDeviceServer):
                 feng_config['feng-antenna-map'], coherent_beam_config,
                 incoherent_beam_config)
             log.info("F-engine capture order info: {}".format(feng_capture_order_info))
-            feng_to_antenna_map = {}
             feng_to_antenna_map = {
                 value: key for key, value in
                 feng_config['feng-antenna-map'].items()}
