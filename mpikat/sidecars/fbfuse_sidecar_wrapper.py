@@ -18,7 +18,7 @@ def main():
     parser = OptionParser(usage=usage)
     parser.add_option('-H', '--host', dest='host', type=str,
                       help='The hostname for the KATCP server to connect to')
-    parser.add_option('-p', '--port', dest='port', type=long,
+    parser.add_option('-p', '--port', dest='port', type=int,
                       help='The port number for the KATCP server to connect to')
     parser.add_option('', '--igui_host', dest='igui_host', type=str,
                       help='The hostname of the iGUI interface', default="127.0.0.1")
@@ -28,8 +28,8 @@ def main():
                       help='The password for the IGUI connection')
     parser.add_option('', '--igui_rx_id', dest='igui_rx_id', type=str,
                       help='The iGUI receiver ID for the managed device')
-    parser.add_option('', '--igui_nodename', dest='igui_nodename', type=str,
-                      help='The nodename for the managed device')
+    parser.add_option('', '--igui_device_name', dest='igui_device_name', type=str,
+                      help='The device name for the IGUI device')
     parser.add_option('', '--igui_numa', dest='igui_numa', type=str,
                       help='The numa number for the managed device')
     parser.add_option('', '--log_level', dest='log_level', type=str,
@@ -48,14 +48,12 @@ def main():
     connection.login()
     igui_rep = connection.build_igui_representation()
     rx_id = opts.igui_rx_id
-    #rx_id = "8880b3e7d92711e8902a0242ac130002"
     rx = igui_rep.by_id(rx_id)
-    device_name = opts.igui_nodename + "_worker_" + opts.igui_numa
-
+    device_name = opts.igui_device_name
     try:
         log.debug("looking for device named {}".format(device_name))
         igui_rep.by_id(rx_id).devices.by_name(device_name)
-    except KeyError as error:
+    except KeyError:
         log.debug("device not found, let's add a device")
         paras = (device_name, "None", "N")
         result = json.loads(connection.create_device(rx, paras))
@@ -71,8 +69,10 @@ def main():
                                     opts.igui_host, opts.igui_user,
                                     opts.igui_pass, igui_device_id)
 
-    signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
-        on_shutdown, ioloop, client))
+    signal.signal(
+        signal.SIGINT,
+        lambda sig, frame: ioloop.add_callback_from_signal(
+            on_shutdown, ioloop, client))
 
     def start_and_display():
         client.start()
@@ -80,6 +80,7 @@ def main():
 
     ioloop.add_callback(start_and_display)
     ioloop.start()
+
 
 if __name__ == "__main__":
     main()

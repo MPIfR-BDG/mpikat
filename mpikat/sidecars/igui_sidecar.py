@@ -740,7 +740,7 @@ def main():
     parser = OptionParser(usage=usage)
     parser.add_option('-H', '--host', dest='host', type=str,
                       help='The hostname for the KATCP server to connect to')
-    parser.add_option('-p', '--port', dest='port', type=long,
+    parser.add_option('-p', '--port', dest='port', type=int,
                       help='The port number for the KATCP server to connect to')
     parser.add_option('', '--igui_host', dest='igui_host', type=str,
                       help='The hostname of the iGUI interface', default="127.0.0.1")
@@ -755,7 +755,7 @@ def main():
 
     (opts, args) = parser.parse_args()
     FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
-    logger = logging.getLogger('r2rm')
+    logger = logging.getLogger('mpikat')
     logging.basicConfig(format=FORMAT)
     logger.setLevel(opts.log_level.upper())
     logging.getLogger('katcp').setLevel('INFO')
@@ -764,8 +764,10 @@ def main():
     client = KATCPToIGUIConverter(opts.host, opts.port,
                                   opts.igui_host, opts.igui_user,
                                   opts.igui_pass, opts.igui_device_id)
-    signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
-        on_shutdown, ioloop, client))
+    signal.signal(
+        signal.SIGINT,
+        lambda sig, frame: ioloop.add_callback_from_signal(
+            on_shutdown, ioloop, client))
 
     def start_and_display():
         client.start()
@@ -773,6 +775,7 @@ def main():
 
     ioloop.add_callback(start_and_display)
     ioloop.start()
+
 
 if __name__ == "__main__":
     main()
