@@ -663,11 +663,11 @@ class FbfProductController(object):
                 overlap = float(tiling.get('overlap', 0.5))
                 epoch = float(tiling.get('epoch', time.time()))
                 self.add_tiling(target, nbeams, freq, overlap, epoch)
-            # Here we generate a plot from the PSF
-            png = self._beam_manager.generate_psf_png(
-                boresight_target, self._katpoint_antennas,
-                self._cfreq_sensor.value(), time.time())
-            self._psf_png_sensor.set_value(base64.b64encode(png))
+        # Here we generate a plot from the PSF
+        png = self._beam_manager.generate_psf_png(
+            boresight_target, self._katpoint_antennas,
+            self._cfreq_sensor.value(), time.time())
+        self._psf_png_sensor.set_value(base64.b64encode(png))
         yield self._ca_client.until_synced()
         try:
             response = yield self._ca_client.req.target_configuration_start(
