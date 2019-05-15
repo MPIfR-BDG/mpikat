@@ -23,6 +23,7 @@ SOFTWARE.
 import logging
 import json
 import time
+import struct
 from copy import deepcopy
 from tornado.gen import coroutine, Return
 from katcp import Sensor, Message, KATCPClientResource
@@ -825,7 +826,8 @@ class FbfProductController(object):
 
         prepare_futures = []
         for ii, (server, ip_range) in enumerate(mapping):
-            chan0_idx = cm.nchans_per_worker * ii
+            group_start = struct.unpack("B", ip_range.base_ip.packed[-1])[0]
+            chan0_idx = cm.nchans_per_group * group_start
             chan0_freq = fbottom + chan0_idx * cm.channel_bandwidth
             future = server.prepare(
                 ip_range.format_katcp(),
@@ -838,7 +840,7 @@ class FbfProductController(object):
                 json.dumps(incoherent_beam_config),
                 de_ip,
                 de_port,
-                timeout=300.0)
+                timeout=120.0)
             prepare_futures.append(future)
 
         failure_count = 0
