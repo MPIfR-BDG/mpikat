@@ -24,6 +24,7 @@ import logging
 import json
 import time
 import struct
+import base64
 from copy import deepcopy
 from tornado.gen import coroutine, Return
 from katcp import Sensor, Message, KATCPClientResource
@@ -666,7 +667,7 @@ class FbfProductController(object):
             png = self._beam_manager.generate_psf_png(
                 boresight_target, self._katpoint_antennas,
                 self._cfreq_sensor.value(), time.time())
-            self._psf_png_sensor.set_value(png)
+            self._psf_png_sensor.set_value(base64.b64encode(png))
         yield self._ca_client.until_synced()
         try:
             response = yield self._ca_client.req.target_configuration_start(
