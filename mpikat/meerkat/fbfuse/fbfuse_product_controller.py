@@ -692,8 +692,8 @@ class FbfProductController(object):
 
     @coroutine
     def target_start(self, target):
-        self._phase_reference_sensor.set_value(target)
-        self._delay_config_server._phase_reference_sensor.set_value(target)
+        self._phase_reference_sensor.set_value(target.format_katcp())
+        self._delay_config_server._phase_reference_sensor.set_value(target.format_katcp())
         if self._ca_client:
             yield self.get_ca_target_configuration(target)
         else:
