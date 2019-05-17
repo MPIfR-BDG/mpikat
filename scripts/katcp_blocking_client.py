@@ -46,6 +46,8 @@ class BlockingRequest(BlockingClient):
 
         def to_stream(self, reply, informs):
                 log.info(self.decode_katcp_message(reply.__str__()))
+                #for msg in reply:
+                #        log.info(self.decode_katcp_message(msg.__str__()))
                 for msg in informs:
                         log.info(self.decode_katcp_message(msg.__str__()))
 
@@ -69,17 +71,19 @@ class BlockingRequest(BlockingClient):
         def configure(self, paras):
                 reply, informs = self.blocking_request(katcp.Message.request("configure", paras))
                 self.to_stream(reply, informs)
-
+		return reply
 
         def deconfigure(self):
                 reply, informs = self.blocking_request(katcp.Message.request("deconfigure"))
                 self.to_stream(reply, informs)
+                return reply
 
-        def capture_start(self, sensors):
+        def capture_start(self):
                 reply, informs = self.blocking_request(katcp.Message.request("start"))
                 self.to_stream(reply, informs)
+                return reply
 
         def capture_stop(self):
                 reply, informs = self.blocking_request(katcp.Message.request("stop"))
                 self.to_stream(reply, informs)
-
+                return reply
