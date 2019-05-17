@@ -59,19 +59,19 @@ DEFAULT_CONFIG = {
         "sync_time" : 1554915838,
 
         "fft_length": 1024 * 1024,
-        "naccumulate": 512,
+        "naccumulate": 256,
         "output_bit_depth": 32,
         "input_level": 100,
         "output_level": 100,
 
         "null_output": False,                           # Disable sending of data for testing purposes
-        "dummy_input": True,                            # Use dummy input instead of mkrecv process.
+        "dummy_input": False,                            # Use dummy input instead of mkrecv process.
         "log_level": "debug",
 
         "polarization_0" :
         {
             "ibv_if": "10.10.1.10",
-            "mcast_sources": "225.0.0.162 225.0.0.163 225.0.0.164 225.0.0.165",
+            "mcast_sources": "225.0.0.152 225.0.0.153 225.0.0.154 225.0.0.155",
             "mcast_dest": "225.0.0.172 225.0.0.173",        #two destinations gate on/off
             "port_rx": "7148",
             "port_tx": "7152",
@@ -122,7 +122,7 @@ IDX1_ITEM           0      # First item of a SPEAD heap
 IDX1_STEP           4096   # The difference between successive timestamps. This is the number of sampels per heap
 
 # Add side item to buffer
-SCI_LIST            7
+SCI_LIST            2
 """
 
 # static configuration for mksend. all items that can be configured are passed
@@ -488,10 +488,10 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 buffer size:      {} byte'.format(self.input_heapSize, nHeaps, input_bufferSize))
 
         # calculate output buffer parameters
-        nSlices = self._config["samples_per_block"] / self._config['fft_length'] /  self._config['naccumulate']
+        nSlices = max(self._config["samples_per_block"] / self._config['fft_length'] /  self._config['naccumulate'], 1)
         nChannels = self._config['fft_length'] / 2 + 1
         # on / off spectrum  + one side channel item per spectrum
-        output_bufferSize = 2 * nChannels * self._config['output_bit_depth'] / 8 + 2 * 8
+        output_bufferSize = nSlices * (2 * nChannels * self._config['output_bit_depth'] / 8 + 2 * 8)
 
         output_heapSize = nChannels * self._config['output_bit_depth'] / 8
         bufferTime = float(self._config["samples_per_block"])  / self._config["sample_clock"]
