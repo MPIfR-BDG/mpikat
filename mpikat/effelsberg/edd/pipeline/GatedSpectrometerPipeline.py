@@ -54,11 +54,11 @@ DEFAULT_CONFIG = {
         "input_bit_depth" : 12,                         # Input bit-depth
         "samples_per_heap": 4096,                       # this needs to be consistent with the mkrecv configuration
         "samples_per_block": 512 * 1024 * 1024,             # 512 Mega sampels per buffer block to allow high res  spectra
-        "enabled_polarizations" : ["polarization_0"],
+        "enabled_polarizations" : ["polarization_1"],
         "sample_clock" : 2600000000,
         "sync_time" : 1554915838,
 
-        "fft_length": 1024 * 1024,
+        "fft_length": 1024 * 1024 * 2,
         "naccumulate": 256,
         "output_bit_depth": 32,
         "input_level": 100,
@@ -71,7 +71,7 @@ DEFAULT_CONFIG = {
         "polarization_0" :
         {
             "ibv_if": "10.10.1.10",
-            "mcast_sources": "225.0.0.152 225.0.0.153 225.0.0.154 225.0.0.155",
+            "mcast_sources": "225.0.0.152+3",
             "mcast_dest": "225.0.0.172 225.0.0.173",        #two destinations gate on/off
             "port_rx": "7148",
             "port_tx": "7152",
@@ -82,7 +82,7 @@ DEFAULT_CONFIG = {
          "polarization_1" :
         {
             "ibv_if": "10.10.1.11",
-            "mcast_sources": "225.0.0.166 225.0.0.167 225.0.0.168 225.0.0.169",
+            "mcast_sources": "225.0.0.156+3",
             "mcast_dest": "225.0.0.184 225.0.0.185",        #two destinations, one for on, one for off
             "port_rx": "7148",
             "port_tx": "7152",
