@@ -96,12 +96,14 @@ class ManagedProcess(object):
         self.stderr_monitor.start()
 
     def _stop_monitors(self):
-        self.stdout_monitor.stop()
-        #self.stdout_monitor.join()
-        self.stdout_monitor = None
-        self.stderr_monitor.stop()
-        #self.stderr_monitor.join()
-        self.stderr_monitor = None
+        if self.stdout_monitor is not None:
+            self.stdout_monitor.stop()
+            self.stdout_monitor.join(3)
+            self.stdout_monitor = None
+        if self.stderr_monitor is not None:
+            self.stderr_monitor.stop()
+            self.stderr_monitor.join(3)
+            self.stderr_monitor = None
 
     def terminate(self, timeout=5):
         start = time.time()
