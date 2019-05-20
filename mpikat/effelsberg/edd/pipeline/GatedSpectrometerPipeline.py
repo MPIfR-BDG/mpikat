@@ -25,6 +25,7 @@ from mpikat.utils.process_monitor import SubprocessMonitor
 from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
 from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
+import mpikat.utils.numa as numa
 
 from katcp import Sensor, AsyncDeviceServer, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str
@@ -75,9 +76,9 @@ DEFAULT_CONFIG = {
             "mcast_dest": "225.0.0.172 225.0.0.173",        #two destinations gate on/off
             "port_rx": "7148",
             "port_tx": "7152",
-            "dada_key": 'dada',             # output keysa are the reverse!
-            "numa_node": 1,                 # we only have on ethernet interface on numa node 1
-            "cuda_device": 1,               # probably the information about the numa layout / device number should be stored / generated ? in a dedicated class
+            "dada_key": "dada",               # output keys are the reverse!
+            "numa_node": "1",                 # we only have on ethernet interface on numa node 1
+            "cuda_device": "1",               # probably the information about the numa layout / device number should be stored / generated ? in a dedicated class
         },
          "polarization_1" :
         {
@@ -86,9 +87,9 @@ DEFAULT_CONFIG = {
             "mcast_dest": "225.0.0.184 225.0.0.185",        #two destinations, one for on, one for off
             "port_rx": "7148",
             "port_tx": "7152",
-            "dada_key": 'dadc',
-            "numa_node": 1,                   # we only have on ethernet interface on numa node 1
-            "cuda_device": 1,
+            "dada_key": "dadc",
+            "numa_node": "1",                   # we only have one ethernet interface on numa node 1
+            "cuda_device": "1",
         }
     }
 
@@ -277,18 +278,26 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             self._polarization_sensors[p]["mkrecv_sensors"] = MkrecvSensors(p)
             for s in self._polarization_sensors[p]["mkrecv_sensors"].sensors.itervalues():
                 self.add_sensor(s)
-            self._polarization_sensors[p]["input-buffer"] = Sensor.float(
+            self._polarization_sensors[p]["input-buffer-fill-level"] = Sensor.float(
                     "input-buffer-fill-level-{}".format(p),
-                    description="Fill level of the input buffer for {}".format(p),
+                    description="Fill level of the input buffer for polarization{}".format(p),
                     params=[0, 1]
                     )
-            self.add_sensor(self._polarization_sensors[p]["input-buffer"])
-            self._polarization_sensors[p]["output-buffer"] = Sensor.float(
+            self.add_sensor(self._polarization_sensors[p]["input-buffer-fill-level"])
+            self._polarization_sensors[p]["input-buffer-total-write"] = Sensor.float(
+                    "input-buffer-total-write-{}".format(p),
+                    description="Total write into input buffer for polarization {}".format(p),
+                    params=[0, 1]
+                    )
+
+            self.add_sensor(self._polarization_sensors[p]["input-buffer-total-write"])
+
+            self._polarization_sensors[p]["output-buffer-fill-level"] = Sensor.float(
                     "output-buffer-fill-level-{}".format(p),
-                    description="Fill level of the output buffer for {}".format(p),
+                    description="Fill level of the output buffer for polarization {}".format(p),
                     params=[0, 1]
                     )
-            self.add_sensor(self._polarization_sensors[p]["output-buffer"])
+            self.add_sensor(self._polarization_sensors[p]["output-buffer-fill-level"])
 
 
 
@@ -418,9 +427,10 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         """
         for p in POLARIZATIONS:
             if status['key'] == self._config[p]['dada_key']:
-                self._polarization_sensors[p]["input-buffer"].set_value(status['fraction-full'])
+                self._polarization_sensors[p]["input-buffer-total-write"].set_value(status['written'])
+                self._polarization_sensors[p]["input-buffer-fill-level"].set_value(status['fraction-full'])
             elif status['key'] == self._config[p]['dada_key'][::-1]:
-                self._polarization_sensors[p]["output-buffer"].set_value(status['fraction-full'])
+                self._polarization_sensors[p]["output-buffer-fill-level"].set_value(status['fraction-full'])
 
 
 
