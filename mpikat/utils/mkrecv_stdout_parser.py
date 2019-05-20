@@ -38,7 +38,7 @@ class MkrecvSensors:
 
     def stdout_handler(self, line):
         data = mkrecv_stdout_parser(line)
-        self.sensors["global_payload_frac"].set_value(float(data["global-heaps-received"]) / float(data["global-payloaf-expected"]))
+        self.sensors["global_payload_frac"].set_value(float(data["global-payload-received"]) / float(data["global-payload-expected"]))
 
 
 
