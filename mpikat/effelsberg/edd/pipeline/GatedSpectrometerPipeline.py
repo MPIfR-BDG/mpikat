@@ -104,6 +104,7 @@ DADA_VERSION    1.0
 PACKET_SIZE         8400
 IBV_VECTOR          -1          # IBV forced into polling mode
 IBV_MAX_POLL        10
+BUFFER_SIZE         128000000
 
 DADA_MODE           4    # The mode, 4=full dada functionality
 
@@ -532,7 +533,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             # Configure + launch gated spectrometer
             # here should be a smarter system to parse the options from the
             # controller to the program without redundant typing of options
-            cmd = "numactl --cpubind={numa_node} --membind={numa_node} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={input_bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, **self._config)
+            physcpu = numa.getInfo()[numa_node]['cores'][0]
+            cmd = "taskset {physcpu} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={input_bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, physcpu=physcpu, **self._config)
             log.debug("Command to run: {}".format(cmd))
 
             cudaDevice = numa.getInfo()[self._config[k]["numa_node"]]["gpus"][0]
@@ -550,8 +552,9 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
                 nhops = len(self._config[k]['mcast_dest'].split())
 
-                cmd = "numactl --cpubind={numa_node} --membind={numa_node} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {fft_length} --item2-list {polarization} --item4-list {nChannels} --item6-list {integrationTime} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name,
-                        ofname=ofname, polarization=i, nChannels=nChannels, integrationTime=integrationTime,
+                physcpu = ",".join(numa.getInfo()[numa_node]['cores'][1:2])
+                cmd = "taskset {physcpu} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {fft_length} --item2-list {polarization} --item4-list {nChannels} --item6-list {integrationTime} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name,
+                        ofname=ofname, polarization=i, nChannels=nChannels, physcpu=physcpu, integrationTime=integrationTime,
                         rate=rate, nhops=nhops, heap_size=output_heapSize, **cfg)
                 log.debug("Command to run: {}".format(cmd))
 
@@ -624,9 +627,11 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 cfg = self._config.copy()
                 cfg.update(self._config[k])
                 if not self._config['dummy_input']:
-                    cmd = "numactl --cpubind={numa_node} --membind={numa_node} mkrecv_nt --quiet --header {mkrecv_header} --dada-key {dada_key} \
+                    numa_node = self._config[k]['numa_node']
+                    physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
+                    cmd = "taskset {physcpu} mkrecv_nt --quiet --header {mkrecv_header} --dada-key {dada_key} \
                     --sync-epoch {sync_time} --sample-clock {sample_clock} \
-                    --ibv-if {ibv_if} --port {port_rx} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name,
+                    --ibv-if {ibv_if} --port {port_rx} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,
                             **cfg )
                     mk = ManagedProcess(cmd, stdout_handler=self._polarization_sensors[k]["mkrecv_sensors"].stdout_handler)
                 else:

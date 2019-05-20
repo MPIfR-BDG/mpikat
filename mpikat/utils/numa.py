@@ -19,7 +19,7 @@ def updateInfo():
         __numaInfo[node] = {"net_devices":{} }
 
         cpurange = open('/sys/devices/system/node/node' + node + '/cpulist').read().strip().split('-')
-        __numaInfo[node]['cores'] = range(int(cpurange[0]), int(cpurange[1])+1)
+        __numaInfo[node]['cores'] = map(str, range(int(cpurange[0]), int(cpurange[1])+1))
         __numaInfo[node]['gpus'] = []
 
     # check network devices
@@ -48,7 +48,7 @@ def updateInfo():
 
         d = '/sys/bus/pci/devices/' + pciInfo.busId + "/numa_node"
         node = open(d).read().strip()
-        __numaInfo[node]['gpus'].append(i)
+        __numaInfo[node]['gpus'].append(str(i))
 
 
 def getInfo():
@@ -64,7 +64,7 @@ def getInfo():
 if __name__ == "__main__":
     for node, res in getInfo().items():
         print("NUMA Node: {}".format(node))
-        print("  CPU Cores: {}".format(", ".join(map(str, res['cores']))))
+        print("  CPU Cores: {}".format(", ".join(res['cores'])))
         print("  GPUs: {}".format(", ".join(map(str, res['gpus']))))
         print("  Network interfaces:")
         for nic, ip in res['net_devices'].items():
