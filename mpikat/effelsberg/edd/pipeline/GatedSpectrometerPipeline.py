@@ -78,7 +78,6 @@ DEFAULT_CONFIG = {
             "port_tx": "7152",
             "dada_key": "dada",               # output keys are the reverse!
             "numa_node": "1",                 # we only have on ethernet interface on numa node 1
-            "cuda_device": "1",               # probably the information about the numa layout / device number should be stored / generated ? in a dedicated class
         },
          "polarization_1" :
         {
@@ -89,7 +88,6 @@ DEFAULT_CONFIG = {
             "port_tx": "7152",
             "dada_key": "dadc",
             "numa_node": "1",                   # we only have one ethernet interface on numa node 1
-            "cuda_device": "1",
         }
     }
 
@@ -537,7 +535,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             cmd = "numactl --cpubind={numa_node} --membind={numa_node} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={input_bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, **self._config)
             log.debug("Command to run: {}".format(cmd))
 
-            gated_cli = ManagedProcess(cmd, env={"CUDA_VISIBLE_DEVICES": str(self._config[k]["cuda_device"])})
+            cudaDevice = numa.getInfo()[self._config[k]["numa_node"]]["gpus"][0]
+            gated_cli = ManagedProcess(cmd, env={"CUDA_VISIBLE_DEVICES": cudaDevice})
             self._subprocessMonitor.add(gated_cli, self._subprocess_error)
             self._subprocesses.append(gated_cli)
 
