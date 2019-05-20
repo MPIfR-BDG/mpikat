@@ -6,7 +6,7 @@ from mpikat.utils.pipe_monitor import PipeMonitor
 log = logging.getLogger('mpikat.db_monitor')
 
 class DbMonitor(object):
-    def __init__(self, key, callback):
+    def __init__(self, key, callback = None):
         self._key = key
         self._dbmon_proc = None
         self._mon_thread = None
@@ -27,7 +27,8 @@ class DbMonitor(object):
         except Exception as error:
             log.warning("Unable to parse line {} with error".format(line, str(error)))
             return None
-        self._callback(params)
+        if self._callback is not None:
+            self._callback(params)
 
     def start(self):
         self._dbmon_proc = Popen(
@@ -40,8 +41,9 @@ class DbMonitor(object):
         self._mon_thread.start()
 
     def stop(self):
+        log.debug("Stopping monitor thread for dada buffer: {}".format(self._key))
         self._mon_thread.stop()
-        self._mon_thread.join()
+        self._mon_thread.join(3)
         self._dbmon_proc.terminate()
 
 
