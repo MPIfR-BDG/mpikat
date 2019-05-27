@@ -52,21 +52,21 @@ PIPELINE_STATES = ["idle", "configuring", "ready",
 POLARIZATIONS = ["polarization_0", "polarization_1"]
 
 DEFAULT_CONFIG = {
-        "input_bit_depth" : 12,                         # Input bit-depth
-        "samples_per_heap": 4096,                       # this needs to be consistent with the mkrecv configuration
-        "samples_per_block": 512 * 1024 * 1024,             # 512 Mega sampels per buffer block to allow high res  spectra
+        "input_bit_depth" : 12,                             # Input bit-depth
+        "samples_per_heap": 4096,                           # this needs to be consistent with the mkrecv configuration
+        "samples_per_block": 512 * 1024 * 1024,             # 512 Mega sampels per buffer block to allow high res  spectra - the theoretical mazimum is thus 256 M Channels
         "enabled_polarizations" : ["polarization_1"],
         "sample_clock" : 2600000000,
         "sync_time" : 1554915838,
 
-        "fft_length": 1024 * 1024 * 2,
-        "naccumulate": 256,
+        "fft_length": 1024 * 1024 * 2 * 8,
+        "naccumulate": 32,
         "output_bit_depth": 32,
         "input_level": 100,
         "output_level": 100,
 
-        "null_output": False,                           # Disable sending of data for testing purposes
-        "dummy_input": False,                            # Use dummy input instead of mkrecv process.
+        "null_output": False,                               # Disable sending of data for testing purposes
+        "dummy_input": False,                               # Use dummy input instead of mkrecv process.
         "log_level": "debug",
 
         "polarization_0" :
@@ -76,8 +76,8 @@ DEFAULT_CONFIG = {
             "mcast_dest": "225.0.0.172 225.0.0.173",        #two destinations gate on/off
             "port_rx": "7148",
             "port_tx": "7152",
-            "dada_key": "dada",               # output keys are the reverse!
-            "numa_node": "1",                 # we only have on ethernet interface on numa node 1
+            "dada_key": "dada",                             # output keys are the reverse!
+            "numa_node": "1",                               # we only have one ethernet interface on numa node 1
         },
          "polarization_1" :
         {
@@ -87,7 +87,7 @@ DEFAULT_CONFIG = {
             "port_rx": "7148",
             "port_tx": "7152",
             "dada_key": "dadc",
-            "numa_node": "1",                   # we only have one ethernet interface on numa node 1
+            "numa_node": "1",                               # we only have one ethernet interface on numa node 1
         }
     }
 
@@ -480,7 +480,10 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         self._config = __updateConfig(DEFAULT_CONFIG, cfg)
 
 
-        log.info("Received configuration:\n" + json.dumps(self._config, indent=4))
+
+        cfs = json.dumps(self._config, indent=4)
+        log.info("Received configuration:\n" + cfs)
+        self._edd_config_sensor.set_value(cfs)
 
         try:
             self.deconfigure()
@@ -491,7 +494,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         self.input_heapSize =  self._config["samples_per_heap"] * self._config['input_bit_depth'] / 8
         nHeaps = self._config["samples_per_block"] / self._config["samples_per_heap"]
         input_bufferSize = nHeaps * (self.input_heapSize + 64 / 8)
-        log.debug('Input dada parameters created from configuration:\n\
+        log.info('Input dada parameters created from configuration:\n\
                 heap size:        {} byte\n\
                 heaps per block:  {}\n\
                 buffer size:      {} byte'.format(self.input_heapSize, nHeaps, input_bufferSize))
@@ -503,20 +506,18 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         output_bufferSize = nSlices * (2 * nChannels * self._config['output_bit_depth'] / 8 + 2 * 8)
 
         output_heapSize = nChannels * self._config['output_bit_depth'] / 8
-        bufferTime = float(self._config["samples_per_block"])  / self._config["sample_clock"]
-        rate = output_heapSize / (bufferTime / nSlices) * 8 # bps
+        integrationTime = self._config['fft_length'] * self._config['naccumulate']  / float(self._config["sample_clock"])
+        rate = output_heapSize / integrationTime # in spead documentation BYTE per second and not bit! 
         rate *= 1.10        # set rate to 110% of expected rate
 
-        integrationTime = bufferTime / nSlices
 
-        log.debug('Output parameters calculated from configuration:\n\
+        log.info('Output parameters calculated from configuration:\n\
                 spectra per block:  {} \n\
                 nChannels:          {} \n\
                 buffer size:        {} byte \n\
                 integrationTime :   {} s \n\
                 heap size:          {} byte\n\
-                rate (110%):        {} bps'.format(nSlices, nChannels, output_bufferSize, integrationTime, output_heapSize, rate))
-
+                rate (110%):        {} Gbps'.format(nSlices, nChannels, output_bufferSize, integrationTime, output_heapSize, rate / 1E9))
 
         self._subprocessMonitor = SubprocessMonitor()
         for i, k in enumerate(self._config['enabled_polarizations']):
