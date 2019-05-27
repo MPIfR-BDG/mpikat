@@ -27,11 +27,12 @@ from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
 from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
 import mpikat.utils.numa as numa
 
-from katcp import Sensor, AsyncDeviceServer, AsyncReply
+from katcp import Sensor, AsyncDeviceServer, AsyncReply, FailReply
 from katcp.kattypes import request, return_reply, Int, Str
 
 import tornado
 from tornado.gen import coroutine
+from concurrent.futures import Future
 
 import os
 import time
@@ -188,8 +189,10 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         self._scpi_interface = None
         self._config = None
         self._subprocesses = []
+        self.mkrec_cmd = []
         self._dada_buffers = []
-        super(GatedSpectrometerPipeline, self).__init__(ip, port)
+        self._subprocessMonitor = None
+        super(GatedSpectrometerPipeline, self).__init__(ip, port) # Async device parent depends on setting e.g. _control_mode in child
 
 
     @property
@@ -299,7 +302,6 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             self.add_sensor(self._polarization_sensors[p]["output-buffer-fill-level"])
 
 
-
     @property
     def katcp_control_mode(self):
         return self._control_mode == self.KATCP
@@ -393,6 +395,9 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         def configure_wrapper():
             try:
                 yield self.configure(config_json)
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
@@ -432,7 +437,6 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 self._polarization_sensors[p]["output-buffer-fill-level"].set_value(status['fraction-full'])
 
 
-
     @coroutine
     def configure(self, config_json):
         """@brief destroy any ring buffer and create new ring buffer."""
@@ -456,11 +460,11 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
         if self.state != "idle":
-            log.error('Cannot configure pipeline. Pipeline state {}.'.format(self.state))
-            return
+            raise FailReply('Cannot configure pipeline. Pipeline state {}.'.format(self.state))
+        # alternatively we should automatically deconfigure
+        #yield self.deconfigure()
 
         self.state = "configuring"
-
         # Merge retrieved config into default via recursive dict merge
         def __updateConfig(oldo, new):
             old = oldo.copy()
@@ -476,19 +480,18 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         elif isinstance(config_json, dict):
             cfg = config_json
         else:
-            raise RuntimeError("Cannot handle config type {}. Config has to bei either json formatted string or dict!".format(type(config_json)))
-        self._config = __updateConfig(DEFAULT_CONFIG, cfg)
-
+            self.state = "idle"     # no states changed
+            raise FailReply("Cannot handle config type {}. Config has to bei either json formatted string or dict!".format(type(config_json)))
+        try:
+            self._config = __updateConfig(DEFAULT_CONFIG, cfg)
+        except KeyError as error:
+            self.state = "idle"     # no states changed
+            raise FailReply("Unknown configuration option: {}".format(str(error)))
 
 
         cfs = json.dumps(self._config, indent=4)
         log.info("Received configuration:\n" + cfs)
         self._edd_config_sensor.set_value(cfs)
-
-        try:
-            self.deconfigure()
-        except Exception as error:
-            raise RuntimeError(str(error))
 
         # calculate input buffer parameters
         self.input_heapSize =  self._config["samples_per_heap"] * self._config['input_bit_depth'] / 8
@@ -507,7 +510,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
         output_heapSize = nChannels * self._config['output_bit_depth'] / 8
         integrationTime = self._config['fft_length'] * self._config['naccumulate']  / float(self._config["sample_clock"])
-        rate = output_heapSize / integrationTime # in spead documentation BYTE per second and not bit! 
+        rate = output_heapSize / integrationTime # in spead documentation BYTE per second and not bit!
         rate *= 1.10        # set rate to 110% of expected rate
 
 
@@ -518,8 +521,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 integrationTime :   {} s \n\
                 heap size:          {} byte\n\
                 rate (110%):        {} Gbps'.format(nSlices, nChannels, output_bufferSize, integrationTime, output_heapSize, rate / 1E9))
-
         self._subprocessMonitor = SubprocessMonitor()
+
         for i, k in enumerate(self._config['enabled_polarizations']):
             numa_node = self._config[k]['numa_node']
 
@@ -591,6 +594,9 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         def start_wrapper():
             try:
                 yield self.capture_start()
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
@@ -601,12 +607,25 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
 
     @coroutine
+    def request_halt(self, req, msg):
+        """
+        Halts the process. Reimplemnetation of base class halt without timeout as this crash
+        """
+        if self.state == "running":
+            yield self.capture_stop()
+        yield self.deconfigure()
+        self.ioloop.stop()
+        req.reply("Server has stopepd - ByeBye!")
+        raise AsyncReply
+
+
+    @coroutine
     def capture_start(self, config_json=""):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
         log.info("Starting EDD backend")
         if self.state != "ready":
-            log.error("pipleine state is not in state = ready, but in state = {} - cannot start the pipeline".format(self.state))
-            return
+            raise FailReply("pipleine state is not in state = ready, but in state = {} - cannot start the pipeline".format(self.state))
+            #return
 
         self.state = "starting"
         try:
@@ -623,7 +642,6 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             mkrecvheader_file.write("\n#PARAMETERS ADDED AUTOMATICALLY BY MKRECV\n")
             mkrecvheader_file.close()
 
-            self.mkrec_cmd = []
             for i, k in enumerate(self._config['enabled_polarizations']):
                 cfg = self._config.copy()
                 cfg.update(self._config[k])
@@ -686,7 +704,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             log.warning("pipleine state is not in state = running but in state {}".format(self.state))
             # return
         log.debug("Stopping")
-        self._subprocessMonitor.stop()
+        if self._subprocessMonitor is not None:
+            self._subprocessMonitor.stop()
 
         # stop mkrec process
         log.debug("Stopping mkrecv processes ...")
@@ -694,11 +713,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             proc.terminate()
         # This will terminate also the gated spectromenter automatically
 
-        log.debug("Stopping remaining processes ...")
-        for proc in self._subprocesses:
-            proc.terminate()
-
-        self.state = "idle"
+        yield self.deconfigure()
 
 
     @request()
@@ -731,18 +746,23 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
         log.info("Deconfiguring EDD backend")
+        if self.state == 'runnning':
+            yield self.capture_stop()
+
         self.state = "deconfiguring"
-        self._subprocessMonitor.stop()
+        if self._subprocessMonitor is not None:
+            self._subprocessMonitor.stop()
+        for proc in self._subprocesses:
+            proc.terminate()
+
+        self.mkrec_cmd = []
 
         log.debug("Destroying dada buffers")
         for k in self._dada_buffers:
             k['monitor'].stop()
             cmd = "dada_db -d -k {0}".format(k['key'])
             log.debug("Running command: {0}".format(cmd))
-            _destory_ring_buffer = ManagedProcess(cmd)
-            _destory_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            _destory_ring_buffer._process.wait()
+            yield command_watcher(cmd)
 
         self._dada_buffers = []
         self.state = "idle"

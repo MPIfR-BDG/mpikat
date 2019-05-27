@@ -18,10 +18,11 @@ class SubprocessMonitor(Thread):
         self._stop_event = Event()
 
     def run(self):
-        for proc, cb in self._procs:
-            if not proc.is_alive():
-                log.debug('Process {} terminated with returncode {}'.format(proc.pid, proc.returncode))
-                cb(proc)
+        #while not self._stop_event.is_set():
+            for proc, cb in self._procs:
+                if not proc.is_alive():
+                    log.debug('Process {} terminated with returncode {}'.format(proc.pid, proc.returncode))
+                    cb(proc)
 
     def add(self, proc, cb):
         log.debug('Adding process {} with callback {}'.format(proc.pid, cb))
@@ -31,7 +32,5 @@ class SubprocessMonitor(Thread):
         """
         @brief      Stop the thread
         """
-        log.debug('Stopping')
+        log.debug('Stopping monitoring of {} subprocesses'.format(len(self._procs)))
         self._stop_event.set()
-
-

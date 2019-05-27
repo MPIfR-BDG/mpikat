@@ -42,9 +42,14 @@ class DbMonitor(object):
 
     def stop(self):
         log.debug("Stopping monitor thread for dada buffer: {}".format(self._key))
+        self._dbmon_proc.terminate()
         self._mon_thread.stop()
         self._mon_thread.join(3)
-        self._dbmon_proc.terminate()
+        if self._dbmon_proc.returncode is None:
+            log.warning("Monitor thread for dada buffer: {} not terminated - killing it now!")
+            self._dbmon_proc.kill()
+        self._dbmon_proc = None  # delete to avoid zombie process
+
 
 
 if __name__ == "__main__":

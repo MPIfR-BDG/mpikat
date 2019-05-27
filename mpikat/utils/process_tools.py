@@ -75,6 +75,7 @@ class ManagedProcess(object):
         self.stderr_monitor = None
         self.eop_monitor = None
         self._start_monitors()
+        self._cmdl = " ".join(map(str, cmdlineargs))
 
     @property
     def pid(self):
@@ -108,10 +109,15 @@ class ManagedProcess(object):
     def terminate(self, timeout=5):
         start = time.time()
         self._stop_monitors()
-        log.debug("Trying to terminate process ...")
+        log.debug("Trying to terminate process {} ...".format(self._cmdl))
+        if self._proc is None:
+            log.warning(" process already terminated!".format())
+            return
+
         while self._proc.poll() is None:
             time.sleep(0.5)
             if (time.time() - start) > timeout:
                 log.debug("Reached timeout - Killing process")
                 self._proc.kill()
                 break
+        self._proc = None  # delete to avoid zombie process
