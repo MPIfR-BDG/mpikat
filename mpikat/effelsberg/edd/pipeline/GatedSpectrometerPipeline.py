@@ -70,6 +70,8 @@ DEFAULT_CONFIG = {
         "dummy_input": False,                               # Use dummy input instead of mkrecv process.
         "log_level": "debug",
 
+        "output_rate_factor": 1.10,                         # True output date rate is multiplied by this factor for sending.
+
         "polarization_0" :
         {
             "ibv_if": "10.10.1.10",
@@ -273,6 +275,19 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             default="idle",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._pipeline_sensor_status)
+        self._integration_time_status = Sensor.float(
+            "integration-time",
+            description="Integration time [s]",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._integration_time_status)
+
+        self._output_rate_status = Sensor.float(
+            "output-rate",
+            description="Output data rate [Gbyte/s]",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._output_rate_status)
+
+
 
         self._polarization_sensors = {}
         for p in POLARIZATIONS:
@@ -293,12 +308,15 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                     )
 
             self.add_sensor(self._polarization_sensors[p]["input-buffer-total-write"])
-
             self._polarization_sensors[p]["output-buffer-fill-level"] = Sensor.float(
                     "output-buffer-fill-level-{}".format(p),
-                    description="Fill level of the output buffer for polarization {}".format(p),
-                    params=[0, 1]
+                    description="Fill level of the output buffer for polarization {}".format(p)
                     )
+            self._polarization_sensors[p]["output-buffer-total-read"] = Sensor.float(
+                    "output-buffer-total-read-{}".format(p),
+                    description="Total read from output buffer for polarization {}".format(p)
+                    )
+            self.add_sensor(self._polarization_sensors[p]["output-buffer-total-read"])
             self.add_sensor(self._polarization_sensors[p]["output-buffer-fill-level"])
 
 
@@ -435,6 +453,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 self._polarization_sensors[p]["input-buffer-fill-level"].set_value(status['fraction-full'])
             elif status['key'] == self._config[p]['dada_key'][::-1]:
                 self._polarization_sensors[p]["output-buffer-fill-level"].set_value(status['fraction-full'])
+                self._polarization_sensors[p]["output-buffer-total-read"].set_value(status['read'])
 
 
     @coroutine
@@ -510,8 +529,10 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
         output_heapSize = nChannels * self._config['output_bit_depth'] / 8
         integrationTime = self._config['fft_length'] * self._config['naccumulate']  / float(self._config["sample_clock"])
+        self._integration_time_status.set_value(integrationTime)
         rate = output_heapSize / integrationTime # in spead documentation BYTE per second and not bit!
-        rate *= 1.10        # set rate to 110% of expected rate
+        rate *= self._config["output_rate_factor"]        # set rate to (100+X)% of expected rate
+        self._output_rate_status.set_value(rate / 1E9)
 
 
         log.info('Output parameters calculated from configuration:\n\
@@ -520,7 +541,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 buffer size:        {} byte \n\
                 integrationTime :   {} s \n\
                 heap size:          {} byte\n\
-                rate (110%):        {} Gbps'.format(nSlices, nChannels, output_bufferSize, integrationTime, output_heapSize, rate / 1E9))
+                rate ({:.0f}%):        {} Gbps'.format(nSlices, nChannels, output_bufferSize, integrationTime, output_heapSize, self._config["output_rate_factor"]*100, rate / 1E9))
         self._subprocessMonitor = SubprocessMonitor()
 
         for i, k in enumerate(self._config['enabled_polarizations']):
