@@ -24,16 +24,12 @@ CONFIG2BEAMS = {"nbeam":           36,  # Expected number from configuration, th
                 "nbeam_per_nic":   2,
                 "nport_per_beam":  3,
                 "nchunk_per_port": 11,
-                #"nport_per_beam":  1,
-                #"nchunk_per_port": 33,
                 }
 
 CONFIG1BEAM = {"nbeam":           18,  # Expected number from configuration, the real number depends on the number of alive NiCs
                "nbeam_per_nic":   1,
                "nport_per_beam":  3,
                "nchunk_per_port": 16,
-               #"nport_per_beam":  1,
-               #"nchunk_per_port": 48,
                }
 
 PARAMIKO_BUFSZ = 102400
