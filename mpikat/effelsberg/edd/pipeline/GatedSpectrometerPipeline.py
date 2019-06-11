@@ -252,7 +252,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         self._edd_config_sensor = Sensor.string(
             "current-config",
             description="The current configuration for the EDD backend",
-            default="",
+            default=json.dumps(DEFAULT_CONFIG, indent=4),
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._edd_config_sensor)
         self._edd_scpi_interface_addr_sensor = Sensor.string(
