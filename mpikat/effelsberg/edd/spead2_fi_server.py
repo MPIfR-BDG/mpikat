@@ -9,6 +9,7 @@ import coloredlogs
 import base64
 import numpy as np
 import ctypes as C
+import math as m
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -24,9 +25,6 @@ import spead2.recv
 
 
 log = logging.getLogger("mpikat.spead_fi_server")
-
-data_to_fw = {}
-lock = RLock()
 
 sensor_logging_queue = Queue()
 
@@ -97,6 +95,8 @@ class FitsWriterConnectionManager(Thread):
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.setsockopt(
             socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._server_socket.setsockopt(
+            socket.SOL_TCP, socket.TCP_NODELAY, 1)
         self._server_socket.setblocking(False)
         log.debug("Binding to {}".format(self._address))
         self._server_socket.bind(self._address)
@@ -126,7 +126,7 @@ class FitsWriterConnectionManager(Thread):
 
     def drop_connection(self):
         """
-        @breif   Drop any current FITS writer connection
+        @brief   Drop any current FITS writer connection
         """
         if self._transmit_socket:
             self._transmit_socket.shutdown(socket.SHUT_RDWR)
@@ -268,15 +268,15 @@ class FitsInterfaceServer(AsyncDeviceServer):
             default=1,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._integration_time_sensor)
-        self._update_sensors_callback = tornado.ioloop.PeriodicCallback(
-            self.update_sensors, 10000)
-        self._update_sensors_callback.start()
         self._power_status_sensor = Sensor.string(
             "POWER_STATUS_PNG",
             description="Power in each stream",
             default= DEFAULT_BLOB,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._power_status_sensor)
+        self._update_sensors_callback = tornado.ioloop.PeriodicCallback(
+            self.update_sensors, 5000)
+        self._update_sensors_callback.start()
 
 
     def update_sensors(self):
@@ -303,17 +303,32 @@ class FitsInterfaceServer(AsyncDeviceServer):
         fig = plt.figure(1)
         plt.clf()
         fig.suptitle("Power Status")
-        ax1 = plt.subplot(211)
-        plt.plot(packet.sections[0].data[:])
-        ax2 = plt.subplot(212)
-        plt.plot(packet.sections[1].data[:])
-        power = StringIO()
-        plt.savefig(power, format='png', dpi=100)
-        power.seek(0)
-        power_png = base64.b64encode(power.buf).replace("\n", "")
-        return power_png
+        logX = []
+        logY = []
         
-
+        for i in range(packet.sections[0].nchannels-1):
+            if(packet.sections[0].data[i] == 0):
+                logX.append(packet.sections[0].data[i])
+            else:
+                logX.append(10*m.log10(packet.sections[0].data[i])+30)
+            if(packet.sections[1].data[i] == 0):
+                logY.append(packet.sections[1].data[i])
+            else:
+                logY.append(10*m.log10(packet.sections[1].data[i])+30)
+        print("log X&Y: ", len(logX), len(logY))    
+        ax1 = plt.subplot(211)
+        #plt.plot(packet.sections[0].data[2:])
+        plt.plot(logX[:])
+        ax2 = plt.subplot(212)
+        #plt.plot(packet.sections[1].data[2:])
+        plt.plot(logY[:])
+        power = StringIO()
+        fig.savefig('plot.png', dpi=fig.dpi)
+        #plt.savefig(power, format='png', dpi=100)
+        #power.seek(0)
+        #power_png = base64.b64encode(power.buf).replace("\n", "")
+        #return power_png
+        
     def _stop_capture(self):
         if self._capture_thread:
             log.debug("Cleaning up capture thread")
@@ -370,12 +385,13 @@ class FitsInterfaceServer(AsyncDeviceServer):
             return ("fail", str(error))
         log.info("Starting FITS interface capture")
         self._stop_capture()
+        handler = StreamHandler(self.heap_group, fw_socket)
         self._capture_thread = CaptureData(self.mc_interface,
                                            self.mc_port,
                                            self._capture_interface,
                                            self.nmcg,
                                            self.heap_group, 
-                                           fw_socket)
+                                           handler)
         self._capture_thread.start()
         return ("ok",)
 
@@ -403,57 +419,49 @@ class CaptureData(Thread):
     @brief     Captures heaps from one or more streams that are transmitted in SPEAD format 
     """
 
-    def __init__(self, mc_ip, mc_port, capture_ip, nmcg, heap_group, transmit_soc):
+    def __init__(self, mc_ip, mc_port, capture_ip, nmcg, heap_group, handler):
         """
         @brief      Initialization of the CaptureData thread
 
         @param  mc_ip              Array of multicast group IPs
         @param  mc_port            Port number of multicast streams
-        @param  capture_interface  Interface to capture streams from MCG  on
+        @param  capture_ip         Interface to capture streams from MCG  on
         @param  nmcg               number of multicast groups to subscribe
         @param  heap_group         numbers of heaps for a given timestamp
-        @param  transmit_soc       FITS writer interface
+        @param  handler            Object that handles data in the stream
         """
         Thread.__init__(self, name=self.__class__.__name__)
         self._mc_ip = mc_ip
         self._mc_port = mc_port
         self._capture_ip = capture_ip
         self._nmcg = nmcg
-        self._heap_group = heap_group
         self._stop_event = Event()
-        self.stream = []
-        self.stream_handlers= []
-        self._transmit_soc = transmit_soc
+        self._handler = handler
         #self._buffer_size = buffer_size
 
     def stop(self):
         """
         @brief      Stop the capture thread
         """
-        for i in range(self._nmcg):
-            self.stream_handlers[i].stop()
+        self.stream.stop()
         self._stop_event.set()
 
-    def mcg_subscription(self, nmcg):
-        """
-        @brief      Subscribes to one or more multicast streams
-        """
+    def resource_allocation(self):
+        thread_pool = spead2.ThreadPool(threads=4)
+        self.stream = spead2.recv.Stream(thread_pool, spead2.BUG_COMPAT_PYSPEAD_0_5_2, max_heaps=64, ring_heaps=64)
+        pool = spead2.MemoryPool(16384, (40*1024**2), max_free=64, initial=64)
+        self.stream.set_memory_allocator(pool)
+        self.rb = self.stream.ringbuffer
+
+    def mcg_subscription(self):
         for i in range(self._nmcg):
-            thread_pool = spead2.ThreadPool()
-            self.stream.append(spead2.recv.Stream(thread_pool, spead2.BUG_COMPAT_PYSPEAD_0_5_2))
-            del thread_pool
-            pool = spead2.MemoryPool(16384, 26214400, 12, 8)
-            self.stream[i].set_memory_allocator(pool)
-            self.stream[i].add_udp_reader(self._mc_ip[i], self._mc_port, max_size = 9200L,
-                buffer_size= 212992L, interface_address=self._capture_ip)
-        return self.stream
+            self.stream.add_udp_reader(self._mc_ip[i], self._mc_port, max_size = 9200L,
+                buffer_size= 1073741820L, interface_address=self._capture_ip)
 
     def run(self):
-        self.mcg_subscription(self._nmcg)
-        for i in range(self._nmcg):
-            self.stream_handlers.append(StreamHandler(self.stream[i], 
-                self._heap_group, self._transmit_soc))
-            self.stream_handlers[i].start()
+        self.resource_allocation()
+        self.mcg_subscription()
+        self._handler(self.stream)
 
 
 class HeapPacket(object):
@@ -538,12 +546,12 @@ def build_fw_object(nsections, nchannels, timestamp, integration_time,
     return packet
 
 
-class StreamHandler(Thread):
+class StreamHandler(object):
     """
-    Aggregates data from one or more streams for the given time
-    before sending to the fits writer
+    Aggregates heaps that belong to a heap_group from one or more streams
+    and sends to the fits writer
     """
-    def __init__(self, stream, heap_group, transmit_socket, max_age=2.0):
+    def __init__(self, heap_group, transmit_socket, max_age=3.0):
         """
         @brief      Initialization of the StreamHandler thread
 
@@ -552,27 +560,24 @@ class StreamHandler(Thread):
         @param  transmit_soc       FITS writer interface to which the data is sent
         @param  max_age            timeout
         """
-        Thread.__init__(self)
-        self._stream = stream
         self._nsections = heap_group 
+        self._data_to_fw = {}
         self._nphases = 1 
         self._transmit_socket = transmit_socket
         self._max_age = max_age
         self._first_heap = True
 
-    def stop(self):
-        self._stream.stop()
-
-    def run(self):
+    def __call__(self, stream):
         """
         @brief      Handle a raw packet from the network
 
         @param      raw_data  The raw data captured from the network
         """
+        self.rb = stream.ringbuffer
         log.info("Reading stream..")
         self.packet = HeapPacket()
         self.packet.heap_items()
-        for heap in self._stream:
+        for heap in stream:
             self.packet.unpack_heap(heap)
             if not self._first_heap:
                 self.aggregate_data(self.packet)
@@ -580,22 +585,14 @@ class StreamHandler(Thread):
 
     def aggregate_data(self, packet):
         key = tuple(packet.timestamp)
-        if key not in data_to_fw:
+        if key not in self._data_to_fw:
             fw_pkt = build_fw_object(self._nsections, int(packet.nchannels), isotime(),
                                      packet.integtime, self._nphases)
             fw_pkt.sections[int(packet.ndStatus)].data[:]=packet.data
-            lock.acquire()
-            try:
-                data_to_fw[key] = [time.time(), 1, fw_pkt]
-            finally:
-                lock.release()
+            self._data_to_fw[key] = [time.time(), 1, fw_pkt]
         else:
-            lock.acquire()
-            try:
-                data_to_fw[key][1] += 1
-                data_to_fw[key][2].sections[int(packet.ndStatus)].data[:] = packet.data
-            finally:
-                lock.release()
+            self._data_to_fw[key][1] += 1
+            self._data_to_fw[key][2].sections[int(packet.ndStatus)].data[:] = packet.data
         self.flush()
 
     def flush(self):
@@ -605,15 +602,14 @@ class StreamHandler(Thread):
         """
         log.debug(
             "Number of active packets pre-flush: {}".format(
-                len(data_to_fw)))
+                len(self._data_to_fw)))
         now = time.time()
-        for key in sorted(data_to_fw.iterkeys()):
-            timestamp, hits, fw_packet = data_to_fw[key]
+        for key in sorted(self._data_to_fw.iterkeys()):
+            timestamp, hits, fw_packet = self._data_to_fw[key]
             if ((now - timestamp) > self._max_age):
                 log.warning(("Age exceeds maximum age. Incomplete packet"
                              " will be flushed to FITS writer."))
-                self._transmit_socket.send(bytearray(fw_packet))
-                del data_to_fw[key]
+                del self._data_to_fw[key]
             elif (hits == self._nsections):
                 try:
                     sensor_logging_queue.put((fw_packet), False)
@@ -623,11 +619,12 @@ class StreamHandler(Thread):
                 log.debug(
                     "Sending complete packet with timestamp: {}".format(
                         timestamp))
+                log.info("Ringbuffer size: {}".format(self.rb.size()))
                 self._transmit_socket.send(bytearray(fw_packet))
-                del data_to_fw[key]
+                del self._data_to_fw[key]
         log.debug(
             "Number of active packets post-flush: {}".format(
-                len(data_to_fw)))
+                len(self._data_to_fw)))
 
 
 @tornado.gen.coroutine
