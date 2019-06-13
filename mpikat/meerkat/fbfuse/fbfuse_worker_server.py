@@ -512,8 +512,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             heap_group_size = ngroups * heap_size * nantennas
             ngroups_data = int(MAX_DADA_BLOCK_SIZE / heap_group_size)
             ngroups_data = 2**((ngroups_data-1).bit_length())
-            centre_frequency = (chan0_freq + feng_config['nchans']
-                                / 2.0 * chan_bw)
+            centre_frequency = chan0_freq + self._partition_bandwidth / 2.0
             self._centre_frequency = centre_frequency
 
             # Coherent beam timestamps
