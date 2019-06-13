@@ -658,7 +658,7 @@ class FbfWorkerServer(AsyncDeviceServer):
                 'coherent_tscrunch': coherent_beam_config['tscrunch'],
                 'coherent_fscrunch': coherent_beam_config['fscrunch'],
                 'coherent_nantennas': len(coherent_beam_config['antennas'].split(",")),
-                'coherent_antenna_offset': 0,
+                'coherent_antenna_offset': feng_capture_order_info["coherent_span"][0],
                 'coherent_nbeams': nbeams,
                 'incoherent_tscrunch': incoherent_beam_config['tscrunch'],
                 'incoherent_fscrunch': incoherent_beam_config['fscrunch']
