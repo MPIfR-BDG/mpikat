@@ -332,6 +332,45 @@ class FbfMasterController(MasterController):
         self._update_products_sensor()
         log.debug("Configured FBFUSE instance with ID: {}".format(product_id))
 
+    @coroutine
+    def deprovision_beams(self, product_id):
+        log.info("Deprovisioning beams on FBFUSE instace with ID '{}'".format(
+            product_id))
+        # Test if product exists
+        product = self._get_product(product_id)
+        yield product.reset_sb_configuration()
+
+    @request(Str())
+    @return_reply()
+    def request_deprovision_beams(self, req, product_id):
+        """
+        @brief      Deprovision beams on an FBFUSE product.
+
+        @note       This is similar to a deconfigure, but it will not delete
+                    the product, only deallocate its resources.
+
+        @param      req               A katcp request object
+
+        @param      product_id        This is a name for the data product, used to track which subarray is being deconfigured.
+                                      For example "array_1_bc856M4k".
+
+        @return     katcp reply object [[[ !deprovision-beams ok | (fail [error description]) ]]]
+        """
+        log.info("Received deprovision-beams request")
+        @coroutine
+        def deprovision_beams_wrapper():
+            try:
+                yield self.deprovision_beams(product_id)
+            except Exception as error:
+                log.error("deprovision-beams request failed: {}".format(
+                    str(error)))
+                req.reply("fail", str(error))
+            else:
+                log.info("deprovision-beams request successful")
+                req.reply("ok",)
+        self.ioloop.add_callback(deprovision_beams_wrapper)
+        raise AsyncReply
+
     @request(Str())
     @return_reply()
     def request_deconfigure(self, req, product_id):

@@ -197,7 +197,7 @@ class DelayBufferController(object):
         """
         @brief   Retrieve configuration information from the delay configuration server
         """
-        log.debug(
+        log.info(
             "Fetching configuration information from the delay configuration server")
         yield self._delay_client.until_synced()
         sensors = self._delay_client.sensor
@@ -209,11 +209,11 @@ class DelayBufferController(object):
             raise error
         self._antennas = [Antenna(antennas[antenna])
                           for antenna in self._ordered_antennas]
-        log.debug("Ordered the antenna capture list to:\n {}".format(
+        log.info("Ordered the antenna capture list to:\n {}".format(
             "\n".join([i.format_katcp() for i in self._antennas])))
         reference_antenna = yield sensors.reference_antenna.get_value()
         self._reference_antenna = Antenna(reference_antenna)
-        log.debug("Reference antenna: {}".format(
+        log.info("Reference antenna: {}".format(
             self._reference_antenna.format_katcp()))
 
     @coroutine
@@ -307,7 +307,7 @@ class DelayBufferController(object):
     def _update_phase_reference(self, rt, t, status, value):
         if status != "nominal":
             return
-        log.debug("Received update to phase-reference: {}, {}, {}, {}".format(
+        log.info("Received update to phase-reference: {}, {}, {}, {}".format(
             rt, t, status, value))
         self._phase_reference = Target(value)
 

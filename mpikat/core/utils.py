@@ -76,7 +76,6 @@ def parse_csv_antennas(antennas_csv):
 
 
 class LoggingSensor(Sensor):
-
     def __init__(self, *args, **kwargs):
         self.logger = None
         super(LoggingSensor, self).__init__(*args, **kwargs)
