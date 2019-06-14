@@ -569,6 +569,7 @@ class FbfProductController(object):
     @coroutine
     def reset_sb_configuration(self):
         self.log.debug("Reseting schedule block configuration")
+        self._previous_sb_config = None
         try:
             self.capture_stop()
         except Exception as error:
