@@ -904,8 +904,7 @@ class FbfProductController(object):
             self._state_sensor.set_value(self.READY)
             self.log.info("Successfully prepared FBFUSE product")
             raise Return(None)
-        else:
-            self._previous_sb_config = sb_config
+        self._previous_sb_config = sb_config
 
         # deallocate all multicast IPs and servers
         yield self.reset_sb_configuration()
