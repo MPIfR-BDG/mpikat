@@ -425,6 +425,35 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         raise AsyncReply
 
 
+    @request()
+    @return_reply()
+    def request_reconfigure(self, req):
+        """
+        @brief      Reconfigure EDD with last configuration 
+
+        @note       This is the KATCP wrapper for the reconfigure command
+
+        @return     katcp reply object [[[ !reconfigure ok | (fail [error description]) ]]]
+        """
+        if not self.katcp_control_mode:
+            return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
+
+        @coroutine
+        def reconfigure_wrapper():
+            try:
+                yield self.configure(self._config)
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(reconfigure_wrapper)
+        raise AsyncReply
+
+
     @coroutine
     def _create_ring_buffer(self, bufferSize, blocks, key, numa_node):
          """
