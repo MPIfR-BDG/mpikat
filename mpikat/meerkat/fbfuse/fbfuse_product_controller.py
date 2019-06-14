@@ -100,6 +100,7 @@ class FbfProductController(object):
         self._ca_client = None
         self._previous_sb_config = None
         self._managed_sensors = []
+        self._beam_sensors = []
         self._ibc_mcast_group = None
         self._cbc_mcast_groups = None
         self._current_configuration = None
