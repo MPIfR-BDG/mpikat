@@ -26,6 +26,7 @@ log.setLevel('DEBUG')
 
 try:
     from GatedSpectrometerPipeline import GatedSpectrometerPipeline
+    from VLBIPipeline import VLBIPipeline
     from Mkrecv2Db2Dspsr import Mkrecv2Db2Dspsr
 except Exception as E:
     log.error("Error importing pipeline: {}".format(E))
