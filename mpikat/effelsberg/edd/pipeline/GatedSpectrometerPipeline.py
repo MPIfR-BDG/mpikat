@@ -218,6 +218,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
     def state(self, value):
         self._state = value
         self._pipeline_sensor_status.set_value(self._state)
+        self._status_change_time.set_value(time.ctime())
         self.notify()
 
 
@@ -249,6 +250,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             default=self._control_mode,
             initial_status=Sensor.NOMINAL)
         self.add_sensor(self._control_mode_sensor)
+
         self._edd_config_sensor = Sensor.string(
             "current-config",
             description="The current configuration for the EDD backend",
@@ -275,6 +277,14 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             default="idle",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._pipeline_sensor_status)
+
+        self._status_change_time = Sensor.string(
+            "status-change-time",
+            description="Time of last status change",
+            default=time.ctime(),
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._status_change_time)
+
         self._integration_time_status = Sensor.float(
             "integration-time",
             description="Integration time [s]",
