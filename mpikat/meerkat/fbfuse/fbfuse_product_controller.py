@@ -612,8 +612,19 @@ class FbfProductController(object):
         yield self.reset_sb_configuration()
         self._state_sensor.set_value(self.ERROR)
 
-    def _sanitise_coh_beam_ants(self, coherent_beam_antennas):
-        antennas = parse_csv_antennas(coherent_beam_antennas)
+    def _get_valid_antennas(self, antennas):
+        antennas_set = set(antennas)
+        subarray_set = set([ant.name for ant in self._katpoint_antennas])
+        valid_set = subarray_set.intersection(antennas_set)
+        diff_set = antennas_set.difference(valid_set)
+        if len(diff_set) > 0:
+            log.warning("Not all requested antennas available in subarray.")
+            log.warning("Dropping antennas: {}".format(list(diff_set)))
+        return sorted(list(valid_set))
+
+    def _sanitise_coh_beam_ants(self, requested_antennas):
+        antennas = self._get_valid_antennas(
+            parse_csv_antennas(requested_antennas))
         remainder = len(antennas) % COH_ANTENNA_GRANULARITY
         if remainder != 0:
             log.warning(
@@ -624,9 +635,16 @@ class FbfProductController(object):
                 "Dropping antennas {} from the coherent beam".format(
                     antennas[-remainder:])
                 )
-            return ",".join(antennas[:len(antennas) - remainder])
-        else:
-            return coherent_beam_antennas
+            antennas = ",".join(antennas[:len(antennas) - remainder])
+        if len(antennas) == 0:
+            raise Exception("After sanitising coherent beam antennas, "
+                            "no valid antennas remain")
+        return ",".join(antennas)
+
+    def _sanitise_incoh_beam_ants(self, requested_antennas):
+        antennas = self._get_valid_antennas(
+            parse_csv_antennas(requested_antennas))
+        return ",".join(antennas)
 
     @coroutine
     def set_sb_configuration(self, config_dict):
@@ -677,6 +695,8 @@ class FbfProductController(object):
         self.log.info("Configuring using: {}".format(config))
         config['coherent-beams-antennas'] = self._sanitise_coh_beam_ants(
             config['coherent-beams-antennas'])
+        config['incoherent-beam-antennas'] = self._sanitise_incoh_beam_ants(
+            config['incoherent-beam-antennas'])
         requested_cbc_antenna = parse_csv_antennas(
             config['coherent-beams-antennas'])
         requested_nantennas = len(requested_cbc_antenna)

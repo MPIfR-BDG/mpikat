@@ -26,7 +26,7 @@ MCAST_DESTINATIONS {{mcast_destinations}}
 
 SYNC_TIME    {{sync_epoch}}
 SAMPLE_CLOCK {{sample_clock}}
-SAMPLE_CLOCK_START 0
+SAMPLE_CLOCK_START unset
 UTC_START unset
 
 HEAP_SIZE     {{heap_size}}
