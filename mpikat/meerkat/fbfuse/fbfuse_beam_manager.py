@@ -156,7 +156,7 @@ class Tiling(object):
             ra, dec = coordinates[ii]
             self._beams[ii].target = Target('{},radec,{},{}'.format(
                 self.target.name, ra, dec))
-
+	return tiling
     def __repr__(self):
         return ", ".join([repr(beam) for beam in self._beams])
 
