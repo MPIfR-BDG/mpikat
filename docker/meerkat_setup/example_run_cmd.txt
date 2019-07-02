@@ -1,0 +1,7 @@
+docker run --runtime=nvidia -tid --name=fbfuse_worker \
+--device=/dev/infiniband/rdma_cm --device=/dev/infiniband/uverbs0 \
+--device=/dev/infiniband/umad0 --device=/dev/infiniband/ucm0 \
+--device=/dev/infiniband/issm0 --device=/dev/infiniband/issm1 \
+--device=/dev/infiniband/umad1 \
+--ulimit memlock=-1 --ulimit core=0 --net=host \
+mpikat:fbfuse
