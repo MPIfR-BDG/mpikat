@@ -42,6 +42,7 @@ from optparse import OptionParser
 import coloredlogs
 import json
 import tempfile
+import threading
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.GatedSpectrometerPipeline")
 log.setLevel('DEBUG')
@@ -167,6 +168,26 @@ ITEM6_ID        5637    # Integration time
 
 ITEM7_ID        5638    # payload item (empty step, list, index and sci)
 """
+
+
+class SensorWatchdog(threading.Thread):
+    """
+    Watchdog thread that checks if the execution stalls without getting noticed.
+    If time between changes of the value of a sensor surpasses  the timeout value, the callbaxck function is called.
+    """
+    def __init__(self, sensor, timeout, callback):
+        threading.Thread.__init__(self)
+        self.__timeout = timeout
+        self.__sensor = sensor
+        self.__callback = callback
+        self.stop_event = threading.Event()
+
+    def run(self):
+        while not self.stop_event.wait(timeout=self.__timeout):
+            timestamp, status, value = self.__sensor.read()
+            if (time.time() - timestamp) > self.__timeout:
+                self.__callback()
+                self.stop_event.set()
 
 
 
@@ -296,8 +317,6 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             description="Output data rate [Gbyte/s]",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._output_rate_status)
-
-
 
         self._polarization_sensors = {}
         for p in POLARIZATIONS:
@@ -628,7 +647,6 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             else:
                 log.warning("Selected null output. Not sending data!")
 
-
         self._subprocessMonitor.start()
         self.state = "ready"
 
@@ -677,6 +695,14 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         self.ioloop.stop()
         req.reply("Server has stopepd - ByeBye!")
         raise AsyncReply
+
+
+    def watchdog_error(self):
+        """
+        @brief Set error mode requested by watchdog.
+        """
+        log.error("Error state requested by watchdog!")
+        self.state = "error"
 
 
     @coroutine
@@ -728,6 +754,13 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             self.state = "error"
         else:
             self.state = "running"
+            self.__watchdogs = []
+            for i, k in enumerate(self._config['enabled_polarizations']):
+                wd = SensorWatchdog(self._polarization_sensors[k]["input-buffer-total-write"],
+                        10 * self._integration_time_status.value(),
+                        self.watchdog_error)
+                wd.start()
+                self.__watchdogs.append(wd)
 
 
     @request()
@@ -764,6 +797,8 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             log.warning("pipleine state is not in state = running but in state {}".format(self.state))
             # return
         log.debug("Stopping")
+        for wd in self.__watchdogs:
+            wd.stop_event.set()
         if self._subprocessMonitor is not None:
             self._subprocessMonitor.stop()
 
