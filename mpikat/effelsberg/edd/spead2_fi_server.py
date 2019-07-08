@@ -23,7 +23,6 @@ from katcp.kattypes import (Int, Str, request, return_reply)
 import spead2
 import spead2.recv
 
-
 log = logging.getLogger("mpikat.spead_fi_server")
 
 sensor_logging_queue = Queue()
@@ -278,7 +277,6 @@ class FitsInterfaceServer(AsyncDeviceServer):
             self.update_sensors, 5000)
         self._update_sensors_callback.start()
 
-
     def update_sensors(self):
         try:
             log.debug("Updating sensor values")
@@ -295,7 +293,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             self._integration_time_sensor.set_value(data.integration_time)
             self._heap_group_sensor.set_value(data.nsections)
             self._nchannels_sensor.set_value(data.sections[0].nchannels)
-            self._power_status_sensor.set_value(self.plot_data(data))
+            #self._power_status_sensor.set_value(self.plot_data(data))
         except Exception:
             log.exception("Exception while updating sensor values")
 
@@ -303,31 +301,18 @@ class FitsInterfaceServer(AsyncDeviceServer):
         fig = plt.figure(1)
         plt.clf()
         fig.suptitle("Power Status")
-        logX = []
-        logY = []
-        
-        for i in range(packet.sections[0].nchannels-1):
-            if(packet.sections[0].data[i] == 0):
-                logX.append(packet.sections[0].data[i])
-            else:
-                logX.append(10*m.log10(packet.sections[0].data[i])+30)
-            if(packet.sections[1].data[i] == 0):
-                logY.append(packet.sections[1].data[i])
-            else:
-                logY.append(10*m.log10(packet.sections[1].data[i])+30)
-        print("log X&Y: ", len(logX), len(logY))    
+        logX_ndON = (np.log10(packet.sections[0].data)*10)
+        logX_ndOFF = (np.log10(packet.sections[1].data)*10)
         ax1 = plt.subplot(211)
-        #plt.plot(packet.sections[0].data[2:])
-        plt.plot(logX[:])
+        plt.plot(logX_ndON[:])
         ax2 = plt.subplot(212)
-        #plt.plot(packet.sections[1].data[2:])
-        plt.plot(logY[:])
+        plt.plot(logX_ndOFF[:])
         power = StringIO()
-        fig.savefig('plot.png', dpi=fig.dpi)
-        #plt.savefig(power, format='png', dpi=100)
-        #power.seek(0)
-        #power_png = base64.b64encode(power.buf).replace("\n", "")
-        #return power_png
+        #fig.savefig('plot.png', dpi=fig.dpi)
+        plt.savefig(power, format='png', dpi=100)
+        power.seek(0)
+        power_png = base64.b64encode(power.buf).replace("\n", "")
+        return power_png
         
     def _stop_capture(self):
         if self._capture_thread:
@@ -363,6 +348,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         self._fw_connection_manager.drop_connection()
         self._stop_capture()
         self._configured = True
+        self._nmcg_sensor.set_value(self.nmcg)
         return ("ok",)
 
     @request()
@@ -437,7 +423,6 @@ class CaptureData(Thread):
         self._nmcg = nmcg
         self._stop_event = Event()
         self._handler = handler
-        #self._buffer_size = buffer_size
 
     def stop(self):
         """
@@ -448,8 +433,8 @@ class CaptureData(Thread):
 
     def resource_allocation(self):
         thread_pool = spead2.ThreadPool(threads=4)
-        self.stream = spead2.recv.Stream(thread_pool, spead2.BUG_COMPAT_PYSPEAD_0_5_2, max_heaps=64, ring_heaps=64)
-        pool = spead2.MemoryPool(16384, (40*1024**2), max_free=64, initial=64)
+        self.stream = spead2.recv.Stream(thread_pool, spead2.BUG_COMPAT_PYSPEAD_0_5_2, max_heaps=64, ring_heaps=64, contiguous_only = False)
+        pool = spead2.MemoryPool(16384, ((4*4*1024**2)+1024), max_free=64, initial=64)
         self.stream.set_memory_allocator(pool)
         self.rb = self.stream.ringbuffer
 
@@ -551,11 +536,10 @@ class StreamHandler(object):
     Aggregates heaps that belong to a heap_group from one or more streams
     and sends to the fits writer
     """
-    def __init__(self, heap_group, transmit_socket, max_age=3.0):
+    def __init__(self, heap_group, transmit_socket, max_age=5.0):
         """
         @brief      Initialization of the StreamHandler thread
 
-        @param  stream             Streams received from mcg
         @param  heap_group         Number of heaps for a given timestamp
         @param  transmit_soc       FITS writer interface to which the data is sent
         @param  max_age            timeout
@@ -566,18 +550,27 @@ class StreamHandler(object):
         self._transmit_socket = transmit_socket
         self._max_age = max_age
         self._first_heap = True
+        self._nheaps = 0
+        self._complete_heaps = 0
+        self._incomplete_heaps = 0
 
     def __call__(self, stream):
         """
         @brief      Handle a raw packet from the network
 
-        @param      raw_data  The raw data captured from the network
+        @param      stream  heaps from multiple multicast groups
         """
         self.rb = stream.ringbuffer
         log.info("Reading stream..")
         self.packet = HeapPacket()
         self.packet.heap_items()
         for heap in stream:
+            self._nheaps += 1
+            if isinstance(heap, spead2.recv.IncompleteHeap):
+                self._incomplete_heaps += 1
+                continue
+            else:
+                self._complete_heaps += 1
             self.packet.unpack_heap(heap)
             if not self._first_heap:
                 self.aggregate_data(self.packet)
@@ -619,7 +612,9 @@ class StreamHandler(object):
                 log.debug(
                     "Sending complete packet with timestamp: {}".format(
                         timestamp))
-                log.info("Ringbuffer size: {}".format(self.rb.size()))
+                log.debug("Ringbuffer size: {}".format(self.rb.size()))
+                log.debug("Heap statistics: total_heaps: {}, complete_heaps: {}, incomplete_heaps: {}".format(
+                          self._nheaps, self._complete_heaps, self._incomplete_heaps))
                 self._transmit_socket.send(bytearray(fw_packet))
                 del self._data_to_fw[key]
         log.debug(
