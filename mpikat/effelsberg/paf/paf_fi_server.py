@@ -406,7 +406,8 @@ class FitsInterfaceServer(AsyncDeviceServer):
             pngs = self._plotting_process.get_plotted_data()
             if not pngs is None:
                 for beam_id in range(36):
-                    self._beam_pngs[beam_id].set_value(pngs[beam_id])
+                    if pngs[beam_id] != DEFAULT_BLOB:
+                        self._beam_pngs[beam_id].set_value(pngs[beam_id])
             else:
                 log.debug("No plots available")
         except Exception:
