@@ -59,7 +59,7 @@ DEFAULT_CONFIG = {
         "samples_per_block": 512 * 1024 * 1024,             # 512 Mega sampels per buffer block to allow high res  spectra - the theoretical mazimum is thus 256 M Channels
         "enabled_polarizations" : ["polarization_1"],
         "sample_clock" : 2600000000,
-        "sync_time" : 1554915838,
+        "sync_time" : 1562662573.0,
 
         "fft_length": 1024 * 1024 * 2 * 8,
         "naccumulate": 32,
@@ -143,6 +143,11 @@ PACKET_SIZE 8400
 IBV_VECTOR   -1          # IBV forced into polling mode
 IBV_MAX_POLL 10
 
+SYNC_TIME           unset  # Default value from mksend manual
+SAMPLE_CLOCK        unset  # Default value from mksend manual
+SAMPLE_CLOCK_START  0      # Default value from mksend manual
+UTC_START           unset  # Default value from mksend manual
+
 #number of heaps with the same time stamp.
 HEAP_COUNT 1
 HEAP_ID_START   1
@@ -150,23 +155,25 @@ HEAP_ID_OFFSET  1
 HEAP_ID_STEP    13
 
 NSCI            1
-NITEMS          7
+NITEMS         8
 ITEM1_ID        5632    # timestamp, slowest index
 
-ITEM2_ID        5633    # polarization
+ITEM2_ID        5633    # naccumulate 
 
 ITEM3_ID        5634    # noise diode status
 ITEM3_LIST      0,1
 ITEM3_INDEX     2
 
-ITEM4_ID        5635    # number of channels in dataset
+ITEM4_ID        5635    # fft_length 
 
 ITEM5_ID        5636
-ITEM5_SCI       1       # number of input ehaps with ndiode on/off
+ITEM5_SCI       1       # number of input heaps with ndiode on/off
 
-ITEM6_ID        5637    # Integration time
+ITEM6_ID        5637    # sync_time
 
-ITEM7_ID        5638    # payload item (empty step, list, index and sci)
+ITEM8_ID        5638    # sampling rate
+
+ITEM7_ID        5639    # payload item (empty step, list, index and sci)
 """
 
 
@@ -458,7 +465,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
     @return_reply()
     def request_reconfigure(self, req):
         """
-        @brief      Reconfigure EDD with last configuration 
+        @brief      Reconfigure EDD with last configuration
 
         @note       This is the KATCP wrapper for the reconfigure command
 
@@ -635,8 +642,9 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
                 nhops = len(self._config[k]['mcast_dest'].split())
 
+                timestep = cfg["fft_length"] * cfg["naccumulate"]
                 physcpu = ",".join(numa.getInfo()[numa_node]['cores'][1:2])
-                cmd = "taskset {physcpu} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {fft_length} --item2-list {polarization} --item4-list {nChannels} --item6-list {integrationTime} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name,
+                cmd = "taskset {physcpu} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {timestep} --item2-list {naccumulate} --item4-list {fft_length} --item6-list {sync_time} --item8-list {sample_clock} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, timestep=timestep,
                         ofname=ofname, polarization=i, nChannels=nChannels, physcpu=physcpu, integrationTime=integrationTime,
                         rate=rate, nhops=nhops, heap_size=output_heapSize, **cfg)
                 log.debug("Command to run: {}".format(cmd))
