@@ -277,7 +277,7 @@ class RoutingTable(object):
             "cd {}/Code/Components/OSL/scripts/ade".format(TOSSIX_SCRIPT_ROOT))
 
         # Configure metadata and streaming
-        tossix.control("python osl_a_metadata_streaming.py")
+        #tossix.control("python osl_a_metadata_streaming.py")
         tossix.control(
             "python osl_a_abf_config_stream.py --param 'ade_bmf.stream10G.streamSetup={}'".format(self.fname.split("/")[-1]))
 
@@ -326,6 +326,6 @@ if __name__ == "__main__":
 
     routing_table = RoutingTable(
         destinations, nbeam, nchunk, nchunk_offset, center_freq)
-    time.sleep(10)
+    #time.sleep(10)
     print(routing_table.center_freq_stream())
     routing_table.upload_table()

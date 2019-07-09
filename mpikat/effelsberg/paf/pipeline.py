@@ -90,8 +90,8 @@ SYSTEM_CONFIG = {"paf_nchan_per_chunk":    	     7,        # MHz
 
 # Configuration for pipelines
 PIPELINE_CONFIG = {"execution":                    1,
-                   "root_software":                "/phased-array-feed/",
-                   #"root_software":                "/home/pulsar/xinping/phased-array-feed/",
+                   #"root_software":                "/phased-array-feed/",
+                   "root_software":                "/home/pulsar/xinping/phased-array-feed/",
                    "root_runtime":                 "/beegfs/DENG/",
                    "rbuf_ndf_per_chunk_per_block": 16384,  # For all ring buffers
                    "tbuf_ndf_per_chunk_per_block": 128,  # Only need for capture
@@ -146,9 +146,9 @@ PIPELINE_CONFIG = {"execution":                    1,
                    #"spectrometer_port":    	  2,
                    "spectrometer_ip":             "10.17.0.2",
                    "spectrometer_port":           17106,
-                   "spectrometer_dbdisk":         0,
+                   "spectrometer_dbdisk":         1,
                    "spectrometer_monitor":        1,
-                   "spectrometer_accumulate_nblk": 3,
+                   "spectrometer_accumulate_nblk": 1,
                    "spectrometer_software_name":  "baseband2spectral_main",
 
                    # Spectral parameters for the simultaneous spectral output from fold and search mode
@@ -1970,6 +1970,7 @@ class Search(Pipeline):
             refinfo = "{}_{}_{}".format(refinfo[0], refinfo[1], refinfo[2])
 
             # capture command
+            #os.environ["LD_PRELOAD"] = "libvma.so"
             command = ("{} -a {} -b {} -c {} -e {} -f {} -g {} -i {} -j {} "
                        "-k {} -l {} -m {} -n {} -o {} -p {} -q {} ").format(
                            self._input_main, self._input_keys[
@@ -2348,23 +2349,42 @@ class Search(Pipeline):
                                       self._input_socket_address[process_index])
                 process_index += 1
             log.info("Send 'END-OF-DATA' command to capture software, DONE")
-
-        if self._search_dbdisk:
-            for execution_instance in self._search_dbdisk_execution_instances:
-                execution_instance.finish()
-            log.info("Finish the search_dbdisk execution")
-
-        if self._search_heimdall:
-            for execution_instance in self._search_heimdall_execution_instances:
-                execution_instance.finish()
-            log.info("Finish the heimdall execution")
-        if self._search_spectrometer and self._spectrometer_dbdisk:
-            for execution_instance in self._spectrometer_dbdisk_execution_instances:
-                execution_instance.finish()
-            log.info("Finish the spectrometer_dbdisk execution")
+            
         for execution_instance in self._search_execution_instances:
             execution_instance.finish()
             log.info("Finish the baseband2filterbank execution")
+
+        if self._search_dbdisk:
+            for execution_instance in self._search_dbdisk_execution_instances:
+                execution_instance.terminate()
+            log.info("Finish the search_dbdisk execution")
+            
+        if self._search_spectrometer and self._spectrometer_dbdisk:
+            for execution_instance in self._spectrometer_dbdisk_execution_instances:
+                execution_instance.terminate()
+            log.info("Finish the spectrometer_dbdisk execution")
+            
+        if self._search_heimdall:
+            for execution_instance in self._search_heimdall_execution_instances:
+                execution_instance.terminate()
+            log.info("Finish the heimdall execution")
+
+        #if self._search_dbdisk:
+        #    for execution_instance in self._search_dbdisk_execution_instances:
+        #        execution_instance.finish()
+        #    log.info("Finish the search_dbdisk execution")
+        #
+        #if self._search_heimdall:
+        #    for execution_instance in self._search_heimdall_execution_instances:
+        #        execution_instance.finish()
+        #    log.info("Finish the heimdall execution")
+        #if self._search_spectrometer and self._spectrometer_dbdisk:
+        #    for execution_instance in self._spectrometer_dbdisk_execution_instances:
+        #        execution_instance.finish()
+        #    log.info("Finish the spectrometer_dbdisk execution")
+        #for execution_instance in self._search_execution_instances:
+        #    execution_instance.finish()
+        #    log.info("Finish the baseband2filterbank execution")
 
         # To delete simultaneous spectral output buffer
         if self._search_spectrometer and self._spectrometer_dbdisk:
@@ -3055,6 +3075,23 @@ class Spectrometer2Beam(Spectrometer):
             config_json, config_dictionary)
 
 
+@register_pipeline("Spectrometer1Beam")
+class Spectrometer1Beam(Spectrometer):
+
+    def __init__(self):
+        super(Spectrometer1Beam, self).__init__()
+
+    def configure(self, config_json):
+        config_dictionary = {
+            "input_nbeam":                  1,
+            "input_nchunk_per_port":       16,
+            "input_ports":                 [[17100, 17101, 17102]]
+        }
+
+        super(Spectrometer1Beam, self).configure(
+            config_json, config_dictionary)
+
+
 @register_pipeline("Search1BeamHigh")
 class Search1BeamHigh(Search):
 
@@ -3081,30 +3118,29 @@ class Search2BeamLow(Search):
     def __init__(self):
         super(Search2BeamLow, self).__init__()
 
-        def configure(self, config_json):
-            config_dictionary = {
-                "input_nbeam":                  2,
-                "input_nchunk_per_port":       11,
-                "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]],
-                "search_heimdall":     0,
-                "search_dbdisk":       0,
-                "search_spectrometer": 0,
-                "search_sod":          0,
-                "search_nreader":      1,
-            }
-            #def configure(self, config_json):
-            #    config_dictionary = {
-            #        "input_nbeam":                  2,
-            #        "input_nchunk_per_port":       11,
-            #        "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]],
-            #        "search_heimdall":     0,
-            #        "search_dbdisk":       1,
-            #        "search_spectrometer": 0,
-            #        "search_sod":          1,
-            #        "search_nreader":      1,
-            #    }
-            super(Search2BeamLow, self).configure(config_json, config_dictionary)
-
+    #def configure(self, config_json):
+        #config_dictionary = {
+        #    "input_nbeam":                  2,
+        #    "input_nchunk_per_port":       11,
+        #    "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]],
+        #    "search_heimdall":     0,
+        #    "search_dbdisk":       0,
+        #    "search_spectrometer": 0,
+        #    "search_sod":          0,
+        #    "search_nreader":      1,
+        #}
+    def configure(self, config_json):
+        config_dictionary = {
+            "input_nbeam":                  2,
+            "input_nchunk_per_port":       11,
+            "input_ports":                 [[17100, 17101, 17102], [17103, 17104, 17105]],
+            "search_heimdall":     1,
+            "search_dbdisk":       1,
+            "search_spectrometer": 0,
+            "search_sod":          1,
+            "search_nreader":      2,
+        }
+        super(Search2BeamLow, self).configure(config_json, config_dictionary)        
 
 @register_pipeline("Search2BeamHigh")
 class Search2BeamHigh(Search):
@@ -3202,6 +3238,9 @@ if __name__ == "__main__":
         if pipeline == "spectrometer2beam":
             config_info["nbands"] = 33
             mode = Spectrometer2Beam()
+        if pipeline == "spectrometer1beam":
+            config_info["nbands"] = 48
+            mode = Spectrometer1Beam()
 
         log.info("Configure it ...")
         config_info["utc_start_capture"] = Time(

@@ -25,6 +25,7 @@ import coloredlogs
 import signal
 import json
 import os
+import time
 from astropy.time import Time
 import astropy.units as units
 from optparse import OptionParser
