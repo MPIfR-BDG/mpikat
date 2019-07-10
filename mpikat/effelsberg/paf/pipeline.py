@@ -1637,7 +1637,7 @@ class Fold(Pipeline):
             execution_instance.finish()
 
         # Change the mode and owner of files
-        for i in self._input_nbeam:
+        for i in range(self._input_nbeam):
             for root, dirs, files in os.walk(self._pipeline_runtime_directory[i]):
                 for d in dirs:
                     os.chown(os.path.join(root, d), 50000, 50000)
@@ -2483,7 +2483,7 @@ class Search(Pipeline):
         log.info("Delete filterbank ring buffer, DONE")
 
         # Change the mode and owner of files
-        for i in self._input_nbeam:
+        for i in range(self._input_nbeam):
             for root, dirs, files in os.walk(self._search_root_directory[i]):
                 for d in dirs:
                     os.chown(os.path.join(root, d), 50000, 50000)
@@ -3068,7 +3068,7 @@ class Spectrometer(Pipeline):
             log.info("Delete spectrometer ring buffer, DONE")
 
         # Change the mode and owner of files
-        for i in self._input_nbeam:
+        for i in range(self._input_nbeam):
             for root, dirs, files in os.walk(self._pipeline_runtime_directory[i]):
                 for d in dirs:
                     os.chown(os.path.join(root, d), 50000, 50000)
