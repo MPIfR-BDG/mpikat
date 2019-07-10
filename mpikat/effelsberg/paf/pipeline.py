@@ -1636,6 +1636,16 @@ class Fold(Pipeline):
         for execution_instance in execution_instances:
             execution_instance.finish()
 
+        # Change the mode and owner of files
+        for i in self._input_nbeam:
+            for root, dirs, files in os.walk(self._pipeline_runtime_directory[i]):
+                for d in dirs:
+                    os.chown(os.path.join(root, d), 50000, 50000)
+                    os.chmod(os.path.join(root, d), 0444)
+                for f in files:
+                    os.chown(os.path.join(root, f), 50000, 50000)
+                    os.chmod(os.path.join(root, f), 0444)
+    
         self.state = "ready"
         log.info("Ready")
 
@@ -2027,88 +2037,6 @@ class Search(Pipeline):
                 command = "taskset -c {} dada_db -d -k {:}".format(
                     dadadb_cpu, self._spectrometer_keys[i])
                 self._spectrometer_delete_rbuf_commands.append(command)
-
-            ## search command
-            #search_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
-            #    (i + 1) * self._pacifix_ncpu_per_instance - 1
-            #command = ("taskset -c {} {} -a {} -b {} -c {} -d {} -e {} "
-            #           "-f {} -i {} -j {} -k {} ").format(
-            #               search_cpu, self._search_main, self._input_keys[i],
-            #               self._search_keys[
-            #                   i], self._rbuf_ndf_per_chunk_per_block,
-            #               self._gpu_nstream, self._gpu_ndf_per_chunk_per_stream, self._input_runtime_directory[
-            #                   i],
-            #               self._input_nchunk, self._search_cufft_nx, self._search_nchan)
-            #
-            #if self._search_spectrometer:
-            #    if self._spectrometer_dbdisk:
-            #        command += "-m k_{}_{}_{}_{}_{}_{}_{} ".format(self._spectrometer_keys[i],
-            #                                                       self._spectrometer_sod,
-            #                                                       self._spectrometer_ptype,
-            #                                                       self._simultaneous_spectrometer_start_chunk,
-            #                                                       self._simultaneous_spectrometer_nchunk,
-            #                                                       self._spectrometer_accumulate_nblk,
-            #                                                       self._spectrometer_cufft_nx)
-            #    else:
-            #        command += "-m n_{}_{}_{}_{}_{}_{}_{} ".format(self._spectrometer_ip,
-            #                                                       self._spectrometer_port,
-            #                                                       self._spectrometer_ptype,
-            #                                                       self._simultaneous_spectrometer_start_chunk,
-            #                                                       self._simultaneous_spectrometer_nchunk,
-            #                                                       self._spectrometer_accumulate_nblk,
-            #                                                       self._spectrometer_cufft_nx)
-            #else:
-            #    command += "-m N "
-            #
-            #if self._search_sod:
-            #    command += "-g 1 "
-            #else:
-            #    command += "-g 0 "
-            #
-            #if self._search_monitor:
-            #    command += "-l Y_{}_{}_{} ".format(
-            #        self._monitor_ip, self._monitor_port, self._monitor_ptype)
-            #else:
-            #    command += "-l N"
-            #self._search_commands.append(command)
-
-            ## Command to run heimdall
-            #if self._search_heimdall:
-            #    heimdall_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
-            #        (i + 1) * self._pacifix_ncpu_per_instance - 1
-            #    command = ("taskset -c {} heimdall -k {} "
-            #               "-detect_thresh {} -output_dir {} ").format(
-            #                   heimdall_cpu, self._search_keys[i],
-            #                   self._search_detect_thresh, input_runtime_directory)
-            #    if self._search_zap_chans:
-            #        zap = ""
-            #        for search_zap_chan in self._search_zap_chans:
-            #            zap += " -zap_chans {} {}".format(
-            #                self._search_zap_chan[0], self._search_zap_chan[1])
-            #        command += zap
-            #    if self._search_dm:
-            #        command += "-dm {} {}".format(
-            #            self._search_dm[0], self._search_dm[1])
-            #    self._search_heimdall_commands.append(command)
-            #
-            ## Command to run dbdisk
-            #if self._search_dbdisk:
-            #    dbdisk_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
-            #        (i + 1) * self._pacifix_ncpu_per_instance - 1
-            #    command = ("dada_dbdisk -b {} -k {} "
-            #               "-D {} -o -s -z").format(
-            #                   dbdisk_cpu,
-            #                   self._search_keys[i],
-            #                   input_runtime_directory)
-            #    self._search_dbdisk_commands.append(command)
-            #
-            ## Command to run dbdisk for spectrometer output
-            #if self._search_spectrometer and self._spectrometer_dbdisk:
-            #    command = ("dada_dbdisk -W -k {} "
-            #               "-D {} -o -s -z").format(self._spectrometer_keys[i],
-            #                                        self._input_runtime_directory[i])
-            #    self._spectrometer_dbdisk_commands.append(command)
-
         log.info("Setup command lines for the pipeline, DONE")
 
         # Create baseband ring buffer
@@ -2516,23 +2444,6 @@ class Search(Pipeline):
             for execution_instance in self._search_heimdall_execution_instances:
                 execution_instance.terminate()
             log.info("Finish the heimdall execution")
-
-        #if self._search_dbdisk:
-        #    for execution_instance in self._search_dbdisk_execution_instances:
-        #        execution_instance.finish()
-        #    log.info("Finish the search_dbdisk execution")
-        #
-        #if self._search_heimdall:
-        #    for execution_instance in self._search_heimdall_execution_instances:
-        #        execution_instance.finish()
-        #    log.info("Finish the heimdall execution")
-        #if self._search_spectrometer and self._spectrometer_dbdisk:
-        #    for execution_instance in self._spectrometer_dbdisk_execution_instances:
-        #        execution_instance.finish()
-        #    log.info("Finish the spectrometer_dbdisk execution")
-        #for execution_instance in self._search_execution_instances:
-        #    execution_instance.finish()
-        #    log.info("Finish the baseband2filterbank execution")
 
         # To delete simultaneous spectral output buffer
         if self._search_spectrometer and self._spectrometer_dbdisk:
