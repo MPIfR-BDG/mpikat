@@ -73,6 +73,7 @@ class PafWorkerServer(AsyncDeviceServer):
         super(PafWorkerServer, self).__init__(ip, port)
         self.ip = ip
         self._managed_sensors = []
+        self._pipeline_instance = None
 
     def add_pipeline_sensors(self):
         """
@@ -239,20 +240,18 @@ class PafWorkerServer(AsyncDeviceServer):
 
     @coroutine
     def deconfigure(self):
-        log.info("Deconfiguring pipeline {}".format(
-            self._pipeline_sensor_name.value()))
-        try:
-            self.remove_pipeline_sensors()
-            self._pipeline_instance.deconfigure()
-            del self._pipeline_instance
-        except Exception as error:
-            msg = "Couldn't deconfigure pipeline {}".format(str(error))
-            log.error(msg)
-            raise PafPipelineError(msg)
-        else:
-            log.info("Deconfigured pipeline {}".format(
-                self._pipeline_sensor_name.value()))
-            self._pipeline_sensor_name.set_value("")
+        if self._pipeline_instance:
+            try:
+                self.remove_pipeline_sensors()
+                self._pipeline_instance.deconfigure()
+            except Exception as error:
+                msg = "Couldn't deconfigure pipeline {}".format(str(error))
+                log.error(msg)
+                raise PafPipelineError(msg)
+            else:
+                log.info("Deconfigured pipeline {}".format(
+                    self._pipeline_sensor_name.value()))
+                self._pipeline_sensor_name.set_value("")
 
     @request(Str())
     @return_reply(Str())
