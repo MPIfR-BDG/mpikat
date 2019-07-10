@@ -1641,7 +1641,7 @@ class Fold(Pipeline):
             for root, dirs, files in os.walk(self._pipeline_runtime_directory[i]):
                 for d in dirs:
                     os.chown(os.path.join(root, d), 50000, 50000)
-                    os.chmod(os.path.join(root, d), 0444)
+                    os.chmod(os.path.join(root, d), 0550)
                 for f in files:
                     os.chown(os.path.join(root, f), 50000, 50000)
                     os.chmod(os.path.join(root, f), 0444)
@@ -2487,7 +2487,7 @@ class Search(Pipeline):
             for root, dirs, files in os.walk(self._search_root_directory[i]):
                 for d in dirs:
                     os.chown(os.path.join(root, d), 50000, 50000)
-                    os.chmod(os.path.join(root, d), 0444)
+                    os.chmod(os.path.join(root, d), 0550)
                 for f in files:
                     os.chown(os.path.join(root, f), 50000, 50000)
                     os.chmod(os.path.join(root, f), 0444)
@@ -3072,7 +3072,7 @@ class Spectrometer(Pipeline):
             for root, dirs, files in os.walk(self._pipeline_runtime_directory[i]):
                 for d in dirs:
                     os.chown(os.path.join(root, d), 50000, 50000)
-                    os.chmod(os.path.join(root, d), 0444)
+                    os.chmod(os.path.join(root, d), 0550)
                 for f in files:
                     os.chown(os.path.join(root, f), 50000, 50000)
                     os.chmod(os.path.join(root, f), 0444)
