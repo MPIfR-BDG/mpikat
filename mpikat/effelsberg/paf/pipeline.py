@@ -53,6 +53,8 @@ iers.conf.auto_max_age = None    # Enable prediction
 # 17. Read from json and check the parameters there
 # 18. Created modes for March run
 # 19. Fresh iers data base at configure
+# 20. Put data files into separate directories
+# 21. Change the mode and ownership of it
 
 log = logging.getLogger('mpikat.effelsberg.paf.pipeline')
 log.setLevel('DEBUG')
@@ -90,8 +92,8 @@ SYSTEM_CONFIG = {"paf_nchan_per_chunk":    	     7,        # MHz
 
 # Configuration for pipelines
 PIPELINE_CONFIG = {"execution":                    1,
-                   #"root_software":                "/phased-array-feed/",
-                   "root_software":                "/home/pulsar/xinping/phased-array-feed/",
+                   "root_software":                "/phased-array-feed/",
+                   #"root_software":                "/home/pulsar/xinping/phased-array-feed/",
                    "root_runtime":                 "/beegfs/DENG/",
                    "rbuf_ndf_per_chunk_per_block": 16384,  # For all ring buffers
                    "tbuf_ndf_per_chunk_per_block": 128,  # Only need for capture
@@ -1174,7 +1176,7 @@ class Fold(Pipeline):
                     self._utc_start_capture, first_alive_ip, first_alive_port)
 
                 # To get directory for data and socket for control
-                pipeline_runtime_directory = "{}/beam{:02}".format(
+                pipeline_runtime_directory = "{}/FOLD/BEAM{:02}".format(
                     self._root_runtime, beam_index)
                 if not os.path.isdir(pipeline_runtime_directory):
                     try:
@@ -1704,7 +1706,9 @@ class Search(Pipeline):
         self._input_beam_index = []
         self._input_socket_address = []
         self._input_control_socket = []
-        self._pipeline_runtime_directory = []
+
+        self._search_root_directory = []
+        
         self._input_commands = []
         self._input_create_rbuf_commands = []
         self._input_delete_rbuf_commands = []
@@ -1904,23 +1908,23 @@ class Search(Pipeline):
                     self._utc_start_capture, first_alive_ip, first_alive_port)
                 log.debug("beam index is {}".format(beam_index))
                 # To get directory for data and socket for control
-                pipeline_runtime_directory = "{}/beam{:02}".format(
+                input_runtime_directory = "{}/SEARCH/BEAM{:02}".format(
                     self._root_runtime, beam_index)
-                if not os.path.isdir(pipeline_runtime_directory):
+                if not os.path.isdir(input_runtime_directory):
                     try:
-                        os.makedirs(pipeline_runtime_directory)
+                        os.makedirs(input_runtime_directory)
                     except Exception as error:
                         log.exception(error)
                         log.error("Fail to create {}".format(
-                            pipeline_runtime_directory))
+                            input_runtime_directory))
                         self._terminate_execution_instances()
                         self._cleanup(self._cleanup_commands_config)
                         self.state = "error"
                         raise PipelineError(
-                            "Fail to create {}".format(pipeline_runtime_directory))
+                            "Fail to create {}".format(input_runtime_directory))
 
                 socket_address = "{}/capture.socket".format(
-                    pipeline_runtime_directory)
+                    input_runtime_directory)
                 # If the socket is there, remove it to be safe
                 if os.path.isfile(socket_address):
                     try:
@@ -1949,7 +1953,6 @@ class Search(Pipeline):
                 control_socket = None
                 runtime_directory = None
             self._input_beam_index.append(beam_index)
-            self._pipeline_runtime_directory.append(pipeline_runtime_directory)
             self._input_socket_address.append(socket_address)
             self._input_control_socket.append(control_socket)
 
@@ -1975,54 +1978,10 @@ class Search(Pipeline):
                        "-k {} -l {} -m {} -n {} -o {} -p {} -q {} ").format(
                            self._input_main, self._input_keys[
                                i], self._paf_df_hdrsz, " -c ".join(alive_info),
-                           self._freq, refinfo, pipeline_runtime_directory, buf_control_cpu, capture_control,
+                           self._freq, refinfo, input_runtime_directory, buf_control_cpu, capture_control,
                            self._input_cpu_bind, self._rbuf_ndf_per_chunk_per_block, self._tbuf_ndf_per_chunk_per_block,
                            self._input_dada_hdr_fname, self._input_source_default, self._input_pad, beam_index)
             self._input_commands.append(command)
-
-            # search command
-            search_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
-                (i + 1) * self._pacifix_ncpu_per_instance - 1
-            command = ("taskset -c {} {} -a {} -b {} -c {} -d {} -e {} "
-                       "-f {} -i {} -j {} -k {} ").format(
-                           search_cpu, self._search_main, self._input_keys[i],
-                           self._search_keys[
-                               i], self._rbuf_ndf_per_chunk_per_block,
-                           self._gpu_nstream, self._gpu_ndf_per_chunk_per_stream, self._pipeline_runtime_directory[
-                               i],
-                           self._input_nchunk, self._search_cufft_nx, self._search_nchan)
-
-            if self._search_spectrometer:
-                if self._spectrometer_dbdisk:
-                    command += "-m k_{}_{}_{}_{}_{}_{}_{} ".format(self._spectrometer_keys[i],
-                                                                   self._spectrometer_sod,
-                                                                   self._spectrometer_ptype,
-                                                                   self._simultaneous_spectrometer_start_chunk,
-                                                                   self._simultaneous_spectrometer_nchunk,
-                                                                   self._spectrometer_accumulate_nblk,
-                                                                   self._spectrometer_cufft_nx)
-                else:
-                    command += "-m n_{}_{}_{}_{}_{}_{}_{} ".format(self._spectrometer_ip,
-                                                                   self._spectrometer_port,
-                                                                   self._spectrometer_ptype,
-                                                                   self._simultaneous_spectrometer_start_chunk,
-                                                                   self._simultaneous_spectrometer_nchunk,
-                                                                   self._spectrometer_accumulate_nblk,
-                                                                   self._spectrometer_cufft_nx)
-            else:
-                command += "-m N "
-
-            if self._search_sod:
-                command += "-g 1 "
-            else:
-                command += "-g 0 "
-
-            if self._search_monitor:
-                command += "-l Y_{}_{}_{} ".format(
-                    self._monitor_ip, self._monitor_port, self._monitor_ptype)
-            else:
-                command += "-l N"
-            self._search_commands.append(command)
 
             # Command to create search ring buffer
             dadadb_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
@@ -2069,42 +2028,86 @@ class Search(Pipeline):
                     dadadb_cpu, self._spectrometer_keys[i])
                 self._spectrometer_delete_rbuf_commands.append(command)
 
-            # Command to run heimdall
-            if self._search_heimdall:
-                heimdall_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
-                    (i + 1) * self._pacifix_ncpu_per_instance - 1
-                command = ("taskset -c {} heimdall -k {} "
-                           "-detect_thresh {} -output_dir {} ").format(
-                               heimdall_cpu, self._search_keys[i],
-                               self._search_detect_thresh, pipeline_runtime_directory)
-                if self._search_zap_chans:
-                    zap = ""
-                    for search_zap_chan in self._search_zap_chans:
-                        zap += " -zap_chans {} {}".format(
-                            self._search_zap_chan[0], self._search_zap_chan[1])
-                    command += zap
-                if self._search_dm:
-                    command += "-dm {} {}".format(
-                        self._search_dm[0], self._search_dm[1])
-                self._search_heimdall_commands.append(command)
+            ## search command
+            #search_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
+            #    (i + 1) * self._pacifix_ncpu_per_instance - 1
+            #command = ("taskset -c {} {} -a {} -b {} -c {} -d {} -e {} "
+            #           "-f {} -i {} -j {} -k {} ").format(
+            #               search_cpu, self._search_main, self._input_keys[i],
+            #               self._search_keys[
+            #                   i], self._rbuf_ndf_per_chunk_per_block,
+            #               self._gpu_nstream, self._gpu_ndf_per_chunk_per_stream, self._input_runtime_directory[
+            #                   i],
+            #               self._input_nchunk, self._search_cufft_nx, self._search_nchan)
+            #
+            #if self._search_spectrometer:
+            #    if self._spectrometer_dbdisk:
+            #        command += "-m k_{}_{}_{}_{}_{}_{}_{} ".format(self._spectrometer_keys[i],
+            #                                                       self._spectrometer_sod,
+            #                                                       self._spectrometer_ptype,
+            #                                                       self._simultaneous_spectrometer_start_chunk,
+            #                                                       self._simultaneous_spectrometer_nchunk,
+            #                                                       self._spectrometer_accumulate_nblk,
+            #                                                       self._spectrometer_cufft_nx)
+            #    else:
+            #        command += "-m n_{}_{}_{}_{}_{}_{}_{} ".format(self._spectrometer_ip,
+            #                                                       self._spectrometer_port,
+            #                                                       self._spectrometer_ptype,
+            #                                                       self._simultaneous_spectrometer_start_chunk,
+            #                                                       self._simultaneous_spectrometer_nchunk,
+            #                                                       self._spectrometer_accumulate_nblk,
+            #                                                       self._spectrometer_cufft_nx)
+            #else:
+            #    command += "-m N "
+            #
+            #if self._search_sod:
+            #    command += "-g 1 "
+            #else:
+            #    command += "-g 0 "
+            #
+            #if self._search_monitor:
+            #    command += "-l Y_{}_{}_{} ".format(
+            #        self._monitor_ip, self._monitor_port, self._monitor_ptype)
+            #else:
+            #    command += "-l N"
+            #self._search_commands.append(command)
 
-            # Command to run dbdisk
-            if self._search_dbdisk:
-                dbdisk_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
-                    (i + 1) * self._pacifix_ncpu_per_instance - 1
-                command = ("dada_dbdisk -b {} -k {} "
-                           "-D {} -o -s -z").format(
-                               dbdisk_cpu,
-                               self._search_keys[i],
-                               pipeline_runtime_directory)
-                self._search_dbdisk_commands.append(command)
-
-            # Command to run dbdisk for spectrometer output
-            if self._search_spectrometer and self._spectrometer_dbdisk:
-                command = ("dada_dbdisk -W -k {} "
-                           "-D {} -o -s -z").format(self._spectrometer_keys[i],
-                                                    self._pipeline_runtime_directory[i])
-                self._spectrometer_dbdisk_commands.append(command)
+            ## Command to run heimdall
+            #if self._search_heimdall:
+            #    heimdall_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
+            #        (i + 1) * self._pacifix_ncpu_per_instance - 1
+            #    command = ("taskset -c {} heimdall -k {} "
+            #               "-detect_thresh {} -output_dir {} ").format(
+            #                   heimdall_cpu, self._search_keys[i],
+            #                   self._search_detect_thresh, input_runtime_directory)
+            #    if self._search_zap_chans:
+            #        zap = ""
+            #        for search_zap_chan in self._search_zap_chans:
+            #            zap += " -zap_chans {} {}".format(
+            #                self._search_zap_chan[0], self._search_zap_chan[1])
+            #        command += zap
+            #    if self._search_dm:
+            #        command += "-dm {} {}".format(
+            #            self._search_dm[0], self._search_dm[1])
+            #    self._search_heimdall_commands.append(command)
+            #
+            ## Command to run dbdisk
+            #if self._search_dbdisk:
+            #    dbdisk_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
+            #        (i + 1) * self._pacifix_ncpu_per_instance - 1
+            #    command = ("dada_dbdisk -b {} -k {} "
+            #               "-D {} -o -s -z").format(
+            #                   dbdisk_cpu,
+            #                   self._search_keys[i],
+            #                   input_runtime_directory)
+            #    self._search_dbdisk_commands.append(command)
+            #
+            ## Command to run dbdisk for spectrometer output
+            #if self._search_spectrometer and self._spectrometer_dbdisk:
+            #    command = ("dada_dbdisk -W -k {} "
+            #               "-D {} -o -s -z").format(self._spectrometer_keys[i],
+            #                                        self._input_runtime_directory[i])
+            #    self._spectrometer_dbdisk_commands.append(command)
 
         log.info("Setup command lines for the pipeline, DONE")
 
@@ -2180,6 +2183,151 @@ class Search(Pipeline):
         self._source_ra, self._source_dec = float(
             self._status_info['ra']), float(self._status_info['dec'])
 
+        # UPDATE BELOW HERE FOR INDIVIDUAL DIRECTORIES
+        self._search_root_directory = []
+        for i in range(self._input_nbeam):
+            # Root directory for search
+            search_root_directory = "{}/SEARCH/{}_{}".format(
+                    self._root_runtime, self._utc_start_process, self._source_name)
+            self._search_root_directory.append(search_root_directory)
+            
+            search_runtime_directory = "{}/BEAM{:02}".format(search_root_directory, self._input_beam_index[i])
+            if not os.path.isdir(search_runtime_directory):
+                try:
+                    os.makedirs(search_runtime_directory)
+                except Exception as error:
+                    log.exception(error)
+                    log.error("Fail to create {}".format(
+                        search_runtime_directory))
+                    self._terminate_execution_instances()
+                    self._cleanup(self._cleanup_commands_config)
+                    self.state = "error"
+                    raise PipelineError(
+                        "Fail to create {}".format(search_runtime_directory))
+
+            search_spectrometer_directory = "{}/SPEC".format(search_runtime_directory)            
+            if not os.path.isdir(search_spectrometer_directory):
+                try:
+                    os.makedirs(search_spectrometer_directory)
+                except Exception as error:
+                    log.exception(error)
+                    log.error("Fail to create {}".format(
+                        search_spectrometer_directory))
+                    self._terminate_execution_instances()
+                    self._cleanup(self._cleanup_commands_config)
+                    self.state = "error"
+                    raise PipelineError(
+                        "Fail to create {}".format(search_spectrometer_directory))
+                
+            search_data_directory = "{}/DATA".format(search_runtime_directory)
+            if not os.path.isdir(search_data_directory):
+                try:
+                    os.makedirs(search_data_directory)
+                except Exception as error:
+                    log.exception(error)
+                    log.error("Fail to create {}".format(
+                        search_data_directory))
+                    self._terminate_execution_instances()
+                    self._cleanup(self._cleanup_commands_config)
+                    self.state = "error"
+                    raise PipelineError(
+                        "Fail to create {}".format(search_data_directory))
+                
+            search_cand_directory = "{}/CAND".format(search_runtime_directory)
+            if not os.path.isdir(search_cand_directory):
+                try:
+                    os.makedirs(search_cand_directory)
+                except Exception as error:
+                    log.exception(error)
+                    log.error("Fail to create {}".format(
+                        search_cand_directory))
+                    self._terminate_execution_instances()
+                    self._cleanup(self._cleanup_commands_config)
+                    self.state = "error"
+                    raise PipelineError(
+                        "Fail to create {}".format(search_cand_directory))
+                
+            # search command
+            search_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
+                (i + 1) * self._pacifix_ncpu_per_instance - 1
+            command = ("taskset -c {} {} -a {} -b {} -c {} -d {} -e {} "
+                       "-f {} -i {} -j {} -k {} ").format(
+                           search_cpu, self._search_main, self._input_keys[i],
+                           self._search_keys[
+                               i], self._rbuf_ndf_per_chunk_per_block,
+                           self._gpu_nstream, self._gpu_ndf_per_chunk_per_stream, search_runtime_directory,
+                           self._input_nchunk, self._search_cufft_nx, self._search_nchan)
+
+            if self._search_spectrometer:
+                if self._spectrometer_dbdisk:
+                    command += "-m k_{}_{}_{}_{}_{}_{}_{} ".format(self._spectrometer_keys[i],
+                                                                   self._spectrometer_sod,
+                                                                   self._spectrometer_ptype,
+                                                                   self._simultaneous_spectrometer_start_chunk,
+                                                                   self._simultaneous_spectrometer_nchunk,
+                                                                   self._spectrometer_accumulate_nblk,
+                                                                   self._spectrometer_cufft_nx)
+                else:
+                    command += "-m n_{}_{}_{}_{}_{}_{}_{} ".format(self._spectrometer_ip,
+                                                                   self._spectrometer_port,
+                                                                   self._spectrometer_ptype,
+                                                                   self._simultaneous_spectrometer_start_chunk,
+                                                                   self._simultaneous_spectrometer_nchunk,
+                                                                   self._spectrometer_accumulate_nblk,
+                                                                   self._spectrometer_cufft_nx)
+            else:
+                command += "-m N "
+
+            if self._search_sod:
+                command += "-g 1 "
+            else:
+                command += "-g 0 "
+
+            if self._search_monitor:
+                command += "-l Y_{}_{}_{} ".format(
+                    self._monitor_ip, self._monitor_port, self._monitor_ptype)
+            else:
+                command += "-l N"
+            self._search_commands.append(command)
+
+            # Command to run heimdall
+            if self._search_heimdall:
+                heimdall_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
+                    (i + 1) * self._pacifix_ncpu_per_instance - 1
+                command = ("taskset -c {} heimdall -k {} "
+                           "-detect_thresh {} -output_dir {} ").format(
+                               heimdall_cpu, self._search_keys[i],
+                               self._search_detect_thresh, search_cand_directory)
+                if self._search_zap_chans:
+                    zap = ""
+                    for search_zap_chan in self._search_zap_chans:
+                        zap += " -zap_chans {} {}".format(
+                            self._search_zap_chan[0], self._search_zap_chan[1])
+                    command += zap
+                if self._search_dm:
+                    command += "-dm {} {}".format(
+                        self._search_dm[0], self._search_dm[1])
+                self._search_heimdall_commands.append(command)
+
+            # Command to run dbdisk
+            if self._search_dbdisk:
+                dbdisk_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
+                    (i + 1) * self._pacifix_ncpu_per_instance - 1
+                command = ("dada_dbdisk -b {} -k {} "
+                           "-D {} -o -s -z").format(
+                               dbdisk_cpu,
+                               self._search_keys[i],
+                               search_data_directory)
+                self._search_dbdisk_commands.append(command)
+
+            # Command to run dbdisk for spectrometer output
+            if self._search_spectrometer and self._spectrometer_dbdisk:
+                command = ("dada_dbdisk -W -k {} "
+                           "-D {} -o -s -z").format(self._spectrometer_keys[i],
+                                                    search_spectrometer_directory)
+                self._spectrometer_dbdisk_commands.append(command)
+        # UPDATE ABOVE HERE FOR INDIVIDUAL DIRECTORIES
+        
         # To start the coord conversion in a thread to save the wait time
         self._beam_ra = []
         self._beam_dec = []
@@ -2423,6 +2571,16 @@ class Search(Pipeline):
             execution_instance.finish()
         log.info("Delete filterbank ring buffer, DONE")
 
+        # Change the mode and owner of files
+        for i in self._input_nbeam:
+            for root, dirs, files in os.walk(self._search_root_directory[i]):
+                for d in dirs:
+                    os.chown(os.path.join(root, d), 50000, 50000)
+                    os.chmod(os.path.join(root, d), 0444)
+                for f in files:
+                    os.chown(os.path.join(root, f), 50000, 50000)
+                    os.chmod(os.path.join(root, f), 0444)
+    
         self.state = "ready"
         log.info("Ready")
 
@@ -2651,7 +2809,7 @@ class Spectrometer(Pipeline):
                     self._utc_start_capture, first_alive_ip, first_alive_port)
 
                 # To get directory for data and socket for control
-                pipeline_runtime_directory = "{}/beam{:02}".format(
+                pipeline_runtime_directory = "{}/SPECTRAL/BEAM{:02}".format(
                     self._root_runtime, beam_index)
                 if not os.path.isdir(pipeline_runtime_directory):
                     try:
@@ -2998,6 +3156,16 @@ class Spectrometer(Pipeline):
                 execution_instance.finish()
             log.info("Delete spectrometer ring buffer, DONE")
 
+        # Change the mode and owner of files
+        for i in self._input_nbeam:
+            for root, dirs, files in os.walk(self._pipeline_runtime_directory[i]):
+                for d in dirs:
+                    os.chown(os.path.join(root, d), 50000, 50000)
+                    os.chmod(os.path.join(root, d), 0444)
+                for f in files:
+                    os.chown(os.path.join(root, f), 50000, 50000)
+                    os.chmod(os.path.join(root, f), 0444)
+        
         self.state = "ready"
         log.info("Ready")
 
