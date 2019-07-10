@@ -405,8 +405,10 @@ class FitsInterfaceServer(AsyncDeviceServer):
             self._channel_bw_sensor.set_value(metadata.channel_bw)
             pngs = self._plotting_process.get_plotted_data()
             if not pngs is None:
+                print(png)
                 for beam_id in range(36):
                     if pngs[beam_id] != DEFAULT_BLOB:
+                        print("setting beam id {}".format(beam_id))
                         self._beam_pngs[beam_id].set_value(pngs[beam_id])
             else:
                 log.debug("No plots available")
