@@ -1645,6 +1645,8 @@ class Fold(Pipeline):
                 for f in files:
                     os.chown(os.path.join(root, f), 50000, 50000)
                     os.chmod(os.path.join(root, f), 0444)
+            os.chown(self._pipeline_runtime_directory[i], 50000, 50000)
+            os.chmod(self._pipeline_runtime_directory[i], 0550)
     
         self.state = "ready"
         log.info("Ready")
@@ -1717,11 +1719,12 @@ class Search(Pipeline):
         self._input_socket_address = []
         self._input_control_socket = []
 
-        self._search_root_directory = []
+        self._search_root_directory = None
         
         self._input_commands = []
         self._input_create_rbuf_commands = []
         self._input_delete_rbuf_commands = []
+        self._input_runtime_directory = []
 
         self._search_commands = []
         self._search_create_rbuf_commands = []
@@ -1932,7 +1935,8 @@ class Search(Pipeline):
                         self.state = "error"
                         raise PipelineError(
                             "Fail to create {}".format(input_runtime_directory))
-
+                self._input_runtime_directory.append(input_runtime_directory)
+                
                 socket_address = "{}/capture.socket".format(
                     input_runtime_directory)
                 # If the socket is there, remove it to be safe
@@ -2112,14 +2116,16 @@ class Search(Pipeline):
             self._status_info['ra']), float(self._status_info['dec'])
 
         # UPDATE BELOW HERE FOR INDIVIDUAL DIRECTORIES
-        self._search_root_directory = []
+        # Root directory for search
+        self._search_commands = []
+        self._search_dbdisk_commands = []
+        self._search_heimdall_commands = []
+        self._spectrometer_dbdisk_commands = []
+        
+        self._search_root_directory = "{}/SEARCH/{}_{}".format(
+            self._root_runtime, self._utc_start_process, self._source_name)
         for i in range(self._input_nbeam):
-            # Root directory for search
-            search_root_directory = "{}/SEARCH/{}_{}".format(
-                    self._root_runtime, self._utc_start_process, self._source_name)
-            self._search_root_directory.append(search_root_directory)
-            
-            search_runtime_directory = "{}/BEAM{:02}".format(search_root_directory, self._input_beam_index[i])
+            search_runtime_directory = "{}/BEAM{:02}".format(self._search_root_directory, self._input_beam_index[i])
             if not os.path.isdir(search_runtime_directory):
                 try:
                     os.makedirs(search_runtime_directory)
@@ -2484,14 +2490,30 @@ class Search(Pipeline):
 
         # Change the mode and owner of files
         for i in range(self._input_nbeam):
-            for root, dirs, files in os.walk(self._search_root_directory[i]):
+            # Update capture log and socket directory
+            for root, dirs, files in os.walk(self._input_runtime_directory[i]):
                 for d in dirs:
                     os.chown(os.path.join(root, d), 50000, 50000)
                     os.chmod(os.path.join(root, d), 0550)
                 for f in files:
                     os.chown(os.path.join(root, f), 50000, 50000)
                     os.chmod(os.path.join(root, f), 0444)
-    
+            os.chown(self._input_runtime_directory[i], 50000, 50000)
+            os.chmod(self._input_runtime_directory[i], 0550)
+            
+            # Update the search root directory
+            #if self._input_beam_index[i] == 0:            
+            # Update all files and directories inside the search directory
+            for root, dirs, files in os.walk(self._search_root_directory):
+                for d in dirs:
+                    os.chown(os.path.join(root, d), 50000, 50000)
+                    os.chmod(os.path.join(root, d), 0550)
+                for f in files:
+                    os.chown(os.path.join(root, f), 50000, 50000)
+                    os.chmod(os.path.join(root, f), 0444)
+            os.chown(self._search_root_directory, 50000, 50000)
+            os.chmod(self._search_root_directory, 0550)
+            
         self.state = "ready"
         log.info("Ready")
 
@@ -3076,7 +3098,9 @@ class Spectrometer(Pipeline):
                 for f in files:
                     os.chown(os.path.join(root, f), 50000, 50000)
                     os.chmod(os.path.join(root, f), 0444)
-        
+            os.chown(self._pipeline_runtime_directory[i], 50000, 50000)
+            os.chmod(self._pipeline_runtime_directory[i], 0550)
+            
         self.state = "ready"
         log.info("Ready")
 
