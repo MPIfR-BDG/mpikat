@@ -21,7 +21,12 @@ ESCAPE_SEQUENCE_RE = re.compile(r'''
     | \\[\\'"abfnrtv]  # Single-character escapes
     )''', re.UNICODE | re.VERBOSE)
 
+
 class BlockingRequest(BlockingClient):
+                """
+                @brief      Blocking request class for KATCP server
+
+                """
         def __init__(self, host, port):
                 device_host = host
                 device_port = port
@@ -46,21 +51,33 @@ class BlockingRequest(BlockingClient):
 
         def to_stream(self, reply, informs):
                 log.info(self.decode_katcp_message(reply.__str__()))
-                #for msg in reply:
+                # for msg in reply:
                 #        log.info(self.decode_katcp_message(msg.__str__()))
                 for msg in informs:
                         log.info(self.decode_katcp_message(msg.__str__()))
 
         def start(self):
+                """
+                @brief      Start the blocking client
+
+                """
                 self.setDaemon(True)
                 super(BlockingRequest, self).start()
                 self.wait_protocol()
 
         def stop(self):
+                """
+                @brief      Stop the blocking client
+
+                """
                 super(BlockingRequest, self).stop()
                 super(BlockingRequest, self).join()
 
         def help(self):
+                """
+                @brief      Send help command to the server
+
+                """
                 reply, informs = self.blocking_request(katcp.Message.request("help"), timeout=20)
                 self.to_stream(reply, informs)
 
@@ -69,21 +86,37 @@ class BlockingRequest(BlockingClient):
 #                self.to_stream(reply, informs)
 
         def configure(self, paras):
+                """
+                @brief      Send configure command to the server
+
+                """
                 reply, informs = self.blocking_request(katcp.Message.request("configure", paras))
                 self.to_stream(reply, informs)
-		return reply
+                return reply
 
         def deconfigure(self):
+                """
+                @brief      Send deconfigure command to the server
+
+                """
                 reply, informs = self.blocking_request(katcp.Message.request("deconfigure"))
                 self.to_stream(reply, informs)
                 return reply
 
         def capture_start(self):
+                """
+                @brief      Send capture_start command to the server
+
+                """
                 reply, informs = self.blocking_request(katcp.Message.request("start"))
                 self.to_stream(reply, informs)
                 return reply
 
         def capture_stop(self):
+                """
+                @brief      Send capture_stop command to the server
+
+                """
                 reply, informs = self.blocking_request(katcp.Message.request("stop"))
                 self.to_stream(reply, informs)
                 return reply
