@@ -29,8 +29,9 @@ from tornado.gen import Return, coroutine
 from katcp import Sensor, AsyncReply
 from katcp.kattypes import request, return_reply, Str
 from mpikat.core.master_controller import MasterController
-from mpikat.effelsberg.edd.edd_roach2_product_controller import (
+#from mpikat.effelsberg.edd.edd_roach2_product_controller import (
     EddRoach2ProductController)
+from mpikat.effelsberg.edd.edd_product_controller import EddProductController
 from mpikat.effelsberg.edd.edd_worker_wrapper import EddWorkerPool
 from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
@@ -166,7 +167,7 @@ class EddMasterController(MasterController):
                           (options: KATCP, SCPI)
         """
         mode = mode.upper()
-        if not mode in self.CONTROL_MODES:
+        if mode not in self.CONTROL_MODES:
             raise UnknownControlMode("Unknown mode '{}', valid modes are '{}' ".format(
                 mode, ", ".join(self.CONTROL_MODES)))
         else:
