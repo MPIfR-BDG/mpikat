@@ -24,6 +24,7 @@ import ipaddress
 
 log = logging.getLogger('mpikat.ip_manager')
 
+SKIP = 2
 
 class IpRangeAllocationError(Exception):
     pass
@@ -45,7 +46,7 @@ class ContiguousIpRange(object):
                     port number and the 'spead://' prefix used in the format_katcp method.
         """
         self._base_ip = ipaddress.ip_address(unicode(base_ip))
-        self._ips = [self._base_ip+ii for ii in range(count)]
+        self._ips = [self._base_ip+ii*SKIP for ii in range(count)]
         self._port = port
         self._count = count
 
@@ -81,7 +82,7 @@ class ContiguousIpRange(object):
         splits = []
         while allocated < self._count:
             available = min(self._count-allocated, n)
-            splits.append(ContiguousIpRange(str(self._base_ip+allocated),
+            splits.append(ContiguousIpRange(str(self._base_ip+allocated*SKIP),
                           self._port, available))
             allocated+=available
         return splits
@@ -164,7 +165,7 @@ class IpRangeManager(object):
                 offset = start+ii
                 self._allocated[offset] = True
             allocated_range = ContiguousIpRange(
-                str(self._ip_range.base_ip + start), self._ip_range.port, n)
+                str(self._ip_range.base_ip + start * SKIP), self._ip_range.port, n)
             self._allocated_ranges.add(allocated_range)
             log.debug("Allocated range: {}".format(
                 allocated_range.format_katcp()))

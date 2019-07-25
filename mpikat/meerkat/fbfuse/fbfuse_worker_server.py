@@ -582,12 +582,13 @@ class FbfWorkerServer(AsyncDeviceServer):
             coh_data_rate = (partition_bandwidth
                              / coherent_beam_config['tscrunch']
                              / coherent_beam_config['fscrunch']
-                             * nbeams_per_group * 1.1)
+                             * nbeams_per_group * 8 * 1.1)
             heap_id_start = worker_idx * coh_ip_range.count
             log.debug("Determining MKSEND configuration for coherent beams")
             dada_mode = int(self._exec_mode == FULL)
-            coherent_mcast_dest = coherent_beam_config['destination'].lstrip(
-                "spead://").split(":")[0]
+            #coherent_mcast_dest = coherent_beam_config['destination'].lstrip(
+            #    "spead://").split(":")[0]
+            coherent_mcast_dest = ",".join(map(str, coh_ip_range))
             mksend_coh_config = {
                 'dada_key': self._dada_coh_output_key,
                 'dada_mode': dada_mode,
@@ -614,7 +615,7 @@ class FbfWorkerServer(AsyncDeviceServer):
             log.debug("Determining MKSEND configuration for incoherent beams")
             incoh_data_rate = (
                 partition_bandwidth / incoherent_beam_config['tscrunch']
-                / incoherent_beam_config['fscrunch'] * 1.1)
+                / incoherent_beam_config['fscrunch'] * 8 * 1.1)
             dada_mode = int(self._exec_mode == FULL)
             incoh_ip_range = ip_range_from_stream(
                 incoherent_beam_config['destination'])
