@@ -635,15 +635,17 @@ class FbfProductController(object):
                 "Dropping antennas {} from the coherent beam".format(
                     antennas[-remainder:])
                 )
-            antennas = ",".join(antennas[:len(antennas) - remainder])
+            antennas = antennas[:len(antennas) - remainder]
         if len(antennas) == 0:
             raise Exception("After sanitising coherent beam antennas, "
                             "no valid antennas remain")
+        log.info("Sanitised coherent antennas: {}".format(antennas))
         return ",".join(antennas)
 
     def _sanitise_incoh_beam_ants(self, requested_antennas):
         antennas = self._get_valid_antennas(
             parse_csv_antennas(requested_antennas))
+	log.info("Sanitised incoherent antennas: {}".format(antennas))
         return ",".join(antennas)
 
     @coroutine
@@ -1038,6 +1040,7 @@ class FbfProductController(object):
             self._previous_sb_config = sb_config
             self._state_sensor.set_value(self.READY)
             self.log.info("Successfully prepared FBFUSE product")
+	yield self.set_levels(20.0, 4.0)
 
     @coroutine
     def deconfigure(self):
