@@ -60,7 +60,6 @@ DEFAULT_CONFIG = {
         "enabled_polarizations" : ["polarization_1"],
         "sample_clock" : 2600000000,
         "sync_time" : 1562662573.0,
-
         "fft_length": 1024 * 1024 * 2 * 8,
         "naccumulate": 32,
         "output_bit_depth": 32,
@@ -123,7 +122,6 @@ NINDICES            1      # Although there is more than one index, we are only 
 
 # The first index item is the running timestamp
 IDX1_ITEM           0      # First item of a SPEAD heap
-IDX1_STEP           4096   # The difference between successive timestamps. This is the number of sampels per heap
 
 # Add side item to buffer
 SCI_LIST            2
@@ -155,25 +153,26 @@ HEAP_ID_OFFSET  1
 HEAP_ID_STEP    13
 
 NSCI            1
-NITEMS         8
+NITEMS          9
 ITEM1_ID        5632    # timestamp, slowest index
 
-ITEM2_ID        5633    # naccumulate 
+ITEM2_ID        5633    # polarization
 
 ITEM3_ID        5634    # noise diode status
 ITEM3_LIST      0,1
 ITEM3_INDEX     2
 
-ITEM4_ID        5635    # fft_length 
+ITEM4_ID        5635    # fft_length
 
 ITEM5_ID        5636
 ITEM5_SCI       1       # number of input heaps with ndiode on/off
 
 ITEM6_ID        5637    # sync_time
 
-ITEM8_ID        5638    # sampling rate
+ITEM7_ID        5638    # sampling rate
+ITEM8_ID        5639    # naccumulate
 
-ITEM7_ID        5639    # payload item (empty step, list, index and sci)
+ITEM9_ID        5640    # payload item (empty step, list, index and sci)
 """
 
 
@@ -438,7 +437,31 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
         """
         @brief      Configure EDD to receive and process data
 
-        @note       This is the KATCP wrapper for the configure command
+       @note       The configure command accepts the following options in json format:
+                    - "input_bit_depth"       : The bit-depth of the input data [8 or 12].
+                    - "samples_per_heap"      : Number of samples in every heap of the input data stream (default 4096)
+                    - "samples_per_block"     : Size of the input buffer blockn in samples . This indirectly defines the maximum size of the output spectra.
+                    - "enabled_polarizations" : Enabled polarizations [polarization_0, polarization_1].
+                    - "sample_clock"          : Sampling frequency in Hertz.
+                    - "sync_time"             : Syncronization time.
+                    - "fft_length"            : Number of sampels used for every FFT.
+                    - "naccumulate"           : Numebr of spectr to integrate.
+                    - "output_bit_depth"      : Bit depth of the output spectra [8, 12 or 32]
+                    - "input_level"           :
+                    - "output_level"          :
+                    - "null_output"           : Disabling sending of data for testing purposes [true, false]/
+                    - "dummy_input"           : Use dummy input instead of data from mkrecv process [true, false].
+                    - "log_level"             : Log level used for console output.
+                    - "output_rate_factor"    : True output date rate is multiplied by this factor for sending.
+                    - "polarization_0,1"      : Dict of options for every polarization:
+                        - "ibv_if"            : Ip of the NIC.
+                        - "mcast_sources"     : Multicast adresses used for input
+                        - "mcast_dest"        : Two multicast adresses used for output of on/off spectra
+                        - "port_rx"           : Port to use for receiving.
+                        - "port_tx":          : Port used for transmission
+                        - "dada_key"          : Hex Key of buffer used used for input. Teh reverse key is used for output, e.g. dada-adad.
+                        - "numa_node"         : Numa node used for processing.
+
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
@@ -452,7 +475,31 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             except FailReply as fr:
                 log.error(str(fr))
                 req.reply("fail", str(fr))
-            except Exception as error:
+            except Exception as error:       @note       This is the KATCP wrapper for the reconfigure command. It accepts the following options:
+                    - "input_bit_depth"       : The bit-depth of the input data [8 or 12].
+                    - "samples_per_heap"      : Number of samples in every heap of the input data stream (default 4096)
+                    - "samples_per_block"     : Size of the input buffer blockn in samples . This indirectly defines the maximum size of the output spectra.
+                    - "enabled_polarizations" : Enabled polarizations [polarization_0, polarization_1].
+                    - "sample_clock"          : Sampling frequency in Hertz.
+                    - "sync_time"             : Syncronization time.
+                    - "fft_length"            : Number of sampels used for every FFT.
+                    - "naccumulate"           : Numebr of spectr to integrate.
+                    - "output_bit_depth"      : Bit depth of the output spectra [8, 12 or 32]
+                    - "input_level"           :
+                    - "output_level"          :
+                    - "null_output"           : Disabling sending of data for testing purposes [true, false]/
+                    - "dummy_input"           : Use dummy input instead of data from mkrecv process [true, false].
+                    - "log_level"             : Log level used for console output.
+                    - "output_rate_factor"    : True output date rate is multiplied by this factor for sending.
+                    - "polarization_0,1"      : Dict of options for every polarization:
+                        - "ibv_if"            : Ip of the NIC.
+                        - "mcast_sources"     : Multicast adresses used for input
+                        - "mcast_dest"        : Two multicast adresses used for output of on/off spectra
+                        - "port_rx"           : Port to use for receiving.
+                        - "port_tx":          : Port used for transmission
+                        - "dada_key"          : Hex Key of buffer used used for input. Teh reverse key is used for output, e.g. dada-adad.
+                        - "numa_node"         : Numa node used for processing.
+
                 log.exception(str(error))
                 req.reply("fail", str(error))
             else:
@@ -465,9 +512,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
     @return_reply()
     def request_reconfigure(self, req):
         """
-        @brief      Reconfigure EDD with last configuration
-
-        @note       This is the KATCP wrapper for the reconfigure command
+        @brief      Configure the EDD using the last configuration.
 
         @return     katcp reply object [[[ !reconfigure ok | (fail [error description]) ]]]
         """
@@ -644,7 +689,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
 
                 timestep = cfg["fft_length"] * cfg["naccumulate"]
                 physcpu = ",".join(numa.getInfo()[numa_node]['cores'][1:2])
-                cmd = "taskset {physcpu} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {timestep} --item2-list {naccumulate} --item4-list {fft_length} --item6-list {sync_time} --item8-list {sample_clock} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, timestep=timestep,
+                cmd = "taskset {physcpu} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {timestep} --item2-list {polarization} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_clock} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, timestep=timestep,
                         ofname=ofname, polarization=i, nChannels=nChannels, physcpu=physcpu, integrationTime=integrationTime,
                         rate=rate, nhops=nhops, heap_size=output_heapSize, **cfg)
                 log.debug("Command to run: {}".format(cmd))
@@ -742,7 +787,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
                 if not self._config['dummy_input']:
                     numa_node = self._config[k]['numa_node']
                     physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
-                    cmd = "taskset {physcpu} mkrecv_nt --quiet --header {mkrecv_header} --dada-key {dada_key} \
+                    cmd = "taskset {physcpu} mkrecv_nt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --dada-key {dada_key} \
                     --sync-epoch {sync_time} --sample-clock {sample_clock} \
                     --ibv-if {ibv_if} --port {port_rx} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,
                             **cfg )
