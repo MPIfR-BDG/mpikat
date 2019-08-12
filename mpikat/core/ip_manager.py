@@ -24,7 +24,7 @@ import ipaddress
 
 log = logging.getLogger('mpikat.ip_manager')
 
-SKIP = 2
+SKIP = 1
 
 class IpRangeAllocationError(Exception):
     pass

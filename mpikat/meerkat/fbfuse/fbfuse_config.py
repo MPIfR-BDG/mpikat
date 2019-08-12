@@ -40,10 +40,10 @@ class FbfConfigurationError(Exception):
 
 class FbfConfigurationManager(object):
     def __init__(self, total_nantennas, total_bandwidth, total_nchans, nworkers, nips):
-        if total_nchans != 4096:
-            log.warning("A channel mode other than 4k has been requested"
-                        ", but as a hack we are pretending it is 4k")
-            total_nchans = 4096
+        #if total_nchans != 4096:
+        #    log.warning("A channel mode other than 4k has been requested"
+        #                ", but as a hack we are pretending it is 4k")
+        #    total_nchans = 4096
             #raise NotImplementedError("Currently only 4k channel mode supported")
         self.total_nantennas = total_nantennas
         self.total_bandwidth = total_bandwidth
