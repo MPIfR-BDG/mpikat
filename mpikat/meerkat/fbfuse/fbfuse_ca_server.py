@@ -134,7 +134,7 @@ class DefaultConfigurationAuthority(BaseFbfConfigurationAuthority):
     def __init__(self, host, port):
         super(DefaultConfigurationAuthority, self).__init__(host, port)
         self.default_config = {
-            u'coherent-beams-nbeams':440,
+            u'coherent-beams-nbeams':480,
             u'coherent-beams-tscrunch':64,
             u'coherent-beams-fscrunch':1,
             u'coherent-beams-granularity':6,
@@ -147,7 +147,7 @@ class DefaultConfigurationAuthority(BaseFbfConfigurationAuthority):
         # Return just a boresight beam
         #raise Return({"beams":[target]})
 	# Return a tiling pattern with 192 beams 
-	raise Return({"tilings":[{"target":target,"reference_frequency":1.28e9,"nbeams":'396',"overlap":0.5}]})
+	raise Return({"tilings":[{"target":target,"reference_frequency":1.28e9,"nbeams":self.default_config['coherent-beams-nbeams'],"overlap":0.5}]})
 
     @tornado.gen.coroutine
     def get_sb_config(self, product_id, sb_id):
