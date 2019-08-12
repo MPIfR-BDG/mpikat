@@ -250,7 +250,7 @@ class BeamManager(object):
         """
         if len(self._free_beams) < nbeams:
             raise BeamAllocationError("Requested more beams than are available.")
-        tiling = Tiling(target, reference_frequency, overlap)
+        tiling = Tiling(target, self._antennas, reference_frequency, overlap)
         for _ in range(nbeams):
             beam = self._free_beams.pop(0)
             tiling.add_beam(beam)
