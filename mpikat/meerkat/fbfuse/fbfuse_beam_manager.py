@@ -94,7 +94,7 @@ class Beam(object):
 class Tiling(object):
     """Wrapper class for a collection of beams in a tiling pattern
     """
-    def __init__(self, target, reference_frequency, overlap):
+    def __init__(self, target, antennas, reference_frequency, overlap):
         """
         @brief   Create a new tiling object
 
@@ -114,6 +114,7 @@ class Tiling(object):
         """
         self._beams = []
         self.target = target
+        self._antennas = antennas
         self.reference_frequency = reference_frequency
         self.overlap = overlap
         self.tiling = None
@@ -130,7 +131,7 @@ class Tiling(object):
         """
         self._beams.append(beam)
 
-    def generate(self, antennas, epoch):
+    def generate(self, epoch):
         """
         @brief   Calculate and update RA and Dec positions of all
                  beams in the tiling object.
@@ -142,7 +143,7 @@ class Tiling(object):
         """
         log.debug("Creating PSF simulator at reference frequency {} Hz".format(
             self.reference_frequency))
-        psfsim = mosaic.PsfSim(antennas, self.reference_frequency)
+        psfsim = mosaic.PsfSim(self._antennas, self.reference_frequency)
         log.debug(("Generating beam shape for target position {} "
                    "at epoch {}").format(self.target, epoch))
         beam_shape = psfsim.get_beam_shape(self.target, epoch)
@@ -192,8 +193,8 @@ class BeamManager(object):
     def antennas(self):
         return self._antennas
 
-    def generate_psf_png(self, target, antennas, reference_frequency, epoch):
-        psfsim = mosaic.PsfSim(antennas, reference_frequency)
+    def generate_psf_png(self, target, reference_frequency, epoch):
+        psfsim = mosaic.PsfSim(self._antennas, reference_frequency)
         beam_shape = psfsim.get_beam_shape(target, epoch)
         png = StringIO.StringIO()
         beam_shape.plot_psf(png, shape_overlay=True)

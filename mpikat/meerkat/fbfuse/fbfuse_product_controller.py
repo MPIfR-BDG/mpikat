@@ -873,7 +873,7 @@ class FbfProductController(object):
 
     def _make_beam_plot(self, target):
         png = self._beam_manager.generate_psf_png(
-            target, self._katpoint_antennas,
+            target,
             self._cfreq_sensor.value(), time.time())
         self._psf_png_sensor.set_value(base64.b64encode(png))
 
@@ -1161,7 +1161,7 @@ class FbfProductController(object):
         tiling = self._beam_manager.add_tiling(
             target, number_of_beams, reference_frequency, overlap)
         try:
-            tiling.generate(self._katpoint_antennas, epoch)
+            tiling.generate(epoch)
         except Exception as error:
             self.log.exception(
                 "Failed to generate tiling pattern with error: {}".format(str(error)))
