@@ -475,31 +475,7 @@ class GatedSpectrometerPipeline(AsyncDeviceServer):
             except FailReply as fr:
                 log.error(str(fr))
                 req.reply("fail", str(fr))
-            except Exception as error:       @note       This is the KATCP wrapper for the reconfigure command. It accepts the following options:
-                    - "input_bit_depth"       : The bit-depth of the input data [8 or 12].
-                    - "samples_per_heap"      : Number of samples in every heap of the input data stream (default 4096)
-                    - "samples_per_block"     : Size of the input buffer blockn in samples . This indirectly defines the maximum size of the output spectra.
-                    - "enabled_polarizations" : Enabled polarizations [polarization_0, polarization_1].
-                    - "sample_clock"          : Sampling frequency in Hertz.
-                    - "sync_time"             : Syncronization time.
-                    - "fft_length"            : Number of sampels used for every FFT.
-                    - "naccumulate"           : Numebr of spectr to integrate.
-                    - "output_bit_depth"      : Bit depth of the output spectra [8, 12 or 32]
-                    - "input_level"           :
-                    - "output_level"          :
-                    - "null_output"           : Disabling sending of data for testing purposes [true, false]/
-                    - "dummy_input"           : Use dummy input instead of data from mkrecv process [true, false].
-                    - "log_level"             : Log level used for console output.
-                    - "output_rate_factor"    : True output date rate is multiplied by this factor for sending.
-                    - "polarization_0,1"      : Dict of options for every polarization:
-                        - "ibv_if"            : Ip of the NIC.
-                        - "mcast_sources"     : Multicast adresses used for input
-                        - "mcast_dest"        : Two multicast adresses used for output of on/off spectra
-                        - "port_rx"           : Port to use for receiving.
-                        - "port_tx":          : Port used for transmission
-                        - "dada_key"          : Hex Key of buffer used used for input. Teh reverse key is used for output, e.g. dada-adad.
-                        - "numa_node"         : Numa node used for processing.
-
+            except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
             else:
