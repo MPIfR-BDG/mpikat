@@ -22,6 +22,7 @@ SOFTWARE.
 from pipeline_register import register_pipeline
 from mpikat.utils.process_tools import ManagedProcess, command_watcher
 from mpikat.utils.process_monitor import SubprocessMonitor
+from mpikat.utils.sensor_watchdog import SensorWatchdog
 from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
 from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
@@ -174,27 +175,6 @@ ITEM8_ID        5639    # naccumulate
 
 ITEM9_ID        5640    # payload item (empty step, list, index and sci)
 """
-
-
-class SensorWatchdog(threading.Thread):
-    """
-    Watchdog thread that checks if the execution stalls without getting noticed.
-    If time between changes of the value of a sensor surpasses  the timeout value, the callbaxck function is called.
-    """
-    def __init__(self, sensor, timeout, callback):
-        threading.Thread.__init__(self)
-        self.__timeout = timeout
-        self.__sensor = sensor
-        self.__callback = callback
-        self.stop_event = threading.Event()
-
-    def run(self):
-        while not self.stop_event.wait(timeout=self.__timeout):
-            timestamp, status, value = self.__sensor.read()
-            if (time.time() - timestamp) > self.__timeout:
-                self.__callback()
-                self.stop_event.set()
-
 
 
 @register_pipeline("GatedSpectrometerPipeline")
