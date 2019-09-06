@@ -140,6 +140,7 @@ class DefaultConfigurationAuthority(BaseFbfConfigurationAuthority):
             u'coherent-beams-granularity':6,
             u'incoherent-beam-tscrunch':64,
             u'incoherent-beam-fscrunch':1,
+	    u'overlap':0.5
             }
 
     @tornado.gen.coroutine
@@ -147,7 +148,7 @@ class DefaultConfigurationAuthority(BaseFbfConfigurationAuthority):
         # Return just a boresight beam
         #raise Return({"beams":[target]})
 	# Return a tiling pattern with 192 beams 
-	raise Return({"tilings":[{"target":target,"reference_frequency":1.28e9,"nbeams":self.default_config['coherent-beams-nbeams'],"overlap":0.5}]})
+	raise Return({"tilings":[{"target":target,"reference_frequency":1.28e9,"nbeams":self.default_config['coherent-beams-nbeams'],"overlap":self.default_config['overlap']}]})
 
     @tornado.gen.coroutine
     def get_sb_config(self, product_id, sb_id):
