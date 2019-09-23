@@ -46,7 +46,7 @@ class DbMonitor(object):
         self._mon_thread.stop()
         self._mon_thread.join(3)
         if self._dbmon_proc.returncode is None:
-            log.warning("Monitor thread for dada buffer: {} not terminated - killing it now!")
+            log.warning("Monitor thread for dada buffer: {} not terminated - killing it now!".format(self._key))
             self._dbmon_proc.kill()
         self._dbmon_proc = None  # delete to avoid zombie process
 

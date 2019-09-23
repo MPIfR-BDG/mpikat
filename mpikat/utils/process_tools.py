@@ -66,11 +66,11 @@ class ManagedProcess(object):
         if stdout_handler:
             self._stdout_handler = stdout_handler
         else:
-            self._stdout_handler = lambda line: log.debug(line.strip())
+            self._stdout_handler = lambda line: log.debug(self._cmdl + ":\n   " + line.strip())
         if stderr_handler:
             self._stderr_handler = stderr_handler
         else:
-            self._stderr_handler = lambda line: log.error(line.strip())
+            self._stderr_handler = lambda line: log.error(self._cmdl + ":\n   " + line.strip())
         self.stdout_monitor = None
         self.stderr_monitor = None
         self.eop_monitor = None
