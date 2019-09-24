@@ -432,6 +432,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 self._subprocesses.append(mks)
             else:
                 log.warning("Selected null output. Not sending data!")
+                command_watcher("dada_dbscrubber -k {}".format(ofname))
 
         self._subprocessMonitor.start()
         self.state = "ready"
