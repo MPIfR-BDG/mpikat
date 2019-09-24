@@ -35,7 +35,7 @@ import tornado
 from tornado.gen import coroutine
 
 import os
-import time
+import datetime
 import logging
 import signal
 from optparse import OptionParser
@@ -79,6 +79,48 @@ class EDDPipeline(AsyncDeviceServer):
         AsyncDeviceServer.__init__(self, ip, port) # Async device parent depends on setting e.g. _control_mode in child
 
 
+    def setup_sensors(self):
+        """
+        @brief Setup monitoring sensors
+        """
+        self._control_mode_sensor = Sensor.string(
+            "control-mode",
+            description="The control mode for the EDD",
+            default=self._control_mode,
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._control_mode_sensor)
+
+        self._edd_scpi_interface_addr_sensor = Sensor.string(
+            "scpi-interface-addr",
+            description="The SCPI interface address for this instance",
+            default="{}:{}".format(self._scpi_ip, self._scpi_port),
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._edd_scpi_interface_addr_sensor)
+        self._pipeline_sensor_status = Sensor.discrete(
+            "pipeline-status",
+            description="Status of the pipeline",
+            params=self.PIPELINE_STATES,
+            default="idle",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._pipeline_sensor_status)
+
+        self._device_status = Sensor.discrete(
+            "device-status",
+            description="Health status of device",
+            params=self.DEVICE_STATUSES,
+            default="ok",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._device_status)
+
+
+        self._status_change_time = Sensor.string(
+            "status-change-time",
+            description="Time of last status change",
+            default=datetime.datetime.now().replace(microsecond=0).isoformat(),
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._status_change_time)
+
+
     @property
     def sensors(self):
         return self._sensors
@@ -100,7 +142,7 @@ class EDDPipeline(AsyncDeviceServer):
     def state(self, value):
         self._state = value
         self._pipeline_sensor_status.set_value(self._state)
-        self._status_change_time.set_value(time.ctime())
+        self._status_change_time.set_value(datetime.datetime.now().replace(microsecond=0).isoformat())
         self.notify()
 
 
@@ -120,13 +162,6 @@ class EDDPipeline(AsyncDeviceServer):
         self._scpi_interface.stop()
         self._scpi_interface = None
         AsyncDeviceServer.stop(self)
-
-
-    def setup_sensors(self):
-        """
-        @brief Setup monitoring sensors
-        """
-        raise NotImplementedError
 
 
     @property
