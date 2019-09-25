@@ -39,7 +39,6 @@ from optparse import OptionParser
 import coloredlogs
 import json
 import tempfile
-import threading
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.GatedSpectrometerPipeline")
 log.setLevel('DEBUG')

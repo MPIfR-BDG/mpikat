@@ -74,7 +74,6 @@ class EDDPipeline(AsyncDeviceServer):
         self._config = None
         self._subprocesses = []
         self.mkrec_cmd = []
-        self._dada_buffers = []
         self._subprocessMonitor = None
         AsyncDeviceServer.__init__(self, ip, port) # Async device parent depends on setting e.g. _control_mode in child
 
@@ -420,6 +419,8 @@ class EDDPipeline(AsyncDeviceServer):
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
         raise NotImplementedError
+
+
 
 
 @coroutine
