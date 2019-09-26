@@ -75,6 +75,7 @@ class EDDPipeline(AsyncDeviceServer):
         self._subprocesses = []
         self.mkrec_cmd = []
         self._subprocessMonitor = None
+        self._dada_buffers = []
         AsyncDeviceServer.__init__(self, ip, port) # Async device parent depends on setting e.g. _control_mode in child
 
 
