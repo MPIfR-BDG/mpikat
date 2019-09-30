@@ -424,7 +424,6 @@ class FbfMasterController(MasterController):
         self._update_products_sensor()
 
     @request(Str(), Str())
-    @return_reply()
     @coroutine
     def request_target_start(self, req, product_id, target):
         """
@@ -451,12 +450,14 @@ class FbfMasterController(MasterController):
                 str(error)))
             raise Return(("fail", str(error)))
         try:
-            yield product.target_start(target)
+	    req.reply("ok",)
+            product.target_start(target)
+            #yield product.target_start(target)
         except Exception as error:
             log.exception("Target start failed with error: {}".format(
                 str(error)))
-        log.info("Target-start request successful")
-        raise Return(("ok",))
+        #log.info("Target-start request successful")
+        #raise Return(("ok",))
 
     @request(Str())
     @return_reply()
