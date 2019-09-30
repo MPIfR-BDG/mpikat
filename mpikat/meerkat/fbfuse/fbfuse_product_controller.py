@@ -551,7 +551,7 @@ class FbfProductController(object):
                         " from configuration authority"))
         yield self._ca_client.until_synced()
         try:
-            response = yield self._ca_client.req.get_schedule_block_configuration(self._proxy_name, sb_id)
+            response = yield self._ca_client.req.get_schedule_block_configuration(self._proxy_name, sb_id, self._n_channels)
         except Exception as error:
             self.log.error(
                 "Request for SB configuration to CA failed with error: {}".format(str(error)))
