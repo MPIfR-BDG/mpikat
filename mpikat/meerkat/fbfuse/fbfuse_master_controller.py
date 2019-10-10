@@ -424,7 +424,7 @@ class FbfMasterController(MasterController):
         self._update_products_sensor()
 
     @request(Str(), Str())
-    @coroutine
+    @return_reply()
     def request_target_start(self, req, product_id, target):
         """
         @brief      Notify FBFUSE that a new target is being observed
@@ -434,6 +434,8 @@ class FbfMasterController(MasterController):
 
         @param      target          A KATPOINT target string
 
+        @note       This method has been updated to be non-blocking
+
         @return     katcp reply object [[[ !target-start ok | (fail [error description]) ]]]
         """
         log.info("Received target-start request for target: {}".format(target))
@@ -442,22 +444,15 @@ class FbfMasterController(MasterController):
         except ProductLookupError as error:
             log.error("target-start request failed with error: {}".format(
                 str(error)))
-            raise Return(("fail", str(error)))
+            return ("fail", str(error))
         try:
             target = Target(target)
         except Exception as error:
             log.exception("Target could not be parsed: {}".format(
                 str(error)))
-            raise Return(("fail", str(error)))
-        try:
-	    req.reply("ok",)
-            product.target_start(target)
-            #yield product.target_start(target)
-        except Exception as error:
-            log.exception("Target start failed with error: {}".format(
-                str(error)))
-        #log.info("Target-start request successful")
-        #raise Return(("ok",))
+            return ("fail", str(error))
+        self.ioloop.add_callback(lambda target: product.target_start(target))
+        return ("ok", )
 
     @request(Str())
     @return_reply()
