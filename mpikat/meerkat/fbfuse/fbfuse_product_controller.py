@@ -818,6 +818,9 @@ class FbfProductController(object):
                 self.add_tiling(target, nbeams, freq, overlap, epoch)
         # Here we generate a plot from the PSF
         yield self._ca_client.until_synced()
+        sensor_name = "{}_beam_position_configuration".format(self._proxy_name)
+        if sensor_name in self._ca_client.sensor:
+            self._ca_client.sensor[sensor_name].clear_listeners()
         try:
             response = yield self._ca_client.req.target_configuration_start(
                 self._proxy_name, boresight_target.format_katcp())
@@ -831,9 +834,7 @@ class FbfProductController(object):
                             "failed with error: {}").format(str(error)))
             raise error
         yield self._ca_client.until_synced()
-        sensor = self._ca_client.sensor[
-            "{}_beam_position_configuration".format(self._proxy_name)]
-        sensor.clear_listeners()
+        sensor = self._ca_client.sensor[sensor_name]
         sensor.register_listener(ca_target_update_callback)
         self._ca_client.set_sampling_strategy(sensor.name, "event")
 
