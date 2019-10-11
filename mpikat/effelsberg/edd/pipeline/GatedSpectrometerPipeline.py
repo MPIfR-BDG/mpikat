@@ -58,7 +58,7 @@ DEFAULT_CONFIG = {
         "input_level": 100,
         "output_level": 100,
 
-        "null_output": False,                               # Disable sending of data for testing purposes
+        "output_type": 'dada',                              # ['network', 'disk', 'null'] 
         "dummy_input": False,                               # Use dummy input instead of mkrecv process.
         "log_level": "debug",
 
@@ -377,7 +377,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
             self._subprocessMonitor.add(gated_cli, self._subprocess_error)
             self._subprocesses.append(gated_cli)
 
-            if not self._config["null_output"]:
+            if self._config["output_type"] == 'dada':
                 mksend_header_file = tempfile.NamedTemporaryFile(delete=False)
                 mksend_header_file.write(mksend_header)
                 mksend_header_file.close()
@@ -394,12 +394,18 @@ class GatedSpectrometerPipeline(EDDPipeline):
                         rate=rate, nhops=nhops, heap_size=output_heapSize, **cfg)
                 log.debug("Command to run: {}".format(cmd))
 
-                mks = ManagedProcess(cmd)
-                self._subprocessMonitor.add(mks, self._subprocess_error)
-                self._subprocesses.append(mks)
+            elif self._config["output_type"] == 'disk':
+                if not os.path.isdir("./{ofname}".format(ofname=ofname)):
+                    os.mkdir("./{ofname}".format(ofname=ofname))
+                cmd = "dada_dbdisk -k {ofname} -D ./{ofname} -W".format(ofname=ofname, **cfg)
             else:
                 log.warning("Selected null output. Not sending data!")
-                command_watcher("dada_dbscrubber -k {}".format(ofname))
+                cmd = "dada_dbnull -z -k {}".format(ofname)
+
+            log.debug("Command to run: {}".format(cmd))
+            mks = ManagedProcess(cmd)
+            self._subprocessMonitor.add(mks, self._subprocess_error)
+            self._subprocesses.append(mks)
 
         self._subprocessMonitor.start()
         self.state = "ready"
