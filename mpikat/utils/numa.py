@@ -3,7 +3,7 @@ import socket
 import fcntl
 import struct
 import pynvml
-
+import logging
 __numaInfo = None
 
 
@@ -11,31 +11,51 @@ def updateInfo():
     """
     Updates the info dictionary.
     """
+    logging.debug("Update numa dictionary")
     global __numaInfo
     __numaInfo = {}
     nodes = open("/sys/devices/system/node/possible").read().strip().split('-')
 
     for node in nodes:
+        logging.debug("Preparing node {} of {}".format(node, len(nodes)))
         __numaInfo[node] = {"net_devices":{} }
 
         cpurange = open('/sys/devices/system/node/node' + node + '/cpulist').read().strip().split('-')
         __numaInfo[node]['cores'] = map(str, range(int(cpurange[0]), int(cpurange[1])+1))
         __numaInfo[node]['gpus'] = []
+        __numaInfo[node]["net_devices"] = {} 
+        logging.debug("  found {} Cores.".format(len(__numaInfo[node]['cores'])))
 
+    
+    logging.debug(__numaInfo)
     # check network devices
     for device in os.listdir("/sys/class/net/"):
+        logging.debug("Associate network device {} to node".format(device))
         d = "/sys/class/net/" + device + "/device/numa_node"
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         if os.path.isfile(d):
             node = open(d).read().strip()
+            __numaInfo[node]["net_devices"][device] = {} 
+            logging.debug("  - found node {}".format(node))
+            __numaInfo[node]["net_devices"][device]['ip'] = ""
             try:
-                ipa = socket.inet_ntoa(fcntl.ioctl(s.fileno(),
+                ip = socket.inet_ntoa(fcntl.ioctl(s.fileno(),
                     0x8915,  # SIOCGIFADDR
                     struct.pack('256s', device[:15]))[20:24])
-            except IOError:
-                pass
-            else:
-                __numaInfo[node]["net_devices"][device] = ipa
+                __numaInfo[node]["net_devices"][device]['ip'] = ip
+            except IOError as e:
+                logging.warning(" Cannot associate device {} to a node: {}".format(device, e))
+
+            d = "/sys/class/net/" + device + "/speed"
+            speed = 0
+            if os.path.isfile(d):
+                try:
+                    speed = open(d).read()
+                except:
+                    logging.warning(" Cannot acess speed for device {}: {}".format(device, e))
+
+            __numaInfo[node]["net_devices"][device]['speed'] = int(speed)
+
 
     # check cuda devices:
     pynvml.nvmlInit()
@@ -62,10 +82,15 @@ def getInfo():
     return __numaInfo
 
 if __name__ == "__main__":
+    logging.basicConfig(level="DEBUG")
     for node, res in getInfo().items():
         print("NUMA Node: {}".format(node))
         print("  CPU Cores: {}".format(", ".join(res['cores'])))
         print("  GPUs: {}".format(", ".join(map(str, res['gpus']))))
         print("  Network interfaces:")
-        for nic, ip in res['net_devices'].items():
-            print("     {}: {}".format(nic, ip))
+        for nic, info in res['net_devices'].items():
+            print("     {nic}: ip = {ip}, speed = {speed} Mbit/s ".format(nic=nic, **info))
+
+        nics = res['net_devices']
+        fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])  
+        print('   -> Fastest interface: {}'.format(fastest_nic))

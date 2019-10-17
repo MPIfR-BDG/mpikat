@@ -389,6 +389,10 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
                 timestep = cfg["fft_length"] * cfg["naccumulate"]
                 physcpu = ",".join(numa.getInfo()[numa_node]['cores'][1:2])
+                #select network interface
+                nics = numa.getInfo(numa_node)["net_devices"]
+                fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])  
+
                 cmd = "taskset {physcpu} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {timestep} --item2-list {polarization} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_clock} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, timestep=timestep,
                         ofname=ofname, polarization=i, nChannels=nChannels, physcpu=physcpu, integrationTime=integrationTime,
                         rate=rate, nhops=nhops, heap_size=output_heapSize, **cfg)
