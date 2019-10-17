@@ -58,7 +58,7 @@ DEFAULT_CONFIG = {
         "input_level": 100,
         "output_level": 100,
 
-        "output_type": 'dada',                              # ['network', 'disk', 'null'] 
+        "output_type": 'network',                              # ['network', 'disk', 'null'] 
         "dummy_input": False,                               # Use dummy input instead of mkrecv process.
         "log_level": "debug",
 
@@ -66,7 +66,6 @@ DEFAULT_CONFIG = {
 
         "polarization_0" :
         {
-            "ibv_if": "10.10.1.10",
             "mcast_sources": "225.0.0.152+3",
             "mcast_dest": "225.0.0.172 225.0.0.173",        #two destinations gate on/off
             "port_rx": "7148",
@@ -76,7 +75,6 @@ DEFAULT_CONFIG = {
         },
          "polarization_1" :
         {
-            "ibv_if": "10.10.1.11",
             "mcast_sources": "225.0.0.156+3",
             "mcast_dest": "225.0.0.184 225.0.0.185",        #two destinations, one for on, one for off
             "port_rx": "7148",
@@ -377,7 +375,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
             self._subprocessMonitor.add(gated_cli, self._subprocess_error)
             self._subprocesses.append(gated_cli)
 
-            if self._config["output_type"] == 'dada':
+            if self._config["output_type"] == 'network':
                 mksend_header_file = tempfile.NamedTemporaryFile(delete=False)
                 mksend_header_file.write(mksend_header)
                 mksend_header_file.close()
@@ -390,12 +388,13 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 timestep = cfg["fft_length"] * cfg["naccumulate"]
                 physcpu = ",".join(numa.getInfo()[numa_node]['cores'][1:2])
                 #select network interface
-                nics = numa.getInfo(numa_node)["net_devices"]
+                nics = numa.getInfo()[numa_node]["net_devices"]
                 fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])  
 
+                log.info("Sending data for {} on NIC {} [ {} ] @ {} Mbit/s".format(k, fastest_nic, nics[fastest_nic]['ip'], nics[fastest_nic]['speed']))
                 cmd = "taskset {physcpu} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {timestep} --item2-list {polarization} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_clock} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, timestep=timestep,
                         ofname=ofname, polarization=i, nChannels=nChannels, physcpu=physcpu, integrationTime=integrationTime,
-                        rate=rate, nhops=nhops, heap_size=output_heapSize, **cfg)
+                        rate=rate, nhops=nhops, heap_size=output_heapSize, ibv_if=nics[fastest_nic]['ip'], **cfg)
                 log.debug("Command to run: {}".format(cmd))
 
             elif self._config["output_type"] == 'disk':
@@ -443,10 +442,13 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 cfg.update(self._config[k])
                 if not self._config['dummy_input']:
                     numa_node = self._config[k]['numa_node']
+                    nics = numa.getInfo()[numa_node]["net_devices"]
+                    fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])
+                    log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(k, fastest_nic, nics[fastest_nic]['ip'], nics[fastest_nic]['speed']))
                     physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
                     cmd = "taskset {physcpu} mkrecv_nt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --dada-key {dada_key} \
                     --sync-epoch {sync_time} --sample-clock {sample_clock} \
-                    --ibv-if {ibv_if} --port {port_rx} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,
+                    --ibv-if {ibv_if} --port {port_rx} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nics[fastest_nic]['ip'],
                             **cfg )
                     mk = ManagedProcess(cmd, stdout_handler=self._polarization_sensors[k]["mkrecv_sensors"].stdout_handler)
                 else:
