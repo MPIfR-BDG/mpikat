@@ -49,7 +49,7 @@ DEFAULT_CONFIG = {
         "input_bit_depth" : 12,                             # Input bit-depth
         "samples_per_heap": 4096,                           # this needs to be consistent with the mkrecv configuration
         "samples_per_block": 512 * 1024 * 1024,             # 512 Mega sampels per buffer block to allow high res  spectra - the theoretical mazimum is thus 256 M Channels
-        "enabled_polarizations" : ["polarization_1"],
+        "enabled_polarizations" : ["polarization_0", "polarization_1"],
         "sample_clock" : 2600000000,
         "sync_time" : 1562662573.0,
         "fft_length": 1024 * 1024 * 2 * 8,
@@ -71,7 +71,7 @@ DEFAULT_CONFIG = {
             "port_rx": "7148",
             "port_tx": "7152",
             "dada_key": "dada",                             # output keys are the reverse!
-            "numa_node": "1",                               # we only have one ethernet interface on numa node 1
+            "numa_node": "0",
         },
          "polarization_1" :
         {
@@ -80,7 +80,7 @@ DEFAULT_CONFIG = {
             "port_rx": "7148",
             "port_tx": "7152",
             "dada_key": "dadc",
-            "numa_node": "1",                               # we only have one ethernet interface on numa node 1
+            "numa_node": "1",
         }
     }
 
@@ -112,6 +112,9 @@ NINDICES            1      # Although there is more than one index, we are only 
 
 # The first index item is the running timestamp
 IDX1_ITEM           0      # First item of a SPEAD heap
+# Modulo to create  a delay to syncronize multiple mkrecv instances - should be
+# a prime of heaps to wait
+IDX1_MODULO         118751 # approx 0.2 s @ 2.6GHz  # other primes: 149993, 349403, 454199, 799529, 1044149
 
 # Add side item to buffer
 SCI_LIST            2
@@ -367,7 +370,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
             # here should be a smarter system to parse the options from the
             # controller to the program without redundant typing of options
             physcpu = numa.getInfo()[numa_node]['cores'][0]
-            cmd = "taskset {physcpu} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={input_bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, physcpu=physcpu, **self._config)
+            cmd = "taskset -c {physcpu} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={input_bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, physcpu=physcpu, **self._config)
             log.debug("Command to run: {}".format(cmd))
 
             cudaDevice = numa.getInfo()[self._config[k]["numa_node"]]["gpus"][0]
@@ -392,7 +395,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])  
 
                 log.info("Sending data for {} on NIC {} [ {} ] @ {} Mbit/s".format(k, fastest_nic, nics[fastest_nic]['ip'], nics[fastest_nic]['speed']))
-                cmd = "taskset {physcpu} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {timestep} --item2-list {polarization} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_clock} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, timestep=timestep,
+                cmd = "taskset -c {physcpu} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {timestep} --item2-list {polarization} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_clock} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, timestep=timestep,
                         ofname=ofname, polarization=i, nChannels=nChannels, physcpu=physcpu, integrationTime=integrationTime,
                         rate=rate, nhops=nhops, heap_size=output_heapSize, ibv_if=nics[fastest_nic]['ip'], **cfg)
                 log.debug("Command to run: {}".format(cmd))
@@ -446,7 +449,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                     fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])
                     log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(k, fastest_nic, nics[fastest_nic]['ip'], nics[fastest_nic]['speed']))
                     physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
-                    cmd = "taskset {physcpu} mkrecv_nt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --dada-key {dada_key} \
+                    cmd = "taskset -c {physcpu} mkrecv_nt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --dada-key {dada_key} \
                     --sync-epoch {sync_time} --sample-clock {sample_clock} \
                     --ibv-if {ibv_if} --port {port_rx} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nics[fastest_nic]['ip'],
                             **cfg )
