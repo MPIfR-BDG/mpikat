@@ -48,7 +48,7 @@ POLARIZATIONS = ["polarization_0", "polarization_1"]
 DEFAULT_CONFIG = {
         "input_bit_depth" : 12,                             # Input bit-depth
         "samples_per_heap": 4096,                           # this needs to be consistent with the mkrecv configuration
-        "samples_per_block": 512 * 1024 * 1024,             # 512 Mega sampels per buffer block to allow high res  spectra - the theoretical mazimum is thus 256 M Channels
+        "samples_per_block": 256 * 1024 * 1024,             # 512 Mega sampels per buffer block to allow high res  spectra - the theoretical mazimum is thus 256 M Channels
         "enabled_polarizations" : ["polarization_0", "polarization_1"],
         "sample_clock" : 2600000000,
         "sync_time" : 1562662573.0,
@@ -71,7 +71,6 @@ DEFAULT_CONFIG = {
             "port_rx": "7148",
             "port_tx": "7152",
             "dada_key": "dada",                             # output keys are the reverse!
-            "numa_node": "0",
         },
          "polarization_1" :
         {
@@ -80,7 +79,6 @@ DEFAULT_CONFIG = {
             "port_rx": "7148",
             "port_tx": "7152",
             "dada_key": "dadc",
-            "numa_node": "1",
         }
     }
 
@@ -178,6 +176,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
     def __init__(self, ip, port, scpi_ip, scpi_port):
         """@brief initialize the pipeline."""
         EDDPipeline.__init__(self, ip, port, scpi_ip, scpi_port)
+        self.__numa_node_pool = []
 
     def setup_sensors(self):
         """
@@ -355,8 +354,28 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 rate ({:.0f}%):        {} Gbps'.format(nSlices, nChannels, output_bufferSize, integrationTime, output_heapSize, self._config["output_rate_factor"]*100, rate / 1E9))
         self._subprocessMonitor = SubprocessMonitor()
 
+
+        self.__numa_node_pool = []
+        # remove numa nodes with missing capabilities 
+        for node in numa.getInfo():
+            if len(numa.getInfo()[node]['gpus']) < 1:
+                log.debug("Not enough gpus on numa node {} - removing from pool.".format(node))
+                continue
+            elif len(numa.getInfo()[node]['net_devices']) < 1:
+                log.debug("Not enough nics on numa node {} - removing from pool.".format(node))
+                continue
+            else:
+                self.__numa_node_pool.append(node) 
+
+        log.debug("{} numa nodes remaining in pool after cosntraints.".format(len(self.__numa_node_pool)))
+
+        if len(self._config['enabled_polarizations']) > len(self.__numa_node_pool):
+            raise FailReply("Not enough numa nodes to process {} polarizations!".format(len(self._config['enabled_polarizations'])))
+
+
         for i, k in enumerate(self._config['enabled_polarizations']):
-            numa_node = self._config[k]['numa_node']
+            numa_node = self.__numa_node_pool[i] 
+            log.debug("Associating {} with numa node {}".format(k, numa_node))
 
             # configure dada buffer
             bufferName = self._config[k]['dada_key']
@@ -373,7 +392,8 @@ class GatedSpectrometerPipeline(EDDPipeline):
             cmd = "taskset -c {physcpu} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={input_bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, physcpu=physcpu, **self._config)
             log.debug("Command to run: {}".format(cmd))
 
-            cudaDevice = numa.getInfo()[self._config[k]["numa_node"]]["gpus"][0]
+
+            cudaDevice =numa.getInfo()[numa_node]['gpus'][0]
             gated_cli = ManagedProcess(cmd, env={"CUDA_VISIBLE_DEVICES": cudaDevice})
             self._subprocessMonitor.add(gated_cli, self._subprocess_error)
             self._subprocesses.append(gated_cli)
@@ -444,7 +464,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 cfg = self._config.copy()
                 cfg.update(self._config[k])
                 if not self._config['dummy_input']:
-                    numa_node = self._config[k]['numa_node']
+                    numa_node = self.__numa_node_pool[i]
                     nics = numa.getInfo()[numa_node]["net_devices"]
                     fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])
                     log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(k, fastest_nic, nics[fastest_nic]['ip'], nics[fastest_nic]['speed']))

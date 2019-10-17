@@ -83,6 +83,7 @@ def getInfo():
 
 if __name__ == "__main__":
     logging.basicConfig(level="DEBUG")
+    print getInfo()
     for node, res in getInfo().items():
         print("NUMA Node: {}".format(node))
         print("  CPU Cores: {}".format(", ".join(res['cores'])))
@@ -92,5 +93,6 @@ if __name__ == "__main__":
             print("     {nic}: ip = {ip}, speed = {speed} Mbit/s ".format(nic=nic, **info))
 
         nics = res['net_devices']
-        fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])  
-        print('   -> Fastest interface: {}'.format(fastest_nic))
+        if len(nics) > 0:
+            fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])
+            print('   -> Fastest interface: {}'.format(fastest_nic))
