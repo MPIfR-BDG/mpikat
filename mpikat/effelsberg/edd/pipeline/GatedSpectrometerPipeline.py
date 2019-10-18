@@ -139,7 +139,6 @@ UTC_START           unset  # Default value from mksend manual
 
 #number of heaps with the same time stamp.
 HEAP_COUNT 1
-HEAP_ID_START   1
 HEAP_ID_OFFSET  1
 HEAP_ID_STEP    13
 
@@ -415,7 +414,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])  
 
                 log.info("Sending data for {} on NIC {} [ {} ] @ {} Mbit/s".format(k, fastest_nic, nics[fastest_nic]['ip'], nics[fastest_nic]['speed']))
-                cmd = "taskset -c {physcpu} mksend --header {mksend_header} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {timestep} --item2-list {polarization} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_clock} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, timestep=timestep,
+                cmd = "taskset -c {physcpu} mksend --header {mksend_header} --heap-id-start {heap_id_start} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {timestep} --item2-list {polarization} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_clock} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, heap_id_start=i , timestep=timestep,
                         ofname=ofname, polarization=i, nChannels=nChannels, physcpu=physcpu, integrationTime=integrationTime,
                         rate=rate, nhops=nhops, heap_size=output_heapSize, ibv_if=nics[fastest_nic]['ip'], **cfg)
                 log.debug("Command to run: {}".format(cmd))
