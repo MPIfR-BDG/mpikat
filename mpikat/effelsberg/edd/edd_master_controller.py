@@ -36,7 +36,7 @@ from mpikat.effelsberg.edd.edd_worker_wrapper import EddWorkerPool
 from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
 from mpikat.effelsberg.edd.edd_fi_client import EddFitsInterfaceClient
-from mpikat.effelsberg.EddServerproductController import EddServerproductController 
+from mpikat.effelsberg.edd.edd_server_product_controller import EddServerProductController 
 
 log = logging.getLogger("mpikat.edd_master_controller")
 EDD_REQUIRED_KEYS = []
@@ -317,7 +317,7 @@ class EddMasterController(MasterController):
                 self._products[product_id] = EddRoach2ProductController(self, product_id,
                                                                         (self._r2rm_host, self._r2rm_port))
             elif product_config["type"] == "server":
-                self._products[product_id] = EddRServerProductController(self, product_id,
+                self._products[product_id] = EddServerProductController(self, product_id, product_config["address"])
             else:
                 raise NotImplementedError(
                     "Only roach2 products are currently supported")

@@ -61,6 +61,18 @@ class DigitiserPacketiserClient(object):
         yield _check_interface('iface01')
 
     @coroutine
+    def set_predecimation(self, factor):
+        yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
+
+    @coroutine
+    def flip_spectrum(self, on):
+        if on == True:
+            yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "on")
+        else:
+            yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "off")
+
+
+    @coroutine
     def set_sampling_rate(self, rate, retries=3):
         """
         @brief      Sets the sampling rate.
@@ -72,7 +84,8 @@ class DigitiserPacketiserClient(object):
         """
         valid_modes = {
             4000000000: ("virtex7_dk769b", "4.0GHz", 5),
-            2600000000: ("virtex7_dk769b", "2.6GHz", 3)
+            2600000000: ("virtex7_dk769b", "2.6GHz", 3),
+            3200000000: ("virtex7_dk769b", "3.2GHz", 6)
         }
         try:
             args = valid_modes[rate]

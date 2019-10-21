@@ -1,4 +1,5 @@
 import logging
+import json
 from tornado.gen import coroutine
 from katcp import Sensor, Message, KATCPClientResource
 from mpikat.core.product_controller import ProductController, state_change
@@ -44,6 +45,19 @@ class EddServerProductController(ProductController):
         self.add_sensor(self._dummy_sensor)
         self._parent.mass_inform(Message.inform('interface-changed'))
 
+    @coroutine
+    def _safe_request(self, request_name, *args, **kwargs):
+        log.info("Sending packetiser request '{}' with arguments {}".format(request_name, args))
+        yield self._client.until_synced()
+        response = yield self._client.req[request_name](*args, **kwargs)
+        if not response.reply.reply_ok():
+            log.error("'{}' request failed with error: {}".format(request_name, response.reply.arguments[1]))
+            raise DigitiserPacketiserError(response.reply.arguments[1])
+        else:
+            log.debug("'{}' request successful".format(request_name))
+            raise Return(response)
+
+
     @state_change(["capturing", "error"], "idle")
     @coroutine
     def deconfigure(self):
@@ -53,7 +67,7 @@ class EddServerProductController(ProductController):
         @detail     This method will remove any product sensors that were added to the
                     parent master controller.
         """
-        yield self._client.deconfigure()
+        yield self._safe_request('deconfigure')
 
     @state_change(["idle", "error"], "capturing", "preparing")
     @coroutine
@@ -84,18 +98,18 @@ class EddServerProductController(ProductController):
                  must correspond to valid managed roach2 boards and firmwares as understood by
                  the R2RM server.
         """
-        self._client.configure(config)
+        self._safe_request("configure", json.dumps(config), timeout=120.0)
 
     @coroutine
     def capture_start(self):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        self._client.capture_start()
+        self._safe_request("capture_start")
 
     @coroutine
     def capture_stop(self):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        self._client.capture_stop()
+        self._safe_request("capture_stop")
