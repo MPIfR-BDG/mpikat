@@ -293,7 +293,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
             self._integration_time_sensor.set_value(data.integration_time)
             self._heap_group_sensor.set_value(data.nsections)
             self._nchannels_sensor.set_value(data.sections[0].nchannels)
-            #self._power_status_sensor.set_value(self.plot_data(data))
+            self._power_status_sensor.set_value(self.plot_data(data))
         except Exception:
             log.exception("Exception while updating sensor values")
 
@@ -434,7 +434,7 @@ class CaptureData(Thread):
     def resource_allocation(self):
         thread_pool = spead2.ThreadPool(threads=4)
         self.stream = spead2.recv.Stream(thread_pool, spead2.BUG_COMPAT_PYSPEAD_0_5_2, max_heaps=64, ring_heaps=64, contiguous_only = False)
-        pool = spead2.MemoryPool(16384, ((4*4*1024**2)+1024), max_free=64, initial=64)
+        pool = spead2.MemoryPool(16384, ((32*4*1024**2)+1024), max_free=64, initial=64)
         self.stream.set_memory_allocator(pool)
         self.rb = self.stream.ringbuffer
 
@@ -451,39 +451,42 @@ class CaptureData(Thread):
 
 class HeapPacket(object):
     def __init__(self):
-        self._first_heap = True 
+        self._first_heap = True
     
     def heap_items(self):
         """
         @brief      Description of heap items 
         """
         self.ig = spead2.ItemGroup()
-        self.ig.add_item(5632, "timestamp", "", (1,), format=[["u", 48]], order='C')
+        self.ig.add_item(5632, "timestamp_count", "", (6,), dtype=">B")
         self.ig.add_item(5633, "polID", "", (1,), dtype=">I")
         self.ig.add_item(5634, "ndStatus", "", (1,), dtype=">I")
-        self.ig.add_item(5635, "nchannels", "", (1,), dtype=">I")
-        self.ig.add_item(5636, "nsamples", "", (1,), dtype=">I")
-        self.ig.add_item(5637, "integtime", "", (1,), dtype=">I")
+        self.ig.add_item(5635, "fft_length", "", (1,), dtype=">I")
+        self.ig.add_item(5636, "nheaps", "", (1,), dtype=">I")
+        self.ig.add_item(5637, "synctime", "", (6,), dtype=">B")
+        self.ig.add_item(5638, "sampling_rate", "", (1,), dtype=">I")
+        self.ig.add_item(5639, "nspectrum", "", (1,), dtype=">I")
         return self.ig
 
     def unpack_heap(self, heap):
         items = self.ig.update(heap)
         for item in items.values():
             if (item.id == 5635) and (self._first_heap):
-                self.ig.add_item(5638, "data", "", (int(item.value),), dtype="<f")
+                self.nchannels = int((item.value/2)+1)
+                self.ig.add_item(5640, "data", "", (self.nchannels,), dtype="<f")
                 self._first_heap = False
             log.info("Iname: {}, Ivalue: {}".format(item.name, item.value))
             setattr(self, item.name, item.value)
-
-    def __repr__(self):
-        return "<HeapPacket, ts={}, polId={}, ndStatus={}, nchannels={}, nsamples={},\
-                 integTime={}, data={}>".format(self.timestamp, self.polID, self.ndStatus,
-                 self.nchannels, self.nsamples, self.integtime, self.data)
-
-
-def isotime():
-    return "{}UTC".format(datetime.utcnow().strftime(
-        '%Y-%m-%dT%H:%M:%S.%f')[:-2])
+        ts_count = ''
+        sync = ''
+        for i in range(6):
+            ts_count = ts_count+'{0:08b}'.format(self.timestamp_count[i])
+            sync = sync+'{0:08b}'.format(self.synctime[i])
+        ts_count = int(ts_count,2)
+        sync = int(sync,2)
+        self.integtime = (self.nspectrum*self.fft_length)/self.sampling_rate
+        t = (sync+((ts_count+(self.nspectrum*self.fft_length)/2)/self.sampling_rate))
+        self.timestamp = datetime.fromtimestamp(t).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-2]
 
 
 def build_fw_type(nsections, nchannels):
@@ -577,10 +580,10 @@ class StreamHandler(object):
             self._first_heap = False
 
     def aggregate_data(self, packet):
-        key = tuple(packet.timestamp)
+        key = tuple(packet.timestamp_count)
         if key not in self._data_to_fw:
-            fw_pkt = build_fw_object(self._nsections, int(packet.nchannels), isotime(),
-                                     packet.integtime, self._nphases)
+            fw_pkt = build_fw_object(self._nsections, int(packet.nchannels), packet.timestamp,
+                                     (packet.integtime*1000), self._nphases)
             fw_pkt.sections[int(packet.ndStatus)].data[:]=packet.data
             self._data_to_fw[key] = [time.time(), 1, fw_pkt]
         else:
@@ -649,7 +652,7 @@ def main():
                       help='Port to serve on for FW connections',
                       default=5002)
     parser.add_option('', '--log-level', dest='log_level', type=str,
-                      help='Defauly logging level', default="INFO")
+                      help='Default logging level', default="INFO")
     (opts, args) = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     coloredlogs.install(
