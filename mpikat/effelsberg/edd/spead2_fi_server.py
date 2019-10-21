@@ -580,15 +580,16 @@ class StreamHandler(object):
             self._first_heap = False
 
     def aggregate_data(self, packet):
+        sec_id = (packet.polID*2)+packet.ndStatus
         key = tuple(packet.timestamp_count)
         if key not in self._data_to_fw:
             fw_pkt = build_fw_object(self._nsections, int(packet.nchannels), packet.timestamp,
                                      (packet.integtime*1000), self._nphases)
-            fw_pkt.sections[int(packet.ndStatus)].data[:]=packet.data
+            fw_pkt.sections[int(sec_id)].data[:]=packet.data
             self._data_to_fw[key] = [time.time(), 1, fw_pkt]
         else:
             self._data_to_fw[key][1] += 1
-            self._data_to_fw[key][2].sections[int(packet.ndStatus)].data[:] = packet.data
+            self._data_to_fw[key][2].sections[int(sec_id)].data[:] = packet.data
         self.flush()
 
     def flush(self):
