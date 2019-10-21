@@ -30,14 +30,13 @@ from katcp import Sensor, AsyncReply
 from katcp.kattypes import request, return_reply, Str
 from mpikat.core.master_controller import MasterController
 #from mpikat.effelsberg.edd.edd_roach2_product_controller import (
-    EddRoach2ProductController)
+#    EddRoach2ProductController)
 from mpikat.effelsberg.edd.edd_product_controller import EddProductController
 from mpikat.effelsberg.edd.edd_worker_wrapper import EddWorkerPool
 from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
 from mpikat.effelsberg.edd.edd_fi_client import EddFitsInterfaceClient
-
-# ?halt message means shutdown everything and power off all machines
+from mpikat.effelsberg.EddServerproductController import EddServerproductController 
 
 log = logging.getLogger("mpikat.edd_master_controller")
 EDD_REQUIRED_KEYS = []
@@ -213,6 +212,8 @@ class EddMasterController(MasterController):
             raise error
         try:
             yield client.set_sampling_rate(config["sampling_rate"])
+            yield client.set_predecimation(config["predecimation_factor"])
+            yield client.flip_spectrum(config["flip_spectrum"])
             yield client.set_bit_width(config["bit_width"])
             yield client.set_destinations(config["v_destinations"], config["h_destinations"])
             for interface, ip_address in config["interface_addresses"].items():
@@ -315,6 +316,8 @@ class EddMasterController(MasterController):
             if product_config["type"] == "roach2":
                 self._products[product_id] = EddRoach2ProductController(self, product_id,
                                                                         (self._r2rm_host, self._r2rm_port))
+            elif product_config["type"] == "server":
+                self._products[product_id] = EddRServerProductController(self, product_id,
             else:
                 raise NotImplementedError(
                     "Only roach2 products are currently supported")
