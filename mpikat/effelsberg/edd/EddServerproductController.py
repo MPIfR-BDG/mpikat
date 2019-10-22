@@ -21,6 +21,7 @@ class EddServerProductController(ProductController):
                                       e.g. ("127.0.0.1", 5000)
         """
         ProductController.__init__(self, parent, product_id)
+        log.debug("Adress {}, {}".format(r2rm_addr[0], r2rm_addr[1]))
         self._client = KATCPClientResource(dict(
             name="r2rm-client",
             address=r2rm_addr,
@@ -44,6 +45,21 @@ class EddServerProductController(ProductController):
         self.add_sensor(self._dummy_sensor)
         self._parent.mass_inform(Message.inform('interface-changed'))
 
+    @coroutine
+    def _safe_request(self, request_name, *args):
+        log.info("Sending server request '{}' with arguments {}".format(request_name, args))
+        yield self._client.until_synced()
+        print("XXXXXXXXXXXX")
+        response = yield self._client.req[request_name](*args)
+        if not response.reply.reply_ok():
+            log.error("'{}' request failed with error: {}".format(request_name, response.reply.arguments[1]))
+        else:
+            log.debug("'{}' request successful".format(request_name))
+            raise Return(response)
+
+
+
+
     @state_change(["capturing", "error"], "idle")
     @coroutine
     def deconfigure(self):
@@ -53,38 +69,13 @@ class EddServerProductController(ProductController):
         @detail     This method will remove any product sensors that were added to the
                     parent master controller.
         """
-        yield self._client.deconfigure()
+        yield self._safe_request("deconfigure")
 
-    @state_change(["idle", "error"], "capturing", "preparing")
     @coroutine
     def configure(self, config):
         """
-        @brief      Configure the roach2 product
-
-        @param      config  A dictionary containing configuration information.
-                            The dictionary should have a form similar to:
-                            @code
-                                 {
-                                     "id": "roach2_spectrometer",
-                                     "type": "roach2",
-                                     "icom_id": "R2-EDD",
-                                     "firmware": "EDDFirmware",
-                                     "commands":
-                                     [
-                                         ["program", []],
-                                         ["start", []],
-                                         ["set_integration_period", [1000.0]],
-                                         ["set_destination_address", ["10.10.1.12", 60001]]
-                                     ]
-                                 }
-                            @endcode
-
-        @detail  This method will request the specified roach2 board from the R2RM server
-                 and request a firmware deployment. The values of the 'icom_id' and 'firmware'
-                 must correspond to valid managed roach2 boards and firmwares as understood by
-                 the R2RM server.
         """
-        self._client.configure(config)
+        yield self._safe_request("configure", config)
 
     @coroutine
     def capture_start(self):
