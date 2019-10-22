@@ -55,6 +55,7 @@ DEFAULT_CONFIG = {
         "fft_length": 1024 * 1024 * 2 * 8,
         "naccumulate": 32,
         "output_bit_depth": 32,
+        "output_directory": "/mnt",
         "input_level": 100,
         "output_level": 100,
 
@@ -422,7 +423,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
             elif self._config["output_type"] == 'disk':
                 if not os.path.isdir("./{ofname}".format(ofname=ofname)):
                     os.mkdir("./{ofname}".format(ofname=ofname))
-                cmd = "dada_dbdisk -k {ofname} -D ./{ofname} -W".format(ofname=ofname, **cfg)
+                cmd = "dada_dbdisk -k {ofname} -D {output_directory}/{ofname} -W".format(ofname=ofname, **cfg)
             else:
                 log.warning("Selected null output. Not sending data!")
                 cmd = "dada_dbnull -z -k {}".format(ofname)
