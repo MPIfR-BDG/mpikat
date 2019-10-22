@@ -22,6 +22,7 @@ class EddServerProductController(ProductController):
                                       e.g. ("127.0.0.1", 5000)
         """
         ProductController.__init__(self, parent, product_id)
+        log.debug("Adress {}, {}".format(r2rm_addr[0], r2rm_addr[1]))
         self._client = KATCPClientResource(dict(
             name="r2rm-client",
             address=r2rm_addr,
@@ -57,7 +58,6 @@ class EddServerProductController(ProductController):
             log.debug("'{}' request successful".format(request_name))
             raise Return(response)
 
-
     @state_change(["capturing", "error"], "idle")
     @coroutine
     def deconfigure(self):
@@ -69,36 +69,11 @@ class EddServerProductController(ProductController):
         """
         yield self._safe_request('deconfigure')
 
-    @state_change(["idle", "error"], "capturing", "preparing")
     @coroutine
     def configure(self, config):
         """
-        @brief      Configure the roach2 product
-
-        @param      config  A dictionary containing configuration information.
-                            The dictionary should have a form similar to:
-                            @code
-                                 {
-                                     "id": "roach2_spectrometer",
-                                     "type": "roach2",
-                                     "icom_id": "R2-EDD",
-                                     "firmware": "EDDFirmware",
-                                     "commands":
-                                     [
-                                         ["program", []],
-                                         ["start", []],
-                                         ["set_integration_period", [1000.0]],
-                                         ["set_destination_address", ["10.10.1.12", 60001]]
-                                     ]
-                                 }
-                            @endcode
-
-        @detail  This method will request the specified roach2 board from the R2RM server
-                 and request a firmware deployment. The values of the 'icom_id' and 'firmware'
-                 must correspond to valid managed roach2 boards and firmwares as understood by
-                 the R2RM server.
         """
-        self._safe_request("configure", json.dumps(config), timeout=120.0)
+        yield self._safe_request("configure", json.dumps(config), timeout=120.0)
 
     @coroutine
     def capture_start(self):

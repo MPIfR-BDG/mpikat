@@ -84,8 +84,10 @@ class DigitiserPacketiserClient(object):
         """
         valid_modes = {
             4000000000: ("virtex7_dk769b", "4.0GHz", 5),
+            3600000000: ("virtex7_dk769b", "3.6GHz", 7),
+            3200000000: ("virtex7_dk769b", "3.2GHz", 6),
             2600000000: ("virtex7_dk769b", "2.6GHz", 3),
-            3200000000: ("virtex7_dk769b", "3.2GHz", 6)
+            2560000000: ("virtex7_dk769b", "2.56GHz", 2)
         }
         try:
             args = valid_modes[rate]
@@ -128,6 +130,19 @@ class DigitiserPacketiserClient(object):
             log.error(msg)
             raise DigitiserPacketiserError(msg)
         yield self._safe_request("rxs_packetizer_edd_switchmode", mode)
+
+
+    @coroutine
+    def flip_spectrum(self, flip):
+        """
+        @brief Flip spectrum flip = True/False to adjust for even/odd nyquist zone
+        """
+        if flip:
+            yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "on")
+        else:
+            yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "off")
+
+
 
     @coroutine
     def set_destinations(self, v_dest, h_dest):
@@ -174,6 +189,14 @@ class DigitiserPacketiserClient(object):
         @brief      Stop data transmission for both polarisation channels
         """
         yield self._safe_request("capture_stop", "vh")
+
+    @coroutine
+    def set_predecimation(self, factor):
+        """
+        @brief      Set predcimation factor 
+        """
+        yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
+
 
     @coroutine
     def get_sync_time(self):
@@ -232,6 +255,10 @@ if __name__ == "__main__":
         help='H polarisation destinations', default="225.0.0.156+3:7148")
     parser.add_option('', '--log-level',dest='log_level',type=str,
         help='Logging level',default="INFO")
+    parser.add_option('', '--predecimation-factor', dest='predecimation_factor', type=int,
+        help='predecimation factor', default=4)
+
+    parser.add_option('', '--flip_spectrum', action="store_true", default=False)
     (opts, args) = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
@@ -247,6 +274,8 @@ if __name__ == "__main__":
             yield client.set_sampling_rate(opts.sampling_rate)
             yield client.set_bit_width(opts.nbits)
             yield client.set_destinations(opts.v_destinations, opts.h_destinations)
+            yield client.set_predecimation(opts.predecimation_factor)
+            yield client.flip_spectrum(opts.flip_spectrum)
             yield client.synchronize()
             yield client.capture_start()
         except Exception as error:
