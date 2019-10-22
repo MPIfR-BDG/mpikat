@@ -54,6 +54,9 @@ DEFAULT_CONFIG = {
         "sync_time" : 1562662573.0,
         "fft_length": 1024 * 1024 * 2 * 8,
         "naccumulate": 32,
+	"id": "dummy",
+	"type": "dummy",
+	"address": "dummy",
         "output_bit_depth": 32,
         "output_directory": "/mnt",
         "input_level": 100,
@@ -398,13 +401,13 @@ class GatedSpectrometerPipeline(EDDPipeline):
             self._subprocessMonitor.add(gated_cli, self._subprocess_error)
             self._subprocesses.append(gated_cli)
 
+	    cfg = self._config.copy()
+            cfg.update(self._config[k])
+
             if self._config["output_type"] == 'network':
                 mksend_header_file = tempfile.NamedTemporaryFile(delete=False)
                 mksend_header_file.write(mksend_header)
                 mksend_header_file.close()
-
-                cfg = self._config.copy()
-                cfg.update(self._config[k])
 
                 nhops = len(self._config[k]['mcast_dest'].split())
 
@@ -421,9 +424,11 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 log.debug("Command to run: {}".format(cmd))
 
             elif self._config["output_type"] == 'disk':
-                if not os.path.isdir("./{ofname}".format(ofname=ofname)):
-                    os.mkdir("./{ofname}".format(ofname=ofname))
-                cmd = "dada_dbdisk -k {ofname} -D {output_directory}/{ofname} -W".format(ofname=ofname, **cfg)
+		ofpath = os.path.join(cfg["output_directory"], ofname)
+                log.debug("Writing output to {}".format(ofpath))
+                if not os.path.isdir(ofpath):
+                    os.mkdir(ofpath)
+                cmd = "dada_dbdisk -k {ofname} -D {ofpath} -W".format(ofname=ofname, ofpath=ofpath, **cfg)
             else:
                 log.warning("Selected null output. Not sending data!")
                 cmd = "dada_dbnull -z -k {}".format(ofname)
