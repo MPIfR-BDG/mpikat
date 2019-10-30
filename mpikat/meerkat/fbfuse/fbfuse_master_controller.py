@@ -803,6 +803,17 @@ class FbfMasterController(MasterController):
         product.add_beam(target)
         return ("ok",)
 
+    @request()
+    @return_reply()
+    def request_add_default_nodes(self, req):
+        """
+        @brief      Add default FBFUSE nodes to the server pool
+        """
+        for idx in range(32):
+            self._server_pool.add("fbfpn{:02d}.mpifr-be.mkat.karoo.kat.ac.za".format(idx), 6000)
+            self._server_pool.add("fbfpn{:02d}.mpifr-be.mkat.karoo.kat.ac.za".format(idx), 6001)
+        return ("ok",)
+
 
 @coroutine
 def on_shutdown(ioloop, server):
