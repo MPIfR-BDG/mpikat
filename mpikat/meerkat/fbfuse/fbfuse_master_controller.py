@@ -82,7 +82,7 @@ class FbfMasterController(MasterController):
         super(FbfMasterController, self).__init__(ip, port, FbfWorkerPool())
         self._dummy = dummy
         if self._dummy:
-            for ii in range(64):
+            for ii in range(0):
                 self._server_pool.add("127.0.0.1", 50000+ii)
         self._last_configure_arguments = None
         self._feng_subscription_manager = FengToFbfMapper()
@@ -456,7 +456,7 @@ class FbfMasterController(MasterController):
             log.exception("Target could not be parsed: {}".format(
                 str(error)))
             return ("fail", str(error))
-        self.ioloop.add_callback(lambda target: product.target_start(target))
+        self.ioloop.add_callback(lambda: product.target_start(target))
         return ("ok", )
 
     @request(Str())
