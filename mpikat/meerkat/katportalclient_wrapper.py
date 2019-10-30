@@ -137,7 +137,7 @@ class SubarrayActivity(object):
         self._sensor_name = yield self._client.sensor_subarray_lookup(
             component="subarray", sensor="observation_activity",
             return_katcp_name=False)
-        log.debug("Tracking sensor: ".format(self._sensor_name))
+        log.debug("Tracking sensor: {}".format(self._sensor_name))
         result = yield self._client.set_sampling_strategies(
             self._namespace, self._sensor_name,
             'event')

@@ -569,7 +569,7 @@ class FbfProductController(object):
     def get_ca_sb_configuration(self, sb_id):
         self.log.debug(("Retrieving schedule block configuration"
                         " from configuration authority"))
-        yield self._ca_client.until_synced()
+        yield self._ca_client.until_synced(timeout=20.0)
         try:
             response = yield self._ca_client.req.get_schedule_block_configuration(self._product_id, sb_id, self._n_channels)
         except Exception as error:
@@ -858,14 +858,14 @@ class FbfProductController(object):
                 epoch = float(tiling.get('epoch', time.time()))
                 self.add_tiling(target, nbeams, freq, overlap, epoch)
             self._parent.ioloop.add_callback(
-                wait_for_track,
-                lambda: self._cbc_data_suspect.set_value(False))
+                lambda: wait_for_track(
+                    lambda: self._cbc_data_suspect.set_value(False)))
 
         # Here we interrupt any active wait_for_track coroutines
         self._activity_tracker_interrupt.set()
 
         # Here we generate a plot from the PSF
-        yield self._ca_client.until_synced()
+        yield self._ca_client.until_synced(timeout=10.0)
         sensor_name = "{}_beam_position_configuration".format(self._product_id)
         if sensor_name in self._ca_client.sensor:
             self._ca_client.sensor[sensor_name].clear_listeners()
@@ -881,7 +881,7 @@ class FbfProductController(object):
             self.log.error(("Request for target configuration to CA "
                             "failed with error: {}").format(str(error)))
             raise error
-        yield self._ca_client.until_synced()
+        yield self._ca_client.until_synced(timeout=10.0)
 
         # Clear the state on the interrupt event for wait_for_track coroutines
         self._activity_tracker_interrupt.clear()
@@ -890,8 +890,8 @@ class FbfProductController(object):
         sensor.register_listener(ca_target_update_callback)
         self._ca_client.set_sampling_strategy(sensor.name, "event")
         self._parent.ioloop.add_callback(
-                    wait_for_track,
-                    lambda: self._ibc_data_suspect.set_value(False))
+            lambda: wait_for_track(
+                lambda: self._ibc_data_suspect.set_value(False)))
 
     def _beam_to_sensor_string(self, beam):
         return beam.target.format_katcp()
