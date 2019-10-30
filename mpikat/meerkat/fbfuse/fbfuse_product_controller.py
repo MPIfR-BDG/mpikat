@@ -1177,6 +1177,13 @@ class FbfProductController(object):
                         self._servers[ii], str(error)))
         self._state_sensor.set_value(self.READY)
 
+    @coroutine
+    def target_stop(self):
+        if self._ca_client:
+            sensor_name = "{}_beam_position_configuration".format(
+                self._product_id)
+            self._ca_client.set_sampling_strategy(sensor_name, "none")
+
     def add_beam(self, target):
         """
         @brief      Specify the parameters of one managed beam
