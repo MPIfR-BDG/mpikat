@@ -330,7 +330,6 @@ class FbfMasterController(MasterController):
 
         log.info("Starting subarray activity tracker")
         activity_tracker = SubarrayActivity(streams['cam.http']['camdata'])
-        yield activity_tracker.start()
         product = FbfProductController(
             self, product_id, observers, n_channels,
             feng_groups, proxy_name, feng_config, activity_tracker)

@@ -125,9 +125,12 @@ class SubarrayActivity(object):
         self._namespace = 'namespace_' + str(uuid.uuid4())
         self._sensor_name = None
         self._state = None
+        self._has_started = False
 
     @coroutine
     def start(self):
+        if self._has_started:
+            return
         log.debug("Starting subarray activity tracker")
         yield self._client.connect()
         result = yield self._client.subscribe(self._namespace)
@@ -143,6 +146,7 @@ class SubarrayActivity(object):
             include_value_ts=False)
         self._state = sensor_sample.value
         log.debug("Initial state: {}".format(self._state))
+        self._has_started = True
 
     def event_handler(self, msg_dict):
         status = msg_dict['msg_data']['status']
