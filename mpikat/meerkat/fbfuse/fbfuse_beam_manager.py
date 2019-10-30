@@ -149,7 +149,6 @@ class Tiling(object):
         beam_shape = psfsim.get_beam_shape(self.target, epoch)
         log.debug("Generating tiling of {} beams with an overlap of {}".format(
             self.nbeams, self.overlap))
-        #margin = max(int(self.nbeams * 0.25), 16)
         tiling = mosaic.generate_nbeams_tiling(
             beam_shape, self.nbeams, self.overlap)
         coordinates = tiling.get_equatorial_coordinates()
@@ -157,7 +156,8 @@ class Tiling(object):
             ra, dec = coordinates[ii]
             self._beams[ii].target = Target('{},radec,{},{}'.format(
                 self.target.name, ra, dec))
-	return tiling
+        return tiling
+
     def __repr__(self):
         return ", ".join([repr(beam) for beam in self._beams])
 
@@ -247,15 +247,21 @@ class BeamManager(object):
                                     when values are close to zero. In future this may be define in sigma units or
                                     in multiples of the FWHM of the beam.]
 
+        @note       This function will not raise an exception in the event that the user over-requests beams
+                    it is incumbent upon the end user to check what has actually been allocated in the tiling.
+
         @returns    The created Tiling object
         """
-        if len(self._free_beams) < nbeams:
-            raise BeamAllocationError("Requested more beams than are available.")
         tiling = Tiling(target, self._antennas, reference_frequency, overlap)
         for _ in range(nbeams):
-            beam = self._free_beams.pop(0)
-            tiling.add_beam(beam)
-            self._allocated_beams.append(beam)
+            if len(self._free_beams) == 0:
+                log.warning("Unable to allocate all beams in tiling: {} of {} allocated".format(
+                    tiling.nbeams, nbeams))
+                break
+            else:
+                beam = self._free_beams.pop(0)
+                tiling.add_beam(beam)
+                self._allocated_beams.append(beam)
         self._tilings.append(tiling)
         return tiling
 

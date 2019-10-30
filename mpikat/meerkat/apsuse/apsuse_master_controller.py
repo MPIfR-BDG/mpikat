@@ -53,6 +53,7 @@ class ApsMasterController(MasterController):
     VERSION_INFO = ("mpikat-aps-api", 0, 1)
     BUILD_INFO = ("mpikat-aps-implementation", 0, 1, "rc1")
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
+
     def __init__(self, ip, port, dummy=False):
         """
         @brief       Construct new ApsMasterController instance
@@ -218,27 +219,6 @@ class ApsMasterController(MasterController):
         yield product.target_start(target)
         raise Return(("ok",))
 
-
-    # DELETE this
-    @request(Str())
-    @return_reply()
-    @coroutine
-    def request_target_stop(self, req, product_id):
-        """
-        @brief      Notify APSUSE that the telescope has stopped observing a target
-
-        @param      product_id      This is a name for the data product, used to track which subarray is being deconfigured.
-                                    For example "array_1_bc856M4k".
-
-        @return     katcp reply object [[[ !target-start ok | (fail [error description]) ]]]
-        """
-        try:
-            product = self._get_product(product_id)
-        except ProductLookupError as error:
-            raise Return(("fail", str(error)))
-        yield product.target_stop()
-        raise Return(("ok",))
-
     @request(Str())
     @return_reply()
     def request_capture_start(self, req, product_id):
@@ -284,6 +264,7 @@ class ApsMasterController(MasterController):
             product = self._get_product(product_id)
         except ProductLookupError as error:
             return ("fail", str(error))
+
         @coroutine
         def stop():
             yield product.capture_stop()
@@ -297,6 +278,7 @@ def on_shutdown(ioloop, server):
     log.info("Shutting down server")
     yield server.stop()
     ioloop.stop()
+
 
 def main():
     usage = "usage: %prog [options]"
@@ -321,9 +303,11 @@ def main():
     server = ApsMasterController(opts.host, opts.port, dummy=opts.dummy)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
+
     def start_and_display():
         server.start()
-        log.info("Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
+        log.info("Listening at {0}, Ctrl-C to terminate server".format(
+            server.bind_address))
 
     ioloop.add_callback(start_and_display)
     ioloop.start()

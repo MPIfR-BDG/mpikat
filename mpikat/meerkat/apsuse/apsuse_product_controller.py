@@ -25,22 +25,25 @@ import json
 import time
 from copy import deepcopy
 from tornado.gen import coroutine, Return
+from tornado.locks import Event
 from katcp import Sensor, Message, KATCPClientResource
-from katpoint import  Target, Antenna
+from katpoint import Target, Antenna
 from mpikat.core.worker_pool import WorkerAllocationError
 from mpikat.core.ip_manager import ip_range_from_stream
 from mpikat.core.utils import parse_csv_antennas, LoggingSensor
 from mpikat.meerkat.apsuse.apsuse_config import get_required_workers
+from mpikat.meerkat.apsuse.apsuse_beam_monitor import FBFUSEBeamMonitor
 
-N_FENG_STREAMS_PER_WORKER = 4
 
 log = logging.getLogger("mpikat.apsuse_product_controller")
+
 
 class ApsProductStateError(Exception):
     def __init__(self, expected_states, current_state):
         message = "Possible states for this operation are '{}', but current state is '{}'".format(
             expected_states, current_state)
         super(ApsProductStateError, self).__init__(message)
+
 
 class ApsProductController(object):
     """
@@ -71,9 +74,12 @@ class ApsProductController(object):
         self._parent = parent
         self._product_id = product_id
         self._fbf_monitor = fbf_monitor
+        self._fbf_beam_monitor = FBFUSEBeamMonitor() #???
+        self._on_target_tracker = OnTargetTracker() #???
         self._proxy_name = proxy_name
         self._managed_sensors = []
         self._servers = []
+        self._state_interrupt = Event()
         self.setup_sensors()
 
     def __del__(self):
@@ -119,26 +125,31 @@ class ApsProductController(object):
         """
         self._state_sensor = LoggingSensor.discrete(
             "state",
-            description = "Denotes the state of this APS instance",
-            params = self.STATES,
-            default = self.IDLE,
-            initial_status = Sensor.NOMINAL)
+            description="Denotes the state of this APS instance",
+            params=self.STATES,
+            default=self.IDLE,
+            initial_status=Sensor.NOMINAL)
         self._state_sensor.set_logger(self.log)
         self.add_sensor(self._state_sensor)
 
-        self._fbf_sb_config_sensor = Sensor.string(
+        self._fbf_sb_config_sensor=Sensor.string(
             "fbfuse-sb-config",
-            description = "The full FBFUSE schedule block configuration",
-            default = "",
-            initial_status = Sensor.UNKNOWN)
+            description="The full FBFUSE schedule block configuration",
+            default="",
+            initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._fbf_sb_config_sensor)
 
-        self._servers_sensor = Sensor.string(
+        self._servers_sensor=Sensor.string(
             "servers",
-            description = "The worker server instances currently allocated to this product",
-            default = ",".join(["{s.hostname}:{s.port}".format(s=server) for server in self._servers]),
-            initial_status = Sensor.UNKNOWN)
+            description="The worker server instances currently allocated to this product",
+            default=",".join(["{s.hostname}:{s.port}".format(s=server) for server in self._servers]),
+            initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._servers_sensor)
+
+        # Server to multicast group map
+
+        # ???
+
         self._parent.mass_inform(Message.inform('interface-changed'))
         self._state_sensor.set_value(self.READY)
 
@@ -204,11 +215,42 @@ class ApsProductController(object):
 
     @coroutine
     def target_start(self, target):
-        log.debug("Received target start command, should probably do something clever here")
+        """
+        @brief  Disable recording of current observation and prepare for next
+
+        @detail   Disables all writers before waiting on RETILING state
+                  on FBFUSE, after retiling, writing is re-enabled with
+                  the correct beam coordinates deployed.
+        """
+
+        # Target start implies previous target has ended
+        yield self.disable_all_writers()
+
+        @coroutine
+        def trigger_writers():
+            # Now we need to wait for all beams to be set by FBFUSE
+            # Only need to wait for beam zero to change then put a timer
+            # on to wait for all beam updates.
+            yield self._fbf_monitor.
+
+            # Wait until we are on source before dispatching the enable call
+            # if we are already on source then dispatch immediately
+
+            # This setup cannot handle on the fly retilings
+            # (but APSUSE shouldn't need to).
+            yield self.enable_writers()
+
+        self.ioloop.add_callback(trigger_writers)
 
     @coroutine
-    def target_stop(self):
-        log.debug("Received target stop command, should probably do something clever here")
+    def disable_all_writers(self):
+        for server in self._servers:
+            yield server.disable_writers()
+
+    @coroutine
+    def enable_writers(self):
+        for server in self._servers:
+            yield server.enable_writers(self._beam_map)
 
     @coroutine
     def capture_start(self):
@@ -218,6 +260,7 @@ class ApsProductController(object):
         self.log.debug("Product moved to 'starting' state")
         fbf_sb_config = yield self._fbf_monitor.get_sb_config()
         yield self._fbf_monitor.subscribe_to_beams()
+
         worker_configs = get_required_workers(fbf_sb_config)
         capture_start_futures = []
         for worker_config in worker_configs:
@@ -228,6 +271,7 @@ class ApsProductController(object):
                 break
             else:
                 self._servers.append(server)
+                yield server.prepare(fbf_sb_config)
                 #capture_start_future = server.capture_start(worker_config)
                 #capture_start_futures.append(capture_start_future)
                 #

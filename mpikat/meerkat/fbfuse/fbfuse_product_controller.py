@@ -27,12 +27,15 @@ import struct
 import base64
 from copy import deepcopy
 from tornado.gen import coroutine, Return
+from tornado.locks import Event
 from katcp import Sensor, Message, KATCPClientResource
 from katpoint import Target, Antenna
 from mpikat.core.ip_manager import ip_range_from_stream
 from mpikat.core.utils import parse_csv_antennas, LoggingSensor
+from mpikat.meerkat.katportalclient_wrapper import SubarrayActivityInterrupt
 from mpikat.meerkat.fbfuse import (
     BeamManager,
+    BeamAllocationError,
     DelayConfigurationServer,
     FbfConfigurationManager)
 
@@ -59,7 +62,8 @@ class FbfProductController(object):
     IDLE, PREPARING, READY, STARTING, CAPTURING, STOPPING, ERROR = STATES
 
     def __init__(self, parent, product_id, katpoint_antennas,
-                 n_channels, feng_streams, proxy_name, feng_config):
+                 n_channels, feng_streams, proxy_name, feng_config,
+                 subarray_activity_tracker):
         """
         @brief      Construct new instance
 
@@ -98,6 +102,8 @@ class FbfProductController(object):
         self._beam_manager = None
         self._delay_config_server = None
         self._ca_client = None
+        self._activity_tracker_interrupt = Event()
+        self._activity_tracker = subarray_activity_tracker
         self._previous_sb_config = None
         self._managed_sensors = []
         self._beam_sensors = []
@@ -331,6 +337,13 @@ class FbfProductController(object):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._cbc_idx1_step_sensor)
 
+        self._cbc_data_suspect = Sensor.boolean(
+            "coherent-beam-data-suspect",
+            description="Indicates when data from the coherent beam is expected to be invalid",
+            default=True,
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._cbc_data_suspect)
+
         self._ibc_nbeams_sensor = Sensor.integer(
             "incoherent-beam-count",
             description="The number of incoherent beams that this FBF instance can currently produce",
@@ -410,6 +423,13 @@ class FbfProductController(object):
             default=0,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._ibc_idx1_step_sensor)
+
+        self._ibc_data_suspect = Sensor.boolean(
+            "incoherent-beam-data-suspect",
+            description="Indicates when data from the incoherent beam is expected to be invalid",
+            default=True,
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._ibc_data_suspect)
 
         self._servers_sensor = Sensor.string(
             "servers",
@@ -551,7 +571,7 @@ class FbfProductController(object):
                         " from configuration authority"))
         yield self._ca_client.until_synced()
         try:
-            response = yield self._ca_client.req.get_schedule_block_configuration(self._proxy_name, sb_id, self._n_channels)
+            response = yield self._ca_client.req.get_schedule_block_configuration(self._product_id, sb_id, self._n_channels)
         except Exception as error:
             self.log.error(
                 "Request for SB configuration to CA failed with error: {}".format(str(error)))
@@ -645,7 +665,7 @@ class FbfProductController(object):
     def _sanitise_incoh_beam_ants(self, requested_antennas):
         antennas = self._get_valid_antennas(
             parse_csv_antennas(requested_antennas))
-	log.info("Sanitised incoherent antennas: {}".format(antennas))
+        log.info("Sanitised incoherent antennas: {}".format(antennas))
         return ",".join(antennas)
 
     @coroutine
@@ -799,15 +819,36 @@ class FbfProductController(object):
 
     @coroutine
     def get_ca_target_configuration(self, boresight_target):
+
+        @coroutine
+        def wait_for_track(callback):
+            self.log.debug("Waiting for subarray to enter 'track' state")
+            try:
+                yield self._activity_tracker.wait_until(
+                    "track", self._activity_tracker_interrupt)
+            except SubarrayActivityInterrupt:
+                self.log.debug("Interrupting callback waiting on 'track' state")
+                pass
+            except Exception as error:
+                log.error(
+                    "Unknown error while waiting on telescope to enter 'track' state: {}".format(
+                        str(error)))
+            else:
+                callback()
+
         def ca_target_update_callback(received_timestamp, timestamp, status,
                                       value):
             # TODO, should we really reset all the beams or should we have
             # a mechanism to only update changed beams
             config_dict = json.loads(value)
+            self._cbc_data_suspect.set_value(True)
             self.reset_beams()
             for target_string in config_dict.get('beams', []):
                 target = Target(target_string)
-                self.add_beam(target)
+                try:
+                    self.add_beam(target)
+                except BeamAllocationError as error:
+                    log.warning(str(error))
             for tiling in config_dict.get('tilings', []):
                 target = Target(tiling['target'])  # required
                 freq = float(tiling.get('reference_frequency',
@@ -816,14 +857,21 @@ class FbfProductController(object):
                 overlap = float(tiling.get('overlap', 0.5))
                 epoch = float(tiling.get('epoch', time.time()))
                 self.add_tiling(target, nbeams, freq, overlap, epoch)
+            self._parent.ioloop.add_callback(
+                wait_for_track,
+                lambda: self._cbc_data_suspect.set_value(False))
+
+        # Here we interrupt any active wait_for_track coroutines
+        self._activity_tracker_interrupt.set()
+
         # Here we generate a plot from the PSF
         yield self._ca_client.until_synced()
-        sensor_name = "{}_beam_position_configuration".format(self._proxy_name)
+        sensor_name = "{}_beam_position_configuration".format(self._product_id)
         if sensor_name in self._ca_client.sensor:
             self._ca_client.sensor[sensor_name].clear_listeners()
         try:
             response = yield self._ca_client.req.target_configuration_start(
-                self._proxy_name, boresight_target.format_katcp())
+                self._product_id, boresight_target.format_katcp())
         except Exception as error:
             self.log.error(("Request for target configuration to CA "
                             "failed with error: {}").format(str(error)))
@@ -834,9 +882,16 @@ class FbfProductController(object):
                             "failed with error: {}").format(str(error)))
             raise error
         yield self._ca_client.until_synced()
+
+        # Clear the state on the interrupt event for wait_for_track coroutines
+        self._activity_tracker_interrupt.clear()
+
         sensor = self._ca_client.sensor[sensor_name]
         sensor.register_listener(ca_target_update_callback)
         self._ca_client.set_sampling_strategy(sensor.name, "event")
+        self._parent.ioloop.add_callback(
+                    wait_for_track,
+                    lambda: self._ibc_data_suspect.set_value(False))
 
     def _beam_to_sensor_string(self, beam):
         return beam.target.format_katcp()
@@ -880,6 +935,8 @@ class FbfProductController(object):
 
     @coroutine
     def target_start(self, target):
+        self._ibc_data_suspect.set_value(True)
+        self._cbc_data_suspect.set_value(True)
         self._phase_reference_sensor.set_value(target.format_katcp())
         self._delay_config_server._phase_reference_sensor.set_value(
             target.format_katcp())
@@ -895,13 +952,6 @@ class FbfProductController(object):
                              "using default beam configuration")
 
     @coroutine
-    def target_stop(self):
-        if self._ca_client:
-            sensor_name = "{}_beam_position_configuration".format(
-                self._proxy_name)
-            self._ca_client.set_sampling_strategy(sensor_name, "none")
-
-    @coroutine
     def prepare(self, sb_id):
         """
         @brief      Prepare the beamformer for streaming
@@ -912,6 +962,7 @@ class FbfProductController(object):
         self.log.info("Preparing FBFUSE product")
         self._state_sensor.set_value(self.PREPARING)
         self.log.debug("Product moved to 'preparing' state")
+        self._server_configs = {}
         try:
             sb_config = yield self.get_sb_configuration(sb_id)
         except Exception as error:
@@ -1010,7 +1061,8 @@ class FbfProductController(object):
             group_start = struct.unpack("B", ip_range.base_ip.packed[-1])[0]
             chan0_idx = cm.nchans_per_group * group_start
             chan0_freq = fbottom + chan0_idx * cm.channel_bandwidth
-            future = server.prepare(
+
+            args = (
                 ip_range.format_katcp(),
                 cm.nchans_per_group,
                 chan0_idx,
@@ -1020,8 +1072,9 @@ class FbfProductController(object):
                 json.dumps(coherent_beam_config),
                 json.dumps(incoherent_beam_config),
                 de_ip,
-                de_port,
-                timeout=120.0)
+                de_port)
+            self._server_configs[server] = args
+            future = server.prepare(*args, timeout=120.0)
             prepare_futures.append(future)
 
         failure_count = 0

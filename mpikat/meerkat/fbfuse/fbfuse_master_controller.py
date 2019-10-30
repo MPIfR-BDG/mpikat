@@ -28,7 +28,7 @@ import time
 import cPickle
 from threading import Lock
 from optparse import OptionParser
-from tornado.gen import Return, coroutine
+from tornado.gen import coroutine
 from katcp import Sensor, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Float
 from katpoint import Antenna, Target
@@ -36,7 +36,8 @@ from mpikat.core.master_controller import (
     MasterController, ProductLookupError, ProductExistsError)
 from mpikat.core.ip_manager import IpRangeManager, ip_range_from_stream
 from mpikat.core.utils import parse_csv_antennas
-from mpikat.meerkat.katportalclient_wrapper import KatportalClientWrapper
+from mpikat.meerkat.katportalclient_wrapper import (
+    KatportalClientWrapper, SubarrayActivity)
 from mpikat.meerkat.fbfuse import FbfWorkerPool, FbfProductController
 from mpikat.meerkat.test.antennas import ANTENNAS as DEFAULT_ANTENNA_MODELS
 from mpikat.meerkat.fbfuse.fbfuse_feng_subscription_manager import (
@@ -50,6 +51,7 @@ lock = Lock()
 FBF_IP_RANGE = "spead://239.11.1.0+127:7147"
 CONFIG_PICKLE_FILE = "/tmp/fbfuse_config.pickle"
 VALID_NCHANS = [1024, 4096, 32768]
+
 
 class FbfMasterController(MasterController):
     """This is the main KATCP interface for the FBFUSE
@@ -325,9 +327,13 @@ class FbfMasterController(MasterController):
         }
         for key, value in feng_config.items():
             log.debug("{}: {}".format(key, value))
+
+        log.info("Starting subarray activity tracker")
+        activity_tracker = SubarrayActivity(streams['cam.http']['camdata'])
+        yield activity_tracker.start()
         product = FbfProductController(
             self, product_id, observers, n_channels,
-            feng_groups, proxy_name, feng_config)
+            feng_groups, proxy_name, feng_config, activity_tracker)
         self._products[product_id] = product
         self._update_products_sensor()
         log.debug("Configured FBFUSE instance with ID: {}".format(product_id))

@@ -22,7 +22,9 @@ SOFTWARE.
 import json
 import logging
 import uuid
-from tornado.gen import coroutine, Return
+import time
+import datetime
+from tornado.gen import coroutine, Return, sleep, TimeoutError
 from katportalclient import KATPortalClient
 from katcp.resource import KATCPSensorReading
 from katcp import Sensor
@@ -107,6 +109,64 @@ class KatportalClientWrapper(object):
         sensor_sample = yield self._query('sub', 'array-position-itrf')
         x, y, z = [float(i) for i in sensor_sample.value.split(",")]
         raise Return((x, y, z))
+
+
+class SubarrayActivityInterrupt(Exception):
+    pass
+
+
+class SubarrayActivity(object):
+    def __init__(self, host):
+        log.debug("Building subarray activity tracker for {}".format(host))
+        self._client = KATPortalClient(
+            host,
+            on_update_callback=self.event_handler,
+            logger=logging.getLogger('katcp'))
+        self._namespace = 'namespace_' + str(uuid.uuid4())
+        self._sensor_name = None
+        self._state = None
+
+    @coroutine
+    def start(self):
+        log.debug("Starting subarray activity tracker")
+        yield self._client.connect()
+        result = yield self._client.subscribe(self._namespace)
+        self._sensor_name = yield self._client.sensor_subarray_lookup(
+            component="subarray", sensor="observation_activity",
+            return_katcp_name=False)
+        log.debug("Tracking sensor: ".format(self._sensor_name))
+        result = yield self._client.set_sampling_strategies(
+            self._namespace, self._sensor_name,
+            'event')
+        sensor_sample = yield self._client.sensor_value(
+            self._sensor_name,
+            include_value_ts=False)
+        self._state = sensor_sample.value
+        log.debug("Initial state: {}".format(self._state))
+
+    def event_handler(self, msg_dict):
+        status = msg_dict['msg_data']['status']
+        if status == "nominal":
+            log.debug("Subarray state update: {} -> {}".format(
+                self._state, msg_dict['msg_data']['value']))
+            self._state = msg_dict['msg_data']['value']
+
+    @coroutine
+    def wait_until(self, state, interrupt):
+        log.debug("Waiting for state='{}'".format(state))
+        while True:
+            if self._state == state:
+                log.debug("Desired state reached")
+                raise Return(self._state)
+            else:
+                try:
+                    yield interrupt.wait(
+                        timeout=datetime.timedelta(seconds=1))
+                except TimeoutError:
+                    continue
+                else:
+                    log.debug("Wait was interrupted")
+                    raise Interrupt("Interrupt event was set")
 
 
 class FbfKatportalMonitor(KatportalClientWrapper):
@@ -200,13 +260,34 @@ class FbfKatportalMonitor(KatportalClientWrapper):
 
 if __name__ == "__main__":
     import tornado
-    host = "http://monctl.devnmk.camlab.kat.ac.za/api/client/1"
+    host = "http://portal.mkat.karoo.kat.ac.za/api/client/1"
     log = logging.getLogger('mpikat.katportalclient_wrapper')
     log.setLevel(logging.DEBUG)
     ioloop = tornado.ioloop.IOLoop.current()
-    x = KatportalClientWrapper(host)
+
+    x = SubarrayActivity(host)
+
+    event = tornado.locks.Event()
+
     @coroutine
-    def run():
-        sensors = yield x.get_observer_strings(["m{:03d}".format(i) for i in range(64)])
-        print sensors
-    ioloop.run_sync(run)
+    def setup():
+        yield x.start()
+        """
+        try:
+            yield x.wait_until("track", event)
+        except Exception as error:
+            print "exception for wait_until"
+            print str(error)
+        else:
+            print "Desired state reached"
+            """
+
+    @coroutine
+    def set_event():
+        print "Setting event wait"
+        event.set()
+
+    ioloop.add_callback(setup)
+    #ioloop.add_callback(set_event)
+
+    ioloop.start()
