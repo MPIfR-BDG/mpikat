@@ -858,8 +858,8 @@ class FbfProductController(object):
                 epoch = float(tiling.get('epoch', time.time()))
                 self.add_tiling(target, nbeams, freq, overlap, epoch)
             self._parent.ioloop.add_callback(
-                lambda: wait_for_track(
-                    lambda: self._cbc_data_suspect.set_value(False)))
+                wait_for_track,
+                lambda: self._cbc_data_suspect.set_value(False))
 
         # Here we interrupt any active wait_for_track coroutines
         self._activity_tracker_interrupt.set()
@@ -890,8 +890,8 @@ class FbfProductController(object):
         sensor.register_listener(ca_target_update_callback)
         self._ca_client.set_sampling_strategy(sensor.name, "event")
         self._parent.ioloop.add_callback(
-            lambda: wait_for_track(
-                lambda: self._ibc_data_suspect.set_value(False)))
+            wait_for_track,
+            lambda: self._ibc_data_suspect.set_value(False))
 
     def _beam_to_sensor_string(self, beam):
         return beam.target.format_katcp()
@@ -945,9 +945,10 @@ class FbfProductController(object):
         self._phase_reference_sensor.set_value(target.format_katcp())
         self._delay_config_server._phase_reference_sensor.set_value(
             target.format_katcp())
-        self._parent.ioloop.add_callback(self._make_beam_plot(target))
+        self._parent.ioloop.add_callback(self._make_beam_plot, target)
         if self._ca_client:
-            yield self.get_ca_target_configuration(target)
+            self._parent.ioloop.add_callback(
+                self.get_ca_target_configuration, target)
         else:
             self.log.warning("No configuration authority is set, "
                              "using default beam configuration")
