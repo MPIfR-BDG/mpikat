@@ -439,8 +439,6 @@ class FbfMasterController(MasterController):
 
         @param      target          A KATPOINT target string
 
-        @note       This method has been updated to be non-blocking
-
         @return     katcp reply object [[[ !target-start ok | (fail [error description]) ]]]
         """
         log.info("Received target-start request for target: {}".format(target))
@@ -456,8 +454,11 @@ class FbfMasterController(MasterController):
             log.exception("Target could not be parsed: {}".format(
                 str(error)))
             return ("fail", str(error))
-        self.ioloop.add_callback(lambda: product.target_start(target))
-        return ("ok", )
+        try:
+            yield product.target_start(target)
+        except Exception as error:
+            return ("fail", str(error))
+        return ("ok",)
 
     @request(Str())
     @return_reply()
