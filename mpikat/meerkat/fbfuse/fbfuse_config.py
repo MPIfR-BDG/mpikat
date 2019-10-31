@@ -29,7 +29,7 @@ FBF_BEAM_NBITS = 8
 MAX_OUTPUT_RATE = 300.0e9 # bits/s -- This is an artifical limit based on the original FBF design
 MAX_OUTPUT_RATE_PER_WORKER = 7.0e9 # bits/s
 MAX_OUTPUT_RATE_PER_MCAST_GROUP = 7.0e9 # bits/s
-MIN_MCAST_GROUPS = 64
+MIN_MCAST_GROUPS = 32
 MIN_NBEAMS = 32
 MIN_ANTENNAS = 4
 NBEAM_GRANULARITY = 32
@@ -40,11 +40,6 @@ class FbfConfigurationError(Exception):
 
 class FbfConfigurationManager(object):
     def __init__(self, total_nantennas, total_bandwidth, total_nchans, nworkers, nips):
-        #if total_nchans != 4096:
-        #    log.warning("A channel mode other than 4k has been requested"
-        #                ", but as a hack we are pretending it is 4k")
-        #    total_nchans = 4096
-            #raise NotImplementedError("Currently only 4k channel mode supported")
         self.total_nantennas = total_nantennas
         self.total_bandwidth = total_bandwidth
         self.total_nchans = total_nchans
@@ -78,7 +73,7 @@ class FbfConfigurationManager(object):
             scale = 1.0/scrunch
         else:
             scale = 1.0
-        nbeams = int(700*(self.nchans_per_worker/float(nantennas)) * scale)
+        nbeams = int(700*(self.nchans_per_worker/float(nantennas)) * scale) * 4
         nbeams -= nbeams%32
         return nbeams
 
