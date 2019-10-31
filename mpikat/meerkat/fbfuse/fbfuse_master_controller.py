@@ -801,7 +801,7 @@ class FbfMasterController(MasterController):
 
     @request()
     @return_reply()
-    def request_add_default_nodes(self, req):
+    def request_register_default_worker_servers(self, req):
         """
         @brief      Add default FBFUSE nodes to the server pool
         """
@@ -809,6 +809,22 @@ class FbfMasterController(MasterController):
             self._server_pool.add("fbfpn{:02d}.mpifr-be.mkat.karoo.kat.ac.za".format(idx), 6000)
             self._server_pool.add("fbfpn{:02d}.mpifr-be.mkat.karoo.kat.ac.za".format(idx), 6001)
         return ("ok",)
+
+    @request(Str())
+    @return_reply(Str())
+    def request_beam_positions(self, req, product_id):
+        """
+        @brief      Add default FBFUSE nodes to the server pool
+        """
+        try:
+            product = self._get_product(product_id)
+        except ProductLookupError as error:
+            return ("fail", str(error))
+        beam_dict = {}
+        beams = product._beam_manager.get_beams()
+        for beam in beams:
+            beam_dict[beam.idx] = beam.target.format_katcp()
+        return ("ok", json.dumps(beam_dict))
 
 
 @coroutine
