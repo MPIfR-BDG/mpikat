@@ -28,7 +28,7 @@ import time
 import cPickle
 from threading import Lock
 from optparse import OptionParser
-from tornado.gen import coroutine
+from tornado.gen import coroutine, Return
 from katcp import Sensor, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Float
 from katpoint import Antenna, Target
@@ -430,6 +430,7 @@ class FbfMasterController(MasterController):
 
     @request(Str(), Str())
     @return_reply()
+    @coroutine
     def request_target_start(self, req, product_id, target):
         """
         @brief      Notify FBFUSE that a new target is being observed
@@ -447,18 +448,13 @@ class FbfMasterController(MasterController):
         except ProductLookupError as error:
             log.error("target-start request failed with error: {}".format(
                 str(error)))
-            return ("fail", str(error))
+            raise Return("fail", str(error))
         try:
             target = Target(target)
         except Exception as error:
-            log.exception("Target could not be parsed: {}".format(
-                str(error)))
-            return ("fail", str(error))
-        try:
-            yield product.target_start(target)
-        except Exception as error:
-            return ("fail", str(error))
-        return ("ok",)
+            raise Return(("fail", str(error)))
+        yield product.target_start(target)
+        raise Return(("ok",))
 
     @request(Str())
     @return_reply()
