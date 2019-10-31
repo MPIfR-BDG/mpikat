@@ -164,8 +164,10 @@ class SubarrayActivity(object):
                 raise Return(self._state)
             else:
                 try:
+                    log.debug("Waiting on interrupt in wait_until loop")
                     yield interrupt.wait(
                         timeout=datetime.timedelta(seconds=1))
+                    log.debug("Moving to next loop iteration")
                 except TimeoutError:
                     continue
                 else:
