@@ -90,6 +90,7 @@ class ScpiAsyncDeviceServer(object):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._socket.bind(self._address)
+        log.debug('binding to socket: {}:{}'.format(*self._address))
         self._socket.setblocking(False)
 
     def _flush(self):
@@ -98,7 +99,7 @@ class ScpiAsyncDeviceServer(object):
             try:
                 message, addr = self._socket.recvfrom(self._buffer_size)
                 log.debug("Flushing message '{}' from {}:{}".format(message, addr[0], addr[1]))
-            except:
+            except Exception as E:
                 break
 
     def _make_coroutine_wrapper(self, req, cr, *args, **kwargs):
