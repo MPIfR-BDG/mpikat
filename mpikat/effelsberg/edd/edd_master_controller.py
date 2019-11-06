@@ -213,6 +213,8 @@ class EddMasterController(MasterController):
             raise error
         try:
             yield client.set_sampling_rate(config["sampling_rate"])
+            yield client.set_predecimation(config["predecimation_factor"])
+            yield client.flip_spectrum(config["flip_spectrum"])
             yield client.set_bit_width(config["bit_width"])
             yield client.set_destinations(config["v_destinations"], config["h_destinations"])
             for interface, ip_address in config["interface_addresses"].items():
