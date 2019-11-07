@@ -118,6 +118,7 @@ class Tiling(object):
         self.reference_frequency = reference_frequency
         self.overlap = overlap
         self.tiling = None
+        self.beam_shape = None
 
     @property
     def nbeams(self):
@@ -146,11 +147,11 @@ class Tiling(object):
         psfsim = mosaic.PsfSim(self._antennas, self.reference_frequency)
         log.debug(("Generating beam shape for target position {} "
                    "at epoch {}").format(self.target, epoch))
-        beam_shape = psfsim.get_beam_shape(self.target, epoch)
+        self.beam_shape = psfsim.get_beam_shape(self.target, epoch)
         log.debug("Generating tiling of {} beams with an overlap of {}".format(
             self.nbeams, self.overlap))
         tiling = mosaic.generate_nbeams_tiling(
-            beam_shape, self.nbeams, self.overlap)
+            self.beam_shape, self.nbeams, self.overlap)
         coordinates = tiling.get_equatorial_coordinates()
         for ii in range(min(tiling.beam_num, self.nbeams)):
             ra, dec = coordinates[ii]

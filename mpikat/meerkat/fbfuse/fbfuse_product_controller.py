@@ -344,6 +344,20 @@ class FbfProductController(object):
             initial_status=Sensor.NOMINAL)
         self.add_sensor(self._cbc_data_suspect)
 
+        self._cbc_data_suspect = Sensor.boolean(
+            "coherent-beam-data-suspect",
+            description="Indicates when data from the coherent beam is expected to be invalid",
+            default=True,
+            initial_status=Sensor.NOMINAL)
+        self.add_sensor(self._cbc_data_suspect)
+
+        self._cbc_beam_shape = Sensor.string(
+            "coherent-beam-shape",
+            description="JSON description of the tied array beam shape",
+            default="",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._cbc_beam_shape)
+
         self._ibc_nbeams_sensor = Sensor.integer(
             "incoherent-beam-count",
             description="The number of incoherent beams that this FBF instance can currently produce",
@@ -1232,6 +1246,12 @@ class FbfProductController(object):
             self.log.exception(
                 "Failed to generate tiling pattern with error: {}".format(
                     str(error)))
+        beam_shape = {
+            "x": tiling.beam_shape.axisH,
+            "y": tiling.beam_shape.axisV,
+            "angle": tiling.beam_shape.angle
+        }
+        self._cbc_beam_shape.set_value(json.dumps(beam_shape))
         return tiling
 
     def reset_beams(self):
