@@ -11,8 +11,8 @@ from mpikat.utils.process_tools import process_watcher, ManagedProcess
 from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.unix_socket import UDSClient
 
-AVAILABLE_CAPTURE_MEMORY = 10e9
-MAX_DADA_BLOCK_SIZE = 1e9
+AVAILABLE_CAPTURE_MEMORY = 3221225472  * 10
+MAX_DADA_BLOCK_SIZE = 3221225472 
 log = logging.getLogger("mpkat.apsuse_capture")
 
 
@@ -84,6 +84,8 @@ class ApsCapture(object):
 
     @coroutine
     def _make_db(self, key, block_size, nblocks, timeout=120):
+        print key, block_size, nblocks, "-" * 100
+
         try:
             yield self._destroy_db(key, timeout=20)
         except Exception as error:
@@ -131,8 +133,8 @@ class ApsCapture(object):
         capture_block_count = int(AVAILABLE_CAPTURE_MEMORY / capture_block_size)
         log.debug("Creating dada buffer for input with key '{}'".format(
             "%s" % self._dada_input_key))
-        #yield self._make_db(self._dada_input_key, capture_block_size,
-        #    capture_block_count)
+        yield self._make_db(self._dada_input_key, capture_block_size,
+            capture_block_count)
         self._config_sensor.set_value(json.dumps(config))
         idx = 0
         for beam in config['beam-ids']:
@@ -144,9 +146,9 @@ class ApsCapture(object):
         {
             "mcast-groups": ["239.11.1.0"],
             "mcast-port": 7147,
-            "beam-ids":[12,13,14,15,16,17],
+            "stream-index":[12,13,14,15,16,17],
             "beam-ids": ["cfbf00012", "cfbf00013", ...]
-            "nchans": 4096,
+            "nchans": 1024,
             "nchans-per-heap": 16,
             "bandwidth": 856e6,
             "centre-frequency": 1284e6,
@@ -161,7 +163,7 @@ class ApsCapture(object):
 
         # Start APSUSE processing code
         apsuse_cmdline = [
-            "taskset", "-c", self._apsuse_cpu_set,
+            #"taskset", "-c", self._apsuse_cpu_set,
             "apsuse",
             "--input_key", self._dada_input_key,
             "--ngroups", nheap_groups,
@@ -169,13 +171,12 @@ class ApsCapture(object):
             "--nchannels", config['nchans-per-heap'],
             "--nsamples", config['heap-size']/config['nchans-per-heap'],
             "--nfreq", npartitions,
-            "--size", config['filesize'],
+            "--size", int(config['filesize']),
             "--socket", self._control_socket,
             "--dir", self._output_dir,
-            "--log_level", "info"]
+            "--log_level", "debug"]
         log.debug(" ".join(map(str, apsuse_cmdline)))
-        #self._apsuse_proc = ManagedProcess(apsuse_cmdline)
-        self._apsuse_proc = ManagedProcess(["sleep","100000"])
+        self._apsuse_proc = ManagedProcess(apsuse_cmdline)
         self._apsuse_args_sensor.set_value(" ".join(map(str, apsuse_cmdline)))
 
         # Start MKRECV capture code
@@ -188,12 +189,12 @@ class ApsCapture(object):
                 'sampling_interval': config['sampling-interval'],
                 'sync_epoch': config['sync-epoch'],
                 'sample_clock': config['sample-clock'],
-                'mcast_sources': ",".join(config['mcast-groups']),
+                'mcast_sources': config['mcast-groups'],
                 'mcast_port': str(config['mcast-port']),
                 'interface': self._capture_interface,
                 'timestamp_step': config['idx1-step'],
                 'timestamp_modulus': 1,
-                'beam_ids_csv': ",".join(map(str, config['beam-ids'])),
+                'beam_ids_csv': ",".join(map(str, config['stream-index'])),
                 'freq_ids_csv': "0:{}:{}".format(config['nchans'], config['nchans-per-heap']),
                 'ngroups_data': ngroups_data,
                 'heap_size': config['heap-size']
@@ -207,12 +208,11 @@ class ApsCapture(object):
         def update_heap_loss_sensor(curr, total, avg, window):
             self._mkrecv_heap_loss.set_value(100.0 - avg)
 
-        self._mkrecv_proc = ManagedProcess(["sleep","100000"])
-        #ManagedProcess(
-        #    ["taskset", "-c", self._mkrecv_cpu_set, "mkrecv_nt", "--header",
-        #     self._mkrecv_config_filename, "--quiet"],
-        #    stdout_handler=MkrecvStdoutHandler(
-        #        callback=update_heap_loss_sensor))
+        self._mkrecv_proc =  ManagedProcess(
+            ["mkrecv_nt", "--header",
+             self._mkrecv_config_filename, "--quiet"],
+            stdout_handler=MkrecvStdoutHandler(
+                callback=update_heap_loss_sensor))
 
         def exit_check_callback():
             if not self._mkrecv_proc.is_alive():
@@ -225,13 +225,13 @@ class ApsCapture(object):
 
         self._capture_monitor = PeriodicCallback(exit_check_callback, 1000)
         self._capture_monitor.start()
-        """
+        
         self._ingress_buffer_monitor = DbMonitor(
             self._dada_input_key,
             callback=lambda params:
             self._ingress_buffer_percentage.set_value(params["fraction-full"]))
         self._ingress_buffer_monitor.start()
-        """
+        
         self._capturing = True
 
     def target_start(self, beam_info):
@@ -274,6 +274,8 @@ class ApsCapture(object):
         client = UDSClient(self._control_socket)
         client.send(json.dumps(message_dict))
         response_str = client.recv(timeout=3)
+        print "-"*11,response_str,"_"*11
+
         try:
             response = json.loads(response_str)["response"]
         except Exception:
@@ -310,7 +312,6 @@ class ApsCapture(object):
         self._capturing = False
         self._internal_beam_mapping = {}
         log.info("Stopping capture")
-        self._state_sensor.set_value(self.STOPPING)
         self._capture_monitor.stop()
         self._ingress_buffer_monitor.stop()
         log.info("Stopping MKRECV instance")
@@ -325,29 +326,35 @@ class ApsCapture(object):
 
 
 if __name__ == "__main__":
+    import coloredlogs
+    logger = logging.getLogger('mpikat')
+    coloredlogs.install(
+        fmt=("[ %(levelname)s - %(asctime)s - %(name)s -"
+             "%(filename)s:%(lineno)s] %(message)s"),
+        level="DEBUG",
+        logger=logger)
+    logger.setLevel("DEBUG")
+    logging.getLogger('katcp').setLevel(logging.ERROR)	
+
+
+
     import time
     ioloop = IOLoop.current()
     coherent_capture = ApsCapture(
-        "10.1.100.100", "/tmp/coherent_capture.sock",
-        "/tmp/coherent_mkrecv.cfg", "0-2", "2-3",
-        "coherent", "dada")
+        "10.100.24.1", "/tmp/coherent_capture.sock",
+        "/tmp/coherent_mkrecv.cfg", "0-8", "8-16",
+        "coherent", "dada", "/DATA/APSUSE_COMMISSIONING/")
     incoherent_capture = ApsCapture(
-        "10.1.100.100", "/tmp/incoherent_capture.sock",
+        "10.100.24.1", "/tmp/incoherent_capture.sock",
         "/tmp/incoherent_mkrecv.cfg", "3", "4",
-        "incoherent", "caca")
+        "incoherent", "caca", "/DATA/APSUSE_COMMISSIONING/")
 
     coherent_config = {
-        "mcast-groups": ["239.11.1.0"],
+        "mcast-groups": "239.11.1.1+15",
         "mcast-port": 7147,
-        "stream-index": [12, 13, 14, 15, 16, 17],
-        "beam-ids": [
-            'cfbf00012',
-            'cfbf00013',
-            'cfbf00014',
-            'cfbf00015',
-            'cfbf00016',
-            'cfbf00017'],
-        "nchans": 4096,
+        "stream-index": range(96),
+        "beam-ids": ["cfbf{:05d}".format(i) for i in range(96)],
+        "nchans": 1024,
         "nchans-per-heap": 16,
         "bandwidth": 856e6,
         "centre-frequency": 1284e6,
@@ -360,11 +367,11 @@ if __name__ == "__main__":
     }
 
     incoherent_config = {
-        "mcast-groups": ["239.11.1.1"],
+        "mcast-groups": ["239.11.1.0"],
         "mcast-port": 7147,
         "stream-index": [0],
         "beam-ids": ['ifbf00000'],
-        "nchans": 4096,
+        "nchans": 1024,
         "nchans-per-heap": 16,
         "bandwidth": 856e6,
         "centre-frequency": 1284e6,
@@ -376,25 +383,19 @@ if __name__ == "__main__":
         "idx1-step": 268435456
     }
 
+    beam_params = []
+    for ii in range(1):
+        beam_params.append({'id': 'cfbf{:05d}'.format(ii), 'target': 'source0,radec,00:00:00.00,00:00:00'}) 
 
-    beam_params = [
-        {"id": "cfbf00000", "source": "PSRJ1823+3410", "ra": "00:00:00.00", "dec": "00:00:00.00"},
-        {"id": "cfbf00002", "source": "SBGS0000",      "ra": "00:00:00.00", "dec": "00:00:00.00"},
-        {"id": "cfbf00006", "source": "SBGS0000",      "ra": "00:00:00.00", "dec": "00:00:00.00"},
-        {"id": "cfbf00008", "source": "SBGS0000",      "ra": "00:00:00.00", "dec": "00:00:00.00"},
-        {"id": "cfbf00010", "source": "SBGS0000",      "ra": "00:00:00.00", "dec": "00:00:00.00"}
-    ]
-
-
-    ioloop.run_sync(coherent_capture.capture_start(coherent_config))
-    ioloop.run_sync(incoherent_capture.capture_start(incoherent_config))
-    coherent_capture.target_start(beam_params)
-    incoherent_capture.target_start(beam_params)
-    time.sleep(20)
-    coherent_capture.target_stop()
-    incoherent_capture.target_stop()
+    ioloop.run_sync(lambda: coherent_capture.capture_start(coherent_config))
+    #ioloop.run_sync(lambda: incoherent_capture.capture_start(incoherent_config))
+    #coherent_capture.target_start(beam_params)
+    #incoherent_capture.target_start(beam_params)
+    time.sleep(2000)
+    #coherent_capture.target_stop()
+    #incoherent_capture.target_stop()
     coherent_capture.capture_stop()
-    incoherent_capture.capture_stop()
+    #incoherent_capture.capture_stop()
 
 
 

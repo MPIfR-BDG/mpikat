@@ -18,7 +18,7 @@ FREQ          {{centre_frequency}}
 NCHAN         {{nchannels}}
 NBIT          8
 TSAMP         {{sampling_interval}}
-SOURCE        unset
+SOURCE        not_a_source
 
 SYNC_TIME     {{sync_epoch}}
 SYNC_TIME_MJD {{sync_epoch/86400.0 + 40587.0}}
