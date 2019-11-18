@@ -22,7 +22,6 @@ SOFTWARE.
 
 import logging
 import json
-from paramiko import PasswordRequiredException
 from tornado.gen import coroutine
 from mpikat.core.product_controller import ProductController, state_change
 
@@ -137,7 +136,7 @@ class EddProductController(ProductController):
                        "at {} MHz").format(center_freq))
         try:
             routing_table.upload_table()
-        except PasswordRequiredException:
+        except:
             log.warning(("Unable to upload routing table due to encrypted key "
                          "(this warning should not exist in production mode)"))
         else:
