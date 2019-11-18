@@ -29,15 +29,13 @@ from tornado.gen import Return, coroutine
 from katcp import Sensor, AsyncReply
 from katcp.kattypes import request, return_reply, Str
 from mpikat.core.master_controller import MasterController
-#from mpikat.effelsberg.edd.edd_roach2_product_controller import (
-    EddRoach2ProductController)
+from mpikat.effelsberg.edd.edd_roach2_product_controller import ( EddRoach2ProductController)
 from mpikat.effelsberg.edd.edd_product_controller import EddProductController
 from mpikat.effelsberg.edd.edd_worker_wrapper import EddWorkerPool
 from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
 from mpikat.effelsberg.edd.edd_fi_client import EddFitsInterfaceClient
-
-# ?halt message means shutdown everything and power off all machines
+from mpikat.effelsberg.edd.edd_server_product_controller import EddServerProductController 
 
 log = logging.getLogger("mpikat.edd_master_controller")
 EDD_REQUIRED_KEYS = []
@@ -317,9 +315,11 @@ class EddMasterController(MasterController):
             if product_config["type"] == "roach2":
                 self._products[product_id] = EddRoach2ProductController(self, product_id,
                                                                         (self._r2rm_host, self._r2rm_port))
+            elif product_config["type"] == "server":
+                self._products[product_id] = EddServerProductController(self, product_id, product_config["address"])
             else:
                 raise NotImplementedError(
-                    "Only roach2 products are currently supported")
+                    "Only roach2+server products are currently supported")
             future = self._products[product_id].configure(product_config)
             product_configure_futures.append(future)
         for future in product_configure_futures:

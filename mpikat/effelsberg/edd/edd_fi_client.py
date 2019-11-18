@@ -66,11 +66,7 @@ class EddFitsInterfaceClient(object):
         @param      config  A dictionary containing configuration information.
         """
         yield self._fits_interface_client.until_synced(2)
-        nbeams = config["nbeams"]
-        nchans = config["nchans"]
-        integration_time = config["integration_time"]
-        blank_phases = config["blank_phases"]
-        yield self._request_helper("configure", nbeams, nchans, integration_time, blank_phases)
+        yield self._request_helper("configure", config["mc_interface"], config["mc_port"], config["nmcg"], config["heap_group"])
 
     @coroutine
     def capture_start(self):
