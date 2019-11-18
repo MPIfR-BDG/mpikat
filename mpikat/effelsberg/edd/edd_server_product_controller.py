@@ -1,6 +1,6 @@
 import logging
 import json
-from tornado.gen import coroutine
+from tornado.gen import Return, coroutine
 from katcp import Sensor, Message, KATCPClientResource
 from mpikat.core.product_controller import ProductController, state_change
 
@@ -53,7 +53,7 @@ class EddServerProductController(ProductController):
         response = yield self._client.req[request_name](*args, **kwargs)
         if not response.reply.reply_ok():
             log.error("'{}' request failed with error: {}".format(request_name, response.reply.arguments[1]))
-            raise DigitiserPacketiserError(response.reply.arguments[1])
+            raise RuntimeError(response.reply.arguments[1])
         else:
             log.debug("'{}' request successful".format(request_name))
             raise Return(response)
