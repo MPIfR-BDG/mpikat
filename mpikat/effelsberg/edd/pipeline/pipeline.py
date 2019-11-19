@@ -500,8 +500,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.debug("Unpacked config: {}".format(config))
             self._pipeline_config = json.loads(config_json)
             self._config = CONFIG
-            self._dada_key = "dada"
+            self._dada_key = "dadc"
             self._dadc_key = "dadc"
+
             try:
                 self.deconfigure()
             except Exception as error:
@@ -670,8 +671,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 delete=False)
             log.debug("Writing dada key file to {0}".format(
                 dada_key_file.name))
-            key_string = make_dada_key_string(self._dada_key)
-            dada_key_file.write(make_dada_key_string(self._dada_key))
+            key_string = make_dada_key_string(self._dadc_key)
+            dada_key_file.write(make_dada_key_string(self._dadc_key))
             log.debug("Dada key file contains:\n{0}".format(key_string))
             dada_header_file.close()
             dada_key_file.close()
@@ -696,7 +697,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             ####################################################
             #STARTING EDDPolnMerge                             #
             ####################################################
-            cmd = "numactl -m 1 taskset -c 28 edd_merge"
+            cmd = "numactl -m 1 taskset -c 29 edd_merge"
             log.debug("Running command: {0}".format(cmd))
             log.info("Staring EDDPolnMerge")
             self._polnmerge_proc = ExecuteCommand(
