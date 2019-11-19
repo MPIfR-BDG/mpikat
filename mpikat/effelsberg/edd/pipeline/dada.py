@@ -50,7 +50,7 @@ DSB
 #MeerKAT specifics
 DADA_KEY     {{key}}                    # The dada key to write to
 DADA_MODE    4                       # The mode, 4=full dada functionality
-ORDER        T                       # Here we are only capturing one polarisation, so data is time only
+ORDER        FTP                       # Here we are only capturing one polarisation, so data is time only
 SYNC_TIME    {{sync_time}}
 SAMPLE_CLOCK {{sample_clock}}
 PACKET_SIZE 8400
@@ -60,26 +60,27 @@ NGROUPS_DATA  4096
 NGROUPS_TEMP  2048
 NHEAPS_SWITCH 1024
 MCAST_SOURCES {{mc_source}}   # 239.2.1.150 (+7)
-PORT         60001
+PORT         7148
 UDP_IF       unset
-IBV_IF       10.10.1.10  # This is the ethernet interface on which to capture
+IBV_IF       10.10.1.15  # This is the ethernet interface on which to capture
 IBV_VECTOR   -1          # IBV forced into polling mode
 IBV_MAX_POLL 10
 BUFFER_SIZE 16777216
 #BUFFER_SIZE 1048576
 SAMPLE_CLOCK_START 0 # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock                     
-HEAP_SIZE    262144
+HEAP_SIZE    4096
 
 #SPEAD specifcation for EDD packetiser data stream
-NINDICES    1   # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
+NINDICES    2   # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
 # The first index item is the running timestamp
 IDX1_ITEM   0      # First item of a SPEAD heap
-IDX1_STEP   1048576   # The difference between successive timestamps
+IDX1_STEP   4096   # The difference between successive timestamps
+IDX1_MODULO 3200000000
 
 # The second index item distinguish between both polarizations
-#IDX2_ITEM   1
-#IDX2_LIST   0,1
-#IDX2_MASK   0x1
+IDX2_ITEM   1
+IDX2_LIST   0,1
+IDX2_MASK   0x1
 # end of header
 """
 
