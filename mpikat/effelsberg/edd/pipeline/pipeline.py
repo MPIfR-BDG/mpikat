@@ -500,7 +500,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.debug("Unpacked config: {}".format(config))
             self._pipeline_config = json.loads(config_json)
             self._config = CONFIG
-            self._dada_key = "dadc"
+            self._dada_key = "dada"
             self._dadc_key = "dadc"
 
             try:
