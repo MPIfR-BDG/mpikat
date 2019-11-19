@@ -22,7 +22,6 @@ SOFTWARE.
 import logging
 import tempfile
 import json
-from tornado import gen
 import os
 import time
 from astropy.time import Time
@@ -32,6 +31,15 @@ import shlex
 import threading
 import base64
 from katcp import Sensor
+import tornado
+import coloredlogs
+import signal
+import astropy.units as units
+from optparse import OptionParser
+from tornado.gen import coroutine
+from katcp import AsyncDeviceServer, Message, Sensor, AsyncReply
+from katcp.kattypes import request, return_reply, Str
+
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
 
@@ -47,12 +55,17 @@ CONFIG = {
     "base_output_dir": os.getcwd(),
     "dspsr_params":
     {
-        "args": "-L 10 -r -F 256:D -x 16384 -minram 1024"
+        "args": "-L 10 -r -F 512:D -minram 1024"
     },
     "dada_db_params":
     {
-        "args": "-n 8 -b 671088640 -p -l",
+        "args": "-n 32 -b 409600000 -p -l",
         "key": "dada"
+    },
+    "dadc_db_params":
+    {
+        "args": "-n 32 -b 409600000 -p -l",
+        "key": "dadc"
     },
     "dada_header_params":
     {
@@ -88,13 +101,6 @@ Central frequency of each band should be with BW of 162.5
 
 sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
            "scannum": 0, "subscannum": 1}
-
-
-def register_pipeline(name):
-    def _register(cls):
-        PIPELINES[name] = cls
-        return cls
-    return _register
 
 
 class PulsarPipelineKeyError(Exception):
@@ -597,13 +603,636 @@ class Mkrecv2Db2Dspsr(object):
         self.state = "idle"
 
 
+class EddPulsarPipelineKeyError(Exception):
+    pass
+
+
+class EddPulsarPipelineError(Exception):
+    pass
+
+
+class EddPulsarPipeline(AsyncDeviceServer):
+    """
+    @brief Interface object which accepts KATCP commands
+
+    """
+    VERSION_INFO = ("mpikat-edd-api", 1, 0)
+    BUILD_INFO = ("mpikat-edd-implementation", 0, 1, "rc1")
+    DEVICE_STATUSES = ["ok", "degraded", "fail"]
+    PIPELINE_STATES = ["idle", "configuring", "ready",
+                       "starting", "running", "stopping",
+                       "deconfiguring", "error"]
+
+    def __init__(self, ip, port):
+        """
+        @brief Initialization of the PafWorkerServer object
+
+        @param ip       IP address of the server
+        @param port     port of the PafWorkerServer
+
+        """
+        super(EddPulsarPipeline, self).__init__(ip, port)
+        self.ip = ip
+        self._managed_sensors = []
+        self.callbacks = set()
+        self._state = "idle"
+        self._sensors = []
+        self._volumes = ["/tmp/:/scratch/"]
+        self._dada_key = None
+        self._config = None
+        self._source_config = None
+        self._dspsr = None
+        self._mkrecv_ingest_proc = None
+        self.setup_sensors()
+
+    def notify(self):
+        """@brief callback function."""
+        for callback in self.callbacks:
+            callback(self._state, self)
+
+    @property
+    def state(self):
+        """@brief property of the pipeline state."""
+        return self._state
+
+    @state.setter
+    def state(self, value):
+        self._state = value
+        self.notify()
+
+
+    def add_pipeline_sensors(self):
+        """
+        @brief Add pipeline sensors to the managed sensors list
+
+        """
+        for sensor in self._pipeline_instance.sensors:
+            log.debug("sensor name is {}".format(sensor))
+            self.add_sensor(sensor)
+            self._managed_sensors.append(sensor)
+        self.mass_inform(Message.inform('interface-changed'))
+
+    def remove_pipeline_sensors(self):
+        """
+        @brief Remove pipeline sensors from the managed sensors list
+
+        """
+        for sensor in self._managed_sensors:
+            self.remove_sensor(sensor)
+        self._managed_sensors = []
+        self.mass_inform(Message.inform('interface-changed'))
+
+    def state_change(self, state, callback):
+        """
+        @brief callback function for state changes
+
+        @parma callback object return from the callback function from the pipeline
+        """
+        log.info('New state of the pipeline is {}'.format(str(state)))
+        self._pipeline_sensor_status.set_value(str(state))
+
+    @coroutine
+    def start(self):
+        super(EddPulsarPipeline, self).start()
+
+    @coroutine
+    def stop(self):
+        """Stop PafWorkerServer server"""
+        # if self._pipeline_sensor_status.value() == "ready":
+        #    log.info("Pipeline still running, stopping pipeline")
+       # yield self.deconfigure()
+        yield super(EddPulsarPipeline, self).stop()
+
+
+
+
+    def setup_sensors(self):
+        """
+        @brief Setup monitoring sensors
+        """
+        self._device_status = Sensor.discrete(
+            "device-status",
+            "Health status of PafWorkerServer",
+            params=self.DEVICE_STATUSES,
+            default="ok",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._device_status)
+
+        self._pipeline_sensor_name = Sensor.string("pipeline-name",
+                                                   "the name of the pipeline", "")
+        self.add_sensor(self._pipeline_sensor_name)
+
+        self._pipeline_sensor_status = Sensor.discrete(
+            "pipeline-status",
+            description="Status of the pipeline",
+            params=self.PIPELINE_STATES,
+            default="idle",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._pipeline_sensor_status)
+
+        self._tscrunch = Sensor.string(
+            "tscrunch_PNG",
+            description="tscrunch png",
+            default=0,
+            initial_status=Sensor.UNKNOWN)
+        self.sensors.append(self._tscrunch)
+
+        self._fscrunch = Sensor.string(
+            "fscrunch_PNG",
+            description="fscrunch png",
+            default=0,
+            initial_status=Sensor.UNKNOWN)
+        self.sensors.append(self._fscrunch)
+
+    @property
+    def sensors(self):
+        return self._sensors
+
+    def _decode_capture_stdout(self, stdout, callback):
+        log.debug('{}'.format(str(stdout)))
+
+    def _save_capture_stdout(self, stdout, callback):
+        with open("{}.par".format(self._source_config["source-name"]), "a") as file:
+            file.write('{}\n'.format(str(stdout)))
+
+    def _handle_execution_returncode(self, returncode, callback):
+        log.debug(returncode)
+
+    def _handle_execution_stderr(self, stderr, callback):
+        log.info(stderr)
+
+    def _add_tscrunch_to_sensor(self, png_blob, callback):
+        self._tscrunch.set_value(png_blob)
+
+    def _add_fscrunch_to_sensor(self, png_blob, callback):
+        self._fscrunch.set_value(png_blob)
+
+
+    @request(Str())
+    @return_reply()
+    def request_configure(self, req, config_json):
+        """
+        @brief      Configure pipeline
+        @param      config_json     A dictionary containing configuration information.
+                                    The dictionary should have a form similar to:
+                                    @code
+                                    {
+                                    "mode":"DspsrPipelineSrxdev",
+                                    "mc_source":"239.2.1.154",
+                                    "central_freq":"1400.4"
+                                    }
+                                    @endcode
+        """
+        @coroutine
+        def configure_wrapper():
+            try:
+                yield self.configure_pipeline(config_json)
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(configure_wrapper)
+        raise AsyncReply
+
+    @coroutine
+    def configure_pipeline(self, config_json):
+        try:
+            config_dict = json.loads(config_json)
+            pipeline_name = config_dict["mode"]
+        except KeyError as error:
+            msg = "Error getting the pipeline name from config_json: {}".format(
+                str(error))
+            log.error(msg)
+            raise EddPulsarPipelineKeyError(msg)
+        self._pipeline_sensor_name.set_value(pipeline_name)
+        log.info("Configuring pipeline {}".format(
+            self._pipeline_sensor_name.value()))
+
+        try:
+            config = json.loads(config_json)
+            log.debug("Unpacked config: {}".format(config))
+            self._pipeline_config = json.loads(config_json)
+            self._config = CONFIG
+            self._dada_key = "dada"
+            self._dadc_key = "dadc"
+            try:
+                self.deconfigure()
+            except Exception as error:
+                raise PulsarPipelineError(str(error))
+            cmd = "numactl -m 1 dada_db -k {key} {args}".format(key=self._dada_key,
+                                                                args=self._config["dada_db_params"]["args"])
+            # cmd = "dada_db -k {key} {args}".format(**
+            #                                       self._config["dada_db_params"])
+            log.debug("Running command: {0}".format(cmd))
+            self._create_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_ring_buffer._process.wait()
+
+            cmd = "numactl -m 1 dada_db -k {key} {args}".format(key=self._dadc_key,
+                                                                args=self._config["dadc_db_params"]["args"])
+            # cmd = "dada_db -k {key} {args}".format(**
+            #                                       self._config["dada_db_params"])
+            log.debug("Running command: {0}".format(cmd))
+            self._create_transpose_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_transpose_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_transpose_ring_buffer._process.wait()
+            self.state = "ready"
+        except Exception as error:
+            self._pipeline_sensor_name.set_value("")
+            msg = "Couldn't start configure pipeline instance {}".format(
+                str(error))
+            log.error(msg)
+            raise EddPulsarPipelineError(msg)
+        else:
+            log.info("Pipeline instance {} configured".format(
+                self._pipeline_sensor_name.value()))
+
+    @request(Str())
+    @return_reply(Str())
+    def request_start(self, req, config_json):
+        """
+        @brief      Start pipeline
+        @param      config_json     A dictionary containing configuration information.
+                                    The dictionary should have a form similar to:
+                                    @code
+                                    {
+                                    "source-name":"J1022+1001",
+                                    "ra":"123.4",
+                                    "dec":"-20.1"
+                                    }
+                                    @endcode
+        """
+        @coroutine
+        def start_wrapper():
+            try:
+                yield self.start_pipeline(config_json)
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(start_wrapper)
+        raise AsyncReply
+
+    @coroutine
+    def start_pipeline(self, config_json):
+        try:
+            config = json.loads(config_json)
+            source_name = config["source-name"]
+            ra = config["ra"]
+            dec = config["dec"]
+            log.debug("Unpacked config: {}".format(config))
+            log.info("staring pipeline for {} at {}, {}".format(
+                source_name, ra, dec))
+            self._pipeline_instance.start(config_json)
+
+        except Exception as error:
+            msg = "Couldn't start pipeline server {}".format(str(error))
+            log.error(msg)
+            raise EddPulsarPipelineError(msg)
+        else:
+            log.info("Starting pipeline {}".format(
+                self._pipeline_sensor_name.value()))
+
+    @coroutine
+    def start_pipeline(self, config_json):
+        """@brief start the dspsr instance then turn on dada_junkdb instance."""
+        # if self.state == "ready":
+        #    self.state = "starting"
+        try:
+            self._source_config = json.loads(config_json)
+            self.frequency_mhz = self._pipeline_config["central_freq"]
+            header = self._config["dada_header_params"]
+            header["ra"], header["dec"], header["key"] = self._source_config[
+                "ra"], self._source_config["dec"], self._dada_key
+            header["mc_source"], header["frequency_mhz"] = self._pipeline_config[
+                "mc_source"], self.frequency_mhz
+            source_name = self._source_config["source-name"]
+            cpu_numbers = "29,30"
+            #cpu_numbers = self._pipeline_config["cpus"]
+            #cuda_number = self._pipeline_config["cuda"]
+            cuda_number = "1"
+            try:
+                header["sync_time"] = self._source_config["sync_time"]
+                header["sample_clock"] = self._source_config["sample_clock"]
+            except:
+                pass
+            log.debug("Unpacked config: {}".format(self._source_config))
+            try:
+                self.source_name = source_name.split("_")[0]
+            except Exception as error:
+                raise PulsarPipelineError(str(error))
+            header["source_name"] = self.source_name
+            header["obs_id"] = "{0}_{1}".format(
+                sensors["scannum"], sensors["subscannum"])
+            tstr = Time.now().isot.replace(":", "-")
+            ####################################################
+            #SETTING UP THE INPUT AND SCRUNCH DATA DIRECTORIES #
+            ####################################################
+            in_path = os.path.join("/media/scratch/jason/dspsr_output/", self.source_name,
+                                   str(self.frequency_mhz), tstr, "raw_data")
+            out_path = os.path.join(
+                "/media/scratch/jason/dspsr_output/", self.source_name, str(self.frequency_mhz), tstr, "combined_data")
+            self.out_path = out_path
+            log.debug("Creating directories")
+            cmd = "mkdir -p {}".format(in_path)
+            log.debug("Command to run: {}".format(cmd))
+            log.debug("Current working directory: {}".format(os.getcwd()))
+            self._create_workdir_in_path = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_workdir_in_path.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_workdir_in_path._process.wait()
+            cmd = "mkdir -p {}".format(out_path)
+            log.debug("Command to run: {}".format(cmd))
+            log.info("Createing data directory {}".format(self.out_path))
+            self._create_workdir_out_path = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_workdir_out_path.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_workdir_out_path._process.wait()
+            os.chdir(in_path)
+            log.debug("Change to workdir: {}".format(os.getcwd()))
+            log.debug("Current working directory: {}".format(os.getcwd()))
+            ####################################################
+            #CREATING THE PARFILE WITH PSRCAT                  #
+            ####################################################
+            cmd = "psrcat -E {source_name}".format(
+                source_name=self.source_name)
+            log.debug("Command to run: {}".format(cmd))
+            self.psrcat = ExecuteCommand(cmd, outpath=None, resident=False)
+            self.psrcat.stdout_callbacks.add(
+                self._save_capture_stdout)
+            self.psrcat.stderr_callbacks.add(
+                self._handle_execution_stderr)
+            time.sleep(3)
+            ####################################################
+            #CREATING THE PREDICTOR WITH TEMPO2                #
+            ####################################################
+            cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
+                self.source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]), float(self._pipeline_config["central_freq"]))
+            log.debug("Command to run: {}".format(cmd))
+            self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
+            self.tempo2.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self.tempo2.stderr_callbacks.add(
+                self._handle_execution_stderr)
+            ####################################################
+            #CREATING THE DADA HEADERFILE                      #
+            ####################################################
+            dada_header_file = tempfile.NamedTemporaryFile(
+                mode="w",
+                prefix="edd_dada_header_",
+                suffix=".txt",
+                dir=os.getcwd(),
+                delete=False)
+            log.debug(
+                "Writing dada header file to {0}".format(
+                    dada_header_file.name))
+            header_string = render_dada_header(header)
+            dada_header_file.write(header_string)
+            dada_key_file = tempfile.NamedTemporaryFile(
+                mode="w",
+                prefix="dada_keyfile_",
+                suffix=".key",
+                dir=os.getcwd(),
+                delete=False)
+            log.debug("Writing dada key file to {0}".format(
+                dada_key_file.name))
+            key_string = make_dada_key_string(self._dada_key)
+            dada_key_file.write(make_dada_key_string(self._dada_key))
+            log.debug("Dada key file contains:\n{0}".format(key_string))
+            dada_header_file.close()
+            dada_key_file.close()
+            time.sleep(3)
+            ####################################################
+            #STARTING DSPSR                                    #
+            ####################################################
+            cmd = "numactl -m 1 dspsr {args} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
+                args=self._config["dspsr_params"]["args"],
+                predictor="{}/t2pred.dat".format(in_path),
+                parfile="{}/{}.par".format(in_path, self.source_name),
+                cpus=cpu_numbers,
+                cuda_number=cuda_number,
+                keyfile=dada_key_file.name)
+            log.debug("Running command: {0}".format(cmd))
+            log.info("Staring DSPSR")
+            self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
+            self._dspsr.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._dspsr.stderr_callbacks.add(
+                self._handle_execution_stderr)
+            ####################################################
+            #STARTING EDDPolnMerge                             #
+            ####################################################
+            cmd = "numactl -m 1 taskset -c 28 edd_merge"
+            log.debug("Running command: {0}".format(cmd))
+            log.info("Staring EDDPolnMerge")
+            self._polnmerge_proc = ExecuteCommand(
+                cmd, outpath=None, resident=True)
+            self._polnmerge_proc.stdout_callbacks.add(
+                self._decode_capture_stdout)
+
+            ####################################################
+            #STARTING MKRECV                                   #
+            ####################################################
+            cmd = "numactl -m 1 taskset -c 18-28 mkrecv_nt --header {} --dada-mode 4 --quiet".format(
+                dada_header_file.name)
+            log.debug("Running command: {0}".format(cmd))
+            log.info("Staring MKRECV")
+            self._mkrecv_ingest_proc = ExecuteCommand(
+                cmd, outpath=None, resident=True)
+            self._mkrecv_ingest_proc.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            ####################################################
+            #STARTING ARCHIVE MONITOR                          #
+            ####################################################
+            cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
+                in_path, out_path)
+            log.debug("Running command: {0}".format(cmd))
+            log.info("Staring archive monitor")
+            self._archive_directory_monitor = ExecuteCommand(
+                cmd, outpath=out_path, resident=True)
+            self._archive_directory_monitor.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._archive_directory_monitor.fscrunch_callbacks.add(
+                self._add_fscrunch_to_sensor)
+            self._archive_directory_monitor.tscrunch_callbacks.add(
+                self._add_tscrunch_to_sensor)
+            self.state = "running"
+        except Exception as error:
+            msg = "Couldn't start pipeline server {}".format(str(error))
+            log.error(msg)
+            raise EddPulsarPipelineError(msg)
+        else:
+            log.info("Starting pipeline {}".format(
+                self._pipeline_sensor_name.value()))
+
+    @request()
+    @return_reply(Str())
+    def request_stop(self, req):
+        """
+        @brief      Stop pipeline
+
+        """
+        @coroutine
+        def stop_wrapper():
+            try:
+                yield self.stop_pipeline()
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(stop_wrapper)
+        raise AsyncReply
+
+    @coroutine
+    def stop_pipeline(self):
+        try:
+            self._pipeline_instance.stop()
+        except Exception as error:
+            msg = "Couldn't stop pipeline {}".format(str(error))
+            log.error(msg)
+            raise EddPulsarPipelineError(msg)
+        else:
+            log.info("Stopping pipeline {}".format(
+                self._pipeline_sensor_name.value()))
+    @coroutine
+    def stop_pipeline(self):
+        """@brief stop the dada_junkdb and dspsr instances."""
+        if self.state == 'running':
+            log.debug("Stopping")
+            self._timeout = 10
+            process = [self._mkrecv_ingest_proc,
+                       self._dspsr, self._archive_directory_monitor]
+            for proc in process:
+                proc.set_finish_event()
+                proc.finish()
+                log.debug(
+                    "Waiting {} seconds for proc to terminate...".format(self._timeout))
+                now = time.time()
+                while time.time() - now < self._timeout:
+                    retval = proc._process.poll()
+                    if retval is not None:
+                        log.debug(
+                            "Returned a return value of {}".format(retval))
+                        break
+                    else:
+                        time.sleep(0.5)
+                else:
+                    log.warning(
+                        "Failed to terminate proc in alloted time")
+                    log.info("Killing process")
+                    proc._process.kill()
+            self.state = "ready"
+        else:
+            log.error("pipleine state is not in state = running, nothing to stop")
+
+
+    @request()
+    @return_reply(Str())
+    def request_deconfigure(self, req):
+        """
+        @brief      Deconfigure pipeline
+
+        """
+        @coroutine
+        def deconfigure_wrapper():
+            try:
+                yield self.deconfigure()
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(deconfigure_wrapper)
+        raise AsyncReply
+
+
+    @coroutine
+    def deconfigure(self):
+        """@brief deconfigure the dspsr pipeline."""
+        log.info("Deconfiguring pipeline {}".format(
+            self._pipeline_sensor_name.value()))
+        log.debug("Destroying dada buffers")
+        try:
+            self.remove_pipeline_sensors()
+            cmd = "dada_db -d -k {0}".format(self._dada_key)
+            log.debug("Running command: {0}".format(cmd))
+            self._destory_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._destory_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._destory_ring_buffer._process.wait()
+
+            cmd = "dada_db -d -k {0}".format(self._dadc_key)
+            log.debug("Running command: {0}".format(cmd))
+            self._destory_merge_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._destory_merge_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._destory_merge_buffer._process.wait()
+
+        except Exception as error:
+            msg = "Couldn't deconfigure pipeline {}".format(str(error))
+            log.error(msg)
+            raise EddPulsarPipelineError(msg)
+        else:
+            log.info("Deconfigured pipeline {}".format(
+                self._pipeline_sensor_name.value()))
+            self._pipeline_sensor_name.set_value("")
+
+
+@coroutine
+def on_shutdown(ioloop, server):
+    log.info('Shutting down server')
+    if server._pipeline_sensor_status.value() == "running":
+        log.info("Pipeline still running, stopping pipeline")
+        yield server.stop_pipeline()
+        time.sleep(10)
+    if server._pipeline_sensor_status.value() != "idle":
+        log.info("Pipeline still configured, deconfiguring pipeline")
+        yield server.deconfigure()
+    yield server.stop()
+    ioloop.stop()
+
+
 def main():
-    logging.info("Starting pipeline instance")
-    server = Mkrecv2Db2Dspsr()
-    server.configure()
-    server.start()
-    server.stop()
-    server.deconfigure()
+    usage = "usage: %prog [options]"
+    parser = OptionParser(usage=usage)
+    parser.add_option('-H', '--host', dest='host', type=str,
+                      help='Host interface to bind to', default="127.0.0.1")
+    parser.add_option('-p', '--port', dest='port', type=long,
+                      help='Port number to bind to', default=5000)
+    parser.add_option('', '--log_level', dest='log_level', type=str,
+                      help='logging level', default="INFO")
+    (opts, args) = parser.parse_args()
+    logging.getLogger().addHandler(logging.NullHandler())
+    logger = logging.getLogger('mpikat')
+    coloredlogs.install(
+        fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
+        level=opts.log_level.upper(),
+        logger=logger)
+    logging.getLogger('katcp').setLevel('INFO')
+    ioloop = tornado.ioloop.IOLoop.current()
+    log.info("Starting EddPulsarPipeline instance")
+    server = EddPulsarPipeline(opts.host, opts.port)
+    signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
+        on_shutdown, ioloop, server))
+
+    def start_and_display():
+        server.start()
+        log.info(
+            "Listening at {0}, Ctrl-C to terminate server".format(server.bind_address))
+
+    ioloop.add_callback(start_and_display)
+    ioloop.start()
 
 if __name__ == "__main__":
     main()
