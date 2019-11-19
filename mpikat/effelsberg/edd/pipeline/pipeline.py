@@ -763,24 +763,14 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     @coroutine
     def stop_pipeline(self):
-        try:
-            self._pipeline_instance.stop()
-        except Exception as error:
-            msg = "Couldn't stop pipeline {}".format(str(error))
-            log.error(msg)
-            raise EddPulsarPipelineError(msg)
-        else:
-            log.info("Stopping pipeline {}".format(
-                self._pipeline_sensor_name.value()))
-
-    @coroutine
-    def stop_pipeline(self):
         """@brief stop the dada_junkdb and dspsr instances."""
-        if self.state == 'running':
+        try:
             log.debug("Stopping")
             self._timeout = 10
+            #process = [self._mkrecv_ingest_proc,
+            #          self._dspsr, self._archive_directory_monitor]
             process = [self._mkrecv_ingest_proc,
-                       self._dspsr, self._archive_directory_monitor]
+                       self._polnmerge_proc, self._dspsr]
             for proc in process:
                 proc.set_finish_event()
                 proc.finish()
@@ -800,9 +790,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
                         "Failed to terminate proc in alloted time")
                     log.info("Killing process")
                     proc._process.kill()
-            self.state = "ready"
+        except Exception as error:
+            msg = "Couldn't stop pipeline {}".format(str(error))
+            log.error(msg)
+            raise EddPulsarPipelineError(msg)
         else:
-            log.error("pipleine state is not in state = running, nothing to stop")
+            log.info("Stopping pipeline {}".format(
+                self._pipeline_sensor_name.value()))
 
     @request()
     @return_reply(Str())
