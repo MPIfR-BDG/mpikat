@@ -718,7 +718,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             ####################################################
             #STARTING ARCHIVE MONITOR                          #
             ####################################################
- """
+            """
             cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
                 in_path, out_path)
             log.debug("Running command: {0}".format(cmd))
@@ -732,7 +732,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._archive_directory_monitor.tscrunch_callbacks.add(
                 self._add_tscrunch_to_sensor)
             self.state = "running"
- """
+            """
         except Exception as error:
             msg = "Couldn't start pipeline server {}".format(str(error))
             log.error(msg)
