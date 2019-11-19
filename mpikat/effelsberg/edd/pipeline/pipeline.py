@@ -37,7 +37,7 @@ import signal
 import astropy.units as units
 from optparse import OptionParser
 from tornado.gen import coroutine
-from katcp import AsyncDeviceServer, Message, Sensor, AsyncReply
+from katcp import AsyncDeviceServer, Message, AsyncReply
 from katcp.kattypes import request, return_reply, Str
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
@@ -334,7 +334,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._source_config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
-        self.setup_sensors()
+        #self.setup_sensors()
 
     def notify(self):
         """@brief callback function."""
