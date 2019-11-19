@@ -642,7 +642,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             #CREATING THE PREDICTOR WITH TEMPO2                #
             ####################################################
             cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
-                self.source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]), float(self._pipeline_config["central_freq"]))
+                self.source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"])-1.0, float(self._pipeline_config["central_freq"])+1.0)
             log.debug("Command to run: {}".format(cmd))
             self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
             self.tempo2.stdout_callbacks.add(
