@@ -567,26 +567,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     @coroutine
     def start_pipeline(self, config_json):
-        try:
-            config = json.loads(config_json)
-            source_name = config["source-name"]
-            ra = config["ra"]
-            dec = config["dec"]
-            log.debug("Unpacked config: {}".format(config))
-            log.info("staring pipeline for {} at {}, {}".format(
-                source_name, ra, dec))
-            self._pipeline_instance.start(config_json)
-
-        except Exception as error:
-            msg = "Couldn't start pipeline server {}".format(str(error))
-            log.error(msg)
-            raise EddPulsarPipelineError(msg)
-        else:
-            log.info("Starting pipeline {}".format(
-                self._pipeline_sensor_name.value()))
-
-    @coroutine
-    def start_pipeline(self, config_json):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
         # if self.state == "ready":
         #    self.state = "starting"
@@ -738,6 +718,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             ####################################################
             #STARTING ARCHIVE MONITOR                          #
             ####################################################
+ """
             cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
                 in_path, out_path)
             log.debug("Running command: {0}".format(cmd))
@@ -751,6 +732,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._archive_directory_monitor.tscrunch_callbacks.add(
                 self._add_tscrunch_to_sensor)
             self.state = "running"
+ """
         except Exception as error:
             msg = "Couldn't start pipeline server {}".format(str(error))
             log.error(msg)
