@@ -422,14 +422,14 @@ class EddPulsarPipeline(AsyncDeviceServer):
             description="tscrunch png",
             default=0,
             initial_status=Sensor.UNKNOWN)
-        self.sensors.append(self._tscrunch)
+        self.add_sensor(self._tscrunch)
 
         self._fscrunch = Sensor.string(
             "fscrunch_PNG",
             description="fscrunch png",
             default=0,
             initial_status=Sensor.UNKNOWN)
-        self.sensors.append(self._fscrunch)
+        self.add_sensor(self._fscrunch)
 
     @property
     def sensors(self):
