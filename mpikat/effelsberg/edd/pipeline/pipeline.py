@@ -30,14 +30,15 @@ from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_ke
 import shlex
 import threading
 import base64
-from katcp import Sensor
+#from katcp import Sensor
 import tornado
 import coloredlogs
 import signal
 import astropy.units as units
 from optparse import OptionParser
 from tornado.gen import coroutine
-from katcp import AsyncDeviceServer, Message, AsyncReply
+#from katcp import AsyncDeviceServer, Message, AsyncReply
+from katcp import AsyncDeviceServer, Message, Sensor, AsyncReply
 from katcp.kattypes import request, return_reply, Str
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
@@ -421,19 +422,19 @@ class EddPulsarPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._pipeline_sensor_status)
 
-        self._tscrunch = Sensor.string(
-            "tscrunch_PNG",
-            description="tscrunch png",
-            default=0,
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._tscrunch)
+        #self._tscrunch = Sensor.string(
+        #    "tscrunch_PNG",
+        #    description="tscrunch png",
+        #    default=0,
+        #    initial_status=Sensor.UNKNOWN)
+        #self.add_sensor(self._tscrunch)
 
-        self._fscrunch = Sensor.string(
-            "fscrunch_PNG",
-            description="fscrunch png",
-            default=0,
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._fscrunch)
+        #self._fscrunch = Sensor.string(
+        #    "fscrunch_PNG",
+        #    description="fscrunch png",
+        #    default=0,
+        #    initial_status=Sensor.UNKNOWN)
+        #self.add_sensor(self._fscrunch)
 
     @property
     def sensors(self):
