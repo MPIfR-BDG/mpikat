@@ -355,28 +355,28 @@ class EddPulsarPipeline(AsyncDeviceServer):
     def state(self, value):
         self._state = value
         self.notify()
-    """
-    def add_pipeline_sensors(self):
+
+    #def add_pipeline_sensors(self):
         """
         @brief Add pipeline sensors to the managed sensors list
 
         """
-        for sensor in self._pipeline_instance.sensors:
-            log.debug("sensor name is {}".format(sensor))
-            self.add_sensor(sensor)
-            self._managed_sensors.append(sensor)
-        self.mass_inform(Message.inform('interface-changed'))
+    #    for sensor in self._pipeline_instance.sensors:
+    #        log.debug("sensor name is {}".format(sensor))
+    #        self.add_sensor(sensor)
+    #        self._managed_sensors.append(sensor)
+    #    self.mass_inform(Message.inform('interface-changed'))
 
-    def remove_pipeline_sensors(self):
+    #def remove_pipeline_sensors(self):
         """
         @brief Remove pipeline sensors from the managed sensors list
 
         """
-        for sensor in self._managed_sensors:
-            self.remove_sensor(sensor)
-        self._managed_sensors = []
-        self.mass_inform(Message.inform('interface-changed'))
-    """
+    #    for sensor in self._managed_sensors:
+    #        self.remove_sensor(sensor)
+    #    self._managed_sensors = []
+    #    self.mass_inform(Message.inform('interface-changed'))
+    
     def state_change(self, state, callback):
         """
         @brief callback function for state changes
