@@ -332,8 +332,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self.ip = ip
         #self._managed_sensors = []
         self.callbacks = set()
-        #self._state = "idle"
-        self._sensors = []
+        self._state = "idle"
+        #self._sensors = []
         self._volumes = ["/tmp/:/scratch/"]
         self._dada_key = None
         self._config = None
