@@ -584,7 +584,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             header["mc_source"], header["frequency_mhz"] = self._pipeline_config[
                 "mc_source"], self.frequency_mhz
             source_name = self._source_config["source-name"]
-            cpu_numbers = "29,30"
+            cpu_numbers = "30,31"
             #cpu_numbers = self._pipeline_config["cpus"]
             #cuda_number = self._pipeline_config["cuda"]
             cuda_number = "1"
@@ -684,14 +684,14 @@ class EddPulsarPipeline(AsyncDeviceServer):
             ####################################################
             #STARTING DSPSR                                    #
             ####################################################
-            #cmd = "numactl -m 1 dspsr {args} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
-            #    args=self._config["dspsr_params"]["args"],
-            #    predictor="{}/t2pred.dat".format(in_path),
-            #    parfile="{}/{}.par".format(in_path, self.source_name),
-            #    cpus=cpu_numbers,
-            #    cuda_number=cuda_number,
-            #    keyfile=dada_key_file.name)
-            cmd = "numactl -m 1 dbnull -k dadc"
+            cmd = "numactl -m 1 dspsr {args} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
+                args=self._config["dspsr_params"]["args"],
+                predictor="{}/t2pred.dat".format(in_path),
+                parfile="{}/{}.par".format(in_path, self.source_name),
+                cpus=cpu_numbers,
+                cuda_number=cuda_number,
+                keyfile=dada_key_file.name)
+            #cmd = "numactl -m 1 dbnull -k dadc"
             log.debug("Running command: {0}".format(cmd))
             log.info("Staring DSPSR")
             self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
