@@ -286,6 +286,7 @@ class ExecuteCommand(object):
         if RUN:
             time.sleep(30)
             while self._process.poll() == None:
+                log.debug("trying to read archive PNG file")
                 try:
                     with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
                         self.fscrunch = base64.b64encode(imageFile.read())
