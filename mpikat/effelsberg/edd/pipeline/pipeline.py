@@ -46,7 +46,7 @@ log.setLevel('DEBUG')
 
 RUN = True
 
-PIPELINES = {}
+#PIPELINES = {}
 
 PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
@@ -355,7 +355,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
     def state(self, value):
         self._state = value
         self.notify()
-
+"""
     def add_pipeline_sensors(self):
         """
         @brief Add pipeline sensors to the managed sensors list
@@ -376,7 +376,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self.remove_sensor(sensor)
         self._managed_sensors = []
         self.mass_inform(Message.inform('interface-changed'))
-
+"""
     def state_change(self, state, callback):
         """
         @brief callback function for state changes
@@ -777,7 +777,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             #process = [self._mkrecv_ingest_proc,
             #          self._dspsr, self._archive_directory_monitor]
             process = [self._mkrecv_ingest_proc,
-                       self._polnmerge_proc, self._dspsr]
+                       self._polnmerge_proc, self._dspsr, self._archive_directory_monitor]
             for proc in process:
                 proc.set_finish_event()
                 proc.finish()
