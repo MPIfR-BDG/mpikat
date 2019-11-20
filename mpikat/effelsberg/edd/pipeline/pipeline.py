@@ -423,19 +423,19 @@ class EddPulsarPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._pipeline_sensor_status)
 
-        #self._tscrunch = Sensor.string(
-        #    "tscrunch_PNG",
-        #    description="tscrunch png",
-        #    default=0,
-        #    initial_status=Sensor.UNKNOWN)
-        #self.add_sensor(self._tscrunch)
+        self._tscrunch = Sensor.string(
+            "tscrunch_PNG",
+            description="tscrunch png",
+            default=0,
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._tscrunch)
 
-        #self._fscrunch = Sensor.string(
-        #    "fscrunch_PNG",
-        #    description="fscrunch png",
-        #    default=0,
-        #    initial_status=Sensor.UNKNOWN)
-        #self.add_sensor(self._fscrunch)
+        self._fscrunch = Sensor.string(
+            "fscrunch_PNG",
+            description="fscrunch png",
+            default=0,
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._fscrunch)
 
     @property
     def sensors(self):
