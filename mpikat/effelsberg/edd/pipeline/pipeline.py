@@ -725,7 +725,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             ####################################################
             #STARTING ARCHIVE MONITOR                          #
             ####################################################
-            time.sleep(15)
+            time.sleep(5)
             cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
                 in_path, out_path)
             log.debug("Running command: {0}".format(cmd))
