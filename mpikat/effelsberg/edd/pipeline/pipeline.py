@@ -321,25 +321,25 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     def __init__(self, ip, port):
         """
-        @brief Initialization of the PafWorkerServer object
+        @brief Initialization of the EDDPulsarPipeline object
 
         @param ip       IP address of the server
-        @param port     port of the PafWorkerServer
+        @param port     port of the EDDPulsarPipeline
 
         """
         super(EddPulsarPipeline, self).__init__(ip, port)
-        self.setup_sensors()
+        #self.setup_sensors()
         self.ip = ip
-        self._managed_sensors = []
-        self.callbacks = set()
-        self._state = "idle"
-        self._sensors = []
-        self._volumes = ["/tmp/:/scratch/"]
-        self._dada_key = None
-        self._config = None
-        self._source_config = None
-        self._dspsr = None
-        self._mkrecv_ingest_proc = None
+        #self._managed_sensors = []
+        #self.callbacks = set()
+        #self._state = "idle"
+        #self._sensors = []
+        #self._volumes = ["/tmp/:/scratch/"]
+        #self._dada_key = None
+        #self._config = None
+        #self._source_config = None
+        #self._dspsr = None
+        #self._mkrecv_ingest_proc = None
         #self.setup_sensors()
 
     def notify(self):
