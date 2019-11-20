@@ -255,9 +255,11 @@ class ExecuteCommand(object):
                 # For the command which runs for a while, if it stops before
                 # the event is set, the command does not successfully finish
                 stdout = self._process.stdout.read()
+                stderr = self._process.stderr.read()
                 log.error(
                     "Process exited unexpectedly with return code: {}".format(self._process.returncode))
                 log.error("exited unexpectedly, stdout = {}".format(stdout))
+                log.error("exited unexpectedly, stderr = {}".format(stderr))
                 log.error("exited unexpectedly, cmd = {}".format(self._command))
                 self.error = True
 
@@ -270,9 +272,11 @@ class ExecuteCommand(object):
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
                 # the event is set, the command does not successfully finish
+                stdout = self._process.stdout.read()
                 stderr = self._process.stderr.read()
                 log.error(
                     "Process exited unexpectedly with return code: {}".format(self._process.returncode))
+                log.error("exited unexpectedly, stdout = {}".format(stdout))
                 log.error("exited unexpectedly, stderr = {}".format(stderr))
                 log.error("exited unexpectedly, cmd = {}".format(self._command))
                 self.error = True
