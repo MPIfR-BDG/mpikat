@@ -9,7 +9,7 @@ from watchdog.events import FileSystemEventHandler
 from subprocess import Popen, PIPE
 
 log = logging.getLogger(
-    "mpikat.effelsberg.edd.pipeline.archive_directory_monitor")
+    "mpikat.effelsberg.edd.pipeline.pipeline")
 
 
 class ArchiveAdder(FileSystemEventHandler):
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     from argparse import ArgumentParser
     FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
     logger = logging.getLogger(
-        'mpikat.effelsberg.edd.pipeline.archive_directory_monitor')
+        'mpikat.effelsberg.edd.pipeline.pipeline')
     logging.basicConfig(format=FORMAT)
     logger.setLevel(logging.DEBUG)
 
