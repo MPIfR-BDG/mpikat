@@ -45,8 +45,8 @@ class ArchiveAdder(FileSystemEventHandler):
                 "psradd -inplace sum.fscrunch {}".format(fscrunch_fname))
             log.debug("psrplot -p time -D {}/fscrunch.png/png sum.fscrunch".format(self.output_dir))
             log.debug("psrplot -p freq -D {}/tscrunch.png/png sum.tscrunch".format(self.output_dir))
-            self._syscall("psrplot -p time -D {}/fscrunch.png/png sum.fscrunch".format(self.output_dir))
-            self._syscall("psrplot -p freq -D {}/tscrunch.png/png sum.tscrunch".format(self.output_dir))
+            self._syscall("psrplot -p time -D ../../../../../../../../{}/fscrunch.png/png sum.fscrunch".format(self.output_dir))
+            self._syscall("psrplot -p freq -D ../../../../../../../../{}/tscrunch.png/png sum.tscrunch".format(self.output_dir))
 
         os.remove(fscrunch_fname)
         shutil.copy2("sum.fscrunch", self.output_dir)
