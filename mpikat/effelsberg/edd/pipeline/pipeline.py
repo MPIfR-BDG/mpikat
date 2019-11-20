@@ -330,7 +330,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         super(EddPulsarPipeline, self).__init__(ip, port)
         #self.setup_sensors()
         self.ip = ip
-        #self._managed_sensors = []
+        self._managed_sensors = []
         self.callbacks = set()
         self._state = "idle"
         #self._sensors = []
