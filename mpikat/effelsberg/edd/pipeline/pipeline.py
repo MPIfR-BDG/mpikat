@@ -339,7 +339,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._source_config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
-        self.setup_sensors()
+        #self.setup_sensors()
 
     def notify(self):
         """@brief callback function."""
