@@ -123,7 +123,7 @@ class KatportalClientWrapper(object):
 
     @coroutine
     def get_fbfuse_address(self):
-        sensor_sample = yield self._query('fbfuse', 'fbfuse-address')
+        sensor_sample = yield self._query('fbfuse', 'fbfmc-address')
         raise Return(sensor_sample.value)
 
     @coroutine
