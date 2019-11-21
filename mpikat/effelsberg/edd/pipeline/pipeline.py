@@ -284,7 +284,7 @@ class ExecuteCommand(object):
 
     def _png_monitor(self):
         if RUN:
-            time.sleep(30)
+            time.sleep(15)
             while self._process.poll() == None:
                 log.debug("trying to read archive PNG file")
                 try:
@@ -485,7 +485,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                self.state == "ready"
+                self._pipeline_sensor_status.set_value("ready")
         self.ioloop.add_callback(configure_wrapper)
         raise AsyncReply
 
@@ -571,7 +571,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                self.state == "running"
+                self._pipeline_sensor_status.set_value("running")
         self.ioloop.add_callback(start_wrapper)
         raise AsyncReply
 
@@ -769,7 +769,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                self.state == "ready"
+                self._pipeline_sensor_status.set_value("ready")
         self.ioloop.add_callback(stop_wrapper)
         raise AsyncReply
 
@@ -826,7 +826,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                self.state == "idle"
+                self._pipeline_sensor_status.set_value("idle")
         self.ioloop.add_callback(deconfigure_wrapper)
         raise AsyncReply
 
