@@ -716,7 +716,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._save_capture_stdout)
             self.psrcat.stderr_callbacks.add(
                 self._handle_execution_stderr)
-            time.sleep(3)
+            #time.sleep(3)
             ####################################################
             #CREATING THE PREDICTOR WITH TEMPO2                #
             ####################################################
@@ -776,7 +776,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._decode_capture_stdout)
             self._dspsr.stderr_callbacks.add(
                 self._handle_execution_stderr)
-            time.sleep(5)
+            #time.sleep(5)
             ####################################################
             #STARTING EDDPolnMerge                             #
             ####################################################
@@ -802,7 +802,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             ####################################################
             #STARTING ARCHIVE MONITOR                          #
             ####################################################
-            time.sleep(5)
+            #time.sleep(5)
             cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
                 in_path, out_path)
             log.debug("Running command: {0}".format(cmd))
