@@ -284,19 +284,23 @@ class ExecuteCommand(object):
 
     def _png_monitor(self):
         if RUN:
-            time.sleep(20)
+            #time.sleep(5)
             while self._process.poll() == None:
                 log.debug("trying to read archive PNG file")
                 try:
                     with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
                         self.fscrunch = base64.b64encode(imageFile.read())
                 except Exception as error:
-                    raise PulsarPipelineError(str(error))
+                    #raise PulsarPipelineError(str(error))
+                    log.debug("fscrunch.png is not ready")
+                    continue 
                 try:
                     with open("{}/tscrunch.png".format(self._outpath), "rb") as imageFile:
                         self.tscrunch = base64.b64encode(imageFile.read())
                 except Exception as error:
-                    raise PulsarPipelineError(str(error))
+                    log.debug("tscrunch.png is not ready")
+                    continue
+                    #raise PulsarPipelineError(str(error))
                 time.sleep(5)
 
 
