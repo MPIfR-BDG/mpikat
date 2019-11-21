@@ -477,14 +477,14 @@ class EddPulsarPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._source_name)
 
-        self._nchannels = Sensor.float(
+        self._nchannels = Sensor.string(
             "_nchannels",
             description="_nchannels",
             default="N/A",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._nchannels)
 
-        self._nbins = Sensor.float(
+        self._nbins = Sensor.string(
             "_nbins",
             description="_nbins",
             default="N/A",
@@ -650,8 +650,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             nchannels = self._source_config["nchannels"]
             nbins = self._source_config["nbins"]
             self._source_name.set_value(self.source_name)
-            self._nchannels.set_value(float(self.nchannels))
-            self._nbins.set_value(float(self.nbins))
+            self._nchannels.set_value(self.nchannels)
+            self._nbins.set_value(self.nbins)
             cpu_numbers = "30,31"
             #cpu_numbers = self._pipeline_config["cpus"]
             #cuda_number = self._pipeline_config["cuda"]
