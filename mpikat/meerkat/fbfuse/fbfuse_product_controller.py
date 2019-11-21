@@ -32,7 +32,7 @@ from katcp import Sensor, Message, KATCPClientResource
 from katpoint import Target, Antenna
 from mpikat.core.ip_manager import ip_range_from_stream
 from mpikat.core.utils import parse_csv_antennas, LoggingSensor
-from mpikat.meerkat.katportalclient_wrapper import SubarrayActivityInterrupt
+from mpikat.meerkat.katportalclient_wrapper import Interrupt
 from mpikat.meerkat.fbfuse import (
     BeamManager,
     BeamAllocationError,
@@ -840,7 +840,7 @@ class FbfProductController(object):
             try:
                 yield self._activity_tracker.wait_until(
                     "track", self._activity_tracker_interrupt)
-            except SubarrayActivityInterrupt:
+            except Interrupt:
                 self.log.debug("Interrupting callback waiting on 'track' state")
                 pass
             except Exception as error:
@@ -1264,3 +1264,6 @@ class FbfProductController(object):
         if self.state not in valid_states:
             raise FbfProductStateError(valid_states, self.state)
         self._beam_manager.reset()
+
+
+

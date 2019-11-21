@@ -814,7 +814,7 @@ class FbfMasterController(MasterController):
     @return_reply(Str())
     def request_beam_positions(self, req, product_id):
         """
-        @brief      Add default FBFUSE nodes to the server pool
+        @brief      Get all beam information for a given product
         """
         try:
             product = self._get_product(product_id)

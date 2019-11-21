@@ -21,10 +21,12 @@ SOFTWARE.
 """
 
 import logging
-from katcp import KATCPClientResource
-from mpikat.core.worker_pool import WorkerPool, WorkerWrapper
+import json
+from tornado.gen import coroutine
+from mpikat.core.worker_pool import WorkerPool, WorkerWrapper, WorkerRequestError
 
 log = logging.getLogger("mpikat.apsuse_worker_wrapper")
+
 
 class ApsWorkerWrapper(WorkerWrapper):
     """Wrapper around a client to an ApsWorkerServer
@@ -38,6 +40,29 @@ class ApsWorkerWrapper(WorkerWrapper):
         @params port     The port number that the worker server serves on
         """
         super(ApsWorkerWrapper, self).__init__(hostname, port)
+
+    @coroutine
+    def _make_request(self, req, *args, **kwargs):
+        response = yield req(*args, **kwargs)
+        if not response.reply.reply_ok():
+            raise WorkerRequestError(response.reply.arguments[1])
+
+    @coroutine
+    def prepare(self, config_dict):
+        yield self._make_request("configure", json.dumps(config_dict))
+
+    def capture_start(self):
+        yield self._make_request("capture_start")
+
+    def capture_stop(self):
+        yield self._make_request("capture_stop")
+
+    def enable_writers(self, beam_dict):
+        yield self._make_request("target_start", json.dumps(beam_dict))
+
+    def disable_writers(self):
+        yield self._make_request("target_stop")
+
 
 class ApsWorkerPool(WorkerPool):
     def make_wrapper(self, hostname, port):

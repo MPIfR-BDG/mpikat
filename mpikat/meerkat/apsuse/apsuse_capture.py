@@ -12,7 +12,7 @@ from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.unix_socket import UDSClient
 
 AVAILABLE_CAPTURE_MEMORY = 3221225472  * 10
-MAX_DADA_BLOCK_SIZE = 3221225472 
+MAX_DADA_BLOCK_SIZE = 3221225472
 log = logging.getLogger("mpkat.apsuse_capture")
 
 
@@ -84,8 +84,6 @@ class ApsCapture(object):
 
     @coroutine
     def _make_db(self, key, block_size, nblocks, timeout=120):
-        print key, block_size, nblocks, "-" * 100
-
         try:
             yield self._destroy_db(key, timeout=20)
         except Exception as error:
@@ -176,7 +174,8 @@ class ApsCapture(object):
             "--dir", self._output_dir,
             "--log_level", "debug"]
         log.debug(" ".join(map(str, apsuse_cmdline)))
-        self._apsuse_proc = ManagedProcess(apsuse_cmdline)
+        self._apsuse_proc = ManagedProcess(
+            apsuse_cmdline, stdout_handler=log.debug, stderr_handler=log.error)
         self._apsuse_args_sensor.set_value(" ".join(map(str, apsuse_cmdline)))
 
         # Start MKRECV capture code
@@ -208,30 +207,37 @@ class ApsCapture(object):
         def update_heap_loss_sensor(curr, total, avg, window):
             self._mkrecv_heap_loss.set_value(100.0 - avg)
 
-        self._mkrecv_proc =  ManagedProcess(
+        mkrecv_sensor_updater = MkrecvStdoutHandler(
+            callback=update_heap_loss_sensor)
+
+        def mkrecv_aggregated_output_handler(line):
+            log.debug(line)
+            mkrecv_sensor_updater(line)
+
+        self._mkrecv_proc = ManagedProcess(
             ["mkrecv_nt", "--header",
              self._mkrecv_config_filename, "--quiet"],
-            stdout_handler=MkrecvStdoutHandler(
-                callback=update_heap_loss_sensor))
+            stdout_handler=mkrecv_aggregated_output_handler,
+            stderr_handler=log.error)
 
         def exit_check_callback():
             if not self._mkrecv_proc.is_alive():
                 log.error("mkrecv_nt exited unexpectedly")
                 self.ioloop.add_callback(self.capture_stop)
-            if not self._apsuse_proc.is_alive():
+            elif not self._apsuse_proc.is_alive():
                 log.error("apsuse pipeline exited unexpectedly")
                 self.ioloop.add_callback(self.capture_stop)
             self._capture_monitor.stop()
 
         self._capture_monitor = PeriodicCallback(exit_check_callback, 1000)
         self._capture_monitor.start()
-        
+
         self._ingress_buffer_monitor = DbMonitor(
             self._dada_input_key,
             callback=lambda params:
             self._ingress_buffer_percentage.set_value(params["fraction-full"]))
         self._ingress_buffer_monitor.start()
-        
+
         self._capturing = True
 
     def target_start(self, beam_info):
@@ -274,8 +280,6 @@ class ApsCapture(object):
         client = UDSClient(self._control_socket)
         client.send(json.dumps(message_dict))
         response_str = client.recv(timeout=3)
-        print "-"*11,response_str,"_"*11
-
         try:
             response = json.loads(response_str)["response"]
         except Exception:
@@ -334,9 +338,7 @@ if __name__ == "__main__":
         level="DEBUG",
         logger=logger)
     logger.setLevel("DEBUG")
-    logging.getLogger('katcp').setLevel(logging.ERROR)	
-
-
+    logging.getLogger('katcp').setLevel(logging.ERROR)
 
     import time
     ioloop = IOLoop.current()
@@ -385,7 +387,7 @@ if __name__ == "__main__":
 
     beam_params = []
     for ii in range(1):
-        beam_params.append({'id': 'cfbf{:05d}'.format(ii), 'target': 'source0,radec,00:00:00.00,00:00:00'}) 
+        beam_params.append({'id': 'cfbf{:05d}'.format(ii), 'target': 'source0,radec,00:00:00.00,00:00:00'})
 
     ioloop.run_sync(lambda: coherent_capture.capture_start(coherent_config))
     #ioloop.run_sync(lambda: incoherent_capture.capture_start(incoherent_config))

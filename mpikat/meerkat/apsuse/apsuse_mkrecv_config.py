@@ -21,7 +21,6 @@ TSAMP         {{sampling_interval}}
 SOURCE        not_a_source
 
 SYNC_TIME     {{sync_epoch}}
-SYNC_TIME_MJD {{sync_epoch/86400.0 + 40587.0}}
 SAMPLE_CLOCK  {{sample_clock}}
 MCAST_SOURCES {{mcast_sources}}
 PORT          {{mcast_port}}

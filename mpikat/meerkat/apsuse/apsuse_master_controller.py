@@ -29,17 +29,19 @@ import numpy as np
 from optparse import OptionParser
 from tornado.gen import Return, coroutine
 from katcp import Sensor, AsyncReply
-from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
+from katcp.kattypes import request, return_reply, Str
 from katpoint import Target
 from mpikat.core.master_controller import MasterController
 from mpikat.core.exceptions import ProductLookupError
-from mpikat.meerkat.katportalclient_wrapper import FbfKatportalMonitor
-from mpikat.meerkat.apsuse import ApsProductController
-from mpikat.meerkat.apsuse import ApsWorkerPool
+from mpikat.meerkat.katportalclient_wrapper import KatportalClientWrapper
+from mpikat.meerkat.test.utils import MockKatportalClientWrapper
+from mpikat.meerkat.apsuse.apsuse_product_controller import ApsProductController
+from mpikat.meerkat.apsuse.apsuse_worker_wrapper import ApsWorkerPool
 
 # ?halt message means shutdown everything and power off all machines
 
 log = logging.getLogger("mpikat.apsuse_master_controller")
+
 
 class ApsMasterController(MasterController):
     """This is the main KATCP interface for the APSUSE
@@ -62,7 +64,7 @@ class ApsMasterController(MasterController):
         @params  port     The port that the server should bind to
         """
         super(ApsMasterController, self).__init__(ip, port, ApsWorkerPool())
-        self._katportal_wrapper_type = FbfKatportalMonitor
+        self._katportal_wrapper_type = MockKatportalClientWrapper#KatportalClientWrapper
         self._dummy = dummy
         if self._dummy:
             for ii in range(8):
@@ -134,28 +136,40 @@ class ApsMasterController(MasterController):
         """
 
         msg = ("Configuring new APSUSE product",
-            "Product ID: {}".format(product_id),
-            "Streams: {}".format(streams_json),
-            "Proxy name: {}".format(proxy_name))
+               "Product ID: {}".format(product_id),
+               "Streams: {}".format(streams_json),
+               "Proxy name: {}".format(proxy_name))
         log.info("\n".join(msg))
+
         # Test if product_id already exists
         if product_id in self._products:
             return ("fail", "APS already has a configured product with ID: {}".format(product_id))
+
         # Determine number of nodes required based on number of antennas in subarray
         # Note this is a poor way of handling this that may be updated later. In theory
         # there is a throughput measure as a function of bandwidth, polarisations and number
         # of antennas that allows one to determine the number of nodes to run. Currently we
         # just assume one antennas worth of data per NIC on our servers, so two antennas per
         # node.
+
         streams = json.loads(streams_json)
         try:
             streams['cam.http']['camdata']
         except KeyError as error:
-            return ("fail", "JSON streams object does not contain required key: {}".format(str(error)))
+            return ("fail",
+                "JSON streams object does not contain required key: {}".format(
+                    str(error)))
+
         @coroutine
         def configure():
-            fbf_monitor = self._katportal_wrapper_type(streams['cam.http']['camdata'], product_id)
-            self._products[product_id] = ApsProductController(self, product_id, fbf_monitor, proxy_name)
+            katportal_client = self._katportal_wrapper_type(
+                streams['cam.http']['camdata'], product_id)
+            self._products[product_id] = ApsProductController(
+                self, product_id, katportal_client, proxy_name)
+            try:
+                yield self._products[product_id].configure()
+            except Exception:
+                log.exception("Error during configuration")
             self._update_products_sensor()
             log.debug("Configured APSUSE instance with ID: {}".format(product_id))
             req.reply("ok",)
@@ -191,7 +205,6 @@ class ApsMasterController(MasterController):
         del self._products[product_id]
         self._update_products_sensor()
         return ("ok",)
-
 
     @request(Str(), Str())
     @return_reply()
@@ -245,6 +258,7 @@ class ApsMasterController(MasterController):
             try:
                 yield product.capture_start()
             except Exception as error:
+                log.exception("Error on capture start")
                 req.reply("fail", str(error))
             else:
                 req.reply("ok",)
@@ -285,7 +299,7 @@ def main():
     parser = OptionParser(usage=usage)
     parser.add_option('-H', '--host', dest='host', type=str,
         help='Host interface to bind to')
-    parser.add_option('-p', '--port', dest='port', type=long,
+    parser.add_option('-p', '--port', dest='port', type=int,
         help='Port number to bind to')
     parser.add_option('', '--log_level',dest='log_level',type=str,
         help='Port number of status server instance',default="INFO")

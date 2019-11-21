@@ -28,8 +28,7 @@ class DbMonitor(object):
             if self._callback:
                 self._callback(params)
             return params
-        except Exception as error:
-            log.warning("Unable to parse line with error".format(str(error)))
+        except Exception:
             return None
 
     def start(self):

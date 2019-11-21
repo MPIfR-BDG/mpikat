@@ -42,7 +42,7 @@ class ApsWorkerServer(AsyncDeviceServer):
     STATES = ["idle", "starting", "capturing", "recording", "stopping", "error"]
     IDLE, STARTING, CAPTURING, RECORDING, STOPPING, ERROR = STATES
 
-    def __init__(self, ip, port, capture_interface, base_output_dir):
+    def __init__(self, ip, port, capture_interface):
         """
         @brief       Construct new ApsWorkerServer instance
 
@@ -51,7 +51,6 @@ class ApsWorkerServer(AsyncDeviceServer):
         """
         self._dada_input_key = "dada"
         self._capture_interface = capture_interface
-        self._base_output_dir = base_output_dir
         self._capture_instances = []
         super(ApsWorkerServer, self).__init__(ip, port)
 
@@ -152,6 +151,7 @@ class ApsWorkerServer(AsyncDeviceServer):
                                       "cfbf00017"],
                          "centre-frequency": 1284000000.0,
                          "filesize": 10000000000.0,
+                         "base_output_dir": "/output/blah",
                          "heap-size": 8192,
                          "idx1-step": 268435456,
                          "mcast-groups": ["239.11.1.0"],
@@ -167,6 +167,7 @@ class ApsWorkerServer(AsyncDeviceServer):
                           "beam-ids": ["ifbf00000"],
                           "centre-frequency": 1284000000.0,
                           "filesize": 10000000000.0,
+                          "base_output_dir": "/output/blah"
                           "heap-size": 8192,
                           "idx1-step": 268435456,
                           "mcast-groups": ["239.11.1.1"],
@@ -200,7 +201,7 @@ class ApsWorkerServer(AsyncDeviceServer):
                 "/tmp/apsuse_capture_coherent.sock",
                 "/tmp/coherent_mkrecv.cfg",
                 "0-2", "2-3",
-                "coherent", "dada", self._base_output_dir)
+                "coherent", "dada")
             for sensor in coherent_cap._sensors:
                 self.add_sensor(sensor)
             yield coherent_cap.capture_start(config["coherent-beams"])
@@ -211,7 +212,7 @@ class ApsWorkerServer(AsyncDeviceServer):
                 "/tmp/apsuse_capture_incoherent.sock",
                 "/tmp/incoherent_mkrecv.cfg",
                 "3", "4",
-                "incoherent", "caca", self._base_output_dir)
+                "incoherent", "caca")
             for sensor in incoherent_cap._sensors:
                 self.add_sensor(sensor)
             yield incoherent_cap.capture_start(config["incoherent-beams"])
