@@ -477,12 +477,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._central_freq)
 
-        self._source_name = Sensor.string(
+        self._source_name_sensor = Sensor.string(
             "source_name",
             description="target name",
             default="N/A",
             initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._source_name)
+        self.add_sensor(self._source_name_sensor)
 
         self._nchannels = Sensor.string(
             "_nchannels",
@@ -656,7 +656,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self.source_name = self._source_config["source-name"]
             self.nchannels = self._source_config["nchannels"]
             self.nbins = self._source_config["nbins"]
-            self._source_name.set_value(self.source_name)
+            self._source_name_sensor.set_value(self.source_name)
             self._nchannels.set_value(self.nchannels)
             self._nbins.set_value(self.nbins)
             cpu_numbers = "30,31"
