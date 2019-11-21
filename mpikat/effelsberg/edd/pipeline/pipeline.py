@@ -48,6 +48,8 @@ RUN = True
 
 #PIPELINES = {}
 
+SMILE= "R0lGODlhDAAMAKIFAF5LAP/zxAAAANyuAP/gaP///wAAAAAAACH5BAEAAAUALAAAAAAMAAwAAAMlWLPcGjDKFYi9lxKBOaGcF35DhWHamZUW0K4mAbiwWtuf0uxFAgA7"
+
 PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
                    "deconfiguring", "error"]
@@ -452,21 +454,21 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._tscrunch = Sensor.string(
             "tscrunch_PNG",
             description="tscrunch png",
-            default=0,
+            default=SMILE,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._tscrunch)
 
         self._fscrunch = Sensor.string(
             "fscrunch_PNG",
             description="fscrunch png",
-            default=0,
+            default=SMILE,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._fscrunch)
 
         self._profile = Sensor.string(
             "profile_PNG",
             description="pulse profile png",
-            default=0,
+            default=SMILE,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._profile)
 
@@ -929,9 +931,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._destory_merge_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._destory_merge_buffer._process.wait()
-            self.tscrunch = 0
-            self.tscrunch = 0 
-            self.profile  = 0
+            self._fscrunch.set_value(SMILE)
+            self._tscrunch.set_value(SMILE)
+            self._profile.set_value(SMILE)
 
         except Exception as error:
             msg = "Couldn't deconfigure pipeline {}".format(str(error))
