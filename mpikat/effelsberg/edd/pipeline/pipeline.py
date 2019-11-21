@@ -284,7 +284,7 @@ class ExecuteCommand(object):
 
     def _png_monitor(self):
         if RUN:
-            time.sleep(15)
+            time.sleep(20)
             while self._process.poll() == None:
                 log.debug("trying to read archive PNG file")
                 try:
