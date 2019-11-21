@@ -31,7 +31,6 @@ from katcp import Sensor
 
 log = logging.getLogger('mpikat.katportalclient_wrapper')
 
-
 class KatportalClientWrapper(object):
     def __init__(self, host, callback=None):
         self._host = host
@@ -51,6 +50,10 @@ class KatportalClientWrapper(object):
             sensor_name,
             include_value_ts=False)
         log.debug("Sensor value: {}".format(sensor_sample))
+        if sensor_sample.status != Sensor.NOMINAL:
+            message = "Sensor {} not in NOMINAL state".format(sensor_name)
+            log.error(message)
+            raise Exception(sensor_name)
         raise Return(sensor_sample)
 
     @coroutine
@@ -118,13 +121,13 @@ class KatportalClientWrapper(object):
 
     @coroutine
     def get_sb_id(self):
-        sensor_sample = yield self._query('sub', 'experiment-id')
+        sensor_sample = yield self._query('sub', 'script-experiment-id')
         raise Return(sensor_sample.value)
 
     @coroutine
     def get_fbfuse_address(self):
         sensor_sample = yield self._query('fbfuse', 'fbfmc-address')
-        raise Return(sensor_sample.value)
+        raise Return(eval(sensor_sample.value))
 
     @coroutine
     def get_fbfuse_sb_config(self, product_id):
