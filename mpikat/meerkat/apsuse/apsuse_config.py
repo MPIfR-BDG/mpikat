@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 import logging
+import json
 from mpikat.core.ip_manager import ip_range_from_stream
 
 log = logging.getLogger('mpikat.apsuse_config_manager')
@@ -134,7 +135,8 @@ def get_required_workers(fbfuse_config):
             worker._incoherent_beams.append("ifbf00000")
         for coherent_group in worker.coherent_groups():
             spead_formatted = "spead://{}:{}".format(str(coherent_group), coherent_range.port)
-            beam_idxs = fbfuse_config['coherent-beam-multicast-group-mapping'][spead_formatted]
+            mapping = json.loads(fbfuse_config['coherent-beam-multicast-group-mapping'])
+            beam_idxs = mapping[spead_formatted]
             worker._coherent_beams.extend(beam_idxs)
 
     for ii, worker in enumerate(workers):
