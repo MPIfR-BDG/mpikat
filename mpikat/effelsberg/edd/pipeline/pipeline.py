@@ -485,6 +485,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
+                self.state == "ready"
         self.ioloop.add_callback(configure_wrapper)
         raise AsyncReply
 
@@ -570,6 +571,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
+                self.state == "running"
         self.ioloop.add_callback(start_wrapper)
         raise AsyncReply
 
@@ -767,6 +769,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
+                self.state == "ready"
         self.ioloop.add_callback(stop_wrapper)
         raise AsyncReply
 
@@ -823,6 +826,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
+                self.state == "idle"
         self.ioloop.add_callback(deconfigure_wrapper)
         raise AsyncReply
 
