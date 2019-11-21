@@ -659,12 +659,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             self._source_config = json.loads(config_json)
             self.frequency_mhz = self._pipeline_config["central_freq"]
+            self.bandwidth = self._pipeline_config["bandwidth"]
             self._central_freq.set_value(str(self.frequency_mhz))
             header = self._config["dada_header_params"]
             header["ra"], header["dec"], header["key"] = self._source_config[
                 "ra"], self._source_config["dec"], self._dada_key
-            header["mc_source"], header["frequency_mhz"] = self._pipeline_config[
-                "mc_source"], self.frequency_mhz
+            header["mc_source"], header["frequency_mhz"] header["bandwidth"]= self._pipeline_config[
+                "mc_source"], self.frequency_mhz, self.bandwidth
             self.source_name = self._source_config["source-name"]
             self.nchannels = self._source_config["nchannels"]
             self.nbins = self._source_config["nbins"]
