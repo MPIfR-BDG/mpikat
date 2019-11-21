@@ -499,6 +499,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._nbins)
 
+        self._time_processed = Sensor.string(
+            "_time_processed",
+            description="_time_processed",
+            default="N/A",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._time_processed)
+
     @property
     def sensors(self):
         return self._sensors
@@ -514,6 +521,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug(returncode)
 
     def _handle_execution_stderr(self, stderr, callback):
+        if stderr[:8]== "Finished":
+            self._time_processed.set_value(stderr)
         log.info(stderr)
 
     def _add_tscrunch_to_sensor(self, png_blob, callback):
