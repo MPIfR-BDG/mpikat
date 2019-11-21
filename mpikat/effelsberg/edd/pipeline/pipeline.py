@@ -48,7 +48,7 @@ RUN = True
 
 #PIPELINES = {}
 
-SMILE= "R0lGODlhDAAMAKIFAF5LAP/zxAAAANyuAP/gaP///wAAAAAAACH5BAEAAAUALAAAAAAMAAwAAAMlWLPcGjDKFYi9lxKBOaGcF35DhWHamZUW0K4mAbiwWtuf0uxFAgA7"
+BLANK_IMAGE = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAABfGlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGAqSSwoyGFhYGDIzSspCnJ3UoiIjFJgv8PAzcDDIMRgxSCemFxc4BgQ4MOAE3y7xsAIoi/rgsxK8/x506a1fP4WNq+ZclYlOrj1gQF3SmpxMgMDIweQnZxSnJwLZOcA2TrJBUUlQPYMIFu3vKQAxD4BZIsUAR0IZN8BsdMh7A8gdhKYzcQCVhMS5AxkSwDZAkkQtgaInQ5hW4DYyRmJKUC2B8guiBvAgNPDZ5QoOAJDNlXBOT+3oLQktUhHwTMvWU9HwcjA0ACkDhRnEKM/B4FNZxQ7jxDLX8jAYKnMwMDcgxBLmsbAsH0PA4PEKYSYyjwGBn5rBoZt5woSixLhDmf8xkKIX5xmbARh8zgxMLDe+///sxoDA/skBoa/E////73o//+/i4H2A+PsQA4AJHdp4IxrEg8AAAGZaVRYdFhNTDpjb20uYWRvYmUueG1wAAAAAAA8eDp4bXBtZXRhIHhtbG5zOng9ImFkb2JlOm5zOm1ldGEvIiB4OnhtcHRrPSJYTVAgQ29yZSA1LjQuMCI+CiAgIDxyZGY6UkRGIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyI+CiAgICAgIDxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PSIiCiAgICAgICAgICAgIHhtbG5zOmV4aWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vZXhpZi8xLjAvIj4KICAgICAgICAgPGV4aWY6UGl4ZWxYRGltZW5zaW9uPjI8L2V4aWY6UGl4ZWxYRGltZW5zaW9uPgogICAgICAgICA8ZXhpZjpQaXhlbFlEaW1lbnNpb24+MjwvZXhpZjpQaXhlbFlEaW1lbnNpb24+CiAgICAgIDwvcmRmOkRlc2NyaXB0aW9uPgogICA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgoyfi0PAAAAE0lEQVQIHWNkYGD4D8QMTCACBAAOKAED/+roawAAAABJRU5ErkJggg=="
 
 PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
@@ -454,21 +454,21 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._tscrunch = Sensor.string(
             "tscrunch_PNG",
             description="tscrunch png",
-            default=SMILE,
+            default=BLANK_IMAGE,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._tscrunch)
 
         self._fscrunch = Sensor.string(
             "fscrunch_PNG",
             description="fscrunch png",
-            default=SMILE,
+            default=BLANK_IMAGE,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._fscrunch)
 
         self._profile = Sensor.string(
             "profile_PNG",
             description="pulse profile png",
-            default=SMILE,
+            default=BLANK_IMAGE,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._profile)
 
@@ -718,7 +718,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._save_capture_stdout)
             self.psrcat.stderr_callbacks.add(
                 self._handle_execution_stderr)
-            #time.sleep(3)
+            # time.sleep(3)
             ####################################################
             #CREATING THE PREDICTOR WITH TEMPO2                #
             ####################################################
@@ -778,7 +778,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._decode_capture_stdout)
             self._dspsr.stderr_callbacks.add(
                 self._handle_execution_stderr)
-            #time.sleep(5)
+            # time.sleep(5)
             ####################################################
             #STARTING EDDPolnMerge                             #
             ####################################################
@@ -804,7 +804,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             ####################################################
             #STARTING ARCHIVE MONITOR                          #
             ####################################################
-            #time.sleep(5)
+            # time.sleep(5)
             cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
                 in_path, out_path)
             log.debug("Running command: {0}".format(cmd))
@@ -931,9 +931,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._destory_merge_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._destory_merge_buffer._process.wait()
-            self._fscrunch.set_value(SMILE)
-            self._tscrunch.set_value(SMILE)
-            self._profile.set_value(SMILE)
+            self._fscrunch.set_value(BLANK_IMAGE)
+            self._tscrunch.set_value(BLANK_IMAGE)
+            self._profile.set_value(BLANK_IMAGE)
 
         except Exception as error:
             msg = "Couldn't deconfigure pipeline {}".format(str(error))
