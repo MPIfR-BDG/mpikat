@@ -49,19 +49,19 @@ class ApsWorkerWrapper(WorkerWrapper):
 
     @coroutine
     def prepare(self, config_dict):
-        yield self._make_request("configure", json.dumps(config_dict))
+        yield self._make_request(self._client.req.configure, json.dumps(config_dict))
 
     def capture_start(self):
-        yield self._make_request("capture_start")
+        yield self._make_request(self._client.req.capture_start)
 
     def capture_stop(self):
-        yield self._make_request("capture_stop")
+        yield self._make_request(self._client.req.capture_stop)
 
     def enable_writers(self, beam_dict):
-        yield self._make_request("target_start", json.dumps(beam_dict))
+        yield self._make_request(self._client.req.target_start, json.dumps(beam_dict))
 
     def disable_writers(self):
-        yield self._make_request("target_stop")
+        yield self._make_request(self._client.req.target_stop)
 
 
 class ApsWorkerPool(WorkerPool):

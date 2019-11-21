@@ -453,7 +453,7 @@ class FbfMasterController(MasterController):
             target = Target(target)
         except Exception as error:
             raise Return(("fail", str(error)))
-        yield product.target_start(target)
+        self.ioloop.add_callback(product.target_start,target)
         raise Return(("ok",))
 
     @request(Str())
