@@ -362,8 +362,11 @@ class ApsProductController(object):
             except Interrupt:
                 pass
             else:
-                yield self.disable_all_writers()
-                yield self.enable_writers()
+                try:
+                    yield self.disable_all_writers()
+                    yield self.enable_writers()
+                except Exception:
+                    log.exception()
             self._parent.ioloop.add_callback(wait_for_off_target)
 
         @coroutine
