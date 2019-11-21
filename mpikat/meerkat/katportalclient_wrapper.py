@@ -50,7 +50,7 @@ class KatportalClientWrapper(object):
             sensor_name,
             include_value_ts=False)
         log.debug("Sensor value: {}".format(sensor_sample))
-        if sensor_sample.status != Sensor.NOMINAL:
+        if sensor_sample.status != Sensor.STATUSES[Sensor.NOMINAL]:
             message = "Sensor {} not in NOMINAL state".format(sensor_name)
             log.error(message)
             raise Exception(sensor_name)
@@ -132,8 +132,6 @@ class KatportalClientWrapper(object):
     @coroutine
     def get_fbfuse_sb_config(self, product_id):
         sensor_list = [
-            "available-antennas",
-            "phase-reference",
             "bandwidth",
             "nchannels",
             "centre-frequency",
@@ -162,15 +160,23 @@ class KatportalClientWrapper(object):
             "incoherent-beam-time-resolution"
         ]
         fbf_config = {}
-        for key in sensor_list:
-            try:
-                log.debug("Fetching: {}".format(key))
-                sensor_sample = yield self._query('fbfuse', 'fbfmc.{}.{}'.format(
-                    product_id, key))
-                fbf_config[key] = sensor_sample.value
-            except Exception as error:
-                log.exception("Could not retrieve {} from fbfuse".format(key))
-                raise error
+        component = product_id.replace("array", "fbfuse")
+        prefix = "{}_fbfmc_{}_".format(component, product_id)
+        query = "^{}({})$".format(
+            prefix, "|".join([s.replace("-", "_") for s in sensor_list]))
+        log.debug("Regex query '{}'".format(query))
+        sensor_samples = yield self._client.sensor_values(
+            query, include_value_ts=False)
+        log.debug("Sensor value: {}".format(sensor_samples))
+        for sensor_name in sensor_list:
+            full_name = "{}{}".format(prefix, sensor_name.replace("-", "_"))
+            sensor_sample = sensor_samples[full_name]
+            if sensor_sample.status != Sensor.STATUSES[Sensor.NOMINAL]:
+                message = "Sensor {} not in NOMINAL state".format(full_name)
+                log.error(message)
+                raise Exception(sensor_name)
+            else:
+                fbf_config[sensor_name] = sensor_sample.value
         raise Return(fbf_config)
 
     def get_sensor_tracker(self, component, sensor_name):
@@ -261,29 +267,10 @@ if __name__ == "__main__":
 
     client = KatportalClientWrapper(host)
 
-    x = SubarrayActivity(host)
-
-    event = tornado.locks.Event()
-
     @coroutine
     def setup():
-        yield x.start()
-        """
-        try:
-            yield x.wait_until("track", event)
-        except Exception as error:
-            print "exception for wait_until"
-            print str(error)
-        else:
-            print "Desired state reached"
-            """
+        val = yield client.get_fbfuse_sb_config2("array_1")
+        print val
 
-    @coroutine
-    def set_event():
-        print "Setting event wait"
-        event.set()
 
-    ioloop.add_callback(setup)
-    #ioloop.add_callback(set_event)
-
-    ioloop.start()
+    ioloop.run_sync(setup)
