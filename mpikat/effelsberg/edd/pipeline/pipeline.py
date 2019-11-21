@@ -230,6 +230,10 @@ class ExecuteCommand(object):
         self._tscrunch = value
         self.tscrunch_notify()
 
+    def profile_notify(self):
+        for callback in self.profile_callbacks:
+            callback(self._profile, self)
+
     @property
     def profile(self):
         return self._profile
@@ -301,6 +305,7 @@ class ExecuteCommand(object):
                     with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
                         self.fscrunch = base64.b64encode(imageFile.read())
                 except Exception as error:
+                    log.debug(error)
                     #raise PulsarPipelineError(str(error))
                     log.debug("fscrunch.png is not ready")
                     # continue
@@ -308,6 +313,7 @@ class ExecuteCommand(object):
                     with open("{}/tscrunch.png".format(self._outpath), "rb") as imageFile:
                         self.tscrunch = base64.b64encode(imageFile.read())
                 except Exception as error:
+                    log.debug(error)
                     log.debug("tscrunch.png is not ready")
                     # continue
                     #raise PulsarPipelineError(str(error))
