@@ -78,6 +78,7 @@ class ApsProductController(object):
         self._managed_sensors = []
         self._worker_config_map = {}
         self._servers = []
+        self._fbf_sb_config = None
         self._state_interrupt = Event()
         self.setup_sensors()
 
@@ -212,13 +213,7 @@ class ApsProductController(object):
 
     @coroutine
     def configure(self):
-        host, port = yield self._katportal_client.get_fbfuse_address()
-        self._fbfuse_client = KATCPClientResource(dict(
-            name="fbfuse-client",
-            address=(host, port),
-            controlled=True
-            ))
-        yield self._fbfuse_client.start()
+        pass
 
     @coroutine
     def disable_all_writers(self):
@@ -227,24 +222,18 @@ class ApsProductController(object):
 
     @coroutine
     def enable_writers(self):
-        yield self._fbfuse_client.until_synced()
-        response = yield self._fbfuse_client.req.beam_positions(
-            self._product_id)
-        if not response.reply.reply_ok():
-            raise Exception(
-                ("Error when requesting FBFUSE beam "
-                 "positions: {}").format(
-                 response.reply.arguments()))
-        else:
-            beam_map = json.loads(response.reply.arguments[0])
+        beam_map = yield self._katportal_client.get_fbfuse_coherent_beam_positions(self._product_id)
+        beam_map.update({"ifbf00000": self._fbf_sb_config["phase-reference"]})
         enable_futures = []
         for server in self._servers:
             worker_config = self._worker_config_map[server]
             sub_beam_list = {}
             for beam in worker_config.incoherent_beams():
-                sub_beam_list[beam] = beam_map[beam]
+                if beam in beam_map:
+                    sub_beam_list[beam] = beam_map[beam]
             for beam in worker_config.coherent_beams():
-                sub_beam_list[beam] = beam_map[beam]
+                if beam in beam_map:
+                    sub_beam_list[beam] = beam_map[beam]
             enable_futures.append(server.enable_writers(sub_beam_list))
         for future in enable_futures:
             yield future
@@ -264,6 +253,7 @@ class ApsProductController(object):
         # The /output/ path is usually a mount of /beegfs/DATA/TRAPUM
         base_output_dir = "/output/{}/{}/".format(proposal_id, sb_id)
         fbf_sb_config = yield self._katportal_client.get_fbfuse_sb_config(self._product_id)
+        self._fbf_sb_config = fbf_sb_config
         self._fbf_sb_config_sensor.set_value(fbf_sb_config)
         worker_configs = get_required_workers(fbf_sb_config)
 
@@ -358,8 +348,8 @@ class ApsProductController(object):
         incoherent_beam_tracker = self._katportal_client.get_sensor_tracker(
             "fbfuse", "fbfmc_{}_incoherent_beam_data_suspect".format(
                 self._product_id))
-        #yield coherent_beam_tracker.start()
-        #yield incoherent_beam_tracker.start()
+        yield coherent_beam_tracker.start()
+        yield incoherent_beam_tracker.start()
 
         @coroutine
         def wait_for_on_target():
@@ -374,7 +364,7 @@ class ApsProductController(object):
             else:
                 yield self.disable_all_writers()
                 yield self.enable_writers()
-            self.ioloop.add_callback(wait_for_off_target)
+            self._parent.ioloop.add_callback(wait_for_off_target)
 
         @coroutine
         def wait_for_off_target():
@@ -388,9 +378,9 @@ class ApsProductController(object):
                 pass
             else:
                 yield self.disable_all_writers()
-            self.ioloop.add_callback(wait_for_on_target)
+            self._parent.ioloop.add_callback(wait_for_on_target)
 
-        #self.ioloop.add_callback(wait_for_on_target)
+        self._parent.ioloop.add_callback(wait_for_on_target)
         server_str = ",".join(["{s.hostname}:{s.port}".format(
             s=server) for server in self._servers])
         self._servers_sensor.set_value(server_str)

@@ -132,6 +132,7 @@ class KatportalClientWrapper(object):
     @coroutine
     def get_fbfuse_sb_config(self, product_id):
         sensor_list = [
+            "phase-reference",
             "bandwidth",
             "nchannels",
             "centre-frequency",
@@ -178,6 +179,20 @@ class KatportalClientWrapper(object):
             else:
                 fbf_config[sensor_name] = sensor_sample.value
         raise Return(fbf_config)
+
+    @coroutine
+    def get_fbfuse_coherent_beam_positions(self, product_id):
+        component = product_id.replace("array", "fbfuse")
+        prefix = "{}_fbfmc_{}_".format(component, product_id)
+        query = "^{}.*cfbf.*$".format(prefix)
+        sensor_samples = yield self._client.sensor_values(
+            query, include_value_ts=False)
+        beams = {}
+        for key, reading in sensor_samples.items():
+            beam_name = key.split("_")[-1]
+            if reading.status == Sensor.STATUSES[Sensor.NOMINAL]:
+                beams[beam_name] = reading.value
+        raise Return(beams)
 
     def get_sensor_tracker(self, component, sensor_name):
         return SensorTracker(self._host, component, sensor_name)
@@ -269,8 +284,9 @@ if __name__ == "__main__":
 
     @coroutine
     def setup():
-        val = yield client.get_fbfuse_sb_config2("array_1")
+        val = yield client.get_fbfuse_coherent_beam_positions("array_1")
         print val
+        print len(val.keys())
 
 
     ioloop.run_sync(setup)

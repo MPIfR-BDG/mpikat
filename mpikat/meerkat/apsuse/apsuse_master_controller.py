@@ -64,7 +64,7 @@ class ApsMasterController(MasterController):
         @params  port     The port that the server should bind to
         """
         super(ApsMasterController, self).__init__(ip, port, ApsWorkerPool())
-        self._katportal_wrapper_type = MockKatportalClientWrapper#KatportalClientWrapper
+        self._katportal_wrapper_type = KatportalClientWrapper # MockKatportalClientWrapper
         self._dummy = dummy
         if self._dummy:
             for ii in range(8):
