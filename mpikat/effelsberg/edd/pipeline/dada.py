@@ -120,7 +120,7 @@ def make_dada_key_string(key):
 
 def dada_defaults():
     out = DADA_DEFAULTS.copy()
-    bytes_per_second = out["bandwidth"] * 1e6 * \
+    bytes_per_second = float(out["bandwidth"]) * 1e6 * \
         out["nchan"] * 2 * out["npol"] * out["nbit"] / 8
     out.update({
         "bytes_per_second": bytes_per_second,
