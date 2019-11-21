@@ -470,6 +470,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._profile)
 
+        self._central_freq = Sensor.string(
+            "_central_freq",
+            description="_central_freq",
+            default="N/A",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._central_freq)
+
         self._source_name = Sensor.string(
             "source_name",
             description="target name",
@@ -640,7 +647,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             self._source_config = json.loads(config_json)
             self.frequency_mhz = self._pipeline_config["central_freq"]
-            self._fchannel.set_value(str(self.frequency_mhz))
+            self._central_freq.set_value(str(self.frequency_mhz))
             header = self._config["dada_header_params"]
             header["ra"], header["dec"], header["key"] = self._source_config[
                 "ra"], self._source_config["dec"], self._dada_key
