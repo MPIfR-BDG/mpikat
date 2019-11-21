@@ -56,7 +56,7 @@ CONFIG = {
     "base_output_dir": os.getcwd(),
     "dspsr_params":
     {
-        "args": "-L 10 -r -F 512:D -minram 1024"
+        "args": "-L 10 -r -minram 1024"
     },
     "dada_db_params":
     {
@@ -298,7 +298,6 @@ class ExecuteCommand(object):
 
     def _png_monitor(self):
         if RUN:
-            # time.sleep(5)
             while self._process.poll() == None:
                 log.debug("Accessing archive PNG files")
                 try:
@@ -308,14 +307,12 @@ class ExecuteCommand(object):
                     log.debug(error)
                     #raise PulsarPipelineError(str(error))
                     log.debug("fscrunch.png is not ready")
-                    # continue
                 try:
                     with open("{}/tscrunch.png".format(self._outpath), "rb") as imageFile:
                         self.tscrunch = base64.b64encode(imageFile.read())
                 except Exception as error:
                     log.debug(error)
                     log.debug("tscrunch.png is not ready")
-                    # continue
                     #raise PulsarPipelineError(str(error))
                 try:
                     with open("{}/profile.png".format(self._outpath), "rb") as imageFile:
@@ -323,7 +320,6 @@ class ExecuteCommand(object):
                 except Exception as error:
                     log.debug(error)
                     log.debug("profile.png is not ready")
-                    # continue
                     #raise PulsarPipelineError(str(error))
 
                 time.sleep(5)
@@ -474,6 +470,27 @@ class EddPulsarPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._profile)
 
+        self._source_name = Sensor.string(
+            "source_name",
+            description="target name",
+            default="N/A",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._source_name)
+
+        self._nchannels = Sensor.float(
+            "_nchannels",
+            description="_nchannels",
+            default="N/A",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._nchannels)
+
+        self._nbins = Sensor.float(
+            "_nbins",
+            description="_nbins",
+            default="N/A",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._nbins)
+
     @property
     def sensors(self):
         return self._sensors
@@ -623,12 +640,18 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             self._source_config = json.loads(config_json)
             self.frequency_mhz = self._pipeline_config["central_freq"]
+            self._fchannel.set_value(str(self.frequency_mhz))
             header = self._config["dada_header_params"]
             header["ra"], header["dec"], header["key"] = self._source_config[
                 "ra"], self._source_config["dec"], self._dada_key
             header["mc_source"], header["frequency_mhz"] = self._pipeline_config[
                 "mc_source"], self.frequency_mhz
             source_name = self._source_config["source-name"]
+            nchannels = self._source_config["nchannels"]
+            nbins = self._source_config["nbins"]
+            self._source_name.set_value(self.source_name)
+            self._nchannels.set_value(float(self.nchannels))
+            self._nbins.set_value(float(self.nbins))
             cpu_numbers = "30,31"
             #cpu_numbers = self._pipeline_config["cpus"]
             #cuda_number = self._pipeline_config["cuda"]
@@ -729,8 +752,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
             ####################################################
             #STARTING DSPSR                                    #
             ####################################################
-            cmd = "numactl -m 1 dspsr {args} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
+            cmd = "numactl -m 1 dspsr {args} {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
                 args=self._config["dspsr_params"]["args"],
+                nchan="-F {}:D".format(nchannels),
+                nbin="-b {}".format(nbins),
                 predictor="{}/t2pred.dat".format(in_path),
                 parfile="{}/{}.par".format(in_path, self.source_name),
                 cpus=cpu_numbers,
