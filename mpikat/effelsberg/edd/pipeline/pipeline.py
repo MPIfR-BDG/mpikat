@@ -284,7 +284,7 @@ class ExecuteCommand(object):
 
     def _png_monitor(self):
         if RUN:
-            #time.sleep(5)
+            # time.sleep(5)
             while self._process.poll() == None:
                 log.debug("trying to read archive PNG file")
                 try:
@@ -293,13 +293,13 @@ class ExecuteCommand(object):
                 except Exception as error:
                     #raise PulsarPipelineError(str(error))
                     log.debug("fscrunch.png is not ready")
-                    #continue 
+                    # continue
                 try:
                     with open("{}/tscrunch.png".format(self._outpath), "rb") as imageFile:
                         self.tscrunch = base64.b64encode(imageFile.read())
                 except Exception as error:
                     log.debug("tscrunch.png is not ready")
-                    #continue
+                    # continue
                     #raise PulsarPipelineError(str(error))
                 time.sleep(5)
 
@@ -333,7 +333,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
         """
         super(EddPulsarPipeline, self).__init__(ip, port)
-        #self.setup_sensors()
+        # self.setup_sensors()
         self.ip = ip
         self._managed_sensors = []
         self.callbacks = set()
@@ -345,7 +345,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._source_config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
-        #self.setup_sensors()
+        # self.setup_sensors()
 
     def notify(self):
         """@brief callback function."""
@@ -382,7 +382,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self.remove_sensor(sensor)
         self._managed_sensors = []
         self.mass_inform(Message.inform('interface-changed'))
-    
+
     def state_change(self, state, callback):
         """
         @brief callback function for state changes
@@ -504,7 +504,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 str(error))
             log.error(msg)
             raise EddPulsarPipelineKeyError(msg)
-        self._pipeline_sensor_name.set_value(pipeline_name)
         log.info("Configuring pipeline {}".format(
             self._pipeline_sensor_name.value()))
 
@@ -520,6 +519,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self.deconfigure()
             except Exception as error:
                 raise PulsarPipelineError(str(error))
+            self._pipeline_sensor_name.set_value(pipeline_name)
             cmd = "numactl -m 1 dada_db -k {key} {args}".format(key=self._dada_key,
                                                                 args=self._config["dada_db_params"]["args"])
             # cmd = "dada_db -k {key} {args}".format(**
@@ -656,7 +656,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             #CREATING THE PREDICTOR WITH TEMPO2                #
             ####################################################
             cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
-                self.source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"])-1.0, float(self._pipeline_config["central_freq"])+1.0)
+                self.source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 1.0, float(self._pipeline_config["central_freq"]) + 1.0)
             log.debug("Command to run: {}".format(cmd))
             self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
             self.tempo2.stdout_callbacks.add(
@@ -784,7 +784,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             log.debug("Stopping")
             self._timeout = 10
-            #process = [self._mkrecv_ingest_proc,
+            # process = [self._mkrecv_ingest_proc,
             #          self._dspsr, self._archive_directory_monitor]
             process = [self._mkrecv_ingest_proc,
                        self._polnmerge_proc, self._dspsr, self._archive_directory_monitor]
