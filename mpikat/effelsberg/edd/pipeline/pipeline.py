@@ -670,7 +670,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 pass
             log.debug("Unpacked config: {}".format(self._source_config))
             try:
-                self.source_name = source_name.split("_")[0]
+                self.source_name = self.source_name.split("_")[0]
             except Exception as error:
                 raise PulsarPipelineError(str(error))
             header["source_name"] = self.source_name
