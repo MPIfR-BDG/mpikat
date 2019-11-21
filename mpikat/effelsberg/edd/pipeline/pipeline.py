@@ -664,7 +664,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             header = self._config["dada_header_params"]
             header["ra"], header["dec"], header["key"] = self._source_config[
                 "ra"], self._source_config["dec"], self._dada_key
-            header["mc_source"], header["frequency_mhz"] header["bandwidth"]= self._pipeline_config[
+            header["mc_source"], header["frequency_mhz"], header["bandwidth"]= self._pipeline_config[
                 "mc_source"], self.frequency_mhz, self.bandwidth
             self.source_name = self._source_config["source-name"]
             self.nchannels = self._source_config["nchannels"]
