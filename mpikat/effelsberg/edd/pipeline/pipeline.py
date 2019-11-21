@@ -123,6 +123,7 @@ class ExecuteCommand(object):
         self.error_callbacks = set()
         self.fscrunch_callbacks = set()
         self.tscrunch_callbacks = set()
+        self.profile_callbacks = set()
         self._monitor_threads = []
         self._process = None
         self._executable_command = None
@@ -229,6 +230,15 @@ class ExecuteCommand(object):
         self._tscrunch = value
         self.tscrunch_notify()
 
+    @property
+    def profile(self):
+        return self._profile
+
+    @profile.setter
+    def profile(self, value):
+        self._profile = value
+        self.profile_notify()
+
     def error_notify(self):
         for callback in self.error_callbacks:
             callback(self._error, self)
@@ -286,7 +296,7 @@ class ExecuteCommand(object):
         if RUN:
             # time.sleep(5)
             while self._process.poll() == None:
-                log.debug("trying to read archive PNG file")
+                log.debug("Accessing archive PNG files")
                 try:
                     with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
                         self.fscrunch = base64.b64encode(imageFile.read())
@@ -301,6 +311,14 @@ class ExecuteCommand(object):
                     log.debug("tscrunch.png is not ready")
                     # continue
                     #raise PulsarPipelineError(str(error))
+                try:
+                    with open("{}/profile.png".format(self._outpath), "rb") as imageFile:
+                        self.profile = base64.b64encode(imageFile.read())
+                except Exception as error:
+                    log.debug("profile.png is not ready")
+                    # continue
+                    #raise PulsarPipelineError(str(error))
+
                 time.sleep(5)
 
 
@@ -442,6 +460,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._fscrunch)
 
+        self._profile = Sensor.string(
+            "profile_PNG",
+            description="pulse profile png",
+            default=0,
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._profile)
+
     @property
     def sensors(self):
         return self._sensors
@@ -464,6 +489,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     def _add_fscrunch_to_sensor(self, png_blob, callback):
         self._fscrunch.set_value(png_blob)
+
+    def _add_profile_to_sensor(self, png_blob, callback):
+        self._profile.set_value(png_blob)
 
     @request(Str())
     @return_reply()
@@ -748,6 +776,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._add_fscrunch_to_sensor)
             self._archive_directory_monitor.tscrunch_callbacks.add(
                 self._add_tscrunch_to_sensor)
+            self._archive_directory_monitor.profile_callbacks.add(
+                self._add_profile_to_sensor)
+
+
 #            self.state = "running"
 
         except Exception as error:
