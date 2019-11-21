@@ -315,6 +315,7 @@ class ExecuteCommand(object):
                     with open("{}/profile.png".format(self._outpath), "rb") as imageFile:
                         self.profile = base64.b64encode(imageFile.read())
                 except Exception as error:
+                    log.debug(error)
                     log.debug("profile.png is not ready")
                     # continue
                     #raise PulsarPipelineError(str(error))
