@@ -293,13 +293,13 @@ class ExecuteCommand(object):
                 except Exception as error:
                     #raise PulsarPipelineError(str(error))
                     log.debug("fscrunch.png is not ready")
-                    continue 
+                    #continue 
                 try:
                     with open("{}/tscrunch.png".format(self._outpath), "rb") as imageFile:
                         self.tscrunch = base64.b64encode(imageFile.read())
                 except Exception as error:
                     log.debug("tscrunch.png is not ready")
-                    continue
+                    #continue
                     #raise PulsarPipelineError(str(error))
                 time.sleep(5)
 
@@ -498,6 +498,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             config_dict = json.loads(config_json)
             pipeline_name = config_dict["mode"]
+            log.debug("Pipeline name = {}".format(pipeline_name))
         except KeyError as error:
             msg = "Error getting the pipeline name from config_json: {}".format(
                 str(error))
@@ -811,7 +812,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.error(msg)
             raise EddPulsarPipelineError(msg)
         else:
-            log.info("Stopping pipeline {}".format(
+            log.info("Pipeline Stopped {}".format(
                 self._pipeline_sensor_name.value()))
 
     @request()
