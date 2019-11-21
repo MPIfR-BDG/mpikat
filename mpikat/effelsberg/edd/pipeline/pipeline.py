@@ -929,6 +929,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._destory_merge_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._destory_merge_buffer._process.wait()
+            self.tscrunch = 0
+            self.tscrunch = 0 
+            self.profile  = 0
 
         except Exception as error:
             msg = "Couldn't deconfigure pipeline {}".format(str(error))
