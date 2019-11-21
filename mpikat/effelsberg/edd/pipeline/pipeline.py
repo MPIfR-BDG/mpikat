@@ -653,9 +653,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 "ra"], self._source_config["dec"], self._dada_key
             header["mc_source"], header["frequency_mhz"] = self._pipeline_config[
                 "mc_source"], self.frequency_mhz
-            source_name = self._source_config["source-name"]
-            nchannels = self._source_config["nchannels"]
-            nbins = self._source_config["nbins"]
+            self.source_name = self._source_config["source-name"]
+            self.nchannels = self._source_config["nchannels"]
+            self.nbins = self._source_config["nbins"]
             self._source_name.set_value(self.source_name)
             self._nchannels.set_value(self.nchannels)
             self._nbins.set_value(self.nbins)
@@ -761,8 +761,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             ####################################################
             cmd = "numactl -m 1 dspsr {args} {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
                 args=self._config["dspsr_params"]["args"],
-                nchan="-F {}:D".format(nchannels),
-                nbin="-b {}".format(nbins),
+                nchan="-F {}:D".format(self.nchannels),
+                nbin="-b {}".format(self.nbins),
                 predictor="{}/t2pred.dat".format(in_path),
                 parfile="{}/{}.par".format(in_path, self.source_name),
                 cpus=cpu_numbers,
