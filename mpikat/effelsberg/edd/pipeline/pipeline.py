@@ -105,14 +105,6 @@ sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
            "scannum": 0, "subscannum": 1}
 
 
-class PulsarPipelineKeyError(Exception):
-    pass
-
-
-class PulsarPipelineError(Exception):
-    pass
-
-
 class ExecuteCommand(object):
 
     def __init__(self, command, outpath=None, resident=False):
@@ -306,7 +298,6 @@ class ExecuteCommand(object):
                         self.fscrunch = base64.b64encode(imageFile.read())
                 except Exception as error:
                     log.debug(error)
-                    #raise PulsarPipelineError(str(error))
                     log.debug("fscrunch.png is not ready")
                 try:
                     with open("{}/tscrunch.png".format(self._outpath), "rb") as imageFile:
@@ -314,14 +305,12 @@ class ExecuteCommand(object):
                 except Exception as error:
                     log.debug(error)
                     log.debug("tscrunch.png is not ready")
-                    #raise PulsarPipelineError(str(error))
                 try:
                     with open("{}/profile.png".format(self._outpath), "rb") as imageFile:
                         self.profile = base64.b64encode(imageFile.read())
                 except Exception as error:
                     log.debug(error)
                     log.debug("profile.png is not ready")
-                    #raise PulsarPipelineError(str(error))
 
                 time.sleep(5)
 
@@ -596,11 +585,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.debug("Deconfiguring pipeline before configuring")
             self.deconfigure()
         except Exception as error:
-            raise PulsarPipelineError(str(error))
+            raise EddPulsarPipelineError(str(error))
 
         try:
             self._pipeline_sensor_name.set_value(pipeline_name)
-            log.debug("Creating DADA buffer for mkrecv")
+            log.info("Creating DADA buffer for mkrecv")
             cmd = "numactl -m 1 dada_db -k {key} {args}".format(key=self._dada_key,
                                                                 args=self._config["dada_db_params"]["args"])
             # cmd = "dada_db -k {key} {args}".format(**
@@ -612,9 +601,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._decode_capture_stdout)
             self._create_ring_buffer._process.wait()
         except Exception as error:
-            raise PulsarPipelineError(str(error))
+            raise EddPulsarPipelineError(str(error))
         try:
-            log.debug("Creating DADA buffer for EDDPolnMerge")
+            log.info("Creating DADA buffer for EDDPolnMerge")
             cmd = "numactl -m 1 dada_db -k {key} {args}".format(key=self._dadc_key,
                                                                 args=self._config["dadc_db_params"]["args"])
             # cmd = "dada_db -k {key} {args}".format(**
@@ -626,7 +615,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._decode_capture_stdout)
             self._create_transpose_ring_buffer._process.wait()
         except Exception as error:
-            raise PulsarPipelineError(str(error))
+            raise EddPulsarPipelineError(str(error))
         else:
             self.state = "ready"
             log.info("Pipeline instance {} configured".format(
@@ -666,35 +655,44 @@ class EddPulsarPipeline(AsyncDeviceServer):
         # if self.state == "ready":
         #    self.state = "starting"
         try:
-            self._source_config = json.loads(config_json)
-            self.frequency_mhz = self._pipeline_config["central_freq"]
-            self.bandwidth = self._pipeline_config["bandwidth"]
-            self._central_freq.set_value(str(self.frequency_mhz))
-            header = self._config["dada_header_params"]
-            header["ra"], header["dec"], header["key"] = self._source_config[
-                "ra"], self._source_config["dec"], self._dada_key
-            header["mc_source"], header["frequency_mhz"], header["bandwidth"] = self._pipeline_config[
-                "mc_source"], self.frequency_mhz, self.bandwidth
-            self.source_name = self._source_config["source-name"]
-            self.nchannels = self._source_config["nchannels"]
-            self.nbins = self._source_config["nbins"]
-            self._source_name_sensor.set_value(self.source_name)
-            self._nchannels.set_value(self.nchannels)
-            self._nbins.set_value(self.nbins)
-            cpu_numbers = "30,31"
+            try:
+                self._source_config = json.loads(config_json)
+                #log.info("Unpacked config: {}".format(self._source_config))
+                for i in self._source_config
+                    log.info(i, self._source_config[i])
+
+                self.frequency_mhz, self.bandwidth = self._pipeline_config[
+                    "central_freq"], self._pipeline_config["bandwidth"]
+                self._central_freq.set_value(str(self.frequency_mhz))
+                header = self._config["dada_header_params"]
+                header["ra"], header["dec"], header["key"], header["mc_source"], header["frequency_mhz"], header["bandwidth"] = self._source_config[
+                    "ra"], self._source_config["dec"], self._dada_key, self._pipeline_config[
+                    "mc_source"], self.frequency_mhz, self.bandwidth
+                self.source_name, self.nchannels, self.nbins = self._source_config[
+                    "source-name"], self._source_config["nchannels"], self._source_config["nbins"]
+                self._source_name_sensor.set_value(self.source_name)
+                self._nchannels.set_value(self.nchannels)
+                self._nbins.set_value(self.nbins)
+            except KeyError as error:
+                msg = "Error getting the pipeline name from config_json: {}".format(
+                    str(error))
+                log.error(msg)
+                raise EddPulsarPipelineKeyError(msg)
+
             #cpu_numbers = self._pipeline_config["cpus"]
             #cuda_number = self._pipeline_config["cuda"]
+            cpu_numbers = "30,31"
             cuda_number = "1"
             try:
                 header["sync_time"] = self._source_config["sync_time"]
                 header["sample_clock"] = self._source_config["sample_clock"]
             except:
                 pass
-            log.debug("Unpacked config: {}".format(self._source_config))
+
             try:
                 self.source_name = self.source_name.split("_")[0]
             except Exception as error:
-                raise PulsarPipelineError(str(error))
+                raise EddPulsarPipelineError(str(error))
             header["source_name"] = self.source_name
             header["obs_id"] = "{0}_{1}".format(
                 sensors["scannum"], sensors["subscannum"])
@@ -824,7 +822,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
             ####################################################
             #STARTING ARCHIVE MONITOR                          #
             ####################################################
-            # time.sleep(5)
             cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
                 in_path, out_path)
             log.debug("Running command: {0}".format(cmd))
@@ -839,9 +836,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._add_tscrunch_to_sensor)
             self._archive_directory_monitor.profile_callbacks.add(
                 self._add_profile_to_sensor)
-
-
-#            self.state = "running"
 
         except Exception as error:
             msg = "Couldn't start pipeline server {}".format(str(error))
@@ -917,6 +911,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         """
         @coroutine
         def deconfigure_wrapper():
+            if self._pipeline_sensor_status.value == 'running':
+                yield self.stop_pipeline()
             try:
                 yield self.deconfigure()
             except Exception as error:
