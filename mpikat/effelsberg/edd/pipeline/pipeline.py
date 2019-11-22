@@ -535,6 +535,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
         if bool(stderr[:8] != "Finished"):
             log.info(stderr)
 
+    def _handle_eddpolnmerge_stderr(self, stderr, callback):
+            log.debug(stderr)
+
     def _add_tscrunch_to_sensor(self, png_blob, callback):
         self._tscrunch.set_value(png_blob)
 
@@ -847,8 +850,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             cmd, outpath=None, resident=True)
         self._polnmerge_proc.stdout_callbacks.add(
             self._decode_capture_stdout)
-        self._polnmerge_proc.error_callbacks.add(
-            self._error_treatment)
+        self._polnmerge_proc.stderr_callbacks.add(
+            self._handle_eddpolnmerge_stderr)
         # time.sleep(5)
         ####################################################
         #STARTING MKRECV                                   #
