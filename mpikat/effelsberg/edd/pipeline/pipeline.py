@@ -919,7 +919,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         def kill_wrapper():
             try:
                 yield self.kill()
-                yield self.configure_pipeline(self.config_json)
+                yield self.configure_pipeline(self._source_config)
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
