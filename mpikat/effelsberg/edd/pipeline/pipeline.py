@@ -75,7 +75,7 @@ CONFIG = {
         "telescope": "Effelsberg",
         "instrument": "asterix",
         "frequency_mhz": 1400.4,
-        "receiver_name": "EDD-LBAND",
+        "receiver_name": "EDD",
         "mc_source": "239.2.1.154",
         "bandwidth": 800,
         "tsamp": 0.000625,
@@ -580,17 +580,27 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
         try:
             config = json.loads(config_json)
+        except Exception as error:
+            log.info("Cannot load config json :{}".format(error))
+
+        try:
             log.debug("Unpacked config: {}".format(config))
             self._pipeline_config = json.loads(config_json)
             self._config = CONFIG
             self._dada_key = "dada"
             self._dadc_key = "dadc"
+        except Exception as error:
+            log.info("Cannot unpack config json :{}".format(error))
 
-            try:
-                self.deconfigure()
-            except Exception as error:
-                raise PulsarPipelineError(str(error))
+        try:
+            log.debug("Deconfiguring pipeline before configuring")
+            self.deconfigure()
+        except Exception as error:
+            raise PulsarPipelineError(str(error))
+
+        try:
             self._pipeline_sensor_name.set_value(pipeline_name)
+            log.debug("Creating DADA buffer for mkrecv")
             cmd = "numactl -m 1 dada_db -k {key} {args}".format(key=self._dada_key,
                                                                 args=self._config["dada_db_params"]["args"])
             # cmd = "dada_db -k {key} {args}".format(**
@@ -601,7 +611,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._create_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._create_ring_buffer._process.wait()
-
+        except Exception as error:
+            raise PulsarPipelineError(str(error))
+        try:
+            log.debug("Creating DADA buffer for EDDPolnMerge")
             cmd = "numactl -m 1 dada_db -k {key} {args}".format(key=self._dadc_key,
                                                                 args=self._config["dadc_db_params"]["args"])
             # cmd = "dada_db -k {key} {args}".format(**
@@ -612,14 +625,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._create_transpose_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._create_transpose_ring_buffer._process.wait()
-            self.state = "ready"
         except Exception as error:
-            self._pipeline_sensor_name.set_value("")
-            msg = "Couldn't start configure pipeline instance {}".format(
-                str(error))
-            log.error(msg)
-            raise EddPulsarPipelineError(msg)
+            raise PulsarPipelineError(str(error))
         else:
+            self.state = "ready"
             log.info("Pipeline instance {} configured".format(
                 self._pipeline_sensor_name.value()))
 
@@ -659,7 +668,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             self._source_config = json.loads(config_json)
             self.frequency_mhz = self._pipeline_config["central_freq"]
-            self.bandwidth = str(self._pipeline_config["bandwidth"])
+            self.bandwidth = self._pipeline_config["bandwidth"]
             self._central_freq.set_value(str(self.frequency_mhz))
             header = self._config["dada_header_params"]
             header["ra"], header["dec"], header["key"] = self._source_config[
