@@ -558,8 +558,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
     @coroutine
     def configure_pipeline(self, config_json):
         try:
-            config_dict = json.loads(config_json)
-            pipeline_name = config_dict["mode"]
+            self.config_dict = json.loads(config_json)
+            pipeline_name = self.config_dict["mode"]
             log.debug("Pipeline name = {}".format(pipeline_name))
         except KeyError as error:
             msg = "Error getting the pipeline name from config_json: {}".format(
@@ -910,7 +910,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     @request()
     @return_reply(Str())
-    def request_kill(self, req):
+    def request_reconfigure(self, req):
         """
         @brief      Deconfigure pipeline
 
@@ -919,6 +919,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         def kill_wrapper():
             try:
                 yield self.kill()
+                yield self.configure_pipeline(self.config_json)
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
