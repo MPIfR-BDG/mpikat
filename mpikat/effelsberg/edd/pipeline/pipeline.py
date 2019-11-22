@@ -261,7 +261,7 @@ class ExecuteCommand(object):
 
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
-                # the event is set, the command does not successfully finish
+                # the event is set, that means that command does not successfully finished
                 stdout = self._process.stdout.read()
                 stderr = self._process.stderr.read()
                 log.error(
@@ -271,6 +271,7 @@ class ExecuteCommand(object):
                 log.error("exited unexpectedly, cmd = {}".format(self._command))
                 self.error = True
 
+
     def _stderr_monitor(self):
         if RUN:
             while self._process.poll() == None:
@@ -279,7 +280,7 @@ class ExecuteCommand(object):
                     self.stderr = stderr
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
-                # the event is set, the command does not successfully finish
+                # the event is set, that means that command does not successfully finished
                 stdout = self._process.stdout.read()
                 stderr = self._process.stderr.read()
                 log.error(
@@ -654,7 +655,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
         # if self.state == "ready":
         #    self.state = "starting"
-#        try:
         try:
             self._source_config = json.loads(config_json)
             log.info("Unpacked config: {}".format(self._source_config))
@@ -746,127 +746,103 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #CREATING THE PREDICTOR WITH TEMPO2                #
         ####################################################
-        try:
-            cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
-                self.source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 1.0, float(self._pipeline_config["central_freq"]) + 1.0)
-            log.debug("Command to run: {}".format(cmd))
-            self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
-            self.tempo2.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self.tempo2.stderr_callbacks.add(
-                self._handle_execution_stderr)
-        except Exception as error:
-            yield self.stop_pipeline()
-            raise EddPulsarPipelineError(str(error))
+        cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
+            self.source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 1.0, float(self._pipeline_config["central_freq"]) + 1.0)
+        log.debug("Command to run: {}".format(cmd))
+        self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
+        self.tempo2.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self.tempo2.stderr_callbacks.add(
+            self._handle_execution_stderr)
         ####################################################
         #CREATING THE DADA HEADERFILE                      #
         ####################################################
-        try:
-            dada_header_file = tempfile.NamedTemporaryFile(
-                mode="w",
-                prefix="edd_dada_header_",
-                suffix=".txt",
-                dir=os.getcwd(),
-                delete=False)
-            log.debug(
-                "Writing dada header file to {0}".format(
-                    dada_header_file.name))
-            header_string = render_dada_header(header)
-            dada_header_file.write(header_string)
-            dada_key_file = tempfile.NamedTemporaryFile(
-                mode="w",
-                prefix="dada_keyfile_",
-                suffix=".key",
-                dir=os.getcwd(),
-                delete=False)
-            log.debug("Writing dada key file to {0}".format(
-                dada_key_file.name))
-            key_string = make_dada_key_string(self._dadc_key)
-            dada_key_file.write(make_dada_key_string(self._dadc_key))
-            log.debug("Dada key file contains:\n{0}".format(key_string))
-            dada_header_file.close()
-            dada_key_file.close()
-            time.sleep(5)
-        except Exception as error:
-            yield self.stop_pipeline()
-            raise EddPulsarPipelineError(str(error))
+        dada_header_file = tempfile.NamedTemporaryFile(
+            mode="w",
+            prefix="edd_dada_header_",
+            suffix=".txt",
+            dir=os.getcwd(),
+            delete=False)
+        log.debug(
+            "Writing dada header file to {0}".format(
+                dada_header_file.name))
+        header_string = render_dada_header(header)
+        dada_header_file.write(header_string)
+        dada_key_file = tempfile.NamedTemporaryFile(
+            mode="w",
+            prefix="dada_keyfile_",
+            suffix=".key",
+            dir=os.getcwd(),
+            delete=False)
+        log.debug("Writing dada key file to {0}".format(
+            dada_key_file.name))
+        key_string = make_dada_key_string(self._dadc_key)
+        dada_key_file.write(make_dada_key_string(self._dadc_key))
+        log.debug("Dada key file contains:\n{0}".format(key_string))
+        dada_header_file.close()
+        dada_key_file.close()
+        time.sleep(5)
         ####################################################
         #STARTING DSPSR                                    #
         ####################################################
-        try:
-            cmd = "numactl -m 1 dspsr {args} {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
-                args=self._config["dspsr_params"]["args"],
-                nchan="-F {}:D".format(self.nchannels),
-                nbin="-b {}".format(self.nbins),
-                predictor="{}/t2pred.dat".format(in_path),
-                parfile="{}/{}.par".format(in_path, self.source_name),
-                cpus=cpu_numbers,
-                cuda_number=cuda_number,
-                keyfile=dada_key_file.name)
-            #cmd = "numactl -m 1 dbnull -k dadc"
-            log.debug("Running command: {0}".format(cmd))
-            log.info("Staring DSPSR")
-            self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
-            self._dspsr.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._dspsr.stderr_callbacks.add(
-                self._handle_execution_stderr)
-        except Exception as error:
-            yield self.stop_pipeline()
-            raise EddPulsarPipelineError(str(error))
+        cmd = "numactl -m 1 dspsr {args} {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
+            args=self._config["dspsr_params"]["args"],
+            nchan="-F {}:D".format(self.nchannels),
+            nbin="-b {}".format(self.nbins),
+            predictor="{}/t2pred.dat".format(in_path),
+            parfile="{}/{}.par".format(in_path, self.source_name),
+            cpus=cpu_numbers,
+            cuda_number=cuda_number,
+            keyfile=dada_key_file.name)
+        #cmd = "numactl -m 1 dbnull -k dadc"
+        log.debug("Running command: {0}".format(cmd))
+        log.info("Staring DSPSR")
+        self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
+        self._dspsr.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._dspsr.stderr_callbacks.add(
+            self._handle_execution_stderr)
         # time.sleep(5)
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
-        try:
-            cmd = "numactl -m 1 taskset -c 29 edd_merge"
-            log.debug("Running command: {0}".format(cmd))
-            log.info("Staring EDDPolnMerge")
-            self._polnmerge_proc = ExecuteCommand(
-                cmd, outpath=None, resident=True)
-            self._polnmerge_proc.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            time.sleep(5)
-        except Exception as error:
-            yield self.stop_pipeline()
-            raise EddPulsarPipelineError(str(error))
+        cmd = "numactl -m 1 taskset -c 29 edd_merge"
+        log.debug("Running command: {0}".format(cmd))
+        log.info("Staring EDDPolnMerge")
+        self._polnmerge_proc = ExecuteCommand(
+            cmd, outpath=None, resident=True)
+        self._polnmerge_proc.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        time.sleep(5)
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
-        try:
-            cmd = "numactl -m 1 taskset -c 18-28 mkrecv_nt --header {} --dada-mode 4 --quiet".format(
-                dada_header_file.name)
-            log.debug("Running command: {0}".format(cmd))
-            log.info("Staring MKRECV")
-            self._mkrecv_ingest_proc = ExecuteCommand(
-                cmd, outpath=None, resident=True)
-            self._mkrecv_ingest_proc.stdout_callbacks.add(
-                self._decode_capture_stdout)
-        except Exception as error:
-            yield self.stop_pipeline()
-            raise EddPulsarPipelineError(str(error))
+        cmd = "numactl -m 1 taskset -c 18-28 mkrecv_nt --header {} --dada-mode 4 --quiet".format(
+            dada_header_file.name)
+        log.debug("Running command: {0}".format(cmd))
+        log.info("Staring MKRECV")
+        self._mkrecv_ingest_proc = ExecuteCommand(
+            cmd, outpath=None, resident=True)
+        self._mkrecv_ingest_proc.stdout_callbacks.add(
+            self._decode_capture_stdout)
 
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
-        try:
-            cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
-                in_path, out_path)
-            log.debug("Running command: {0}".format(cmd))
-            log.info("Staring archive monitor")
-            self._archive_directory_monitor = ExecuteCommand(
-                cmd, outpath=out_path, resident=True)
-            self._archive_directory_monitor.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._archive_directory_monitor.fscrunch_callbacks.add(
-                self._add_fscrunch_to_sensor)
-            self._archive_directory_monitor.tscrunch_callbacks.add(
-                self._add_tscrunch_to_sensor)
-            self._archive_directory_monitor.profile_callbacks.add(
-                self._add_profile_to_sensor)
-        except Exception as error:
-            yield self.stop_pipeline()
-            raise EddPulsarPipelineError(str(error))
+        cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
+            in_path, out_path)
+        log.debug("Running command: {0}".format(cmd))
+        log.info("Staring archive monitor")
+        self._archive_directory_monitor = ExecuteCommand(
+            cmd, outpath=out_path, resident=True)
+        self._archive_directory_monitor.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._archive_directory_monitor.fscrunch_callbacks.add(
+            self._add_fscrunch_to_sensor)
+        self._archive_directory_monitor.tscrunch_callbacks.add(
+            self._add_tscrunch_to_sensor)
+        self._archive_directory_monitor.profile_callbacks.add(
+            self._add_profile_to_sensor)
 
         # except Exception as error:
         #    msg = "Couldn't start pipeline server {}".format(str(error))
