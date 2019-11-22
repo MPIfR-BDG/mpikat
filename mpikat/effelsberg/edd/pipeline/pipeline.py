@@ -787,7 +787,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-        #time.sleep(5)
+        time.sleep(5)
         ####################################################
         #STARTING DSPSR                                    #
         ####################################################
@@ -808,7 +808,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._decode_capture_stdout)
         self._dspsr.stderr_callbacks.add(
             self._handle_execution_stderr)
-        time.sleep(5)
+        #time.sleep(5)
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
