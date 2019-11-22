@@ -250,7 +250,7 @@ class ExecuteCommand(object):
         self.error_notify()
 
     def _execution_monitor(self):
-        # Monitor the execution and also the stdout for the outside useage
+        # Monitor the execution and also the stdout
         if RUN:
             while self._process.poll() == None:
                 stdout = self._process.stdout.readline().rstrip("\n\r")
@@ -261,7 +261,8 @@ class ExecuteCommand(object):
 
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
-                # the event is set, that means that command does not successfully finished
+                # the event is set, that means that command does not
+                # successfully finished
                 stdout = self._process.stdout.read()
                 stderr = self._process.stderr.read()
                 log.error(
@@ -271,7 +272,6 @@ class ExecuteCommand(object):
                 log.error("exited unexpectedly, cmd = {}".format(self._command))
                 self.error = True
 
-
     def _stderr_monitor(self):
         if RUN:
             while self._process.poll() == None:
@@ -280,7 +280,8 @@ class ExecuteCommand(object):
                     self.stderr = stderr
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
-                # the event is set, that means that command does not successfully finished
+                # the event is set, that means that command does not
+                # successfully finished
                 stdout = self._process.stdout.read()
                 stderr = self._process.stderr.read()
                 log.error(
@@ -878,8 +879,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             log.debug("Stopping")
             self._timeout = 10
-            # process = [self._mkrecv_ingest_proc,
-            #          self._dspsr, self._archive_directory_monitor]
             process = [self._mkrecv_ingest_proc,
                        self._polnmerge_proc, self._dspsr, self._archive_directory_monitor]
             for proc in process:
@@ -908,6 +907,37 @@ class EddPulsarPipeline(AsyncDeviceServer):
         else:
             log.info("Pipeline Stopped {}".format(
                 self._pipeline_sensor_name.value()))
+
+    @request()
+    @return_reply(Str())
+    def request_kill(self, req):
+        """
+        @brief      Deconfigure pipeline
+
+        """
+        @coroutine
+        def kill_wrapper():
+            try:
+                yield self.kill()
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+                self._pipeline_sensor_status.set_value("ready")
+        self.ioloop.add_callback(kill_wrapper)
+        raise AsyncReply
+
+    @coroutine
+    def deconfigure(self):
+        process = [self._mkrecv_ingest_proc,
+                   self._polnmerge_proc, self._dspsr, self._archive_directory_monitor]
+        for proc in process:
+            log.debug("killing process")
+            try:
+                proc._process.kill()
+            except:
+                pass
 
     @request()
     @return_reply(Str())
