@@ -505,8 +505,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug('{}'.format(str(stdout)))
 
     def _error_treatment(self, callback):
-        log.debug('reconfigureing')
-        self.reconfigure()
+        pass
+        #log.debug('reconfigureing')
+        #self.reconfigure()
 
     def _save_capture_stdout(self, stdout, callback):
         with open("{}.par".format(self._source_config["source-name"]), "a") as file:
