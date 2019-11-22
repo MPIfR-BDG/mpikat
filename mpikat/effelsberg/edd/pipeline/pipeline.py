@@ -663,6 +663,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         # if self.state == "ready":
         #    self.state = "starting"
         try:
+            self._timer = Time.now()
             self._source_config = json.loads(config_json)
             log.info("Unpacked config: {}".format(self._source_config))
             self.frequency_mhz, self.bandwidth = self._pipeline_config[
@@ -871,6 +872,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #    log.error(msg)
         #    raise EddPulsarPipelineError(msg)
         # else:
+        self._timer = Time.now() - self._timer
+        log.info("Took {} s to start".format(self._timer))
         log.info("Starting pipeline {}".format(
             self._pipeline_sensor_name.value()))
 
