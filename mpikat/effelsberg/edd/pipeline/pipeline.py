@@ -848,7 +848,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._polnmerge_proc.stdout_callbacks.add(
             self._decode_capture_stdout)
         self._polnmerge_proc.error_callbacks.add(
-            self._handle_execution_stderr)
+            self._error_treatment)
         # time.sleep(5)
         ####################################################
         #STARTING MKRECV                                   #
