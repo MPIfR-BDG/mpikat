@@ -787,7 +787,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-        time.sleep(5)
+        #time.sleep(5)
         ####################################################
         #STARTING DSPSR                                    #
         ####################################################
@@ -1016,6 +1016,8 @@ def on_shutdown(ioloop, server):
     if server._pipeline_sensor_status.value() != "idle":
         log.info("Pipeline still configured, deconfiguring pipeline")
         yield server.deconfigure()
+        
+    yield server.deconfigure()
     yield server.stop()
     ioloop.stop()
 
