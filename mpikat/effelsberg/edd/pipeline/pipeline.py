@@ -929,7 +929,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         raise AsyncReply
 
     @coroutine
-    def deconfigure(self):
+    def kill(self):
         process = [self._mkrecv_ingest_proc,
                    self._polnmerge_proc, self._dspsr, self._archive_directory_monitor]
         for proc in process:
