@@ -658,7 +658,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             try:
                 self._source_config = json.loads(config_json)
                 #log.info("Unpacked config: {}".format(self._source_config))
-                for i in self._source_config
+                for i in self._source_config:
                     log.info(i, self._source_config[i])
 
                 self.frequency_mhz, self.bandwidth = self._pipeline_config[
