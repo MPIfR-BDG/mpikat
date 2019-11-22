@@ -105,6 +105,18 @@ sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
            "scannum": 0, "subscannum": 1}
 
 
+def is_accessible(path, mode='r'):
+    """
+    Check if the file or directory at `path` can
+    be accessed by the program using `mode` open flags.
+    """
+    try:
+        f = open(path, mode)
+        f.close()
+    except IOError:
+        return False
+    return True
+
 class ExecuteCommand(object):
 
     def __init__(self, command, outpath=None, resident=False):
@@ -750,8 +762,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
         except Exception as error:
             yield self.stop_pipeline()
             raise EddPulsarPipelineError(str(error))
+        #time.sleep(1)
         while True:
-            if os.path.exists('{}/{}.par'.format(os.getcwd(), self.source_name)):
+            if is_accessible('{}/{}.par'.format(os.getcwd(), self.source_name)):
                 log.debug('{}/{}.par'.format(os.getcwd(), self.source_name))
                 break
         # time.sleep(3)
