@@ -792,7 +792,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING DSPSR                                    #
         ####################################################
         while True:
-            if os.path.exists('{}/{}'.format(os.getcwd(), dada_key_file.name)):
+            if os.path.exists('{}'.format(dada_key_file.name)):
+                log.debug('{}'.format(dada_key_file.name))
                 break
 
         cmd = "numactl -m 1 dspsr {args} {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
