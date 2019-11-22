@@ -238,7 +238,7 @@ class ExecuteCommand(object):
 
     def error_notify(self):
         for callback in self.error_callbacks:
-            callback(self._error, self)
+            callback(self)
 
     @property
     def error(self):
@@ -270,7 +270,7 @@ class ExecuteCommand(object):
                 log.error("exited unexpectedly, stdout = {}".format(stdout))
                 log.error("exited unexpectedly, stderr = {}".format(stderr))
                 log.error("exited unexpectedly, cmd = {}".format(self._command))
-                self.error = True
+                #self.error = True
 
     def _stderr_monitor(self):
         if RUN:
@@ -414,7 +414,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         """Stop PafWorkerServer server"""
         # if self._pipeline_sensor_status.value() == "ready":
         #    log.info("Pipeline still running, stopping pipeline")
-       # yield self.deconfigure()
+        # yield self.deconfigure()
         yield super(EddPulsarPipeline, self).stop()
 
     def setup_sensors(self):
@@ -504,6 +504,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
     def _decode_capture_stdout(self, stdout, callback):
         log.debug('{}'.format(str(stdout)))
 
+    def _error_treatment(self, callback):
+        log.debug('reconfigureing')
+        self.reconfigure()
+
     def _save_capture_stdout(self, stdout, callback):
         with open("{}.par".format(self._source_config["source-name"]), "a") as file:
             file.write('{}\n'.format(str(stdout)))
@@ -526,6 +530,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     def _add_profile_to_sensor(self, png_blob, callback):
         self._profile.set_value(png_blob)
+    de
 
     @request(Str())
     @return_reply()
@@ -559,7 +564,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
     def configure_pipeline(self, config_json):
         try:
             self.config_json = config_json
-            self.config_dict = json.loads(config_json)
+            self.config_dict = json.loads(self.config_json)
             pipeline_name = self.config_dict["mode"]
             log.debug("Pipeline name = {}".format(pipeline_name))
         except KeyError as error:
@@ -827,6 +832,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             cmd, outpath=None, resident=True)
         self._mkrecv_ingest_proc.stdout_callbacks.add(
             self._decode_capture_stdout)
+        self._mkrecv_ingest_proc.error_callbacks.add(
+            self._error_treatment)
 
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
