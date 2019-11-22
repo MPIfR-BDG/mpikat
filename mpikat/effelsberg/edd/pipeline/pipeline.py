@@ -840,7 +840,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
-        cmd = "numactl -m 1 taskset -c 29 edd_merge"
+        cmd = "numactl -m 1 taskset -c 29 edd_merge --log_level=debug"
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDPolnMerge")
         self._polnmerge_proc = ExecuteCommand(
