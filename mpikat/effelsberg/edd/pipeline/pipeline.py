@@ -558,6 +558,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
     @coroutine
     def configure_pipeline(self, config_json):
         try:
+            self.config_json = config_json
             self.config_dict = json.loads(config_json)
             pipeline_name = self.config_dict["mode"]
             log.debug("Pipeline name = {}".format(pipeline_name))
@@ -918,8 +919,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         @coroutine
         def kill_wrapper():
             try:
-                yield self.kill()
-                yield self.configure_pipeline(self._source_config)
+                yield self.reconfigure()
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
@@ -930,7 +930,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         raise AsyncReply
 
     @coroutine
-    def kill(self):
+    def reconfigure(self):
         process = [self._mkrecv_ingest_proc,
                    self._polnmerge_proc, self._dspsr, self._archive_directory_monitor]
         for proc in process:
@@ -939,6 +939,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 proc._process.kill()
             except:
                 pass
+        yield self.configure_pipeline(self.config_json)
 
     @request()
     @return_reply(Str())
