@@ -506,8 +506,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     def _error_treatment(self, callback):
         pass
-        #log.debug('reconfigureing')
-        #self.reconfigure()
+        # log.debug('reconfigureing')
+        # self.reconfigure()
 
     def _save_capture_stdout(self, stdout, callback):
         with open("{}.par".format(self._source_config["source-name"]), "a") as file:
@@ -834,7 +834,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             cmd, outpath=None, resident=True)
         self._polnmerge_proc.stdout_callbacks.add(
             self._decode_capture_stdout)
-        #time.sleep(5)
+        # time.sleep(5)
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
@@ -873,7 +873,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #    raise EddPulsarPipelineError(msg)
         # else:
         self._timer = Time.now() - self._timer
-        log.info("Took {} s to start".format(self._timer))
+        log.info("Took {} s to start".format(self._timer * 86400))
         log.info("Starting pipeline {}".format(
             self._pipeline_sensor_name.value()))
 
