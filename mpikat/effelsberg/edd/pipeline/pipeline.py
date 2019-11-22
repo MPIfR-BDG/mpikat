@@ -530,7 +530,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     def _add_profile_to_sensor(self, png_blob, callback):
         self._profile.set_value(png_blob)
-    de
 
     @request(Str())
     @return_reply()
