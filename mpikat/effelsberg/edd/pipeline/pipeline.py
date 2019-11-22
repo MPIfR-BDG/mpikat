@@ -780,7 +780,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self.tempo2.stderr_callbacks.add(
             self._handle_execution_stderr)
         while True:
-            if os.path.exists('{}/t2pred.dat'.format(os.getcwd())):
+            if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
                 log.debug('{}/t2pred.dat'.format(os.getcwd()))
                 break
         ####################################################
@@ -811,7 +811,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         dada_header_file.close()
         dada_key_file.close()
         while True:
-            if os.path.exists('{}'.format(dada_key_file.name)):
+            if is_accessible('{}'.format(dada_key_file.name)):
                 log.debug('{}'.format(dada_key_file.name))
                 break
 
