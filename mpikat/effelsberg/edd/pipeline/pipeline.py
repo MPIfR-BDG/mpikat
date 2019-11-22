@@ -754,6 +754,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #CREATING THE PARFILE WITH PSRCAT                  #
         ####################################################
         try:
+            os.chdir("/tmp/")
             cmd = "psrcat -E {source_name}".format(
                 source_name=self.source_name)
             log.debug("Command to run: {}".format(cmd))
@@ -762,19 +763,21 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._save_capture_stdout)
             self.psrcat.stderr_callbacks.add(
                 self._handle_execution_stderr)
+            #os.chdir(in_path)
+
         except Exception as error:
             yield self.stop_pipeline()
             raise EddPulsarPipelineError(str(error))
         #time.sleep(1)
         while True:
-            if is_accessible('{}/{}.par'.format(os.getcwd(), self.source_name)):
-                log.debug('{}/{}.par'.format(os.getcwd(), self.source_name))
+            if is_accessible('/tmp/{}.par'.format(self.source_name)):
+                log.debug('/tmp/{}.par'.format(self.source_name))
                 break
         # time.sleep(3)
         ####################################################
         #CREATING THE PREDICTOR WITH TEMPO2                #
         ####################################################
-        cmd = 'tempo2 -f {}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
+        cmd = 'tempo2 -f /tmp/{}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
             self.source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 1.0, float(self._pipeline_config["central_freq"]) + 1.0)
         log.debug("Command to run: {}".format(cmd))
         self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
@@ -793,7 +796,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             mode="w",
             prefix="edd_dada_header_",
             suffix=".txt",
-            dir=os.getcwd(),
+            dir="/tmp/",
             delete=False)
         log.debug(
             "Writing dada header file to {0}".format(
@@ -804,7 +807,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             mode="w",
             prefix="dada_keyfile_",
             suffix=".key",
-            dir=os.getcwd(),
+            dir="/tmp/",
             delete=False)
         log.debug("Writing dada key file to {0}".format(
             dada_key_file.name))
@@ -821,13 +824,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING DSPSR                                    #
         ####################################################
-
+        os.chdir(in_path)
         cmd = "numactl -m 1 dspsr {args} {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             nchan="-F {}:D".format(self.nchannels),
             nbin="-b {}".format(self.nbins),
-            predictor="{}/t2pred.dat".format(in_path),
-            parfile="{}/{}.par".format(in_path, self.source_name),
+            predictor="/tmp/t2pred.dat",
+            parfile="/tmp/{}.par".format(self.source_name),
             cpus=cpu_numbers,
             cuda_number=cuda_number,
             keyfile=dada_key_file.name)
