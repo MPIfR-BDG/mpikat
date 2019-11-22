@@ -749,6 +749,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
         except Exception as error:
             yield self.stop_pipeline()
             raise EddPulsarPipelineError(str(error))
+        while True:
+            if os.path.exists('{}/{}.par'.format(os.getcwd(), self.source_name)):
+                log.debug('{}/{}.par'.format(os.getcwd(), self.source_name))
+                break
         # time.sleep(3)
         ####################################################
         #CREATING THE PREDICTOR WITH TEMPO2                #
@@ -761,6 +765,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._decode_capture_stdout)
         self.tempo2.stderr_callbacks.add(
             self._handle_execution_stderr)
+        while True:
+            if os.path.exists('{}/t2pred.dat'.format(os.getcwd())):
+                log.debug('{}/t2pred.dat'.format(os.getcwd()))
+                break
         ####################################################
         #CREATING THE DADA HEADERFILE                      #
         ####################################################
@@ -788,15 +796,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-
-        while True:
-            if os.path.exists('{}/{}.par'.format(os.getcwd(), self.source_name)):
-                log.debug('{}/{}.par'.format(os.getcwd(), self.source_name))
-                break
-        while True:
-            if os.path.exists('{}/t2pred.dat'.format(os.getcwd())):
-                log.debug('{}/t2pred.dat'.format(os.getcwd()))
-                break
         while True:
             if os.path.exists('{}'.format(dada_key_file.name)):
                 log.debug('{}'.format(dada_key_file.name))
