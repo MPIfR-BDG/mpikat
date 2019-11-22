@@ -808,7 +808,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._decode_capture_stdout)
         self._dspsr.stderr_callbacks.add(
             self._handle_execution_stderr)
-        # time.sleep(5)
+        time.sleep(5)
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
@@ -1016,7 +1016,7 @@ def on_shutdown(ioloop, server):
     if server._pipeline_sensor_status.value() != "idle":
         log.info("Pipeline still configured, deconfiguring pipeline")
         yield server.deconfigure()
-        
+
     yield server.deconfigure()
     yield server.stop()
     ioloop.stop()
