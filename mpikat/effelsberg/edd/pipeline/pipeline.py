@@ -787,10 +787,14 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-        time.sleep(5)
+        # time.sleep(5)
         ####################################################
         #STARTING DSPSR                                    #
         ####################################################
+        while True:
+            if os.path.exists('{}/{}'.format(os.getcwd(), dada_key_file.name)):
+                break
+
         cmd = "numactl -m 1 dspsr {args} {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
             args=self._config["dspsr_params"]["args"],
             nchan="-F {}:D".format(self.nchannels),
@@ -808,7 +812,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._decode_capture_stdout)
         self._dspsr.stderr_callbacks.add(
             self._handle_execution_stderr)
-        #time.sleep(5)
+        # time.sleep(5)
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
