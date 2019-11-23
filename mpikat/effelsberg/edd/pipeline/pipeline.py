@@ -117,6 +117,7 @@ def is_accessible(path, mode='r'):
         return False
     return True
 
+
 class ExecuteCommand(object):
 
     def __init__(self, command, outpath=None, resident=False):
@@ -178,7 +179,7 @@ class ExecuteCommand(object):
     def finish(self):
         if RUN:
             self._process.send_signal(signal.SIGINT)
-            #self._process.terminate()
+            # self._process.terminate()
             self._monitor_thread.join()
             self._stderr_monitor_thread.join()
             if self._outpath is not None:
@@ -537,7 +538,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.info(stderr)
 
     def _handle_eddpolnmerge_stderr(self, stderr, callback):
-            log.debug(stderr)
+        log.debug(stderr)
 
     def _add_tscrunch_to_sensor(self, png_blob, callback):
         self._tscrunch.set_value(png_blob)
@@ -764,12 +765,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._save_capture_stdout)
             self.psrcat.stderr_callbacks.add(
                 self._handle_execution_stderr)
-            #os.chdir(in_path)
+            # os.chdir(in_path)
 
         except Exception as error:
             yield self.stop_pipeline()
             raise EddPulsarPipelineError(str(error))
-        #time.sleep(1)
+        # time.sleep(1)
         while True:
             if is_accessible('/tmp/{}.par'.format(self.source_name)):
                 log.debug('/tmp/{}.par'.format(self.source_name))
@@ -947,6 +948,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
                         "Failed to terminate proc in alloted time")
                     log.info("Killing process")
                     proc._process.kill()
+            os.remove("/tmp/t2pred.dat")
+            
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
             log.error(msg)
