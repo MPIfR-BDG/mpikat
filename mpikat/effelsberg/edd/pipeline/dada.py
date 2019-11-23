@@ -75,7 +75,7 @@ NINDICES    2   # Although there is more than one index, we are only receiving o
 # The first index item is the running timestamp
 IDX1_ITEM   0      # First item of a SPEAD heap
 IDX1_STEP   4096   # The difference between successive timestamps
-#IDX1_MODULO 3200000000
+IDX1_MODULO 3200000000
 
 # The second index item distinguish between both polarizations
 IDX2_ITEM   1
