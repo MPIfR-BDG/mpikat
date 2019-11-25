@@ -217,14 +217,19 @@ class ApsProductController(object):
 
     @coroutine
     def disable_all_writers(self):
+        log.debug("Disabling all writers") 
+
         for server in self._servers:
             yield server.disable_writers()
 
     @coroutine
     def enable_writers(self):
+        log.debug("Enabling writers")
+        log.debug("Getting beam positions")
         beam_map = yield self._katportal_client.get_fbfuse_coherent_beam_positions(self._product_id)
         beam_map.update({"ifbf00000": self._fbf_sb_config["phase-reference"]})
-        enable_futures = []
+        log.debug("Beam map: {}".format(beam_map))
+        enable_futures = []   
         for server in self._servers:
             worker_config = self._worker_config_map[server]
             sub_beam_list = {}
