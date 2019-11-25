@@ -1,6 +1,7 @@
 import mock
 import re
-from tornado.gen import coroutine, Return
+import json
+from tornado.gen import coroutine, Return, sleep
 from tornado.testing import AsyncTestCase
 from katcp.testutils import mock_req, handle_mock_req
 from katpoint import Target
@@ -95,7 +96,7 @@ class MockKatportalClientWrapper(mock.Mock):
 
     @coroutine
     def get_fbfuse_sb_config(self, product_id):
-        config = {'available-antennas': '',
+        config = {'phase-reference': "source,radec,00:00:00,00:00:00",
                   'bandwidth': 856000000.0,
                   'centre-frequency': 1280000000.0,
                   'coherent-beam-antennas': '',
@@ -104,7 +105,7 @@ class MockKatportalClientWrapper(mock.Mock):
                   'coherent-beam-fscrunch': 1,
                   'coherent-beam-heap-size': 8192,
                   'coherent-beam-idx1-step': 1232131123,
-                  'coherent-beam-multicast-group-mapping': {
+                  'coherent-beam-multicast-group-mapping': json.dumps({
                       'spead://239.11.1.1:7147': [
                           'cfbf00000',
                           'cfbf00001',
@@ -146,7 +147,7 @@ class MockKatportalClientWrapper(mock.Mock):
                           'cfbf00032',
                           'cfbf00033',
                           'cfbf00034',
-                          'cfbf00035']},
+                          'cfbf00035']}),
                   'coherent-beam-multicast-groups': 'spead://239.11.1.1+5:7147',
                   'coherent-beam-multicast-groups-data-rate': 600000000.0,
                   'coherent-beam-ngroups': 6,
@@ -163,6 +164,33 @@ class MockKatportalClientWrapper(mock.Mock):
                   'incoherent-beam-subband-nchans': 16,
                   'incoherent-beam-time-resolution': 7.9e-05,
                   'incoherent-beam-tscrunch': 16,
-                  'nchannels': 4096,
-                  'phase-reference': ''}
+                  'nchannels': 4096}
         raise Return(config)
+
+    @coroutine
+    def get_fbfuse_proxy_id(self):
+        raise Return("fbfuse_1")
+
+    @coroutine
+    def get_fbfuse_coherent_beam_positions(self, product_id):
+        beams = {}
+        for ii in range(128):
+            beams["cfbf{:05d}".format(ii)] = "source0,radec,00:00:00,00:00:00"
+        return beams
+
+    def get_sensor_tracker(self, component, sensor_name):
+        return DummySensorTracker()
+
+
+class DummySensorTracker(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
+    @coroutine
+    def start(self):
+        pass
+
+    @coroutine
+    def wait_until(self, state, interrupt):
+        yield sleep(10)
+

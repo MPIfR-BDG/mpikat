@@ -21,12 +21,10 @@ SOFTWARE.
 """
 
 import logging
-import json
-import time
 from copy import deepcopy
 from tornado.gen import coroutine
 from tornado.locks import Event
-from katcp import Sensor, Message, KATCPClientResource
+from katcp import Sensor, Message
 from mpikat.core.worker_pool import WorkerAllocationError
 from mpikat.core.utils import LoggingSensor
 from mpikat.meerkat.katportalclient_wrapper import Interrupt
@@ -216,6 +214,10 @@ class ApsProductController(object):
         pass
 
     @coroutine
+    def deconfigure(self):
+        pass
+
+    @coroutine
     def disable_all_writers(self):
         log.debug("Disabling all writers") 
 
@@ -257,10 +259,9 @@ class ApsProductController(object):
         # scan number will be added to the path later
         # The /output/ path is usually a mount of /beegfs/DATA/TRAPUM
         base_output_dir = "/output/{}/{}/".format(proposal_id, sb_id)
-        fbf_sb_config = yield self._katportal_client.get_fbfuse_sb_config(self._product_id)
-        self._fbf_sb_config = fbf_sb_config
-        self._fbf_sb_config_sensor.set_value(fbf_sb_config)
-        worker_configs = get_required_workers(fbf_sb_config)
+        self._fbf_sb_config = yield self._katportal_client.get_fbfuse_sb_config(self._product_id)
+        self._fbf_sb_config_sensor.set_value(self._fbf_sb_config)
+        worker_configs = get_required_workers(self._fbf_sb_config)
 
         # allocate workers
         self._worker_config_map = {}
@@ -280,28 +281,28 @@ class ApsProductController(object):
 
         # Get all common configuration parameters
         common_config = {
-            "bandwidth": fbf_sb_config["bandwidth"],
-            "centre-frequency": fbf_sb_config["centre-frequency"],
-            "sample-clock": fbf_sb_config["bandwidth"] * 2,
+            "bandwidth": self._fbf_sb_config["bandwidth"],
+            "centre-frequency": self._fbf_sb_config["centre-frequency"],
+            "sample-clock": self._fbf_sb_config["bandwidth"] * 2,
         }
         common_config["sync-epoch"] = yield self._katportal_client.get_sync_epoch()
 
         common_coherent_config = {
-            "heap-size": fbf_sb_config["coherent-beam-heap-size"],
-            "idx1-step": fbf_sb_config["coherent-beam-idx1-step"],
-            "nchans": fbf_sb_config["nchannels"] / fbf_sb_config["coherent-beam-fscrunch"],
-            "nchans-per-heap": fbf_sb_config["coherent-beam-subband-nchans"],
-            "sampling-interval": fbf_sb_config["coherent-beam-time-resolution"],
-            "base_output_dir": "{}/coherent".format(base_output_dir)
+            "heap-size": self._fbf_sb_config["coherent-beam-heap-size"],
+            "idx1-step": self._fbf_sb_config["coherent-beam-idx1-step"],
+            "nchans": self._fbf_sb_config["nchannels"] / self._fbf_sb_config["coherent-beam-fscrunch"],
+            "nchans-per-heap": self._fbf_sb_config["coherent-beam-subband-nchans"],
+            "sampling-interval": self._fbf_sb_config["coherent-beam-time-resolution"],
+            "base-output-dir": "{}/coherent".format(base_output_dir)
         }
 
         common_incoherent_config = {
-            "heap-size": fbf_sb_config["incoherent-beam-heap-size"],
-            "idx1-step": fbf_sb_config["incoherent-beam-idx1-step"],
-            "nchans": fbf_sb_config["nchannels"] / fbf_sb_config["incoherent-beam-fscrunch"],
-            "nchans-per-heap": fbf_sb_config["incoherent-beam-subband-nchans"],
-            "sampling-interval": fbf_sb_config["incoherent-beam-time-resolution"],
-            "base_output_dir": "{}/incoherent".format(base_output_dir)
+            "heap-size": self._fbf_sb_config["incoherent-beam-heap-size"],
+            "idx1-step": self._fbf_sb_config["incoherent-beam-idx1-step"],
+            "nchans": self._fbf_sb_config["nchannels"] / self._fbf_sb_config["incoherent-beam-fscrunch"],
+            "nchans-per-heap": self._fbf_sb_config["incoherent-beam-subband-nchans"],
+            "sampling-interval": self._fbf_sb_config["incoherent-beam-time-resolution"],
+            "base-output-dir": "{}/incoherent".format(base_output_dir)
         }
 
         prepare_futures = []
@@ -371,7 +372,7 @@ class ApsProductController(object):
                     yield self.disable_all_writers()
                     yield self.enable_writers()
                 except Exception:
-                    log.exception()
+                    log.exception("error")
             self._parent.ioloop.add_callback(wait_for_off_target)
 
         @coroutine

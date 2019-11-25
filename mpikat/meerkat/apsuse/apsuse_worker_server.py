@@ -151,7 +151,7 @@ class ApsWorkerServer(AsyncDeviceServer):
                                       "cfbf00017"],
                          "centre-frequency": 1284000000.0,
                          "filesize": 10000000000.0,
-                         "base_output_dir": "/output/blah",
+                         "base-output-dir": "/output/blah",
                          "heap-size": 8192,
                          "idx1-step": 268435456,
                          "mcast-groups": ["239.11.1.0"],
@@ -167,7 +167,7 @@ class ApsWorkerServer(AsyncDeviceServer):
                           "beam-ids": ["ifbf00000"],
                           "centre-frequency": 1284000000.0,
                           "filesize": 10000000000.0,
-                          "base_output_dir": "/output/blah"
+                          "base-output-dir": "/output/blah"
                           "heap-size": 8192,
                           "idx1-step": 268435456,
                           "mcast-groups": ["239.11.1.1"],
@@ -195,6 +195,7 @@ class ApsWorkerServer(AsyncDeviceServer):
         log.info("Config: {}".format(config))
 
         self._state_sensor.set_value(self.STARTING)
+
         if "coherent-beams" in config:
             coherent_cap = ApsCapture(
                 self._capture_interface,
@@ -206,6 +207,7 @@ class ApsWorkerServer(AsyncDeviceServer):
                 self.add_sensor(sensor)
             yield coherent_cap.capture_start(config["coherent-beams"])
             self._capture_instances.append(coherent_cap)
+
         if "incoherent-beams" in config:
             incoherent_cap = ApsCapture(
                 self._capture_interface,
@@ -217,6 +219,7 @@ class ApsWorkerServer(AsyncDeviceServer):
                 self.add_sensor(sensor)
             yield incoherent_cap.capture_start(config["incoherent-beams"])
             self._capture_instances.append(incoherent_cap)
+
         self.mass_inform(Message.inform('interface-changed'))
         self._state_sensor.set_value(self.CAPTURING)
         raise Return(("ok",))
@@ -262,22 +265,14 @@ class ApsWorkerServer(AsyncDeviceServer):
         @note       The 'beam_info' JSON takes the form:
 
                     @code
-                    [ {"id": "cfbf00000",
-                      "target": "source0,radec,00:00:00.00,00:00:00"},
-                      {"id": "cfbf00001",
-                      "target": "source0,radec,00:00:00.00,00:00:00"},
-                      {"id": "cfbf00002",
-                      "target": "source0,radec,00:00:00.00,00:00:00"},
-                      {"id": "cfbf00003",
-                      "target": "source0,radec,00:00:00.00,00:00:00"},
-                      {"id": "cfbf000004",
-                      "target": "source0,radec,00:00:00.00,00:00:00"},
-                      {"id": "cfbf00005",
-                      "target": "source0,radec,00:00:00.00,00:00:00"},
-                      {"id": "cfbf00006",
-                      "target": "source0,radec,00:00:00.00,00:00:00"},
-                      {"id": "cfbf00007",
-                      "target": "source0,radec,00:00:00.00,00:00:00"},]
+                    [ {"cfbf00000":"source0,radec,00:00:00.00,00:00:00"},
+                      {"cfbf00001":"source0,radec,00:00:00.00,00:00:00"},
+                      {"cfbf00002":"source0,radec,00:00:00.00,00:00:00"},
+                      {"cfbf00003":"source0,radec,00:00:00.00,00:00:00"},
+                      {"cfbf00004":"source0,radec,00:00:00.00,00:00:00"},
+                      {"cfbf00005":"source0,radec,00:00:00.00,00:00:00"},
+                      {"cfbf00006":"source0,radec,00:00:00.00,00:00:00"},
+                      {"cfbf00007":"source0,radec,00:00:00.00,00:00:00"},]
                     @endcode
 
         @return     katcp reply object [[[ !target-start ok | (fail [error description]) ]]]
@@ -323,8 +318,6 @@ def main():
                       help='Port number to bind to')
     parser.add_option('-c', '--capture-ip', dest='cap_ip', type=str,
                       help='The interface to use for data capture')
-    parser.add_option('-d', '--base-output-dir', dest='outdir', type=str,
-                      help='The base output directory for storing recorded data')
     parser.add_option('', '--log-level', dest='log_level', type=str,
                       help='Port number of status server instance',
                       default="INFO")
@@ -339,7 +332,7 @@ def main():
     logging.getLogger('katcp').setLevel(logging.ERROR)
     ioloop = IOLoop.current()
     log.info("Starting ApsWorkerServer instance")
-    server = ApsWorkerServer(opts.host, opts.port, opts.cap_ip, opts.outdir)
+    server = ApsWorkerServer(opts.host, opts.port, opts.cap_ip)
     signal.signal(
         signal.SIGINT,
         lambda sig, frame: ioloop.add_callback_from_signal(
