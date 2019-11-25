@@ -147,7 +147,7 @@ class ApsCapture(object):
         {
             "mcast-groups": ["239.11.1.0"],
             "mcast-port": 7147,
-            "stream-index":[12,13,14,15,16,17],
+            "stream-indices":[12,13,14,15,16,17],
             "beam-ids": ["cfbf00012", "cfbf00013", ...]
             "nchans": 1024,
             "nchans-per-heap": 16,
@@ -198,7 +198,7 @@ class ApsCapture(object):
                 'interface': self._capture_interface,
                 'timestamp_step': config['idx1-step'],
                 'timestamp_modulus': 1,
-                'beam_ids_csv': ",".join(map(str, config['stream-index'])),
+                'beam_ids_csv': ",".join(map(str, config['stream-indices'])),
                 'freq_ids_csv': "0:{}:{}".format(config['nchans'], config['nchans-per-heap']),
                 'ngroups_data': ngroups_data,
                 'heap_size': config['heap-size']
@@ -364,7 +364,7 @@ if __name__ == "__main__":
     coherent_config = {
         "mcast-groups": "239.11.1.1+15",
         "mcast-port": 7147,
-        "stream-index": range(96),
+        "stream-indices": range(96),
         "beam-ids": ["cfbf{:05d}".format(i) for i in range(96)],
         "nchans": 1024,
         "nchans-per-heap": 16,
@@ -381,7 +381,7 @@ if __name__ == "__main__":
     incoherent_config = {
         "mcast-groups": ["239.11.1.0"],
         "mcast-port": 7147,
-        "stream-index": [0],
+        "stream-indices": [0],
         "beam-ids": ['ifbf00000'],
         "nchans": 1024,
         "nchans-per-heap": 16,
