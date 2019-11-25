@@ -115,8 +115,7 @@ class ApsMasterController(MasterController):
 
                                       @code
                                          pprint(streams_dict)
-                                         {"cam.http":
-                                             {"camdata":"http://10.8.67.235/api/client/1"},
+                                         {"cam.http": {"camdata":"http://10.8.67.235/api/client/1"},
                                           "cbf.antenna_channelised_voltage":
                                              {"i0.antenna-channelised-voltage":"spead://239.2.1.150+15:7148"},
                                           ...}

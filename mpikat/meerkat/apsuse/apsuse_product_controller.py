@@ -307,7 +307,7 @@ class ApsProductController(object):
             "filesize": 1e9
         }
 
-        prepare_futures = []
+        configure_futures = []
         all_server_configs = {}
         for server, config in self._worker_config_map.items():
             server_config = {}
@@ -335,18 +335,10 @@ class ApsProductController(object):
                     coherent_config["stream-indices"].append(int(beam.lstrip("cfbf")))
                 coherent_config["mcast-groups"].extend(map(str, config.coherent_groups()))
                 server_config["coherent-beams"] = coherent_config
-            prepare_futures.append(server.prepare(server_config))
+            configure_futures.append(server.configure(server_config))
             all_server_configs[server] = server_config
         self._worker_configs_sensor.set_value(all_server_configs)
-
-        for future in prepare_futures:
-            yield future
-
-        capture_start_futures = []
-        for server in self._servers:
-            capture_start_futures.append(server.capture_start())
-
-        for future in capture_start_futures:
+        for future in configure_futures:
             yield future
 
         # At this point we do the data-suspect tracking start
@@ -413,10 +405,10 @@ class ApsProductController(object):
         self._state_sensor.set_value(self.STOPPING)
         self._state_interrupt.set()
         yield self.disable_all_writers()
-        capture_stop_futures = []
+        deconfigure_futures = []
         for server in self._worker_config_map.keys():
-            capture_stop_futures.append(server.capture_stop())
-        for future in capture_stop_futures:
+            deconfigure_futures.append(server.deconfigure())
+        for future in deconfigure_futures:
             yield future
         for server in self._worker_config_map.keys():
             self._parent._server_pool.deallocate(server)
