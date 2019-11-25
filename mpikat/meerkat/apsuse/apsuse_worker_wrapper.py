@@ -48,16 +48,15 @@ class ApsWorkerWrapper(WorkerWrapper):
             raise WorkerRequestError(response.reply.arguments[1])
 
     @coroutine
-    def prepare(self, config_dict):
-        yield self._make_request(self._client.req.configure, json.dumps(config_dict))
+    def configure(self, config_dict):
+        yield self._make_request(
+            self._client.req.configure,
+            json.dumps(config_dict),
+            timeout=60.0)
 
     @coroutine
-    def capture_start(self):
-        yield self._make_request(self._client.req.capture_start)
-
-    @coroutine
-    def capture_stop(self):
-        yield self._make_request(self._client.req.capture_stop)
+    def deconfigure(self):
+        yield self._make_request(self._client.req.deconfigure)
 
     @coroutine
     def enable_writers(self, beam_dict):
