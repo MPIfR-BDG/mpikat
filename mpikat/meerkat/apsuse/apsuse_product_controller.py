@@ -293,7 +293,8 @@ class ApsProductController(object):
             "nchans": self._fbf_sb_config["nchannels"] / self._fbf_sb_config["coherent-beam-fscrunch"],
             "nchans-per-heap": self._fbf_sb_config["coherent-beam-subband-nchans"],
             "sampling-interval": self._fbf_sb_config["coherent-beam-time-resolution"],
-            "base-output-dir": "{}/coherent".format(base_output_dir)
+            "base-output-dir": "{}/coherent".format(base_output_dir),
+            "filesize": 1e9
         }
 
         common_incoherent_config = {
@@ -302,7 +303,8 @@ class ApsProductController(object):
             "nchans": self._fbf_sb_config["nchannels"] / self._fbf_sb_config["incoherent-beam-fscrunch"],
             "nchans-per-heap": self._fbf_sb_config["incoherent-beam-subband-nchans"],
             "sampling-interval": self._fbf_sb_config["incoherent-beam-time-resolution"],
-            "base-output-dir": "{}/incoherent".format(base_output_dir)
+            "base-output-dir": "{}/incoherent".format(base_output_dir),
+            "filesize": 1e9
         }
 
         prepare_futures = []
