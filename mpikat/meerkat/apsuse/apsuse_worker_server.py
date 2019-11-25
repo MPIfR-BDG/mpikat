@@ -294,7 +294,7 @@ class ApsWorkerServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !target-stop ok | (fail [error description]) ]]]
         """
-        if self.state not in self.RECORDING:
+        if self.state not in [self.RECORDING, self.CAPTURING]:
             return ("fail", "Worker not in 'capturing' or 'recording' state")
         for capture_instance in self._capture_instances:
             capture_instance.target_stop()
