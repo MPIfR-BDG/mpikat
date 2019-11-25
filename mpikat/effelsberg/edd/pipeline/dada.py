@@ -20,7 +20,7 @@ FILE_SIZE    {{filesize}}          # requested size of data files
 FILE_NUMBER  0                   # number of data file
 
 # time of the rising edge of the first time sample
-UTC_START    {{utc_start}}               # yyyy-mm-dd-hh:mm:ss.fs
+#UTC_START    {{utc_start}}               # yyyy-mm-dd-hh:mm:ss.fs
 MJD_START    {{mjd}}                # MJD equivalent to the start UTC
 
 OBS_OFFSET   0                   # bytes offset from the start MJD/UTC
