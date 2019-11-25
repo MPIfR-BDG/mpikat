@@ -19,8 +19,7 @@ log = logging.getLogger("mpkat.apsuse_capture")
 class ApsCapture(object):
     def __init__(self, capture_interface, control_socket,
                  mkrecv_config_filename, mkrecv_cpu_set,
-                 apsuse_cpu_set, sensor_prefix, dada_key,
-                 output_dir):
+                 apsuse_cpu_set, sensor_prefix, dada_key):
         self._capture_interface = capture_interface
         self._control_socket = control_socket
         self._mkrecv_config_filename = mkrecv_config_filename
@@ -28,7 +27,6 @@ class ApsCapture(object):
         self._apsuse_cpu_set = apsuse_cpu_set
         self._sensor_prefix = sensor_prefix
         self._dada_input_key = dada_key
-        self._output_dir = output_dir
         self._mkrecv_proc = None
         self._apsuse_proc = None
         self._ingress_buffer_monitor = None
@@ -91,8 +89,12 @@ class ApsCapture(object):
                 key, str(error)))
         log.debug(("Building DADA buffer: key={}, block_size={}, "
                    "nblocks={}").format(key, block_size, nblocks))
-        cmdline = map(str, ["dada_db", "-k", key, "-b", block_size, "-n",
-                            nblocks, "-l", "-p"])
+
+
+        cmdline = ["sleep", "2"]
+
+        #cmdline = map(str, ["dada_db", "-k", key, "-b", block_size, "-n",
+        #                    nblocks, "-l", "-p"])
         proc = Popen(
             cmdline, stdout=PIPE,
             stderr=PIPE, shell=False,
@@ -104,7 +106,8 @@ class ApsCapture(object):
     @coroutine
     def _destroy_db(self, key, timeout=20.0):
         log.debug("Destroying DADA buffer with key={}".format(key))
-        cmdline = map(str, ["dada_db", "-k", key, "-d"])
+        #cmdline = map(str, ["dada_db", "-k", key, "-d"])
+        cmdline = ["sleep", "1"]
         proc = Popen(
             cmdline, stdout=PIPE,
             stderr=PIPE, shell=False,
@@ -155,7 +158,8 @@ class ApsCapture(object):
             "filesize": 10e9,
             "sync-epoch": 1232352352.0,
             "sample-clock": 1712000000.0,
-            "idx1-step": 268435456
+            "idx1-step": 268435456,
+            "base-output-dir"
         }
         """
 
@@ -171,9 +175,10 @@ class ApsCapture(object):
             "--nfreq", npartitions,
             "--size", int(config['filesize']),
             "--socket", self._control_socket,
-            "--dir", self._output_dir,
+            "--dir", config["base-output-dir"],
             "--log_level", "debug"]
         log.debug(" ".join(map(str, apsuse_cmdline)))
+        apsuse_cmdline = ["sleep", "1000"]
         self._apsuse_proc = ManagedProcess(
             apsuse_cmdline, stdout_handler=log.debug, stderr_handler=log.error)
         self._apsuse_args_sensor.set_value(" ".join(map(str, apsuse_cmdline)))
@@ -214,11 +219,14 @@ class ApsCapture(object):
             log.debug(line)
             mkrecv_sensor_updater(line)
 
+        #self._mkrecv_proc = ManagedProcess(
+        #    ["mkrecv_nt", "--header",
+        #     self._mkrecv_config_filename, "--quiet"],
+        #    stdout_handler=mkrecv_aggregated_output_handler,
+        #    stderr_handler=log.error)
+
         self._mkrecv_proc = ManagedProcess(
-            ["mkrecv_nt", "--header",
-             self._mkrecv_config_filename, "--quiet"],
-            stdout_handler=mkrecv_aggregated_output_handler,
-            stderr_handler=log.error)
+            ["sleep", "1000"])
 
         def exit_check_callback():
             if not self._mkrecv_proc.is_alive():
@@ -232,11 +240,13 @@ class ApsCapture(object):
         self._capture_monitor = PeriodicCallback(exit_check_callback, 1000)
         self._capture_monitor.start()
 
+        """
         self._ingress_buffer_monitor = DbMonitor(
             self._dada_input_key,
             callback=lambda params:
             self._ingress_buffer_percentage.set_value(params["fraction-full"]))
         self._ingress_buffer_monitor.start()
+        """
 
         self._capturing = True
 
@@ -265,14 +275,14 @@ class ApsCapture(object):
         #
         beam_params = []
         message_dict = {"command": "start", "beam_parameters": beam_params}
-        for beam in beam_info:
-            if beam["id"] in self._internal_beam_mapping:
-                idx = self._internal_beam_mapping[beam["id"]]
-                target = Target(beam["target"])
+        for beam, target_str in beam_info.items():
+            if beam in self._internal_beam_mapping:
+                idx = self._internal_beam_mapping[beam]
+                target = Target(target_str)
                 ra, dec = map(str, target.radec())
                 beam_params.append({
                         "idx": idx,
-                        "name": beam["id"],
+                        "name": beam,
                         "source": target.name,
                         "ra": ra,
                         "dec": dec
@@ -387,7 +397,7 @@ if __name__ == "__main__":
 
     beam_params = []
     for ii in range(1):
-        beam_params.append({'id': 'cfbf{:05d}'.format(ii), 'target': 'source0,radec,00:00:00.00,00:00:00'})
+        beam_params.append({'cfbf{:05d}'.format(ii): 'source0,radec,00:00:00.00,00:00:00'})
 
     ioloop.run_sync(lambda: coherent_capture.capture_start(coherent_config))
     #ioloop.run_sync(lambda: incoherent_capture.capture_start(incoherent_config))

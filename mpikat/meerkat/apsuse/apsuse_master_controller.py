@@ -24,11 +24,9 @@ import coloredlogs
 import json
 import tornado
 import signal
-import time
-import numpy as np
 from optparse import OptionParser
 from tornado.gen import Return, coroutine
-from katcp import Sensor, AsyncReply
+from katcp import AsyncReply
 from katcp.kattypes import request, return_reply, Str
 from katpoint import Target
 from mpikat.core.master_controller import MasterController
@@ -64,7 +62,8 @@ class ApsMasterController(MasterController):
         @params  port     The port that the server should bind to
         """
         super(ApsMasterController, self).__init__(ip, port, ApsWorkerPool())
-        self._katportal_wrapper_type = KatportalClientWrapper # MockKatportalClientWrapper
+        #self._katportal_wrapper_type = KatportalClientWrapper
+        self._katportal_wrapper_type = MockKatportalClientWrapper
         self._dummy = dummy
         if self._dummy:
             for ii in range(8):
@@ -116,10 +115,10 @@ class ApsMasterController(MasterController):
 
                                       @code
                                          pprint(streams_dict)
-                                         {'cam.http':
-                                             {'camdata':'http://10.8.67.235/api/client/1'},
-                                          'cbf.antenna_channelised_voltage':
-                                             {'i0.antenna-channelised-voltage':'spead://239.2.1.150+15:7148'},
+                                         {"cam.http":
+                                             {"camdata":"http://10.8.67.235/api/client/1"},
+                                          "cbf.antenna_channelised_voltage":
+                                             {"i0.antenna-channelised-voltage":"spead://239.2.1.150+15:7148"},
                                           ...}
                                       @endcode
 

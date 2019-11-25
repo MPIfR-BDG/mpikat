@@ -31,6 +31,7 @@ from katcp import Sensor
 
 log = logging.getLogger('mpikat.katportalclient_wrapper')
 
+
 class KatportalClientWrapper(object):
     def __init__(self, host, callback=None):
         self._host = host
@@ -194,6 +195,15 @@ class KatportalClientWrapper(object):
                 beams[beam_name] = reading.value
         raise Return(beams)
 
+    @coroutine
+    def get_fbfuse_proxy_id(self):
+        sensor_sample = yield self._query('sub', 'allocations')
+        for resource, _, _ in eval(sensor_sample):
+            if resource.startswith("fbfuse"):
+                raise Return(resource)
+        else:
+            raise Exception("No FBFUSE proxy found in current subarray")
+
     def get_sensor_tracker(self, component, sensor_name):
         return SensorTracker(self._host, component, sensor_name)
 
@@ -284,9 +294,7 @@ if __name__ == "__main__":
 
     @coroutine
     def setup():
-        val = yield client.get_fbfuse_coherent_beam_positions("array_1")
+        val = yield client.get_fbfuse_proxy_id()
         print val
-        print len(val.keys())
-
 
     ioloop.run_sync(setup)
