@@ -238,44 +238,43 @@ class DigitiserPacketiserClient(object):
 
 if __name__ == "__main__":
     import coloredlogs
-    from optparse import OptionParser
-    usage = "usage: %prog [options]"
-    parser = OptionParser(usage=usage)
-    parser.add_option('-H', '--host', dest='host', type=str,
-        help='Host interface to bind to', default="134.104.73.132")
-    parser.add_option('-p', '--port', dest='port', type=long,
+    from argparse import ArgumentParser 
+    parser = ArgumentParser(description="Configures edd digitiezer.")
+    parser.add_argument('host', type=str, nargs=1,
+        help='Digitizer interface to bind to.')
+    parser.add_argument('-p', '--port', dest='port', type=long,
         help='Port number to bind to', default=7147)
-    parser.add_option('', '--nbits', dest='nbits', type=long,
+    parser.add_argument('--nbits', dest='nbits', type=long,
         help='The number of bits per output sample', default=12)
-    parser.add_option('', '--sampling_rate', dest='sampling_rate', type=float,
+    parser.add_argument('--sampling_rate', dest='sampling_rate', type=float,
         help='The digitiser sampling rate (Hz)', default=2600000000.0)
-    parser.add_option('', '--v-destinations', dest='v_destinations', type=str,
+    parser.add_argument('--v-destinations', dest='v_destinations', type=str,
         help='V polarisation destinations', default="225.0.0.152+3:7148")
-    parser.add_option('', '--h-destinations', dest='h_destinations', type=str,
+    parser.add_argument('--h-destinations', dest='h_destinations', type=str,
         help='H polarisation destinations', default="225.0.0.156+3:7148")
-    parser.add_option('', '--log-level',dest='log_level',type=str,
+    parser.add_argument('--log-level',dest='log_level',type=str,
         help='Logging level',default="INFO")
-    parser.add_option('', '--predecimation-factor', dest='predecimation_factor', type=int,
-        help='predecimation factor', default=4)
+    parser.add_argument('--predecimation-factor', dest='predecimation_factor', type=int,
+        help='predecimation factor', default=1)
 
-    parser.add_option('', '--flip_spectrum', action="store_true", default=False)
-    (opts, args) = parser.parse_args()
+    parser.add_argument('--flip_spectrum', action="store_true", default=False)
+    args = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
-        level=opts.log_level.upper(),
+        level=args.log_level.upper(),
         logger=logger)
     ioloop = IOLoop.current()
-    client = DigitiserPacketiserClient(opts.host, port=opts.port)
+    client = DigitiserPacketiserClient(args.host, port=args.port)
     @coroutine
     def configure():
         try:
-            yield client.set_sampling_rate(opts.sampling_rate)
-            yield client.set_bit_width(opts.nbits)
-            yield client.set_destinations(opts.v_destinations, opts.h_destinations)
-            yield client.set_predecimation(opts.predecimation_factor)
-            yield client.flip_spectrum(opts.flip_spectrum)
+            yield client.set_sampling_rate(args.sampling_rate)
+            yield client.set_bit_width(args.nbits)
+            yield client.set_destinations(args.v_destinations, args.h_destinations)
+            yield client.set_predecimation(args.predecimation_factor)
+            yield client.flip_spectrum(args.flip_spectrum)
             yield client.synchronize()
             yield client.capture_start()
         except Exception as error:
