@@ -173,6 +173,7 @@ class KatportalClientWrapper(object):
         for sensor_name in sensor_list:
             full_name = "{}{}".format(prefix, sensor_name.replace("-", "_"))
             sensor_sample = sensor_samples[full_name]
+            log.debug(sensor_sample)
             if sensor_sample.status != Sensor.STATUSES[Sensor.NOMINAL]:
                 message = "Sensor {} not in NOMINAL state".format(full_name)
                 log.error(message)

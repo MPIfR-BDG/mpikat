@@ -261,7 +261,9 @@ class ApsProductController(object):
         base_output_dir = "/output/{}/{}/".format(proposal_id, sb_id)
         self._fbf_sb_config = yield self._katportal_client.get_fbfuse_sb_config(self._product_id)
         self._fbf_sb_config_sensor.set_value(self._fbf_sb_config)
+        log.debug("Determined FBFUSE config: {}".format(self._fbf_sb_config))
         worker_configs = get_required_workers(self._fbf_sb_config)
+
 
         # allocate workers
         self._worker_config_map = {}
@@ -367,7 +369,7 @@ class ApsProductController(object):
                     yield self.enable_writers()
                 except Exception:
                     log.exception("error")
-            self._parent.ioloop.add_callback(wait_for_off_target)
+            #self._parent.ioloop.add_callback(wait_for_off_target)
 
         @coroutine
         def wait_for_off_target():
@@ -410,8 +412,7 @@ class ApsProductController(object):
             deconfigure_futures.append(server.deconfigure())
         for future in deconfigure_futures:
             yield future
-        for server in self._worker_config_map.keys():
-            self._parent._server_pool.deallocate(server)
+        self._parent._server_pool.deallocate(self._worker_config_map.keys())
         self._worker_config_map = {}
         self._servers_sensor.set_value("")
         self._state_sensor.set_value(self.READY)

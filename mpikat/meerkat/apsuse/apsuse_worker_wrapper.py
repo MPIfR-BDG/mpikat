@@ -52,11 +52,11 @@ class ApsWorkerWrapper(WorkerWrapper):
         yield self._make_request(
             self._client.req.configure,
             json.dumps(config_dict),
-            timeout=60.0)
+            timeout=120.0)
 
     @coroutine
     def deconfigure(self):
-        yield self._make_request(self._client.req.deconfigure)
+        yield self._make_request(self._client.req.deconfigure, timeout=60.0)
 
     @coroutine
     def enable_writers(self, beam_dict):
