@@ -770,7 +770,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         except Exception as error:
             yield self.stop_pipeline()
             raise EddPulsarPipelineError(str(error))
-        # time.sleep(1)
+        time.sleep(2)
         while True:
             if is_accessible('/tmp/{}.par'.format(self.source_name)):
                 log.debug('/tmp/{}.par'.format(self.source_name))
@@ -787,6 +787,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._decode_capture_stdout)
         self.tempo2.stderr_callbacks.add(
             self._handle_execution_stderr)
+        time.sleep(2)
         while True:
             if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
                 log.debug('{}/t2pred.dat'.format(os.getcwd()))
@@ -818,6 +819,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
+        time.sleep(2)
         while True:
             if is_accessible('{}'.format(dada_key_file.name)):
                 log.debug('{}'.format(dada_key_file.name))
