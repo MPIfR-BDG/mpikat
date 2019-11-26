@@ -138,7 +138,6 @@ class ApsMasterController(MasterController):
                "Streams: {}".format(streams_json),
                "Proxy name: {}".format(proxy_name))
         log.info("\n".join(msg))
-
         # Test if product_id already exists
         if product_id in self._products:
             return ("fail", "APS already has a configured product with ID: {}".format(product_id))
@@ -169,7 +168,7 @@ class ApsMasterController(MasterController):
             except Exception:
                 log.exception("Error during configuration")
             self._update_products_sensor()
-            log.debug("Configured APSUSE instance with ID: {}".format(product_id))
+            log.info("Configured APSUSE instance with ID: {}".format(product_id))
             req.reply("ok",)
         self.ioloop.add_callback(configure)
         raise AsyncReply
@@ -202,6 +201,7 @@ class ApsMasterController(MasterController):
             return ("fail", str(error))
         del self._products[product_id]
         self._update_products_sensor()
+        log.info("Deconfigured APSUSE instance with ID '{}'".format(product_id))
         return ("ok",)
 
     @request(Str(), Str())
@@ -227,7 +227,8 @@ class ApsMasterController(MasterController):
             target = Target(target)
         except Exception as error:
             raise Return(("fail", str(error)))
-        yield product.target_start(target)
+        yield product.disable_all_writers()
+        yield product.enable_writers()
         raise Return(("ok",))
 
     @request(Str())
@@ -247,6 +248,7 @@ class ApsMasterController(MasterController):
 
         @return     katcp reply object [[[ !start-beams ok | (fail [error description]) ]]]
         """
+        log.info("Capture start requested on product '{}'".format(product_id))
         try:
             product = self._get_product(product_id)
         except ProductLookupError as error:
@@ -259,6 +261,7 @@ class ApsMasterController(MasterController):
                 log.exception("Error on capture start")
                 req.reply("fail", str(error))
             else:
+                log.info("Capture start complete for '{}'".format(product_id))
                 req.reply("ok",)
         self.ioloop.add_callback(start)
         raise AsyncReply
@@ -272,6 +275,7 @@ class ApsMasterController(MasterController):
         @param      product_id      This is a name for the data product, used to track which subarray is being deconfigured.
                                     For example "array_1_bc856M4k".
         """
+        log.info("Capture stop request on '{}'".format(product_id))
         try:
             product = self._get_product(product_id)
         except ProductLookupError as error:
@@ -280,6 +284,7 @@ class ApsMasterController(MasterController):
         @coroutine
         def stop():
             yield product.capture_stop()
+            log.info("Capture stop complete for '{}'".format(product_id))
             req.reply("ok",)
         self.ioloop.add_callback(stop)
         raise AsyncReply

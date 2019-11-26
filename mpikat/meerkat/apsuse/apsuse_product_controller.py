@@ -219,19 +219,18 @@ class ApsProductController(object):
 
     @coroutine
     def disable_all_writers(self):
-        log.debug("Disabling all writers") 
-
+        self.log.debug("Disabling all writers")
         for server in self._servers:
             yield server.disable_writers()
 
     @coroutine
     def enable_writers(self):
-        log.debug("Enabling writers")
-        log.debug("Getting beam positions")
+        self.log.info("Enabling writers")
+        self.log.debug("Getting beam positions")
         beam_map = yield self._katportal_client.get_fbfuse_coherent_beam_positions(self._product_id)
         beam_map.update({"ifbf00000": self._fbf_sb_config["phase-reference"]})
-        log.debug("Beam map: {}".format(beam_map))
-        enable_futures = []   
+        self.log.debug("Beam map: {}".format(beam_map))
+        enable_futures = []
         for server in self._servers:
             worker_config = self._worker_config_map[server]
             sub_beam_list = {}
@@ -261,9 +260,8 @@ class ApsProductController(object):
         base_output_dir = "/output/{}/{}/".format(proposal_id, sb_id)
         self._fbf_sb_config = yield self._katportal_client.get_fbfuse_sb_config(self._product_id)
         self._fbf_sb_config_sensor.set_value(self._fbf_sb_config)
-        log.debug("Determined FBFUSE config: {}".format(self._fbf_sb_config))
+        self.log.debug("Determined FBFUSE config: {}".format(self._fbf_sb_config))
         worker_configs = get_required_workers(self._fbf_sb_config)
-
 
         # allocate workers
         self._worker_config_map = {}
@@ -339,6 +337,8 @@ class ApsProductController(object):
                 server_config["coherent-beams"] = coherent_config
             configure_futures.append(server.configure(server_config))
             all_server_configs[server] = server_config
+            self.log.info("Configuration for server {}: {}".format(
+                server, server_config))
         self._worker_configs_sensor.set_value(all_server_configs)
         for future in configure_futures:
             yield future
@@ -350,11 +350,13 @@ class ApsProductController(object):
         incoherent_beam_tracker = self._katportal_client.get_sensor_tracker(
             "fbfuse", "fbfmc_{}_incoherent_beam_data_suspect".format(
                 self._product_id))
+        self.log.info("Starting FBFUSE data-suspect tracking")
         yield coherent_beam_tracker.start()
         yield incoherent_beam_tracker.start()
 
         @coroutine
         def wait_for_on_target():
+            self.log.info("Waiting for data-suspect flags to become False")
             self._state_interrupt.clear()
             try:
                 yield coherent_beam_tracker.wait_until(
@@ -362,17 +364,20 @@ class ApsProductController(object):
                 yield incoherent_beam_tracker.wait_until(
                     False, self._state_interrupt)
             except Interrupt:
+                self.log.debug("data-suspect tracker interrupted")
                 pass
             else:
+                self.log.info("data-suspect flags now False (on target)")
                 try:
                     yield self.disable_all_writers()
                     yield self.enable_writers()
                 except Exception:
                     log.exception("error")
-            #self._parent.ioloop.add_callback(wait_for_off_target)
+            self._parent.ioloop.add_callback(wait_for_off_target)
 
         @coroutine
         def wait_for_off_target():
+            self.log.info("Waiting for data-suspect flags to become True")
             self._state_interrupt.clear()
             try:
                 yield coherent_beam_tracker.wait_until(
@@ -380,8 +385,10 @@ class ApsProductController(object):
                 yield incoherent_beam_tracker.wait_until(
                     True, self._state_interrupt)
             except Interrupt:
+                self.log.debug("data-suspect tracker interrupted")
                 pass
             else:
+                self.log.info("data-suspect flags now True (off-target/retiling)")
                 yield self.disable_all_writers()
             self._parent.ioloop.add_callback(wait_for_on_target)
 
@@ -409,10 +416,12 @@ class ApsProductController(object):
         yield self.disable_all_writers()
         deconfigure_futures = []
         for server in self._worker_config_map.keys():
+            self.log.info("Sending deconfigure to server {}".format(server))
             deconfigure_futures.append(server.deconfigure())
         for future in deconfigure_futures:
             yield future
         self._parent._server_pool.deallocate(self._worker_config_map.keys())
+        self.log.info("Deallocated all servers")
         self._worker_config_map = {}
         self._servers_sensor.set_value("")
         self._state_sensor.set_value(self.READY)

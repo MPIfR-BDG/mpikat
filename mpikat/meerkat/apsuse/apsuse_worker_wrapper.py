@@ -60,7 +60,8 @@ class ApsWorkerWrapper(WorkerWrapper):
 
     @coroutine
     def enable_writers(self, beam_dict):
-        yield self._make_request(self._client.req.target_start, json.dumps(beam_dict))
+        yield self._make_request(self._client.req.target_start,
+            json.dumps(beam_dict))
 
     @coroutine
     def disable_writers(self):

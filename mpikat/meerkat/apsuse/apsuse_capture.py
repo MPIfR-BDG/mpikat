@@ -13,6 +13,7 @@ from mpikat.utils.unix_socket import UDSClient
 
 AVAILABLE_CAPTURE_MEMORY = 3221225472  * 10
 MAX_DADA_BLOCK_SIZE = 1<<28
+
 log = logging.getLogger("mpikat.apsuse_capture")
 
 
@@ -21,9 +22,9 @@ class ApsCapture(object):
                  mkrecv_config_filename, mkrecv_cpu_set,
                  apsuse_cpu_set, sensor_prefix, dada_key):
         log.info("Building ApsCapture instance with parameters: ({})".format(
-	         capture_interface, control_socket,
-                 mkrecv_config_filename, mkrecv_cpu_set,
-                 apsuse_cpu_set, sensor_prefix, dada_key))
+            capture_interface, control_socket,
+            mkrecv_config_filename, mkrecv_cpu_set,
+            apsuse_cpu_set, sensor_prefix, dada_key))
         self._capture_interface = capture_interface
         self._control_socket = control_socket
         self._mkrecv_config_filename = mkrecv_config_filename
@@ -139,28 +140,7 @@ class ApsCapture(object):
         idx = 0
         for beam in config['beam-ids']:
             self._internal_beam_mapping[beam] = idx
-            idx =+ 1
-
-        """
-        Config takes the following form:
-        {
-            "mcast-groups": ["239.11.1.0"],
-            "mcast-port": 7147,
-            "stream-indices":[12,13,14,15,16,17],
-            "beam-ids": ["cfbf00012", "cfbf00013", ...]
-            "nchans": 1024,
-            "nchans-per-heap": 16,
-            "bandwidth": 856e6,
-            "centre-frequency": 1284e6,
-            "sampling-interval": 306e-6,
-            "heap-size": 8192,
-            "filesize": 10e9,
-            "sync-epoch": 1232352352.0,
-            "sample-clock": 1712000000.0,
-            "idx1-step": 268435456,
-            "base-output-dir"
-        }
-        """
+            idx += 1
 
         # Start APSUSE processing code
         apsuse_cmdline = [
@@ -218,7 +198,7 @@ class ApsCapture(object):
             log.debug(line)
             mkrecv_sensor_updater(line)
 
-	log.info("Starting MKRECV")
+        log.info("Starting MKRECV")
         self._mkrecv_proc = ManagedProcess(
             ["mkrecv_nt", "--header",
              self._mkrecv_config_filename, "--quiet"],
@@ -240,9 +220,9 @@ class ApsCapture(object):
             self._dada_input_key,
             callback=lambda params:
             self._ingress_buffer_percentage.set_value(params["fraction-full"]))
-        #self._ingress_buffer_monitor.start()
+        self._ingress_buffer_monitor.start()
         self._capturing = True
-	log.info("Successfully started capture pipeline")
+        log.info("Successfully started capture pipeline")
 
     def target_start(self, beam_info):
         # Send target information to apsuse pipeline
@@ -270,14 +250,14 @@ class ApsCapture(object):
         log.info("Target start on capture instance")
         beam_params = []
         message_dict = {"command": "start", "beam_parameters": beam_params}
-	log.info("Parsing beam information")	
+        log.info("Parsing beam information")
         for beam, target_str in beam_info.items():
             if beam in self._internal_beam_mapping:
                 idx = self._internal_beam_mapping[beam]
                 target = Target(target_str)
                 ra, dec = map(str, target.radec())
                 log.info("IDX: {}, name: {}, ra: {}, dec: {}, source: {}".format(
-		    idx, beam, ra, dec, target.name))
+                    idx, beam, ra, dec, target.name))
                 beam_params.append({
                         "idx": idx,
                         "name": beam,
@@ -300,7 +280,7 @@ class ApsCapture(object):
                 raise Exception("Failed to start APSUSE recording")
         finally:
             client.close()
-	    log.debug("Closed socket connection")
+        log.debug("Closed socket connection")
 
     def target_stop(self):
         # Trigger end of file writing
@@ -335,7 +315,7 @@ class ApsCapture(object):
         self._internal_beam_mapping = {}
         log.info("Stopping capture monitors")
         self._capture_monitor.stop()
-        #self._ingress_buffer_monitor.stop()
+        self._ingress_buffer_monitor.stop()
         log.info("Stopping MKRECV instance")
         self._mkrecv_proc.terminate()
         log.info("Stopping PSRDADA_CPP instance")
