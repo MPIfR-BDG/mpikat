@@ -3,7 +3,7 @@ import logging
 import time
 from collections import deque
 
-log = logging.getLogger('mpikat.fbfuse_mksend_config')
+log = logging.getLogger('mpikat.apsuse_mkrecv_config')
 
 HEADER_TEMPLATE = """
 HEADER        DADA

@@ -31,9 +31,7 @@ from katcp.kattypes import request, return_reply, Str
 from mpikat.core.utils import LoggingSensor
 from mpikat.meerkat.apsuse.apsuse_capture import ApsCapture
 
-
 log = logging.getLogger("mpikat.apsuse_worker_server")
-
 
 class ApsWorkerServer(AsyncDeviceServer):
     VERSION_INFO = ("aps-worker-server-api", 0, 1)
@@ -184,7 +182,7 @@ class ApsWorkerServer(AsyncDeviceServer):
         """
         if not self.idle:
             raise Return(("fail", "APS worker not in IDLE state"))
-        log.info("Preparing worker server instance")
+        log.info("Configuring worker server instance")
         try:
             config = json.loads(config_json)
         except Exception as error:
@@ -193,35 +191,42 @@ class ApsWorkerServer(AsyncDeviceServer):
             log.error("Prepare failed: {}".format(msg))
             raise Return(("fail", msg))
         log.info("Config: {}".format(config))
-
         self._state_sensor.set_value(self.STARTING)
 
+        cap_start_futures = []
+
         if "coherent-beams" in config:
+            log.info("Creating capture instance for coherent beams")
             coherent_cap = ApsCapture(
                 self._capture_interface,
                 "/tmp/apsuse_capture_coherent.sock",
                 "/tmp/coherent_mkrecv.cfg",
                 "0-2", "2-3",
                 "coherent", "dada")
-            for sensor in coherent_cap._sensors:
-                self.add_sensor(sensor)
-            yield coherent_cap.capture_start(config["coherent-beams"])
+            cap_start_futures.append(coherent_cap.capture_start(config["coherent-beams"]))
             self._capture_instances.append(coherent_cap)
 
         if "incoherent-beams" in config:
+            log.info("Creating capture instance for incoherent beam")
             incoherent_cap = ApsCapture(
                 self._capture_interface,
                 "/tmp/apsuse_capture_incoherent.sock",
                 "/tmp/incoherent_mkrecv.cfg",
                 "3", "4",
                 "incoherent", "caca")
-            for sensor in incoherent_cap._sensors:
-                self.add_sensor(sensor)
-            yield incoherent_cap.capture_start(config["incoherent-beams"])
+            cap_start_futures.append(incoherent_cap.capture_start(config["incoherent-beams"]))
             self._capture_instances.append(incoherent_cap)
+
+        for future in cap_start_futures:
+            yield future
+
+	for capture_instance in self._capture_instances:
+	    for sensor in capture_instance._sensors:
+	        self.add_sensor(sensor)
 
         self.mass_inform(Message.inform('interface-changed'))
         self._state_sensor.set_value(self.CAPTURING)
+        log.info("Completed configuration")
         raise Return(("ok",))
 
     @request()
@@ -235,6 +240,7 @@ class ApsWorkerServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]
         """
+        log.info("Received deconfigure request")
         self._state_sensor.set_value(self.STOPPING)
         futures = []
         for capture_instance in self._capture_instances:
@@ -250,9 +256,10 @@ class ApsWorkerServer(AsyncDeviceServer):
                 log.exception("Error during capture_stop")
                 raise Return(("fail", str(error)))
         self._state_sensor.set_value(self.IDLE)
+        log.info("Deconfigured worker server")
         raise Return(("ok",))
 
-    @request()
+    @request(Str())
     @return_reply()
     def request_target_start(self, req, beam_info):
         """
@@ -277,11 +284,19 @@ class ApsWorkerServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !target-start ok | (fail [error description]) ]]]
         """
+        log.info("Received target start request") 
         if self.state != self.CAPTURING:
             return ("fail", "Worker not in 'capturing' state")
+        try:
+            beam_info = json.loads(beam_info)
+        except Exception as error:
+            log.exception("Error while parsing beam information")
+            return ("fail", str(error))
+        log.info("Beam information: {}".format(beam_info)) 
         for capture_instance in self._capture_instances:
             capture_instance.target_start(beam_info)
         self._state_sensor.set_value(self.RECORDING)
+        log.info("Target start successful")
         return ("ok",)
 
     @request()
@@ -294,11 +309,13 @@ class ApsWorkerServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !target-stop ok | (fail [error description]) ]]]
         """
+        log.info("Received target stop request")
         if self.state not in [self.RECORDING, self.CAPTURING]:
             return ("fail", "Worker not in 'capturing' or 'recording' state")
         for capture_instance in self._capture_instances:
             capture_instance.target_stop()
         self._state_sensor.set_value(self.CAPTURING)
+        log.info("Target stop request successful") 
         return ("ok",)
 
 

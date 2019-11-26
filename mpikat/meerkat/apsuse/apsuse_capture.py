@@ -12,14 +12,18 @@ from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.unix_socket import UDSClient
 
 AVAILABLE_CAPTURE_MEMORY = 3221225472  * 10
-MAX_DADA_BLOCK_SIZE = 3221225472
-log = logging.getLogger("mpkat.apsuse_capture")
+MAX_DADA_BLOCK_SIZE = 1<<28
+log = logging.getLogger("mpikat.apsuse_capture")
 
 
 class ApsCapture(object):
     def __init__(self, capture_interface, control_socket,
                  mkrecv_config_filename, mkrecv_cpu_set,
                  apsuse_cpu_set, sensor_prefix, dada_key):
+        log.info("Building ApsCapture instance with parameters: ({})".format(
+	         capture_interface, control_socket,
+                 mkrecv_config_filename, mkrecv_cpu_set,
+                 apsuse_cpu_set, sensor_prefix, dada_key))
         self._capture_interface = capture_interface
         self._control_socket = control_socket
         self._mkrecv_config_filename = mkrecv_config_filename
@@ -33,6 +37,7 @@ class ApsCapture(object):
         self._internal_beam_mapping = {}
         self._sensors = []
         self._capturing = False
+        self.ioloop = IOLoop.current()
         self.setup_sensors()
 
     def add_sensor(self, sensor):
@@ -121,7 +126,6 @@ class ApsCapture(object):
         heap_group_size = config['heap-size'] * nbeams * npartitions
         ngroups_data = int(MAX_DADA_BLOCK_SIZE / heap_group_size)
         ngroups_data = 2**((ngroups_data-1).bit_length())
-        nheap_groups = ngroups_data / heap_group_size
 
         # Make DADA buffer and start watchers
         log.info("Creating capture buffer")
@@ -163,7 +167,7 @@ class ApsCapture(object):
             #"taskset", "-c", self._apsuse_cpu_set,
             "apsuse",
             "--input_key", self._dada_input_key,
-            "--ngroups", nheap_groups,
+            "--ngroups", ngroups_data,
             "--nbeams", nbeams,
             "--nchannels", config['nchans-per-heap'],
             "--nsamples", config['heap-size']/config['nchans-per-heap'],
@@ -172,6 +176,7 @@ class ApsCapture(object):
             "--socket", self._control_socket,
             "--dir", config["base-output-dir"],
             "--log_level", "debug"]
+        log.info("Starting APSUSE")
         log.debug(" ".join(map(str, apsuse_cmdline)))
         self._apsuse_proc = ManagedProcess(
             apsuse_cmdline, stdout_handler=log.debug, stderr_handler=log.error)
@@ -187,7 +192,7 @@ class ApsCapture(object):
                 'sampling_interval': config['sampling-interval'],
                 'sync_epoch': config['sync-epoch'],
                 'sample_clock': config['sample-clock'],
-                'mcast_sources': config['mcast-groups'],
+                'mcast_sources': ",".join(config['mcast-groups']),
                 'mcast_port': str(config['mcast-port']),
                 'interface': self._capture_interface,
                 'timestamp_step': config['idx1-step'],
@@ -213,14 +218,12 @@ class ApsCapture(object):
             log.debug(line)
             mkrecv_sensor_updater(line)
 
-        #self._mkrecv_proc = ManagedProcess(
-        #    ["mkrecv_nt", "--header",
-        #     self._mkrecv_config_filename, "--quiet"],
-        #    stdout_handler=mkrecv_aggregated_output_handler,
-        #    stderr_handler=log.error)
-
+	log.info("Starting MKRECV")
         self._mkrecv_proc = ManagedProcess(
-            ["sleep", "1000"])
+            ["mkrecv_nt", "--header",
+             self._mkrecv_config_filename, "--quiet"],
+            stdout_handler=mkrecv_aggregated_output_handler,
+            stderr_handler=log.error)
 
         def exit_check_callback():
             if not self._mkrecv_proc.is_alive():
@@ -237,8 +240,9 @@ class ApsCapture(object):
             self._dada_input_key,
             callback=lambda params:
             self._ingress_buffer_percentage.set_value(params["fraction-full"]))
-        self._ingress_buffer_monitor.start()
+        #self._ingress_buffer_monitor.start()
         self._capturing = True
+	log.info("Successfully started capture pipeline")
 
     def target_start(self, beam_info):
         # Send target information to apsuse pipeline
@@ -263,13 +267,17 @@ class ApsCapture(object):
         # global index. It is thus necessary to track the mapping between internal and
         # external indices for these beams.
         #
+        log.info("Target start on capture instance")
         beam_params = []
         message_dict = {"command": "start", "beam_parameters": beam_params}
+	log.info("Parsing beam information")	
         for beam, target_str in beam_info.items():
             if beam in self._internal_beam_mapping:
                 idx = self._internal_beam_mapping[beam]
                 target = Target(target_str)
                 ra, dec = map(str, target.radec())
+                log.info("IDX: {}, name: {}, ra: {}, dec: {}, source: {}".format(
+		    idx, beam, ra, dec, target.name))
                 beam_params.append({
                         "idx": idx,
                         "name": beam,
@@ -277,7 +285,9 @@ class ApsCapture(object):
                         "ra": ra,
                         "dec": dec
                     })
+        log.debug("Connecting to apsuse instance via socket")
         client = UDSClient(self._control_socket)
+        log.debug("Sending message: {}".format(json.dumps(message_dict)))
         client.send(json.dumps(message_dict))
         response_str = client.recv(timeout=3)
         try:
@@ -285,10 +295,12 @@ class ApsCapture(object):
         except Exception:
             log.exception("Unable to parse JSON returned from apsuse application")
         else:
+            log.debug("Response: {}".format(response_str))
             if response != "success":
                 raise Exception("Failed to start APSUSE recording")
         finally:
             client.close()
+	    log.debug("Closed socket connection")
 
     def target_stop(self):
         # Trigger end of file writing
@@ -297,8 +309,11 @@ class ApsCapture(object):
         # {
         #     "command": "stop"
         # }
+        log.info("Target stop request on capture instance")
         message = {"command": "stop"}
+        log.debug("Connecting to apsuse instance via socket")
         client = UDSClient(self._control_socket)
+        log.debug("Sending message: {}".format(json.dumps(message)))
         client.send(json.dumps(message))
         response_str = client.recv(timeout=3)
         try:
@@ -306,25 +321,28 @@ class ApsCapture(object):
         except Exception:
             log.exception("Unable to parse JSON returned from apsuse application")
         else:
+            log.debug("Response: {}".format(response_str))
             if response != "success":
                 raise Exception("Failed to stop APSUSE recording")
         finally:
             client.close()
+            log.debug("Closed socket connection")
 
     @coroutine
     def capture_stop(self):
+        log.info("Capture stop request on capture instance")
         self._capturing = False
         self._internal_beam_mapping = {}
-        log.info("Stopping capture")
+        log.info("Stopping capture monitors")
         self._capture_monitor.stop()
-        self._ingress_buffer_monitor.stop()
+        #self._ingress_buffer_monitor.stop()
         log.info("Stopping MKRECV instance")
         self._mkrecv_proc.terminate()
         log.info("Stopping PSRDADA_CPP instance")
         self._apsuse_proc.terminate()
         log.info("Destroying DADA buffers")
         try:
-            yield self._destroy_db(self._dada_input_key, timeout=7.0)
+            yield self._destroy_db(self._dada_input_key, timeout=10.0)
         except Exception as error:
             log.warning("Error raised on DB destroy: {}".format(str(error)))
 
