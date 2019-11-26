@@ -89,12 +89,8 @@ class ApsCapture(object):
                 key, str(error)))
         log.debug(("Building DADA buffer: key={}, block_size={}, "
                    "nblocks={}").format(key, block_size, nblocks))
-
-
-        cmdline = ["sleep", "2"]
-
-        #cmdline = map(str, ["dada_db", "-k", key, "-b", block_size, "-n",
-        #                    nblocks, "-l", "-p"])
+        cmdline = map(str, ["dada_db", "-k", key, "-b", block_size, "-n",
+                            nblocks, "-l", "-p"])
         proc = Popen(
             cmdline, stdout=PIPE,
             stderr=PIPE, shell=False,
@@ -106,8 +102,7 @@ class ApsCapture(object):
     @coroutine
     def _destroy_db(self, key, timeout=20.0):
         log.debug("Destroying DADA buffer with key={}".format(key))
-        #cmdline = map(str, ["dada_db", "-k", key, "-d"])
-        cmdline = ["sleep", "1"]
+        cmdline = map(str, ["dada_db", "-k", key, "-d"])
         proc = Popen(
             cmdline, stdout=PIPE,
             stderr=PIPE, shell=False,
@@ -178,7 +173,6 @@ class ApsCapture(object):
             "--dir", config["base-output-dir"],
             "--log_level", "debug"]
         log.debug(" ".join(map(str, apsuse_cmdline)))
-        apsuse_cmdline = ["sleep", "1000"]
         self._apsuse_proc = ManagedProcess(
             apsuse_cmdline, stdout_handler=log.debug, stderr_handler=log.error)
         self._apsuse_args_sensor.set_value(" ".join(map(str, apsuse_cmdline)))
@@ -239,15 +233,11 @@ class ApsCapture(object):
 
         self._capture_monitor = PeriodicCallback(exit_check_callback, 1000)
         self._capture_monitor.start()
-
-        """
         self._ingress_buffer_monitor = DbMonitor(
             self._dada_input_key,
             callback=lambda params:
             self._ingress_buffer_percentage.set_value(params["fraction-full"]))
         self._ingress_buffer_monitor.start()
-        """
-
         self._capturing = True
 
     def target_start(self, beam_info):
