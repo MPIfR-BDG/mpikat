@@ -46,17 +46,17 @@ log.setLevel('DEBUG')
 POLARIZATIONS = ["polarization_0", "polarization_1"]
 
 DEFAULT_CONFIG = {
+	    "id": "dummy",                                      # default cfgs for master controler
+    	"type": "dummy",
+	    "address": "dummy",
         "input_bit_depth" : 12,                             # Input bit-depth
         "samples_per_heap": 4096,                           # this needs to be consistent with the mkrecv configuration
-        "samples_per_block": 256 * 1024 * 1024,             # 512 Mega sampels per buffer block to allow high res  spectra - the theoretical mazimum is thus 256 M Channels
+        "samples_per_block": 256 * 1024 * 1024,             # 256 Mega sampels per buffer block to allow high res  spectra - the theoretical mazimum is thus 128 M Channels
         "enabled_polarizations" : ["polarization_0", "polarization_1"],
         "sample_clock" : 2600000000,
         "sync_time" : 1562662573.0,
         "fft_length": 1024 * 1024 * 2 * 8,
         "naccumulate": 32,
-	"id": "dummy",
-	"type": "dummy",
-	"address": "dummy",
         "output_bit_depth": 32,
         "output_directory": "/mnt",
         "input_level": 100,
