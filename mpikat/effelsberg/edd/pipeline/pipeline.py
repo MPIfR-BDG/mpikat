@@ -73,9 +73,9 @@ CONFIG = {
     {
         "filesize": 32000000000,
         "telescope": "Effelsberg",
-        "instrument": "asterix",
+        "instrument": "EDD",
         "frequency_mhz": 1400.4,
-        "receiver_name": "EDD",
+        "receiver_name": "P217",
         "mc_source": "239.2.1.154",
         "bandwidth": 800,
         "tsamp": 0.000625,

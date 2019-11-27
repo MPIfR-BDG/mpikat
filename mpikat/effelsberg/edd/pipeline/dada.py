@@ -52,7 +52,7 @@ DADA_KEY     {{key}}                    # The dada key to write to
 DADA_MODE    4                       # The mode, 4=full dada functionality
 ORDER        FTP                       # Here we are only capturing one polarisation, so data is time only
 SYNC_TIME    {{sync_time}}
-SAMPLE_CLOCK {{sample_clock}}
+CLOCK_SAMPLE  {{sample_clock}}
 PACKET_SIZE 8400
 NTHREADS 32
 NHEAPS 256
@@ -67,7 +67,7 @@ IBV_VECTOR   -1          # IBV forced into polling mode
 IBV_MAX_POLL 10
 BUFFER_SIZE 16777216
 #BUFFER_SIZE 1048576
-SAMPLE_CLOCK_START 0 # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock                     
+SAMPLE_CLOCK_START  unset # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock                     
 HEAP_SIZE    4096
 
 #SPEAD specifcation for EDD packetiser data stream
