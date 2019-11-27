@@ -771,10 +771,17 @@ class EddPulsarPipeline(AsyncDeviceServer):
             yield self.stop_pipeline()
             raise EddPulsarPipelineError(str(error))
         time.sleep(2)
+
         while True:
             if is_accessible('/tmp/{}.par'.format(self.source_name)):
                 log.debug('/tmp/{}.par'.format(self.source_name))
                 break
+        self.first_line = []
+        with open('/tmp/{}.par'.format(self.source_name)) as f:
+            self.first_line = f.readline()
+            if self.first_line.split(" ")[0] == "WARNING:"
+                raise EddPulsarPipelineError(self.first_line)
+
         # time.sleep(3)
         ####################################################
         #CREATING THE PREDICTOR WITH TEMPO2                #
@@ -951,7 +958,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     log.info("Killing process")
                     proc._process.kill()
             os.remove("/tmp/t2pred.dat")
-            
+
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
             log.error(msg)
