@@ -779,7 +779,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self.first_line = []
         with open('/tmp/{}.par'.format(self.source_name)) as f:
             self.first_line = f.readline()
-            if self.first_line.split(" ")[0] == "WARNING:"
+            if self.first_line.split(" ")[0] == "WARNING:":
                 raise EddPulsarPipelineError(self.first_line)
 
         # time.sleep(3)
