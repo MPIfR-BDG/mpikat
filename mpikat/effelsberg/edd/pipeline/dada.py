@@ -82,6 +82,7 @@ IDX2_ITEM   1
 IDX2_LIST   0,1
 IDX2_MASK   0x1
 # end of header
+
 """
 
 DADA_DEFAULTS = {
