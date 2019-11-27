@@ -225,55 +225,6 @@ class KATCPToIGUIConverter(object):
         @brief      Stop the client
         """
         self.rc.stop()
-"""
-@tornado.gen.coroutine
-def on_shutdown(ioloop, client):
-    log.info("Shutting down client")
-    yield client.stop()
-    ioloop.stop()
-
-
-def main():
-    usage = "usage: %prog [options]"
-    parser = OptionParser(usage=usage)
-    parser.add_option('-H', '--host', dest='host', type=str,
-                      help='The hostname for the KATCP server to connect to')
-    parser.add_option('-p', '--port', dest='port', type=long,
-                      help='The port number for the KATCP server to connect to')
-    parser.add_option('', '--igui_host', dest='igui_host', type=str,
-                      help='The hostname of the iGUI interface', default="127.0.0.1")
-    parser.add_option('', '--igui_user', dest='igui_user', type=str,
-                      help='The username for the iGUI connection')
-    parser.add_option('', '--igui_pass', dest='igui_pass', type=str,
-                      help='The password for the IGUI connection')
-    parser.add_option('', '--igui_device_id', dest='igui_device_id', type=str,
-                      help='The iGUI device ID for the managed device')
-    parser.add_option('', '--log_level', dest='log_level', type=str,
-                      help='Logging level', default="INFO")
-
-    (opts, args) = parser.parse_args()
-    FORMAT = "[ %(levelname)s - %(asctime)s - %(filename)s:%(lineno)s] %(message)s"
-    logger = logging.getLogger('r2rm')
-    logging.basicConfig(format=FORMAT)
-    logger.setLevel(opts.log_level.upper())
-    logging.getLogger('katcp').setLevel('INFO')
-    ioloop = tornado.ioloop.IOLoop.current()
-    log.info("Starting KATCPToIGUIConverter instance")
-    client = KATCPToIGUIConverter(opts.host, opts.port)
-    signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
-        on_shutdown, ioloop, client))
-
-    def start_and_display():
-        client.start()
-        log.info("Ctrl-C to terminate client")
-
-    ioloop.add_callback(start_and_display)
-    ioloop.start()
-
-if __name__ == "__main__":
-    main()
-
-"""
 
 
 class ExecuteCommand(object):
@@ -530,6 +481,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._source_config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
+        self._status_server = KATCPToIGUIConverter("134.104.64.51",6000)
+        self._status_server.start()
         # self.setup_sensors()
 
     def notify(self):
