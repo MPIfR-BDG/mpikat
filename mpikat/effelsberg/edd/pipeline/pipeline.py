@@ -508,7 +508,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
         """
         for sensor in self._pipeline_instance.sensors:
-        log.debug("sensor name is {}".format(sensor))
+            log.debug("sensor name is {}".format(sensor))
             self.add_sensor(sensor)
             self._managed_sensors.append(sensor)
         self.mass_inform(Message.inform('interface-changed'))
