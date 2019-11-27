@@ -219,6 +219,8 @@ class KATCPToIGUIConverter(object):
         """
         log.debug("Recieved sensor update for sensor '{}': {}".format(
             sensor.name, repr(reading)))
+        self._observing.set_value(str(reading))
+
 
     def stop(self):
         """
@@ -506,12 +508,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
         """
         for sensor in self._pipeline_instance.sensors:
-            log.debug("sensor name is {}".format(sensor))
+        log.debug("sensor name is {}".format(sensor))
             self.add_sensor(sensor)
             self._managed_sensors.append(sensor)
         self.mass_inform(Message.inform('interface-changed'))
 
-    def remove_pipeline_sensors(self):
+    def remove_pipeline_sensors(self, sensor):
         """
         @brief Remove pipeline sensors from the managed sensors list
 
@@ -621,6 +623,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
             default="N/A",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._time_processed)
+        self._observing = Sensor.string(
+            "observing",
+            description="observing",
+            default="N/A",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._observing)
 
     @property
     def sensors(self):
