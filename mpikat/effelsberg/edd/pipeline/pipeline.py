@@ -127,7 +127,7 @@ class KATCPToIGUIConverter(object):
         @param   port             KATCP port number
         """
         #super(KATCPToIGUIConverter, self).__init__()
-        super(KATCPToIGUIConverter, self).__init__()
+        #super(KATCPToIGUIConverter, self).__init__()
         self.rc = KATCPClientResource(dict(
             name="test-client",
             address=(host, port),
@@ -139,6 +139,7 @@ class KATCPToIGUIConverter(object):
         self.api_version = None
         self.implementation_version = None
         self.previous_sensors = set()
+        self.sensor = []
 
     def sensor_notify(self):
         for callback in self.sensor_callbacks:
