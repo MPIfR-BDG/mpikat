@@ -72,7 +72,8 @@ class DigitiserPacketiserClient(object):
         """
         valid_modes = {
             4000000000: ("virtex7_dk769b", "4.0GHz", 5),
-            2600000000: ("virtex7_dk769b", "2.6GHz", 3)
+            2600000000: ("virtex7_dk769b", "2.6GHz", 3),
+            3200000000: ("virtex7_dk769b", "3.2GHz", 6)
         }
         try:
             args = valid_modes[rate]
