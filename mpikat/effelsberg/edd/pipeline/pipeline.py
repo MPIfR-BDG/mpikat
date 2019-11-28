@@ -215,15 +215,15 @@ class KATCPToIGUIConverter(object):
         added = current_sensors.difference(self.previous_sensors)
         log.debug("Sensors added since last update: {}".format(added))
         #for name in list(added):
-        for name in ["source_name", "observing"]:
+        for name in ["source_name", "observing", "timestamp"]:
             #if name == 'observing':
             #log.debug("Setting sampling strategy and callbacks on sensor '{}'".format(name))
         # strat3 = ('event-rate', 2.0, 3.0)              #event-rate doesn't work
         # self.rc.set_sampling_strategy(name, strat3)    #KATCPSensorError:
         # Error setting strategy
         # not sure that auto means here
-        #self.rc.set_sampling_strategy(name, "auto")
-            self.rc.set_sampling_strategy(name, ["period", (1)])
+            self.rc.set_sampling_strategy(name, "auto")
+            #self.rc.set_sampling_strategy(name, ["period", (1)])
         #self.rc.set_sampling_strategy(name, "event")
             self.rc.set_sensor_listener(name, self._sensor_updated)
             self.new_sensor = name
