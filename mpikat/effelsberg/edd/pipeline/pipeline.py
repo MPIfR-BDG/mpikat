@@ -117,7 +117,7 @@ def is_accessible(path, mode='r'):
         return False
     return True
 
-class KATCPToIGUIConverter(EddPulsarPipeline):
+class KATCPToIGUIConverter(object):
 
     def __init__(self, host, port):
         """
