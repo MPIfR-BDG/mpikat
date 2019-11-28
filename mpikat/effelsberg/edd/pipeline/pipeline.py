@@ -764,7 +764,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self.config_dict["mc_streaming_port"]))
             yield self._digpack_client.synchronize()
             yield self._digpack_client.capture_start()
-            log.debug(self._digpack_client.get_sync_time())
+            self.sync_epoch = yield self.get_sync_time()
+            log.debug("Sync epoch is {}".format(self.sync_epoch))
 
         except Exception as error:
             log.info("Cannot configure DigitiserPacketiserClient :{}".format(error))
