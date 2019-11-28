@@ -241,7 +241,7 @@ class KATCPToIGUIConverter(object):
         log.debug("Recieved sensor update for sensor '{}': {}".format(
             sensor.name, repr(reading)))
         #self.sensor = sensor.value
-        self.sensor = sensor.name
+        self.sensor = sensor.name, sensor.value
         log.debug("Value of {} sensor {}".format(sensor.name, sensor.value))
         #self._observing.set_value(repr(reading))
 
@@ -517,8 +517,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     def sensor_update(self, sensor_value, callback):
         log.debug('Settting sensor value in EDD_pipeline = {}'.format(str(sensor_value)))
-        self.test_object = self.get_sensor(str(sensor_value))
-        log.debug(self.test_object)
+        #self.test_object = self.get_sensor(str(sensor_value))
+        #log.debug(self.test_object)
         self._observing.set_value(str(sensor_value))
 
     def new_sensor(self, sensor_name, callback):
