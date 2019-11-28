@@ -61,7 +61,7 @@ class DigitiserPacketiserClient(object):
         yield _check_interface('iface01')
 
     @coroutine
-    def set_sampling_rate(self, rate, retries=3):
+    def set_sampling_rate(self, rate, retries=10):
         """
         @brief      Sets the sampling rate.
 
