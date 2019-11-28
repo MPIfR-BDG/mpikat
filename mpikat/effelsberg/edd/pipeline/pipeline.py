@@ -127,8 +127,6 @@ class KATCPToIGUIConverter(object):
         @param   host             KATCP host address
         @param   port             KATCP port number
         """
-        #super(KATCPToIGUIConverter, self).__init__()
-        #super(KATCPToIGUIConverter, self).__init__()
         self.rc = KATCPClientResource(dict(
             name="test-client",
             address=(host, port),
@@ -141,6 +139,7 @@ class KATCPToIGUIConverter(object):
         self.implementation_version = None
         self.previous_sensors = set()
         self.sensor_callbacks = set()
+        self.new_sensor_callbacks = set()
         self._sensor = []
 
     def sensor_notify(self):
@@ -155,6 +154,20 @@ class KATCPToIGUIConverter(object):
     def sensor(self, value):
         self._sensor = value
         self.sensor_notify()
+
+    def new_sensor_notify(self):
+        for callback in self.new_sensor_callbacks:
+            callback(self.new_sensor, self)
+
+    @property
+    def new_sensor(self):
+        return self.new_sensor
+
+    @new_sensor.setter
+    def new_sensor(self, value):
+        self._sensor = value
+        self.new_sensor_notify()
+
 
     def start(self):
         """
@@ -176,23 +189,10 @@ class KATCPToIGUIConverter(object):
             yield self.rc.until_synced()
             log.debug("Client synced")
             log.debug("Requesting version info")
-            # This information can be used to get an iGUI device ID
             response = yield self.rc.req.version_list()
             log.info("response {}".format(response))
-            # for internal device KATCP server, response.informs[2].arguments return index out of range
-            #_, api, implementation = response.informs[2].arguments
-            #self.api_version = api
-            #self.implementation_version = implementation
-            #log.info("katcp-device API: {}".format(self.api_version))
-            #log.info("katcp-device implementation: {}".format(self.implementation_version))
             self.ioloop.add_callback(self.update)
         log.debug("Starting {} instance".format(self.__class__.__name__))
-        # self.igui_connection.login()
-        #self.igui_connection.login(self.igui_user, self.igui_pass)
-        # log.debug(self.igui_rxmap)
-        # Here we do a look up to find the parent of this device
-
-        #log.debug("iGUI representation:\n{}".format(self.igui_rxmap))
         self.rc.start()
         self.ic = self.rc._inspecting_client
         self.ioloop = self.rc.ioloop
@@ -226,6 +226,7 @@ class KATCPToIGUIConverter(object):
                 self.rc.set_sampling_strategy(name, ["period", (10)])
             #self.rc.set_sampling_strategy(name, "event")
                 self.rc.set_sensor_listener(name, self._sensor_updated)
+                self.new_sensor = name
         self.previous_sensors = current_sensors
 
     def _sensor_updated(self, sensor, reading):
@@ -508,10 +509,17 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._status_server.start()
         self._status_server.sensor_callbacks.add(
             self.sensor_update)
+        self._status_server.new_sensor_callbacks.add(
+            self.new_sensor)
+        
         # self.setup_sensors()
 
     def sensor_update(self, sensor_value, callback):
         log.debug('Settting sensor value = {}'.format(str(sensor_value)))
+        #self._observing.set_value(str(sensor_value))
+
+    def new_sensor(self, sensor_name, callback):
+        log.debug('New sensor reporting = {}'.format(str(sensor_name)))
         #self._observing.set_value(str(sensor_value))
 
     def notify(self):
@@ -529,15 +537,15 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._state = value
         self.notify()
 
-    def add_pipeline_sensors(self):
+    def add_pipeline_sensors(self, sensor):
         """
         @brief Add pipeline sensors to the managed sensors list
 
         """
-        for sensor in self._pipeline_instance.sensors:
-            log.debug("sensor name is {}".format(sensor))
-            self.add_sensor(sensor)
-            self._managed_sensors.append(sensor)
+        #for sensor in self._pipeline_instance.sensors:
+        log.debug("sensor name is {}".format(sensor))
+        self.add_sensor(sensor)
+        self._managed_sensors.append(sensor)
         self.mass_inform(Message.inform('interface-changed'))
 
     def remove_pipeline_sensors(self):
@@ -651,12 +659,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._time_processed)
 
-        self._observing = Sensor.string(
-            "observing",
-            description="observing",
-            default="N/A",
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._observing)
+        #self._observing = Sensor.string(
+        #    "observing",
+        #    description="observing",
+        #    default="N/A",
+        #    initial_status=Sensor.UNKNOWN)
+        #self.add_sensor(self._observing)
 
     @property
     def sensors(self):
