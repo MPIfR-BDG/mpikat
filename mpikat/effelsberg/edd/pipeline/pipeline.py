@@ -516,7 +516,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     def sensor_update(self, sensor_value, callback):
         log.debug('Settting sensor value for EDD_pipeline sensor : {} with value {}'.format(sensor_value[0],sensor_value[1]))
-        self.test_object = self.get_sensor(sensor_value[0])
+        self.test_object = self.get_sensor(sensor_value[0].replace("-", "_"))
         log.debug(self.test_object)
         self.test_object.set_value(str(sensor_value[1]))
 
