@@ -126,6 +126,7 @@ class KATCPToIGUIConverter(object):
         @param   host             KATCP host address
         @param   port             KATCP port number
         """
+        #super(KATCPToIGUIConverter, self).__init__()
         super(KATCPToIGUIConverter, self).__init__()
         self.rc = KATCPClientResource(dict(
             name="test-client",
