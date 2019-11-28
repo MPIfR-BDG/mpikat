@@ -26,11 +26,11 @@ import os
 import time
 from astropy.time import Time
 from subprocess import PIPE, Popen
+from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
 import shlex
 import threading
 import base64
-#from katcp import Sensor
 import tornado
 import coloredlogs
 import signal
@@ -497,7 +497,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._managed_sensors = []
         self.callbacks = set()
         self._state = "idle"
-        #self._sensors = []
         self._volumes = ["/tmp/:/scratch/"]
         self._dada_key = None
         self._config = None
@@ -749,11 +748,26 @@ class EddPulsarPipeline(AsyncDeviceServer):
             raise EddPulsarPipelineKeyError(msg)
         log.info("Configuring pipeline {}".format(
             self._pipeline_sensor_name.value()))
-
         try:
             config = json.loads(config_json)
         except Exception as error:
             log.info("Cannot load config json :{}".format(error))
+
+        try:
+            self._digpack_ip = self.config_dict["digpack_ip"]
+            self._digpack_port = self.config_dict["digpack_port"]
+            self._digpack_client = DigitiserPacketiserClient(self._digpack_ip, self._digpack_port)
+            yield self._digpack_client.set_sampling_rate(self.config_dict["sampling_rate"])
+            yield self._digpack_client.set_bit_width(self.config_dict["nbits"])
+            yield self._digpack_client.set_destinations("{}:{}".format(self.config_dict["mc_source"].split(",")[0],
+                self.config_dict["mc_streaming_port"]), "{}:{}".format(self.config_dict["mc_source"].split(",")[1],
+                self.config_dict["mc_streaming_port"]))
+            yield self._digpack_client.synchronize()
+            yield self._digpack_client.capture_start()
+            log.debug(self._digpack_client.get_sync_time())
+
+        except Exception as error:
+            log.info("Cannot configure DigitiserPacketiserClient :{}".format(error))
 
         try:
             log.debug("Unpacked config: {}".format(config))
