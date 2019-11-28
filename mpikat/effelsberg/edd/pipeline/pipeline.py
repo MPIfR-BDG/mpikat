@@ -543,8 +543,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
         """
         #for sensor in self._pipeline_instance.sensors:
-        log.debug("sensor name is {}".format(sensor))
-        self.add_sensor(Sensor.string("{}".format(sensor), description="observing",
+        #log.debug("sensor name is {}".format(sensor))
+        self.add_sensor(Sensor.string("{}".format(sensor), description="{}".format(sensor),
             default="N/A", initial_status=Sensor.UNKNOWN))
         #self.add_sensor(sensor)
         self._managed_sensors.append(sensor)
