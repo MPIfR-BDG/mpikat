@@ -139,8 +139,8 @@ class KATCPToIGUIConverter(object):
         self.api_version = None
         self.implementation_version = None
         self.previous_sensors = set()
-        self.sensor = []
         self.sensor_callbacks = set()
+        self._sensor = []
 
     def sensor_notify(self):
         for callback in self.sensor_callbacks:
