@@ -216,7 +216,7 @@ class KATCPToIGUIConverter(object):
         log.debug("Sensors added since last update: {}".format(added))
         for name in list(added):
             #if name == 'observing':
-            log.debug(
+            #log.debug(
                 "Setting sampling strategy and callbacks on sensor '{}'".format(name))
         # strat3 = ('event-rate', 2.0, 3.0)              #event-rate doesn't work
         # self.rc.set_sampling_strategy(name, strat3)    #KATCPSensorError:
@@ -516,7 +516,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         # self.setup_sensors()
 
     def sensor_update(self, sensor_value, callback):
-        log.debug('Settting sensor value for EDD_pipeline sensor : {}'.format(sensor_value[0]))
+        log.debug('Settting sensor value for EDD_pipeline sensor : {} with value {}'.format(sensor_value[0],sensor_value[1]))
         self.test_object = self.get_sensor(sensor_value[0])
         log.debug(self.test_object)
         self.test_object.set_value(str(sensor_value[1]))
