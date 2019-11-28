@@ -1172,7 +1172,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         except Exception as error:
             msg = "Couldn't deconfigure pipeline {}".format(str(error))
             log.error(msg)
-            raise EddPulsarPipelineError(msg)
+            #raise EddPulsarPipelineError(msg)
         else:
             log.info("Deconfigured pipeline {}".format(
                 self._pipeline_sensor_name.value()))
