@@ -635,7 +635,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self.add_sensor(self._central_freq)
 
         self._source_name_sensor = Sensor.string(
-            "source_name",
+            "target_name",
             description="target name",
             default="N/A",
             initial_status=Sensor.UNKNOWN)
