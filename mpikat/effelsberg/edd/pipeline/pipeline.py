@@ -505,7 +505,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._mkrecv_ingest_proc = None
         self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
         self._status_server.start()
+        self._status_server.sensor_callbacks.add(
+            self.sensor_update)
         # self.setup_sensors()
+
+    def sensor_update(self, sensor_value, callback):
+        log.debug('Settting sensor value = {}'.format(str(sensor_value)))
 
     def notify(self):
         """@brief callback function."""
@@ -643,6 +648,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             default="N/A",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._time_processed)
+
         self._observing = Sensor.string(
             "observing",
             description="observing",
