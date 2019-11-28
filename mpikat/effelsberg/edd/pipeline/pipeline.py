@@ -137,6 +137,7 @@ class KATCPToIGUIConverter(object):
         self.api_version = None
         self.implementation_version = None
         self.previous_sensors = set()
+        self.parent = parent
 
     def start(self):
         """
@@ -217,7 +218,7 @@ class KATCPToIGUIConverter(object):
         @param      sensor   The sensor
         @param      reading  The sensor reading
         """
-        log.debug("Value of _observing sensor {}".format(parent._observing.get_value()))
+        log.debug("Value of _observing sensor {}".format(self.parent._observing.get_value()))
         log.debug("Recieved sensor update for sensor '{}': {}".format(sensor.name, repr(reading)))
         log.debug("testing")
         #self._observing.set_value(repr(reading))
