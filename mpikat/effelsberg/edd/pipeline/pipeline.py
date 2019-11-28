@@ -119,13 +119,14 @@ def is_accessible(path, mode='r'):
 
 class KATCPToIGUIConverter(object):
 
-    def __init__(self, parent, host, port):
+    def __init__(self, host, port):
         """
         @brief      Class for katcp to igui converter.
 
         @param   host             KATCP host address
         @param   port             KATCP port number
         """
+        super.__init__()
         self.rc = KATCPClientResource(dict(
             name="test-client",
             address=(host, port),
@@ -137,7 +138,6 @@ class KATCPToIGUIConverter(object):
         self.api_version = None
         self.implementation_version = None
         self.previous_sensors = set()
-        self.parent = parent
 
     def start(self):
         """
@@ -218,7 +218,7 @@ class KATCPToIGUIConverter(object):
         @param      sensor   The sensor
         @param      reading  The sensor reading
         """
-        log.debug("Value of _observing sensor {}".format(self.parent._observing.get_value()))
+        log.debug("Value of _observing sensor {}".format(self._observing.get_value()))
         log.debug("Recieved sensor update for sensor '{}': {}".format(sensor.name, repr(reading)))
         log.debug("testing")
         #self._observing.set_value(repr(reading))
@@ -487,7 +487,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._source_config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
-        self._status_server = KATCPToIGUIConverter(self, "134.104.64.51", 6000)
+        self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
         self._status_server.start()
         # self.setup_sensors()
 
