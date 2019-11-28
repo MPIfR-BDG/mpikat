@@ -216,8 +216,7 @@ class KATCPToIGUIConverter(object):
         log.debug("Sensors added since last update: {}".format(added))
         for name in list(added):
             #if name == 'observing':
-            #log.debug(
-                "Setting sampling strategy and callbacks on sensor '{}'".format(name))
+            #log.debug("Setting sampling strategy and callbacks on sensor '{}'".format(name))
         # strat3 = ('event-rate', 2.0, 3.0)              #event-rate doesn't work
         # self.rc.set_sampling_strategy(name, strat3)    #KATCPSensorError:
         # Error setting strategy
