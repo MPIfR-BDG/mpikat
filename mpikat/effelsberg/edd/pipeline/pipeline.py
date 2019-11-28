@@ -117,6 +117,7 @@ def is_accessible(path, mode='r'):
         return False
     return True
 
+
 class KATCPToIGUIConverter(object):
 
     def __init__(self, host, port):
@@ -234,14 +235,12 @@ class KATCPToIGUIConverter(object):
         @param      sensor   The sensor
         @param      reading  The sensor reading
         """
-        
-        log.debug("Recieved sensor update for sensor '{}': {}".format(sensor.name, repr(reading)))
-        self.sensor = repr(reading)
-        log.debug("Value of _observing sensor {}".format(self.sensor))
-        #self._observing.set_value(repr(reading))
-        
-        
 
+        log.debug("Recieved sensor update for sensor '{}': {}".format(
+            sensor.name, repr(reading)))
+        self.sensor = sensor.value
+        log.debug("Value of _observing sensor {}".format(self.sensor))
+        # self._observing.set_value(repr(reading))
 
     def stop(self):
         """
@@ -920,7 +919,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         with open('/tmp/{}.par'.format(self.source_name)) as f:
             self.first_line = f.readline()
             if self.first_line.split(" ")[0] == "WARNING:":
-                raise EddPulsarPipelineError("ERROR: {}".format(self.first_line))
+                raise EddPulsarPipelineError(
+                    "ERROR: {}".format(self.first_line))
 
         # time.sleep(3)
         ####################################################
