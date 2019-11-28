@@ -215,7 +215,7 @@ class KATCPToIGUIConverter(object):
         added = current_sensors.difference(self.previous_sensors)
         log.debug("Sensors added since last update: {}".format(added))
         #for name in list(added):
-        for name in ["source_name", "observing"]    
+        for name in ["source_name", "observing"]:
             #if name == 'observing':
             #log.debug("Setting sampling strategy and callbacks on sensor '{}'".format(name))
         # strat3 = ('event-rate', 2.0, 3.0)              #event-rate doesn't work
