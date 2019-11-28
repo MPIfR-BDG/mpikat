@@ -140,6 +140,19 @@ class KATCPToIGUIConverter(object):
         self.implementation_version = None
         self.previous_sensors = set()
 
+    def sensor_notify(self):
+        for callback in self.sensor_callbacks:
+            callback(self._sensor, self)
+
+    @property
+    def sensor(self):
+        return self._sensor
+
+    @sensor.setter
+    def sensor(self, value):
+        self._sensor = value
+        self.sensor_notify()
+
     def start(self):
         """
         @brief      Start the instance running
@@ -219,7 +232,7 @@ class KATCPToIGUIConverter(object):
         @param      sensor   The sensor
         @param      reading  The sensor reading
         """
-        log.debug("Value of _observing sensor {}".format(self._observing.get_value()))
+        log.debug("Value of _observing sensor {}".format(self.sensor))
         log.debug("Recieved sensor update for sensor '{}': {}".format(sensor.name, repr(reading)))
         log.debug("testing")
         #self._observing.set_value(repr(reading))
