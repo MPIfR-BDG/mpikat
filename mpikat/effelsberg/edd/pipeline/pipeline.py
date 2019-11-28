@@ -222,7 +222,7 @@ class KATCPToIGUIConverter(object):
         # Error setting strategy
         # not sure that auto means here
         #self.rc.set_sampling_strategy(name, "auto")
-            self.rc.set_sampling_strategy(name, ["period", (10)])
+            self.rc.set_sampling_strategy(name, ["period", (1)])
         #self.rc.set_sampling_strategy(name, "event")
             self.rc.set_sensor_listener(name, self._sensor_updated)
             self.new_sensor = name
@@ -237,12 +237,10 @@ class KATCPToIGUIConverter(object):
         @param      reading  The sensor reading
         """
 
-        log.debug("Recieved sensor update for sensor '{}': {}".format(
-            sensor.name, repr(reading)))
-        #self.sensor = sensor.value
+        #log.debug("Recieved sensor update for sensor '{}': {}".format(
+        #    sensor.name, repr(reading)))
         self.sensor = sensor.name, sensor.value
         log.debug("Value of {} sensor {}".format(sensor.name, sensor.value))
-        #self._observing.set_value(repr(reading))
 
     def stop(self):
         """
@@ -515,9 +513,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
         # self.setup_sensors()
 
     def sensor_update(self, sensor_value, callback):
-        log.debug('Settting sensor value for EDD_pipeline sensor : {} with value {}'.format(sensor_value[0],sensor_value[1]))
+        #log.debug('Settting sensor value for EDD_pipeline sensor : {} with value {}'.format(sensor_value[0],sensor_value[1]))
         self.test_object = self.get_sensor(sensor_value[0].replace("-", "_"))
-        log.debug(self.test_object)
+        #log.debug(self.test_object)
         self.test_object.set_value(str(sensor_value[1]))
 
     def new_sensor(self, sensor_name, callback):
