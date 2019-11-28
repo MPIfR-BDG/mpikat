@@ -168,7 +168,6 @@ class KATCPToIGUIConverter(object):
         self._new_sensor = value
         self.new_sensor_notify()
 
-
     def start(self):
         """
         @brief      Start the instance running
@@ -214,14 +213,14 @@ class KATCPToIGUIConverter(object):
         log.debug("Sensors removed since last update: {}".format(removed))
         added = current_sensors.difference(self.previous_sensors)
         log.debug("Sensors added since last update: {}".format(added))
-        #for name in list(added):
+        # for name in list(added):
         for name in ["source_name", "observing", "timestamp"]:
-            #if name == 'observing':
+            # if name == 'observing':
             #log.debug("Setting sampling strategy and callbacks on sensor '{}'".format(name))
-        # strat3 = ('event-rate', 2.0, 3.0)              #event-rate doesn't work
-        # self.rc.set_sampling_strategy(name, strat3)    #KATCPSensorError:
-        # Error setting strategy
-        # not sure that auto means here
+            # strat3 = ('event-rate', 2.0, 3.0)              #event-rate doesn't work
+            # self.rc.set_sampling_strategy(name, strat3)    #KATCPSensorError:
+            # Error setting strategy
+            # not sure that auto means here
             self.rc.set_sampling_strategy(name, "auto")
             #self.rc.set_sampling_strategy(name, ["period", (1)])
         #self.rc.set_sampling_strategy(name, "event")
@@ -238,7 +237,7 @@ class KATCPToIGUIConverter(object):
         @param      reading  The sensor reading
         """
 
-        #log.debug("Recieved sensor update for sensor '{}': {}".format(
+        # log.debug("Recieved sensor update for sensor '{}': {}".format(
         #    sensor.name, repr(reading)))
         self.sensor = sensor.name, sensor.value
         #log.debug("Value of {} sensor {}".format(sensor.name, sensor.value))
@@ -509,13 +508,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self.sensor_update)
         self._status_server.new_sensor_callbacks.add(
             self.new_sensor)
-        
+
         # self.setup_sensors()
 
     def sensor_update(self, sensor_value, callback):
         #log.debug('Settting sensor value for EDD_pipeline sensor : {} with value {}'.format(sensor_value[0],sensor_value[1]))
         self.test_object = self.get_sensor(sensor_value[0].replace("-", "_"))
-        #log.debug(self.test_object)
+        # log.debug(self.test_object)
         self.test_object.set_value(str(sensor_value[1]))
 
     def new_sensor(self, sensor_name, callback):
@@ -542,11 +541,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
         @brief Add pipeline sensors to the managed sensors list
 
         """
-        #for sensor in self._pipeline_instance.sensors:
+        # for sensor in self._pipeline_instance.sensors:
         #log.debug("sensor name is {}".format(sensor))
         self.add_sensor(Sensor.string("{}".format(sensor), description="{}".format(sensor),
-            default="N/A", initial_status=Sensor.UNKNOWN))
-        #self.add_sensor(sensor)
+                                      default="N/A", initial_status=Sensor.UNKNOWN))
+        # self.add_sensor(sensor)
         self._managed_sensors.append(sensor)
         self.mass_inform(Message.inform('interface-changed'))
 
@@ -661,12 +660,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._time_processed)
 
-        #self._observing = Sensor.string(
+        # self._observing = Sensor.string(
         #    "observing",
         #    description="observing",
         #    default="N/A",
         #    initial_status=Sensor.UNKNOWN)
-        #self.add_sensor(self._observing)
+        # self.add_sensor(self._observing)
 
     @property
     def sensors(self):
@@ -756,13 +755,16 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             self._digpack_ip = self.config_dict["digpack_ip"]
             self._digpack_port = self.config_dict["digpack_port"]
-            self._digpack_client = DigitiserPacketiserClient(self._digpack_ip, self._digpack_port)
+            self._digpack_client = DigitiserPacketiserClient(
+                self._digpack_ip, self._digpack_port)
             yield self._digpack_client.set_sampling_rate(self.config_dict["sampling_rate"])
             yield self._digpack_client.set_bit_width(self.config_dict["nbits"])
             yield self._digpack_client.set_destinations("{}:{}".format(self.config_dict["mc_source"].split(",")[0],
-                self.config_dict["mc_streaming_port"]), "{}:{}".format(self.config_dict["mc_source"].split(",")[1],
-                self.config_dict["mc_streaming_port"]))
+                                                                       self.config_dict["mc_streaming_port"]), "{}:{}".format(self.config_dict["mc_source"].split(",")[1],
+                                                                                                                              self.config_dict["mc_streaming_port"]))
             yield self._digpack_client.synchronize()
+            yield self._digpack_client.set_predecimation_factor(2)
+            yield self._digpack_client.set_flipsignalspectrum(1)
             yield self._digpack_client.capture_start()
             self.sync_epoch = yield self._digpack_client.get_sync_time()
             log.debug("Sync epoch is {}".format(self.sync_epoch))
@@ -879,8 +881,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
         cpu_numbers = "30,31"
         cuda_number = "1"
         try:
-            header["sync_time"] = self._source_config["sync_time"]
-            header["sample_clock"] = self._source_config["sample_clock"]
+            header["sync_time"] = self.sync_epoch
+            header["sample_clock"] = float(
+                self.config_dict["sampling_rate"]) / 2.0
         except:
             pass
         ########NEED TO PUT IN THE LOGIC FOR _R here#############

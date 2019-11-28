@@ -134,6 +134,28 @@ class DigitiserPacketiserClient(object):
         yield self._safe_request("capture_destination", "v", v_dest)
         yield self._safe_request("capture_destination", "h", h_dest)
 
+
+    @coroutine
+    def set_predecimation_factor(self, factor):
+        """
+        @brief      Sets the predecimation_factorfor data out of the packetiser
+
+        @param      factor (e.g. 1,2,4,8)
+
+        """
+        yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
+
+    @coroutine
+    def set_flipsignalspectrum(self, value):
+        """
+        @brief      Sets the rxs-packetizer-edd-flipsignalspectrum data out of the packetiser
+
+        @param      value (e.g. 0, 1)
+
+        """
+        yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", value)
+
+
     @coroutine
     def set_interface_address(self, intf, ip):
         """
