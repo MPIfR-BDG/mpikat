@@ -220,7 +220,7 @@ class KATCPToIGUIConverter(object):
         log.debug("Recieved sensor update for sensor '{}': {}".format(
             sensor.name, repr(reading)))
         self._observing.set_value(str(reading))
-        log.debug("Value of _observing sensor {}".format(self._observing.get_value())
+        log.debug("Value of _observing sensor {}".format(self._observing.get_value()))
         
 
 
