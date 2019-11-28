@@ -157,15 +157,15 @@ class KATCPToIGUIConverter(object):
 
     def new_sensor_notify(self):
         for callback in self.new_sensor_callbacks:
-            callback(self.new_sensor, self)
+            callback(self._new_sensor, self)
 
     @property
     def new_sensor(self):
-        return self.new_sensor
+        return self._new_sensor
 
     @new_sensor.setter
     def new_sensor(self, value):
-        self._sensor = value
+        self._new_sensor = value
         self.new_sensor_notify()
 
 
@@ -227,6 +227,7 @@ class KATCPToIGUIConverter(object):
             #self.rc.set_sampling_strategy(name, "event")
                 self.rc.set_sensor_listener(name, self._sensor_updated)
                 self.new_sensor = name
+                log.debug("Setting new sensor with name = {}".format(name))
         self.previous_sensors = current_sensors
 
     def _sensor_updated(self, sensor, reading):
