@@ -516,12 +516,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
         # self.setup_sensors()
 
     def sensor_update(self, sensor_value, callback):
-        log.debug('Settting sensor value = {}'.format(str(sensor_value)))
+        log.debug('Settting sensor value = {} {}'.format(str(sensor_value.split(" "))))
         #self._observing.set_value(str(sensor_value))
 
     def new_sensor(self, sensor_name, callback):
         log.debug('New sensor reporting = {}'.format(str(sensor_name)))
-        #self._observing.set_value(str(sensor_value))
+        add_pipeline_sensors(sensor_name)
+        self._observing.set_value(str(sensor_value))
 
     def notify(self):
         """@brief callback function."""
