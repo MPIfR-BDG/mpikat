@@ -660,13 +660,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._time_processed)
 
-        # self._observing = Sensor.string(
-        #    "observing",
-        #    description="observing",
-        #    default="N/A",
-        #    initial_status=Sensor.UNKNOWN)
-        # self.add_sensor(self._observing)
-
     @property
     def sensors(self):
         return self._sensors
