@@ -126,7 +126,7 @@ class KATCPToIGUIConverter(EddPulsarPipeline):
         @param   host             KATCP host address
         @param   port             KATCP port number
         """
-        EddPulsarPipeline.__init__(self)
+        super()
         self.rc = KATCPClientResource(dict(
             name="test-client",
             address=(host, port),
