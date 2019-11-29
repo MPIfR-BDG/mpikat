@@ -757,7 +757,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                                                                                                                               self.config_dict["mc_streaming_port"]))
             yield self._digpack_client.synchronize()
             yield self._digpack_client.set_predecimation_factor(2)
-            yield self._digpack_client.set_flipsignalspectrum(1)
+            yield self._digpack_client.set_flipsignalspectrum(0)
             yield self._digpack_client.capture_start()
             self.sync_epoch = yield self._digpack_client.get_sync_time()
             log.debug("Sync epoch is {}".format(self.sync_epoch))
