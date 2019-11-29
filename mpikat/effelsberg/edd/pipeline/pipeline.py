@@ -89,6 +89,12 @@ CONFIG = {
 
 }
 
+NUMA_MODE = {
+    0: ("0-9", "10", "11,12"),
+    1: ("18-28", "29", "30,31")
+}
+INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15"}
+
 """
 Central frequency of each band should be with BW of 162.5
 239.2.1.150 2528.90625
@@ -103,6 +109,9 @@ Central frequency of each band should be with BW of 162.5
 
 sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
            "scannum": 0, "subscannum": 1}
+
+
+/
 
 
 def is_accessible(path, mode='r'):
@@ -731,6 +740,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             self.config_json = config_json
             self.config_dict = json.loads(self.config_json)
+            self.numa_number = self.config_dict["numa"]
             pipeline_name = self.config_dict["mode"]
             log.debug("Pipeline name = {}".format(pipeline_name))
         except KeyError as error:
@@ -784,10 +794,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             self._pipeline_sensor_name.set_value(pipeline_name)
             log.info("Creating DADA buffer for mkrecv")
-            cmd = "numactl -m 1 dada_db -k {key} {args}".format(key=self._dada_key,
-                                                                args=self._config["dada_db_params"]["args"])
-            # cmd = "dada_db -k {key} {args}".format(**
-            #                                       self._config["dada_db_params"])
+            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dada_key,
+                                                                     args=self._config["dada_db_params"]["args"])
             log.debug("Running command: {0}".format(cmd))
             self._create_ring_buffer = ExecuteCommand(
                 cmd, outpath=None, resident=False)
@@ -798,8 +806,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             raise EddPulsarPipelineError(str(error))
         try:
             log.info("Creating DADA buffer for EDDPolnMerge")
-            cmd = "numactl -m 1 dada_db -k {key} {args}".format(key=self._dadc_key,
-                                                                args=self._config["dadc_db_params"]["args"])
+            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dadc_key,
+                                                                     args=self._config["dadc_db_params"]["args"])
             # cmd = "dada_db -k {key} {args}".format(**
             #                                       self._config["dada_db_params"])
             log.debug("Running command: {0}".format(cmd))
@@ -856,9 +864,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 "central_freq"], self._pipeline_config["bandwidth"]
             self._central_freq.set_value(str(self.frequency_mhz))
             header = self._config["dada_header_params"]
-            header["ra"], header["dec"], header["key"], header["mc_source"], header["frequency_mhz"], header["bandwidth"] = self._source_config[
+            header["ra"], header["dec"], header["key"], header["mc_source"], header["frequency_mhz"], header["bandwidth"], header["interface"] = self._source_config[
                 "ra"], self._source_config["dec"], self._dada_key, self._pipeline_config[
-                "mc_source"], self.frequency_mhz, self.bandwidth
+                "mc_source"], self.frequency_mhz, self.bandwidth, INTERFACE[self.numa_number]
             self.source_name, self.nchannels, self.nbins = self._source_config[
                 "source-name"], self._source_config["nchannels"], self._source_config["nbins"]
             self._source_name_sensor.set_value(self.source_name)
@@ -872,8 +880,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
         #cpu_numbers = self._pipeline_config["cpus"]
         #cuda_number = self._pipeline_config["cuda"]
-        cpu_numbers = "30,31"
-        cuda_number = "1"
+        cpu_numbers = NUMA_MODE[self.numa_number][2]
+        cuda_number = self.numa_number
         try:
             header["sync_time"] = self.sync_epoch
             header["sample_clock"] = float(
@@ -1007,7 +1015,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING DSPSR                                    #
         ####################################################
         os.chdir(in_path)
-        cmd = "numactl -m 1 dspsr {args} {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
+        cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
+            numa=self.numa_number
             args=self._config["dspsr_params"]["args"],
             nchan="-F {}:D".format(self.nchannels),
             nbin="-b {}".format(self.nbins),
@@ -1028,7 +1037,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
-        cmd = "numactl -m 1 taskset -c 29 edd_merge --log_level=debug"
+        cmd = "numactl -m {numa} taskset -c {cpu} edd_merge --log_level=debug".format(
+            numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][1])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDPolnMerge")
         self._polnmerge_proc = ExecuteCommand(
@@ -1041,8 +1051,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
-        cmd = "numactl -m 1 taskset -c 18-28 mkrecv_nt --header {} --dada-mode 4 --quiet".format(
-            dada_header_file.name)
+        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_nt --header {dada_header} --dada-mode 4 --quiet".format(
+            numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
         self._mkrecv_ingest_proc = ExecuteCommand(
