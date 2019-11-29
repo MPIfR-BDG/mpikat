@@ -111,9 +111,6 @@ sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
            "scannum": 0, "subscannum": 1}
 
 
-/
-
-
 def is_accessible(path, mode='r'):
     """
     Check if the file or directory at `path` can
