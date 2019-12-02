@@ -33,7 +33,8 @@ from katcp import AsyncDeviceServer, Message, Sensor, AsyncReply
 from katcp.kattypes import request, return_reply, Str
 
 
-log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline.dummy_status_server")
+log = logging.getLogger(
+    "mpikat.effelsberg.edd.pipeline.pipeline.dummy_status_server")
 
 #PIPELINES = {"mock":mock.Mock()}
 
@@ -109,9 +110,9 @@ class EddDummyStatusServer(AsyncDeviceServer):
     @coroutine
     def stop(self):
         """Stop PafWorkerServer server"""
-        #if self._pipeline_sensor_status.value() == "ready":
+        # if self._pipeline_sensor_status.value() == "ready":
         #    log.info("Pipeline still running, stopping pipeline")
-       #yield self.deconfigure()
+       # yield self.deconfigure()
         yield super(EddDummyStatusServer, self).stop()
 
     def setup_sensors(self):
@@ -152,13 +153,14 @@ class EddDummyStatusServer(AsyncDeviceServer):
         self.add_sensor(self._source)
 
     @coroutine
-    @request(Str(),Str())
+    @request(Str(), Str())
     @return_reply()
     def request_set_source(self, req, observing, source_name):
         """Add two numbers"""
         self._observing.set_value(str(observing))
         self._source.set_value(str(source_name))
         req.reply("ok")
+        raise AsyncReply
 
 
 @coroutine
