@@ -273,7 +273,7 @@ class EddCommander(AsyncDeviceServer):
         self._status_server.new_sensor_callbacks.add(
             self.new_sensor)
         self._bc = BlockingRequest("134.104.70.66", 5000)
-        #self.start_working()
+        self.start_working()
 
     def sensor_update(self, sensor_value, callback):
         #log.debug('Settting sensor value for EDD_pipeline sensor : {} with value {}'.format(sensor_value[0],sensor_value[1]))
@@ -394,6 +394,7 @@ class EddCommander(AsyncDeviceServer):
     def _add_profile_to_sensor(self, png_blob, callback):
         self._profile.set_value(png_blob)
 
+    @coroutine
     def start_working(self):
 
         while True:
