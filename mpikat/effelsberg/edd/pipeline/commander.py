@@ -209,7 +209,6 @@ class EddCommander(AsyncDeviceServer):
             self.sensor_update)
         self._status_server.new_sensor_callbacks.add(
             self.new_sensor)
-        #self._bc = BlockingRequest("134.104.70.66", 5000)
         self._edd_pipeline = KATCPClientResource(dict(
             name='edd_pipeline-client',
             address=("134.104.70.66", 5000),
@@ -234,6 +233,7 @@ class EddCommander(AsyncDeviceServer):
          #   log.debug("observing sensor value is {}".format(
          #       self._observing.value()))
             log.debug("Should send a start command to the pipeline {}".format(self._source.value()))
+            self._edd_pipeline.req.start('{"source-name":"J1723-2837","nchannels":1024,"nbins":1024,"ra":"123.4","dec":"-20.1"}')
             self.first_true = False
             self.last_value = True
 
@@ -241,6 +241,7 @@ class EddCommander(AsyncDeviceServer):
          #   log.debug("observing sensor value is {}".format(
          #       self._observing.value()))
             log.debug("Should send a stop to the pipeline")
+            self._edd_pipeline.req.stop()
             self.first_true = True
             self.last_value = False
 
