@@ -229,15 +229,15 @@ class EddCommander(AsyncDeviceServer):
         #log.debug(bool(self.first_true == True) & bool(
         #    self._observing.value() == 'True'))
 
-        if bool(self.last_value == False) & bool(self.first_true == True) & bool(self._observing.value() == 'True'):
+        if bool(self.last_value is False) & bool(self.first_true is True) & bool(self._observing.value() == 'True'):
          #   log.debug("observing sensor value is {}".format(
          #       self._observing.value()))
             log.debug("Should send a start command to the pipeline {}".format(self._source.value()))
-            self._edd_pipeline.req.start('{"source-name":"J1723-2837","nchannels":1024,"nbins":1024,"ra":"123.4","dec":"-20.1"}')
+            self._edd_pipeline.req.start('{"source-name":"{}","nchannels":1024,"nbins":1024,"ra":"123.4","dec":"-20.1"}'.format(self._source.value()))
             self.first_true = False
             self.last_value = True
 
-        elif bool(self._observing.value() == 'False') & bool(self.last_value == True):
+        elif bool(self._observing.value() == 'False') & bool(self.last_value is True):
          #   log.debug("observing sensor value is {}".format(
          #       self._observing.value()))
             log.debug("Should send a stop to the pipeline")
