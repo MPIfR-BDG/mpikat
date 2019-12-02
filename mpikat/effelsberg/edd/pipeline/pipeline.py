@@ -1040,7 +1040,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -c 1 {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
-                nchan="-F {}:D".format(self.nchannels),
+                nchan="-F {}".format(self.nchannels),
                 nbin="-b {}".format(self.nbins),
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
