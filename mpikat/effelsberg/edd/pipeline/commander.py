@@ -273,7 +273,7 @@ class EddCommander(AsyncDeviceServer):
         self._status_server.new_sensor_callbacks.add(
             self.new_sensor)
         self._bc = BlockingRequest("134.104.70.66", 5000)
-        self.start_working()
+        #self.start_working()
 
     def sensor_update(self, sensor_value, callback):
         #log.debug('Settting sensor value for EDD_pipeline sensor : {} with value {}'.format(sensor_value[0],sensor_value[1]))
@@ -394,16 +394,34 @@ class EddCommander(AsyncDeviceServer):
     def _add_profile_to_sensor(self, png_blob, callback):
         self._profile.set_value(png_blob)
 
-    @coroutine
-    def start_working(self):
 
-        while True:
-            # if observing == TRUE and observing_started == FALSE:
+    @coroutine
+    @request()
+    @return_reply()
+    def request_start_working(self, req):
+        """Add two numbers"""
+
+        #ereq.reply("ok")
+        #raise AsyncReply
+        @coroutine
+        def start_wrapper():
+            try:
+                while True:
+    #        # if observing == TRUE and observing_started == FALSE:
                 # grab source name and send start command
             #    self._source.get_value
-            print("checking sensor value")
-            time.sleep(10)
-        # check observing and source value
+                print("checking sensor value")
+                time.sleep(10)
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+                #self._pipeline_sensor_status.set_value("ready")
+        self.ioloop.add_callback(start_wrapper)
+        raise AsyncReply
+
+
 
 
 @coroutine
