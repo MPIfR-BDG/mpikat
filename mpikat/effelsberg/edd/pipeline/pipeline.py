@@ -85,6 +85,8 @@ CONFIG = {
         "nchan": 1,
         "resolution": 1,
         "dsb": 1
+        "ra": "123"
+        "dec": "-10"
     }
 
 }
@@ -863,8 +865,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 "central_freq"], self._pipeline_config["bandwidth"]
             self._central_freq.set_value(str(self.frequency_mhz))
             header = self._config["dada_header_params"]
-            header["ra"], header["dec"], header["key"], header["mc_source"], header["frequency_mhz"], header["bandwidth"], header["interface"] = self._source_config[
-                "ra"], self._source_config["dec"], self._dada_key, self._pipeline_config[
+            header["key"], header["mc_source"], header["frequency_mhz"], header["bandwidth"], header["interface"] = self._dada_key, self._pipeline_config[
                 "mc_source"], self.frequency_mhz, self.bandwidth, INTERFACE[self.numa_number]
             self.source_name, self.nchannels, self.nbins = self._source_config[
                 "source-name"], self._source_config["nchannels"], self._source_config["nbins"]
