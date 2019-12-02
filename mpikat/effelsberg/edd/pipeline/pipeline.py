@@ -1140,19 +1140,19 @@ class EddPulsarPipeline(AsyncDeviceServer):
             try:
                 self._mkrecv_ingest_proc
             except NameError:
-                var_exists = False
+                pass
             else:
                 process.append(self._mkrecv_ingest_proc)
             try:
                 self._polnmerge_proc
             except NameError:
-                var_exists = False
+                pass
             else:
                 process.append(self._polnmerge_proc)
             try:
                 self._archive_directory_monitor
             except NameError:
-                var_exists = False
+                pass
             else:
                 process.append(self._archive_directory_monitor)
 
