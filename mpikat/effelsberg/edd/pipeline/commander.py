@@ -27,12 +27,8 @@ import logging
 from katcp import BlockingClient, Message
 
 
-logging.basicConfig(level=logging.INFO,
-                    stream=sys.stderr,
-                    format="%(asctime)s - %(name)s - %(filename)s:"
-                    "%(lineno)s - %(levelname)s - %(message)s")
-
-log = logging.getLogger("blockingclient")
+log = logging.getLogger("mpikat.effelsberg.edd.pipeline")
+log.setLevel('DEBUG')
 
 ESCAPE_SEQUENCE_RE = re.compile(r'''
     ( \\U........      # 8-digit hex escapes
