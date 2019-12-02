@@ -1013,7 +1013,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING DSPSR                                    #
         ####################################################
         os.chdir(in_path)
-        cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -cpu {cpus}-asynch-fold -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
+        cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -cpu {cpus} -asynch-fold -skz -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
             numa=self.numa_number,
             args=self._config["dspsr_params"]["args"],
             nchan="-F {}:D".format(self.nchannels),

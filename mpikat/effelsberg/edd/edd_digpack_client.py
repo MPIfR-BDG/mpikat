@@ -6,13 +6,17 @@ from katcp import KATCPClientResource
 
 log = logging.getLogger("mpikat.edd_digpack_client")
 
+
 class DigitiserPacketiserError(Exception):
     pass
+
 
 class PacketiserInterfaceError(Exception):
     pass
 
+
 class DigitiserPacketiserClient(object):
+
     def __init__(self, host, port=7147):
         """
         @brief      Class for digitiser packetiser client.
@@ -33,11 +37,13 @@ class DigitiserPacketiserClient(object):
 
     @coroutine
     def _safe_request(self, request_name, *args):
-        log.info("Sending packetiser request '{}' with arguments {}".format(request_name, args))
+        log.info("Sending packetiser request '{}' with arguments {}".format(
+            request_name, args))
         yield self._client.until_synced()
         response = yield self._client.req[request_name](*args)
         if not response.reply.reply_ok():
-            log.error("'{}' request failed with error: {}".format(request_name, response.reply.arguments[1]))
+            log.error("'{}' request failed with error: {}".format(
+                request_name, response.reply.arguments[1]))
             raise DigitiserPacketiserError(response.reply.arguments[1])
         else:
             log.debug("'{}' request successful".format(request_name))
@@ -47,14 +53,17 @@ class DigitiserPacketiserClient(object):
     def _check_interfaces(self):
         log.debug("Checking status of 40 GbE interfaces")
         yield self._client.until_synced()
+
         @coroutine
         def _check_interface(name):
             log.debug("Checking status of '{}'".format(name))
-            sensor = self._client.sensor['rxs_packetizer_40g_{}_am_lock_status'.format(name)]
+            sensor = self._client.sensor[
+                'rxs_packetizer_40g_{}_am_lock_status'.format(name)]
             status = yield sensor.get_value()
             if not status == 0x0f:
                 log.warning("Interface '{}' in error state".format(name))
-                raise PacketiserInterfaceError("40-GbE interface '{}' did not boot".format(name))
+                raise PacketiserInterfaceError(
+                    "40-GbE interface '{}' did not boot".format(name))
             else:
                 log.debug("Interface '{}' is healthy".format(name))
         yield _check_interface('iface00')
@@ -78,7 +87,8 @@ class DigitiserPacketiserClient(object):
         try:
             args = valid_modes[rate]
         except KeyError as error:
-            msg = "Invalid sampling rate, valid sampling rates are: {}".format(valid_modes.keys())
+            msg = "Invalid sampling rate, valid sampling rates are: {}".format(
+                valid_modes.keys())
             log.error(msg)
             raise DigitiserPacketiserError(msg)
 
@@ -112,7 +122,8 @@ class DigitiserPacketiserClient(object):
         try:
             mode = valid_modes[nbits]
         except KeyError as error:
-            msg = "Invalid bit depth, valid bit depths are: {}".format(valid_modes.keys())
+            msg = "Invalid bit depth, valid bit depths are: {}".format(
+                valid_modes.keys())
             log.error(msg)
             raise DigitiserPacketiserError(msg)
         yield self._safe_request("rxs_packetizer_edd_switchmode", mode)
@@ -134,7 +145,6 @@ class DigitiserPacketiserClient(object):
         yield self._safe_request("capture_destination", "v", v_dest)
         yield self._safe_request("capture_destination", "h", h_dest)
 
-
     @coroutine
     def set_predecimation_factor(self, factor):
         """
@@ -154,7 +164,6 @@ class DigitiserPacketiserClient(object):
 
         """
         yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", value)
-
 
     @coroutine
     def set_interface_address(self, intf, ip):
@@ -216,11 +225,12 @@ class DigitiserPacketiserClient(object):
                     set the
         """
         if not unix_time:
-            unix_time = round(time.time()+2)
+            unix_time = round(time.time() + 2)
         yield self._safe_request("synchronise", 0, unix_time)
         sync_epoch = yield self.get_sync_time()
         if sync_epoch != unix_time:
-            log.warning("Requested sync time {} not equal to actual sync time {}".format(unix_time, sync_epoch))
+            log.warning("Requested sync time {} not equal to actual sync time {}".format(
+                unix_time, sync_epoch))
 
 
 if __name__ == "__main__":
@@ -229,19 +239,23 @@ if __name__ == "__main__":
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('-H', '--host', dest='host', type=str,
-        help='Host interface to bind to', default="134.104.73.132")
+                      help='Host interface to bind to', default="134.104.73.132")
     parser.add_option('-p', '--port', dest='port', type=long,
-        help='Port number to bind to', default=7147)
+                      help='Port number to bind to', default=7147)
     parser.add_option('', '--nbits', dest='nbits', type=long,
-        help='The number of bits per output sample', default=12)
+                      help='The number of bits per output sample', default=12)
     parser.add_option('', '--sampling_rate', dest='sampling_rate', type=float,
-        help='The digitiser sampling rate (Hz)', default=2600000000.0)
+                      help='The digitiser sampling rate (Hz)', default=2600000000.0)
     parser.add_option('', '--v-destinations', dest='v_destinations', type=str,
-        help='V polarisation destinations', default="225.0.0.152+3:7148")
+                      help='V polarisation destinations', default="225.0.0.152+3:7148")
     parser.add_option('', '--h-destinations', dest='h_destinations', type=str,
-        help='H polarisation destinations', default="225.0.0.156+3:7148")
-    parser.add_option('', '--log-level',dest='log_level',type=str,
-        help='Logging level',default="INFO")
+                      help='H polarisation destinations', default="225.0.0.156+3:7148")
+    parser.add_option('', '--pre', dest='predecimation_factor', type=long,
+                      help='The number predecimation_factor', default=1)
+    parser.add_option('', '--flip', dest='flip_band', type=long,
+                      help='Flip band or not 0 or 1', default=0)
+    parser.add_option('', '--log-level', dest='log_level', type=str,
+                      help='Logging level', default="INFO")
     (opts, args) = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
@@ -251,39 +265,19 @@ if __name__ == "__main__":
         logger=logger)
     ioloop = IOLoop.current()
     client = DigitiserPacketiserClient(opts.host, port=opts.port)
+
     @coroutine
     def configure():
         try:
             yield client.set_sampling_rate(opts.sampling_rate)
             yield client.set_bit_width(opts.nbits)
             yield client.set_destinations(opts.v_destinations, opts.h_destinations)
+            yield client.set_predecimation_factor(opts.predecimation_factor)
+            yield client.set_flipsignalspectrum(opts.flip_band)
             yield client.synchronize()
             yield client.capture_start()
         except Exception as error:
-            log.exception("Error during packetiser configuration: {}".format(str(error)))
+            log.exception(
+                "Error during packetiser configuration: {}".format(str(error)))
             raise error
     ioloop.run_sync(configure)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
