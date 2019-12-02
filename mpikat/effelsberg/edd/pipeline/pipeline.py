@@ -683,10 +683,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
     def _decode_capture_stdout(self, stdout, callback):
         log.debug('{}'.format(str(stdout)))
 
-    def _error_treatment(self, callback):
+    def c(self, callback):
         pass
-        # log.debug('reconfigureing')
-        # self.reconfigure()
+        #log.debug('reconfigureing')
+        self.stop_pipeline()
 
     def _save_capture_stdout(self, stdout, callback):
         with open("{}.par".format(self._source_config["source-name"]), "a") as file:
