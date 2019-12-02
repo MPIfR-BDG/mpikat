@@ -85,7 +85,7 @@ class DigitiserPacketiserClient(object):
         valid_modes = {
             4000000000: ("virtex7_dk769b", "4.0GHz", 5),
             3600000000: ("virtex7_dk769b", "3.6GHz", 7),
-            3200000000: ("virtex7_dk769b", "3.2GHz", 6),
+            3200000000: ("virtex7_dk769b", "3.2GHz", 9),
             2600000000: ("virtex7_dk769b", "2.6GHz", 3),
             2560000000: ("virtex7_dk769b", "2.56GHz", 2)
         }
