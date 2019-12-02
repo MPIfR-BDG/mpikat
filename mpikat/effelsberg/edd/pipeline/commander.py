@@ -404,7 +404,7 @@ class EddCommander(AsyncDeviceServer):
     @request()
     @return_reply()
     def request_start_working(self, req):
-        """Add two numbers"""
+
 
         #ereq.reply("ok")
         #raise AsyncReply
