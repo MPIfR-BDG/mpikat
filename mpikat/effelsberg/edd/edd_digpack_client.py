@@ -70,7 +70,7 @@ class DigitiserPacketiserClient(object):
         yield _check_interface('iface01')
 
     @coroutine
-    def set_sampling_rate(self, rate, retries=10):
+    def set_sampling_rate(self, rate, retries=3):
         """
         @brief      Sets the sampling rate.
 
@@ -250,9 +250,9 @@ if __name__ == "__main__":
                       help='V polarisation destinations', default="225.0.0.152+3:7148")
     parser.add_option('', '--h-destinations', dest='h_destinations', type=str,
                       help='H polarisation destinations', default="225.0.0.156+3:7148")
-    parser.add_option('', '--pre', dest='predecimation_factor', type=long,
+    parser.add_option('', '--pre', dest='predecimation_factor', type=int,
                       help='The number predecimation_factor', default=1)
-    parser.add_option('', '--flip', dest='flip_band', type=long,
+    parser.add_option('', '--flip', dest='flip_band', type=int,
                       help='Flip band or not 0 or 1', default=0)
     parser.add_option('', '--log-level', dest='log_level', type=str,
                       help='Logging level', default="INFO")
@@ -276,6 +276,7 @@ if __name__ == "__main__":
             yield client.set_flipsignalspectrum(opts.flip_band)
             yield client.synchronize()
             yield client.capture_start()
+            client.stop()
         except Exception as error:
             log.exception(
                 "Error during packetiser configuration: {}".format(str(error)))

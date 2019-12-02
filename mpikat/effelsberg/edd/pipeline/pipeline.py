@@ -767,6 +767,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             yield self._digpack_client.set_flipsignalspectrum(self.config_dict["flip_band"])
             yield self._digpack_client.synchronize()
             yield self._digpack_client.capture_start()
+            self._digpack_client.stop()
             self.sync_epoch = yield self._digpack_client.get_sync_time()
             log.debug("Sync epoch is {}".format(self.sync_epoch))
             yield self._digpack_client.stop()
