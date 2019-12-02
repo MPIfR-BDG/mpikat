@@ -158,7 +158,7 @@ class EddDummyStatusServer(AsyncDeviceServer):
         """Add two numbers"""
         self._observing.set_value(str(observing))
         self._source.set_value(str(source_name))
-        req.reply("ok")
+        req.reply("ok",)
 
 
 @coroutine
