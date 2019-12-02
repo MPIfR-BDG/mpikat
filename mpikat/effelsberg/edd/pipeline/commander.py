@@ -279,12 +279,12 @@ class EddCommander(AsyncDeviceServer):
     def sensor_update(self, sensor_value, callback):
         #log.debug('Settting sensor value for EDD_pipeline sensor : {} with value {}'.format(sensor_value[0],sensor_value[1]))
         self.test_object = self.get_sensor(sensor_value[0].replace("-", "_"))
-        log.debug("{} {}".format(
-            sensor_value[0].replace("-", "_"), sensor_value[1]))
+        #log.debug("{} {}".format(
+        #    sensor_value[0].replace("-", "_"), sensor_value[1]))
         self.test_object.set_value(str(sensor_value[1]))
         self._observing = self.get_sensor("_observing")
         self._observing = self.get_sensor("_source")
-        log.debug(self._observing.value())
+        log.debug("Value for _observing {}".format(self._observing.value()))
         if self._observing.value() == True & self.first_flag == True:
             log.debug("observing sensor value is {}".format(
                 self._observing.value()))
