@@ -84,8 +84,8 @@ CONFIG = {
         "npol": 2,
         "nchan": 1,
         "resolution": 1,
-        "dsb": 1
-        "ra": "123"
+        "dsb": 1,
+        "ra": "123",
         "dec": "-10"
     }
 
