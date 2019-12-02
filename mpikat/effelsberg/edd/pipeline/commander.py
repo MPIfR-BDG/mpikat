@@ -285,18 +285,18 @@ class EddCommander(AsyncDeviceServer):
         self._observing = self.get_sensor("_observing")
         self._observing = self.get_sensor("_source")
         log.debug(self._observing.value())
-        if self._observing.value() == 'TRUE' & self.first_flag == True:
+        if self._observing.value() = True & self.first_flag = True:
             log.debug("observing sensor value is {}".format(
                 self._observing.value()))
             log.debug("Should send a start command to the pipeline")
-            self.first_flag == False
+            self.first_flag = False
 
             # log.debug(")
-        elif self._observing.value() == 'FALSE':
+        elif self._observing.value() = False:
             log.debug("observing sensor value is {}".format(
                 self._observing.value()))
             log.debug("Should send a stop to the pipeline")
-            self.first_flag == True
+            self.first_flag = True
 
     def new_sensor(self, sensor_name, callback):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))
