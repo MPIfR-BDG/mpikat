@@ -280,11 +280,12 @@ class EddCommander(AsyncDeviceServer):
         self.test_object = self.get_sensor(sensor_value[0].replace("-", "_"))
         log.debug("{} {}".format(sensor_value[0].replace("-", "_"), sensor_value[1]))
         self.test_object.set_value(str(sensor_value[1]))
-        if self.get_sensor("_observing").get_value() == 'TRUE':
-            log.debug("observing sensor value is {}".format(self.get_sensor("_observing").get_value()))
+        self._observing = self.get_sensor("_observing")
+        if self._observing.get_value() == 'TRUE':
+            log.debug("observing sensor value is {}".format(self._observing.get_value()))
             #log.debug(")
-        elif self.get_sensor("_observing").get_value()  == 'FALSE':
-            log.debug("observing sensor value is {}".format(self.get_sensor("_observing").get_value()))
+        elif self._observing.get_value()  == 'FALSE':
+            log.debug("observing sensor value is {}".format(self._observing.get_value()))
 
     def new_sensor(self, sensor_name, callback):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))
