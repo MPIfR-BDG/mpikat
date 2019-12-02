@@ -233,7 +233,8 @@ class EddCommander(AsyncDeviceServer):
          #   log.debug("observing sensor value is {}".format(
          #       self._observing.value()))
             log.debug("Should send a start command to the pipeline {}".format(self._source.value()))
-            self._edd_pipeline.req.start('{"source-name":"{}","nchannels":1024,"nbins":1024,"ra":"123.4","dec":"-20.1"}'.format(self._source.value()))
+            #self._edd_pipeline.req.start('{"source-name":"{}","nchannels":1024,"nbins":1024,"ra":"123.4","dec":"-20.1"}'.format(self._source.value()))
+            self._edd_pipeline.req.start('{"source-name":"J1723-2837","nchannels":1024,"nbins":1024,"ra":"123.4","dec":"-20.1"}')
             self.first_true = False
             self.last_value = True
 
@@ -307,6 +308,8 @@ class EddCommander(AsyncDeviceServer):
         #    log.info("Pipeline still running, stopping pipeline")
         # yield self.deconfigure()
         yield super(EddCommander, self).stop()
+        yield self._edd_pipeline.stop()
+        yield self._status_server.stop()
 
     def setup_sensors(self):
         """
