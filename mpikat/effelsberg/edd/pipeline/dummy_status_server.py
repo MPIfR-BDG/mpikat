@@ -31,7 +31,6 @@ from optparse import OptionParser
 from tornado.gen import coroutine
 from katcp import AsyncDeviceServer, Message, Sensor, AsyncReply
 from katcp.kattypes import request, return_reply, Str
-from mpikat.effelsberg.edd.pipeline.pipeline import PIPELINES
 
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline.dummy_status_server")
