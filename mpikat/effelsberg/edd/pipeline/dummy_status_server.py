@@ -151,7 +151,7 @@ class EddDummyStatusServer(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._source)
 
-
+    @coroutine
     @request(Str(),Str())
     @return_reply(Str())
     def request_set_source(self, req, observing, source_name):
