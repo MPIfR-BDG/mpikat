@@ -1136,8 +1136,22 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             log.debug("Stopping")
             self._timeout = 10
-            process = [self._mkrecv_ingest_proc,
-                       self._polnmerge_proc, self._archive_directory_monitor]
+            process = []
+            try:
+                process.append(self._mkrecv_ingest_proc)
+            except:
+                pass
+            try:
+                process.append(self._polnmerge_proc)
+            except:
+                pass 
+            try:
+                process.append(self._archive_directory_monitor)
+            except:
+                pass 
+            #process = [self._mkrecv_ingest_proc,
+                       #self._polnmerge_proc, self._archive_directory_monitor]
+
             for proc in process:
                 time.sleep(2)
                 proc.set_finish_event()
