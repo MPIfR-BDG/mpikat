@@ -90,8 +90,8 @@ CONFIG = {
 }
 
 NUMA_MODE = {
-    0: ("0-9", "10", "11,12"),
-    1: ("18-28", "29", "30,31")
+    0: ("0-9", "10", "11,12,13,14"),
+    1: ("18-28", "29", "30,31,32,33")
 }
 INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15"}
 
@@ -1013,7 +1013,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING DSPSR                                    #
         ####################################################
         os.chdir(in_path)
-        cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
+        cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -cpu {cpus} -asynch-fold -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
             numa=self.numa_number,
             args=self._config["dspsr_params"]["args"],
             nchan="-F {}:D".format(self.nchannels),
