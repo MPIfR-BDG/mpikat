@@ -201,8 +201,8 @@ class BlockingRequest(BlockingClient):
 
     def to_stream(self, reply, informs):
         log.info(self.decode_katcp_message(reply.__str__()))
-            for msg in informs:
-                log.info(self.decode_katcp_message(msg.__str__()))
+        for msg in informs:
+            log.info(self.decode_katcp_message(msg.__str__()))
 
     def start(self):
         self.setDaemon(True)
@@ -278,8 +278,6 @@ class EddCommander(AsyncDeviceServer):
             self.new_sensor)
         self._bc = BlockingRequest("134.104.70.66", 5000)
         self.start_working()
-
-
 
     def sensor_update(self, sensor_value, callback):
         #log.debug('Settting sensor value for EDD_pipeline sensor : {} with value {}'.format(sensor_value[0],sensor_value[1]))
@@ -403,7 +401,7 @@ class EddCommander(AsyncDeviceServer):
     def start_working(self):
 
         while True:
-            #if observing == TRUE and observing_started == FALSE:
+            # if observing == TRUE and observing_started == FALSE:
                 # grab source name and send start command
             #    self._source.get_value
             log.debug("checking sensor value")
@@ -441,8 +439,7 @@ def main():
     logging.getLogger('katcp').setLevel('INFO')
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting EddCommander instance")
-    server = EddCommander(opts.host, opts.port,
-                          opts.target - host, target - port)
+    server = EddCommander(opts.host, opts.port)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
 
