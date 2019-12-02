@@ -153,12 +153,12 @@ class EddDummyStatusServer(AsyncDeviceServer):
 
     @coroutine
     @request(Str(),Str())
-    @return_reply(Str())
+    @return_reply()
     def request_set_source(self, req, observing, source_name):
         """Add two numbers"""
         self._observing.set_value(str(observing))
         self._source.set_value(str(source_name))
-        req.reply("ok",)
+        req.reply("ok")
 
 
 @coroutine
