@@ -273,6 +273,7 @@ class EddCommander(AsyncDeviceServer):
         self._status_server.new_sensor_callbacks.add(
             self.new_sensor)
         self._bc = BlockingRequest("134.104.70.66", 5000)
+        self.first_flag = True
         # self.start_working()
 
     def sensor_update(self, sensor_value, callback):
@@ -282,14 +283,20 @@ class EddCommander(AsyncDeviceServer):
             sensor_value[0].replace("-", "_"), sensor_value[1]))
         self.test_object.set_value(str(sensor_value[1]))
         self._observing = self.get_sensor("_observing")
+        self._observing = self.get_sensor("_source")
         log.debug(self._observing.value())
-        if self._observing.value() == 'TRUE':
+        if self._observing.value() == 'TRUE' && self.first_flag == True:
             log.debug("observing sensor value is {}".format(
                 self._observing.value()))
+            log.debug("Should send a start command to the pipeline")
+            self.first_flag == False
+
             # log.debug(")
         elif self._observing.value() == 'FALSE':
             log.debug("observing sensor value is {}".format(
                 self._observing.value()))
+            log.debug("Should send a stop to the pipeline")
+            self.first_flag == True
 
     def new_sensor(self, sensor_name, callback):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))
