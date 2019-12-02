@@ -126,6 +126,14 @@ def is_accessible(path, mode='r'):
     return True
 
 
+def parse_tag(source_name):
+    split = source_name.split("_")
+    if len(split) == 1:
+        return "default"
+    else:
+        return split[-1]
+
+
 class KATCPToIGUIConverter(object):
 
     def __init__(self, host, port):
@@ -889,10 +897,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
         except:
             pass
         ########NEED TO PUT IN THE LOGIC FOR _R here#############
-        try:
-            self.source_name = self.source_name.split("_")[0]
-        except Exception as error:
-            raise EddPulsarPipelineError(str(error))
+        # try:
+        #    self.source_name = self.source_name.split("_")[0]
+        # except Exception as error:
+        #    raise EddPulsarPipelineError(str(error))
         header["source_name"] = self.source_name
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
@@ -935,49 +943,51 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         try:
             os.chdir("/tmp/")
-            cmd = "psrcat -E {source_name}".format(
-                source_name=self.source_name)
-            log.debug("Command to run: {}".format(cmd))
-            self.psrcat = ExecuteCommand(cmd, outpath=None, resident=False)
-            self.psrcat.stdout_callbacks.add(
-                self._save_capture_stdout)
-            self.psrcat.stderr_callbacks.add(
-                self._handle_execution_stderr)
+            if parse_tag(self.source_name) == "default":
+                cmd = "psrcat -E {source_name}".format(
+                    source_name=self.source_name.split("_")[0])
+                log.debug("Command to run: {}".format(cmd))
+                self.psrcat = ExecuteCommand(cmd, outpath=None, resident=False)
+                self.psrcat.stdout_callbacks.add(
+                    self._save_capture_stdout)
+                self.psrcat.stderr_callbacks.add(
+                    self._handle_execution_stderr)
             # os.chdir(in_path)
 
         except Exception as error:
             yield self.stop_pipeline()
             raise EddPulsarPipelineError(str(error))
         time.sleep(2)
-
-        while True:
-            if is_accessible('/tmp/{}.par'.format(self.source_name)):
-                log.debug('/tmp/{}.par'.format(self.source_name))
-                break
-        self.first_line = []
-        with open('/tmp/{}.par'.format(self.source_name)) as f:
-            self.first_line = f.readline()
-            if self.first_line.split(" ")[0] == "WARNING:":
-                raise EddPulsarPipelineError(
-                    "ERROR: {}".format(self.first_line))
+        if parse_tag(self.source_name) == "default":
+            while True:
+                if is_accessible('/tmp/{}.par'.format(self.source_name)):
+                    log.debug('/tmp/{}.par'.format(self.source_name))
+                    break
+            self.first_line = []
+            with open('/tmp/{}.par'.format(self.source_name)) as f:
+                self.first_line = f.readline()
+                if self.first_line.split(" ")[0] == "WARNING:":
+                    raise EddPulsarPipelineError(
+                        "ERROR: {}".format(self.first_line))
 
         # time.sleep(3)
         ####################################################
         #CREATING THE PREDICTOR WITH TEMPO2                #
         ####################################################
-        cmd = 'tempo2 -f /tmp/{}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
-            self.source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 1.0, float(self._pipeline_config["central_freq"]) + 1.0)
-        log.debug("Command to run: {}".format(cmd))
-        self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
-        self.tempo2.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self.tempo2.stderr_callbacks.add(
-            self._handle_execution_stderr)
-        time.sleep(2)
-        while True:
-            if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
-                log.debug('{}/t2pred.dat'.format(os.getcwd()))
-                break
+
+            cmd = 'tempo2 -f /tmp/{}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
+                self.source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 1.0, float(self._pipeline_config["central_freq"]) + 1.0)
+            log.debug("Command to run: {}".format(cmd))
+            self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
+            self.tempo2.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self.tempo2.stderr_callbacks.add(
+                self._handle_execution_stderr)
+            time.sleep(2)
+            while True:
+                if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
+                    log.debug('{}/t2pred.dat'.format(os.getcwd()))
+                    break
         ####################################################
         #CREATING THE DADA HEADERFILE                      #
         ####################################################
@@ -1015,16 +1025,26 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING DSPSR                                    #
         ####################################################
         os.chdir(in_path)
-        cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
-            numa=self.numa_number,
-            args=self._config["dspsr_params"]["args"],
-            nchan="-F {}:D".format(self.nchannels),
-            nbin="-b {}".format(self.nbins),
-            predictor="/tmp/t2pred.dat",
-            parfile="/tmp/{}.par".format(self.source_name),
-            cpus=cpu_numbers,
-            cuda_number=cuda_number,
-            keyfile=dada_key_file.name)
+        if parse_tag(self.source_name) == "default":
+            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
+                numa=self.numa_number,
+                args=self._config["dspsr_params"]["args"],
+                nchan="-F {}:D".format(self.nchannels),
+                nbin="-b {}".format(self.nbins),
+                predictor="/tmp/t2pred.dat",
+                parfile="/tmp/{}.par".format(self.source_name),
+                cpus=cpu_numbers,
+                cuda_number=cuda_number,
+                keyfile=dada_key_file.name)
+        elif parse_tag(self.source_name) == "R":
+            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -c 1 {keyfile}".format(
+                numa=self.numa_number,
+                args=self._config["dspsr_params"]["args"],
+                nchan="-F {}:D".format(self.nchannels),
+                nbin="-b {}".format(self.nbins),
+                cpus=cpu_numbers,
+                cuda_number=cuda_number,
+                keyfile=dada_key_file.name)
         #cmd = "numactl -m 1 dbnull -k dadc"
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring DSPSR")
