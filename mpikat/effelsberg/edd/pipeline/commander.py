@@ -425,10 +425,10 @@ def main():
                       help='Port number to bind to', default=5000)
     parser.add_option('', '--log_level', dest='log_level', type=str,
                       help='logging level', default="INFO")
-    parser.add_option('-H', '--target-host', dest='target-host', type=str,
-                      help='Host interface to bind to', default="127.0.0.1")
-    parser.add_option('-p', '--target-port', dest='target-port', type=long,
-                      help='Port number to bind to', default=5000)
+    #parser.add_option('-H', '--target-host', dest='target-host', type=str,
+    #                  help='Host interface to bind to', default="127.0.0.1")
+    #parser.add_option('-p', '--target-port', dest='target-port', type=long,
+    #                  help='Port number to bind to', default=5000)
     (opts, args) = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
