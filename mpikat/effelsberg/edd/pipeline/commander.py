@@ -170,6 +170,7 @@ class KATCPToIGUIConverter(object):
         """
         self.rc.stop()
 
+
 class EddCommander(AsyncDeviceServer):
     """
     @brief Interface object which accepts KATCP commands
@@ -224,21 +225,21 @@ class EddCommander(AsyncDeviceServer):
         self.test_object.set_value(str(sensor_value[1]))
         self._observing = self.get_sensor("_observing")
         self._source = self.get_sensor("_source")
-        log.debug("Value for _observing {}".format(self._observing.value()))
-        log.debug(bool(self._observing.value() == 'True'))
-        log.debug(bool(self.first_true == True) & bool(self._observing.value() == 'True'))
-        
+        #log.debug("Value for _observing {}".format(self._observing.value()))
+        #log.debug(bool(self._observing.value() == 'True'))
+        #log.debug(bool(self.first_true == True) & bool(
+        #    self._observing.value() == 'True'))
+
         if bool(self.last_value == False) & bool(self.first_true == True) & bool(self._observing.value() == 'True'):
-            log.debug("observing sensor value is {}".format(
-                self._observing.value()))
-            log.debug("Should send a start command to the pipeline")
+         #   log.debug("observing sensor value is {}".format(
+         #       self._observing.value()))
+            log.debug("Should send a start command to the pipeline {}".format(self._source.value()))
             self.first_true = False
             self.last_value = True
 
-            # log.debug(")
         elif bool(self._observing.value() == 'False') & bool(self.last_value == True):
-            log.debug("observing sensor value is {}".format(
-                self._observing.value()))
+         #   log.debug("observing sensor value is {}".format(
+         #       self._observing.value()))
             log.debug("Should send a stop to the pipeline")
             self.first_true = True
             self.last_value = False
