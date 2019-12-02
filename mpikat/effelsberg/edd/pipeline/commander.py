@@ -410,8 +410,8 @@ class EddCommander(AsyncDeviceServer):
     #        # if observing == TRUE and observing_started == FALSE:
                 # grab source name and send start command
             #    self._source.get_value
-                print("checking sensor value")
-                time.sleep(10)
+                    print("checking sensor value")
+                    time.sleep(10)
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
