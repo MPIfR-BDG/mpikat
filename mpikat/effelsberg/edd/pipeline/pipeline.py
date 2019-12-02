@@ -1182,7 +1182,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             os.remove("/tmp/t2pred.dat")
 
         except Exception as error:
-            msg = "Couldn't stop pipeline {}".format(str(error))
+            msg = "Couldn't stop pipeline {} process name :{}".format(str(error), proc)
             log.error(msg)
             raise EddPulsarPipelineError(msg)
         else:
