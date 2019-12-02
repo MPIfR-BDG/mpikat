@@ -215,31 +215,33 @@ class EddCommander(AsyncDeviceServer):
             controlled=True))
         self._edd_pipeline.start()
         self.first_true = True
+        self.last_value = False
         # self.start_working()
 
     def sensor_update(self, sensor_value, callback):
         #log.debug('Settting sensor value for EDD_pipeline sensor : {} with value {}'.format(sensor_value[0],sensor_value[1]))
         self.test_object = self.get_sensor(sensor_value[0].replace("-", "_"))
-        #log.debug("{} {}".format(
-        #    sensor_value[0].replace("-", "_"), sensor_value[1]))
         self.test_object.set_value(str(sensor_value[1]))
         self._observing = self.get_sensor("_observing")
         self._source = self.get_sensor("_source")
         log.debug("Value for _observing {}".format(self._observing.value()))
         log.debug(bool(self._observing.value() == 'True'))
         log.debug(bool(self.first_true == True) & bool(self._observing.value() == 'True'))
-        if bool(self.first_true == True) & bool(self._observing.value() == 'True'):
+        
+        if bool(self.last_vaule == False) & bool(self.first_true == True) & bool(self._observing.value() == 'True'):
             log.debug("observing sensor value is {}".format(
                 self._observing.value()))
             log.debug("Should send a start command to the pipeline")
             self.first_true = False
+            self.last_vaule = True
 
             # log.debug(")
-        elif self._observing.value() == 'False':
+        elif self._observing.value() == 'False' & bool(self.last_vaule == True):
             log.debug("observing sensor value is {}".format(
                 self._observing.value()))
             log.debug("Should send a stop to the pipeline")
             self.first_true = True
+            self.last_vaule = False
 
     def new_sensor(self, sensor_name, callback):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))
