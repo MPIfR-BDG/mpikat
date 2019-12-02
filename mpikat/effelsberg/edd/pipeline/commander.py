@@ -170,70 +170,6 @@ class KATCPToIGUIConverter(object):
         """
         self.rc.stop()
 
-
-class BlockingRequest(BlockingClient):
-
-    def __init__(self, host, port):
-        device_host = host
-        device_port = port
-        super(BlockingRequest, self).__init__(device_host, device_port)
-
-    def __del__(self):
-        super(BlockingRequest, self).stop()
-        super(BlockingRequest, self).join()
-
-    def unescape_string(self, s):
-        def decode_match(match):
-            return codecs.decode(match.group(0), 'unicode-escape')
-        return ESCAPE_SEQUENCE_RE.sub(decode_match, s)
-
-    def decode_katcp_message(self, s):
-        """
-        @brief      Render a katcp message human readable
-
-    @params s   A string katcp message
-        """
-        return self.unescape_string(s).replace("\_", " ")
-
-    def to_stream(self, reply, informs):
-        log.info(self.decode_katcp_message(reply.__str__()))
-        for msg in informs:
-            log.info(self.decode_katcp_message(msg.__str__()))
-
-    def start(self):
-        self.setDaemon(True)
-        super(BlockingRequest, self).start()
-        self.wait_protocol()
-
-    def stop(self):
-        super(BlockingRequest, self).stop()
-        super(BlockingRequest, self).join()
-
-    def help(self):
-        reply, informs = self.blocking_request(
-            katcp.Message.request("help"), timeout=20)
-        self.to_stream(reply, informs)
-
-    def configure(self, paras, sensors):
-        reply, informs = self.blocking_request(
-            katcp.Message.request("configure", paras, sensors))
-        self.to_stream(reply, informs)
-
-    def deconfigure(self):
-        reply, informs = self.blocking_request(
-            katcp.Message.request("deconfigure"))
-        self.to_stream(reply, informs)
-
-    def capture_start(self, source_name):
-        reply, informs = self.blocking_request(
-            katcp.Message.request("start", source_name, 1024, 1024))
-        self.to_stream(reply, informs)
-
-    def capture_stop(self):
-        reply, informs = self.blocking_request(katcp.Message.request("stop"))
-        self.to_stream(reply, informs)
-
-
 class EddCommander(AsyncDeviceServer):
     """
     @brief Interface object which accepts KATCP commands
@@ -272,8 +208,13 @@ class EddCommander(AsyncDeviceServer):
             self.sensor_update)
         self._status_server.new_sensor_callbacks.add(
             self.new_sensor)
-        self._bc = BlockingRequest("134.104.70.66", 5000)
-        self.first_flag = True
+        #self._bc = BlockingRequest("134.104.70.66", 5000)
+        self._edd_pipeline = KATCPClientResource(dict(
+            name='edd_pipeline-client',
+            address=("134.104.70.66", 5000),
+            controlled=True))
+        self._edd_pipeline.start()
+        self.first_true = True
         # self.start_working()
 
     def sensor_update(self, sensor_value, callback):
@@ -286,8 +227,8 @@ class EddCommander(AsyncDeviceServer):
         self._source = self.get_sensor("_source")
         log.debug("Value for _observing {}".format(self._observing.value()))
         log.debug(bool(self._observing.value() == 'True'))
-        log.debug(bool(self.first_flag == True)&bool(self._observing.value() == 'True'))
-        if self._observing.value() == 'True' & self.first_flag == True:
+        log.debug(bool(self.first_true == True)&bool(self._observing.value() == 'True'))
+        if self._observing.value() == 'True' & self.first_true == True:
             log.debug("observing sensor value is {}".format(
                 self._observing.value()))
             log.debug("Should send a start command to the pipeline")
