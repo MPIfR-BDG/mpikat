@@ -136,7 +136,7 @@ class KATCPToIGUIConverter(object):
         added = current_sensors.difference(self.previous_sensors)
         log.debug("Sensors added since last update: {}".format(added))
         for name in list(added):
-        #for name in ["source_name", "observing", "timestamp"]:
+            # for name in ["source_name", "observing", "timestamp"]:
             # if name == 'observing':
             #log.debug("Setting sampling strategy and callbacks on sensor '{}'".format(name))
             # strat3 = ('event-rate', 2.0, 3.0)              #event-rate doesn't work
@@ -273,20 +273,23 @@ class EddCommander(AsyncDeviceServer):
         self._status_server.new_sensor_callbacks.add(
             self.new_sensor)
         self._bc = BlockingRequest("134.104.70.66", 5000)
-        #self.start_working()
+        # self.start_working()
 
     def sensor_update(self, sensor_value, callback):
         #log.debug('Settting sensor value for EDD_pipeline sensor : {} with value {}'.format(sensor_value[0],sensor_value[1]))
         self.test_object = self.get_sensor(sensor_value[0].replace("-", "_"))
-        log.debug("{} {}".format(sensor_value[0].replace("-", "_"), sensor_value[1]))
+        log.debug("{} {}".format(
+            sensor_value[0].replace("-", "_"), sensor_value[1]))
         self.test_object.set_value(str(sensor_value[1]))
         self._observing = self.get_sensor("_observing")
-        log.debug(self._observing.get_value())
-        if self._observing.get_value() == 'TRUE':
-            log.debug("observing sensor value is {}".format(self._observing.get_value()))
-            #log.debug(")
-        elif self._observing.get_value()  == 'FALSE':
-            log.debug("observing sensor value is {}".format(self._observing.get_value()))
+        log.debug(self._observing.value())
+        if self._observing.value() == 'TRUE':
+            log.debug("observing sensor value is {}".format(
+                self._observing.value()))
+            # log.debug(")
+        elif self._observing.value() == 'FALSE':
+            log.debug("observing sensor value is {}".format(
+                self._observing.value()))
 
     def new_sensor(self, sensor_name, callback):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))
@@ -447,9 +450,9 @@ def main():
                       help='Port number to bind to', default=5000)
     parser.add_option('', '--log_level', dest='log_level', type=str,
                       help='logging level', default="INFO")
-    #parser.add_option('-H', '--target-host', dest='target-host', type=str,
+    # parser.add_option('-H', '--target-host', dest='target-host', type=str,
     #                  help='Host interface to bind to', default="127.0.0.1")
-    #parser.add_option('-p', '--target-port', dest='target-port', type=long,
+    # parser.add_option('-p', '--target-port', dest='target-port', type=long,
     #                  help='Port number to bind to', default=5000)
     (opts, args) = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
