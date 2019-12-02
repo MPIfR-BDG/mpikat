@@ -226,16 +226,19 @@ class EddCommander(AsyncDeviceServer):
         self._source = self.get_sensor("_source")
         #log.debug("Value for _observing {}".format(self._observing.value()))
         #log.debug(bool(self._observing.value() == 'True'))
-        #log.debug(bool(self.first_true == True) & bool(
+        # log.debug(bool(self.first_true == True) & bool(
         #    self._observing.value() == 'True'))
 
         if bool(self.last_value == False) & bool(self.first_true == True) & bool(self._observing.value() == 'True'):
          #   log.debug("observing sensor value is {}".format(
          #       self._observing.value()))
-            log.debug("Should send a start command to the pipeline {}".format(self._source.value()))
-            #self._edd_pipeline.req.start('{"source-name":"{}","nchannels":1024,"nbins":1024,"ra":"123.4","dec":"-20.1"}'.format(self._source.value()))
-            log.debug('{"source-name":"{}","nchannels":1024,"nbins":1024,"ra":"123.4","dec":"-20.1"}"'.format(str(self._source.value())))
-            #self._edd_pipeline.req.start('{"source-name":"J1723-2837","nchannels":1024,"nbins":1024,"ra":"123.4","dec":"-20.1"}')
+            log.debug("Should send a start command to the pipeline {}".format(
+                self._source.value()))
+            # self._edd_pipeline.req.start('{"source-name":"{}","nchannels":1024,"nbins":1024,"ra":"123.4","dec":"-20.1"}'.format(self._source.value()))
+            json_string = json.dumps({"source-name": "{}".format(self._source.value(
+            )), "nchannels": 1024, "nbins": 1024, "ra": 123.4, "dec": -20.1})
+            log.debug(json_string)
+            self._edd_pipeline.req.start(json_string)
             self.first_true = False
             self.last_value = True
 
@@ -243,7 +246,7 @@ class EddCommander(AsyncDeviceServer):
          #   log.debug("observing sensor value is {}".format(
          #       self._observing.value()))
             log.debug("Should send a stop to the pipeline")
-            #self._edd_pipeline.req.stop()
+            self._edd_pipeline.req.stop()
             self.first_true = True
             self.last_value = False
 
