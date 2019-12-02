@@ -767,7 +767,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             yield self._digpack_client.set_flipsignalspectrum(self.config_dict["flip_band"])
             yield self._digpack_client.synchronize()
             yield self._digpack_client.capture_start()
-            
+
             self.sync_epoch = yield self._digpack_client.get_sync_time()
             log.debug("Sync epoch is {}".format(self.sync_epoch))
             yield self._digpack_client.stop()
@@ -1014,7 +1014,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING DSPSR                                    #
         ####################################################
         os.chdir(in_path)
-        cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -cpu {cpus} -asynch-fold -skz -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
+        cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -cpu {cpus} -asynch-fold -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
             numa=self.numa_number,
             args=self._config["dspsr_params"]["args"],
             nchan="-F {}:D".format(self.nchannels),
