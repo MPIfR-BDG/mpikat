@@ -236,7 +236,7 @@ class EddCommander(AsyncDeviceServer):
             self.last_vaule = True
 
             # log.debug(")
-        elif self._observing.value() == 'False' & bool(self.last_vaule == True):
+        elif bool(self._observing.value() == 'False') & bool(self.last_vaule == True):
             log.debug("observing sensor value is {}".format(
                 self._observing.value()))
             log.debug("Should send a stop to the pipeline")
