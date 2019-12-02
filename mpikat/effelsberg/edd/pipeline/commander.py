@@ -280,6 +280,11 @@ class EddCommander(AsyncDeviceServer):
         self.test_object = self.get_sensor(sensor_value[0].replace("-", "_"))
         log.debug("{} {}".format(sensor_value[0].replace("-", "_"), sensor_value[1]))
         self.test_object.set_value(str(sensor_value[1]))
+            if _observing == 'TRUE':
+                log.debug("observing sensor value is {}".format(self._oberving.get_value()))
+                #log.debug(")
+            elif _observing == 'FALSE':
+                log.debug("observing sensor value is {}".format(self._oberving.get_value()))
 
     def new_sensor(self, sensor_name, callback):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))
@@ -394,7 +399,7 @@ class EddCommander(AsyncDeviceServer):
     def _add_profile_to_sensor(self, png_blob, callback):
         self._profile.set_value(png_blob)
 
-
+"""
     @coroutine
     @request()
     @return_reply()
@@ -421,7 +426,7 @@ class EddCommander(AsyncDeviceServer):
         self.ioloop.add_callback(start_wrapper)
         raise AsyncReply
 
-
+"""
 
 
 @coroutine
