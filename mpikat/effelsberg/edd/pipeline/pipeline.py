@@ -316,8 +316,8 @@ class ExecuteCommand(object):
                     target=self._png_monitor)
                 self._png_monitor_thread.start()
 
-#    def __del__(self):
-#        class_name = self.__class__.__name__
+    def __del__(self):
+        class_name = self.__class__.__name__
 
     def set_finish_event(self):
         if not self._finish_event.isSet():
@@ -1233,7 +1233,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             log.debug("Stopping")
             self._timeout = 10
-            process = [self._polnmerge_proc, self._dspsr, self._archive_directory_monitor]
+            #self.callbacks = set()
+            process = [self._dspsr, self._archive_directory_monitor, self._polnmerge_proc]
             for proc in process:
                 time.sleep(2)
                 proc.set_finish_event()
