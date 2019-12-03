@@ -1113,6 +1113,63 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     @request()
     @return_reply(Str())
+    def request_stop_archive_monitor(self, req):
+        """
+        @brief      Stop pipeline
+
+        """
+        @coroutine
+        def stop_archive_monitor_wrapper():
+            try:
+                yield self.stop_archive_monitor()
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+                self._pipeline_sensor_status.set_value("ready")
+        self.ioloop.add_callback(stop_archive_monitor_wrapper)
+        raise AsyncReply
+
+    @coroutine
+    def stop_archive_monitor(self):
+        """@brief stop the dada_junkdb and dspsr instances."""
+        try:
+            log.debug("Stopping")
+            self._timeout = 10
+            process = [self._archive_directory_monitor]
+            for proc in process:
+                time.sleep(2)
+                proc.set_finish_event()
+                proc.finish()
+                log.debug(
+                    "Waiting {} seconds for proc to terminate...".format(self._timeout))
+                now = time.time()
+                while time.time() - now < self._timeout:
+                    retval = proc._process.poll()
+                    if retval is not None:
+                        log.debug(
+                            "Returned a return value of {}".format(retval))
+                        break
+                    else:
+                        time.sleep(0.5)
+                else:
+                    log.warning(
+                        "Failed to terminate proc in alloted time")
+                    log.info("Killing process")
+                    proc._process.kill()
+            os.remove("/tmp/t2pred.dat")
+
+        except Exception as error:
+            msg = "Couldn't stop pipeline {}".format(str(error))
+            log.error(msg)
+            raise EddPulsarPipelineError(msg)
+        else:
+            log.info("Pipeline Stopped {}".format(
+                self._pipeline_sensor_name.value()))
+
+    @request()
+    @return_reply(Str())
     def request_stop(self, req):
         """
         @brief      Stop pipeline
