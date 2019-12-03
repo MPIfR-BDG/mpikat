@@ -455,7 +455,7 @@ class ExecuteCommand(object):
     def _png_monitor(self):
         if RUN:
             #while self._process.poll() == None:
-            while self._pipeline_sensor_status.value == "running":
+            while not self._finish_event.isSet():
                 log.debug("Accessing archive PNG files")
                 try:
                     with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
@@ -1233,7 +1233,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             log.debug("Stopping")
             self._timeout = 10
-            process = [self._polnmerge_proc, self._archive_directory_monitor]
+            process = [self._polnmerge_proc, self._dspsr, self._archive_directory_monitor]
             for proc in process:
                 time.sleep(2)
                 proc.set_finish_event()
