@@ -521,12 +521,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._source_config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
-        self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
-        self._status_server.start()
-        self._status_server.sensor_callbacks.add(
-            self.sensor_update)
-        self._status_server.new_sensor_callbacks.add(
-            self.new_sensor)
+        #self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
+        #self._status_server.start()
+        #self._status_server.sensor_callbacks.add(
+        #    self.sensor_update)
+        #self._status_server.new_sensor_callbacks.add(
+        #    self.new_sensor)
 
         # self.setup_sensors()
 
