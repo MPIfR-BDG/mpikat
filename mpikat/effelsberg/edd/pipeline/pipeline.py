@@ -316,8 +316,8 @@ class ExecuteCommand(object):
                     target=self._png_monitor)
                 self._png_monitor_thread.start()
 
-    def __del__(self):
-        class_name = self.__class__.__name__
+#    def __del__(self):
+#        class_name = self.__class__.__name__
 
     def set_finish_event(self):
         if not self._finish_event.isSet():
