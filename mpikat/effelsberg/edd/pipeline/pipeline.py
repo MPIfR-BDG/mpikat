@@ -686,7 +686,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
     def _error_treatment(self, callback):
         #pass
         #log.debug('reconfigureing')
-        self.stop_pipeline()
+        #self.stop_pipeline()
+        self.stop_pipeline_with_mkrecv_crashed()
 
     def _save_capture_stdout(self, stdout, callback):
         with open("{}.par".format(self._source_config["source-name"]), "a") as file:
@@ -1136,29 +1137,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             log.debug("Stopping")
             self._timeout = 10
-            process = []
-            try:
-                self._mkrecv_ingest_proc
-            except NameError:
-                pass
-            else:
-                process.append(self._mkrecv_ingest_proc)
-            try:
-                self._polnmerge_proc
-            except NameError:
-                pass
-            else:
-                process.append(self._polnmerge_proc)
-            try:
-                self._archive_directory_monitor
-            except NameError:
-                pass
-            else:
-                process.append(self._archive_directory_monitor)
-
-            #process = [self._mkrecv_ingest_proc,
-                       #self._polnmerge_proc, self._archive_directory_monitor]
-
+            process = [self._mkrecv_ingest_proc,
+                       self._polnmerge_proc, self._archive_directory_monitor]
             for proc in process:
                 time.sleep(2)
                 proc.set_finish_event()
@@ -1182,7 +1162,44 @@ class EddPulsarPipeline(AsyncDeviceServer):
             os.remove("/tmp/t2pred.dat")
 
         except Exception as error:
-            msg = "Couldn't stop pipeline {} process name :{}".format(str(error), proc)
+            msg = "Couldn't stop pipeline {}".format(str(error))
+            log.error(msg)
+            raise EddPulsarPipelineError(msg)
+        else:
+            log.info("Pipeline Stopped {}".format(
+                self._pipeline_sensor_name.value()))
+
+    @coroutine
+    def stop_pipeline_with_mkrecv_crashed(self):
+        """@brief stop the dada_junkdb and dspsr instances."""
+        try:
+            log.debug("Stopping")
+            self._timeout = 10
+            process = [self._polnmerge_proc, self._archive_directory_monitor]
+            for proc in process:
+                time.sleep(2)
+                proc.set_finish_event()
+                proc.finish()
+                log.debug(
+                    "Waiting {} seconds for proc to terminate...".format(self._timeout))
+                now = time.time()
+                while time.time() - now < self._timeout:
+                    retval = proc._process.poll()
+                    if retval is not None:
+                        log.debug(
+                            "Returned a return value of {}".format(retval))
+                        break
+                    else:
+                        time.sleep(0.5)
+                else:
+                    log.warning(
+                        "Failed to terminate proc in alloted time")
+                    log.info("Killing process")
+                    proc._process.kill()
+            #os.remove("/tmp/t2pred.dat")
+
+        except Exception as error:
+            msg = "Couldn't stop pipeline {}".format(str(error))
             log.error(msg)
             raise EddPulsarPipelineError(msg)
         else:
