@@ -1230,20 +1230,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     log.info("Killing process")
                     proc._process.kill()
             os.remove("/tmp/t2pred.dat")
-"""
-        try:
-            os.kill(self._mkrecv_ingest_proc_pid, signal.SIGTERM)
-        except Exception as error:
-            log.error("cannot kill _mkrecv_ingest_proc, {}".format(error))
-        try:
-            os.kill(self._polnmerge_proc_pid, signal.SIGTERM)
-        except Exception as error:
-            log.error("cannot kill _polnmerge_proc_pid, {}".format(error))
-        try:
-            os.kill(self._archive_directory_monitor_pid, signal.SIGTERM)
-        except Exception as error:
-            log.error("cannot kill _archive_directory_monitor, {}".format(error))
-"""
 
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
