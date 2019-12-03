@@ -454,7 +454,8 @@ class ExecuteCommand(object):
 
     def _png_monitor(self):
         if RUN:
-            while self._process.poll() == None:
+            #while self._process.poll() == None:
+            while self._pipeline_sensor_status.value == "running":
                 log.debug("Accessing archive PNG files")
                 try:
                     with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
