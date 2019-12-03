@@ -1232,21 +1232,29 @@ class EddPulsarPipeline(AsyncDeviceServer):
             os.remove("/tmp/t2pred.dat")
 """
         try:
-
             p = os.kill(self._mkrecv_ingest_proc_pid, signal.SIGTERM)
             p.terminate()
+        except Exception as error:
+            log.error("cannot kill _mkrecv_ingest_proc, {}".format(error))
+        try:
             p = os.kill(self._polnmerge_proc_pid, signal.SIGTERM)
             p.terminate()
+        except Exception as error:
+            log.error("cannot kill _polnmerge_proc_pid, {}".format(error))
+        try:
             p = os.kill(self._archive_directory_monitor_pid, signal.SIGTERM)
             p.terminate()
-
         except Exception as error:
-            msg = "Couldn't stop pipeline {}".format(str(error))
-            log.error(msg)
-            raise EddPulsarPipelineError(msg)
-        else:
-            log.info("Pipeline Stopped {}".format(
-                self._pipeline_sensor_name.value()))
+            log.error("cannot kill _archive_directory_monitor, {}".format(error))
+
+
+        #except Exception as error:
+        #    msg = "Couldn't stop pipeline {}".format(str(error))
+        #    log.error(msg)
+        #    raise EddPulsarPipelineError(msg)
+        #else:
+        #    log.info("Pipeline Stopped {}".format(
+        #        self._pipeline_sensor_name.value()))
 
     @coroutine
     def stop_pipeline_with_mkrecv_crashed(self):
