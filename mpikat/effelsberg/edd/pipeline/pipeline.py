@@ -1203,7 +1203,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
     @coroutine
     def stop_pipeline(self):
         """@brief stop the dada_junkdb and dspsr instances."""
-        """
+        
         try:
             log.debug("Stopping")
             self._timeout = 10
@@ -1232,33 +1232,43 @@ class EddPulsarPipeline(AsyncDeviceServer):
             os.remove("/tmp/t2pred.dat")
 """
         try:
-            p = os.kill(self._mkrecv_ingest_proc_pid, signal.SIGTERM)
-            p.terminate()
+            os.kill(self._mkrecv_ingest_proc_pid, signal.SIGTERM)
         except Exception as error:
             log.error("cannot kill _mkrecv_ingest_proc, {}".format(error))
         try:
-            p = os.kill(self._polnmerge_proc_pid, signal.SIGTERM)
-            p.terminate()
+            os.kill(self._polnmerge_proc_pid, signal.SIGTERM)
         except Exception as error:
             log.error("cannot kill _polnmerge_proc_pid, {}".format(error))
         try:
-            p = os.kill(self._archive_directory_monitor_pid, signal.SIGTERM)
-            p.terminate()
+            os.kill(self._archive_directory_monitor_pid, signal.SIGTERM)
         except Exception as error:
             log.error("cannot kill _archive_directory_monitor, {}".format(error))
+"""
 
-
-        #except Exception as error:
-        #    msg = "Couldn't stop pipeline {}".format(str(error))
-        #    log.error(msg)
-        #    raise EddPulsarPipelineError(msg)
-        #else:
-        #    log.info("Pipeline Stopped {}".format(
-        #        self._pipeline_sensor_name.value()))
+        except Exception as error:
+            msg = "Couldn't stop pipeline {}".format(str(error))
+            log.error(msg)
+            raise EddPulsarPipelineError(msg)
+        else:
+            log.info("Pipeline Stopped {}".format(
+                self._pipeline_sensor_name.value()))
 
     @coroutine
     def stop_pipeline_with_mkrecv_crashed(self):
         """@brief stop the dada_junkdb and dspsr instances."""
+        try:
+            os.kill(self._polnmerge_proc_pid, signal.SIGTERM)
+        except Exception as error:
+            log.error("cannot kill _polnmerge_proc_pid, {}".format(error))
+        try:
+            os.kill(self._archive_directory_monitor_pid, signal.SIGTERM)
+        except Exception as error:
+            log.error("cannot kill _archive_directory_monitor, {}".format(error))
+        try:
+            os.kill(self._dspsr_pid, signal.SIGTERM)
+        except Exception as error:
+            log.error("cannot kill _dspsr, {}".format(error))
+"""
         try:
             log.debug("Stopping")
             self._timeout = 10
@@ -1286,14 +1296,63 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     log.info("Killing process")
                     proc._process.kill()
             # os.remove("/tmp/t2pred.dat")
+"""
+        #except Exception as error:
+        #    msg = "Couldn't stop pipeline {}".format(str(error))
+        #    log.error(msg)
+        #    raise EddPulsarPipelineError(msg)
+        try:
+            log.debug("deleting buffers")
+            cmd = "dada_db -d -k {0}".format(self._dada_key)
+            log.debug("Running command: {0}".format(cmd))
+            self._destory_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._destory_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._destory_ring_buffer._process.wait()
+
+            cmd = "dada_db -d -k {0}".format(self._dadc_key)
+            log.debug("Running command: {0}".format(cmd))
+            self._destory_merge_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._destory_merge_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._destory_merge_buffer._process.wait()
 
         except Exception as error:
-            msg = "Couldn't stop pipeline {}".format(str(error))
+            msg = "Couldn't deleting buffers {}".format(str(error))
             log.error(msg)
             raise EddPulsarPipelineError(msg)
+
+        try:
+            self._pipeline_sensor_name.set_value(pipeline_name)
+            log.info("Creating DADA buffer for mkrecv")
+            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dada_key,
+                                                                     args=self._config["dada_db_params"]["args"])
+            log.debug("Running command: {0}".format(cmd))
+            self._create_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_ring_buffer._process.wait()
+        except Exception as error:
+            raise EddPulsarPipelineError(str(error))
+        try:
+            log.info("Creating DADA buffer for EDDPolnMerge")
+            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dadc_key,
+                                                                     args=self._config["dadc_db_params"]["args"])
+            # cmd = "dada_db -k {key} {args}".format(**
+            #                                       self._config["dada_db_params"])
+            log.debug("Running command: {0}".format(cmd))
+            self._create_transpose_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_transpose_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_transpose_ring_buffer._process.wait()
+        except Exception as error:
+            raise EddPulsarPipelineError(str(error))
         else:
-            log.info("Pipeline Stopped {}".format(
-                self._pipeline_sensor_name.value()))
+            log.info("Pipeline Stopped with mkrecv crash, buffers recreated")
 
     @request()
     @return_reply(Str())
