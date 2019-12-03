@@ -1041,10 +1041,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
         elif parse_tag(self.source_name) == "R":
-            cmd = "numactl -m {numa} dspsr -L 1 -r -minram 1024 {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -c 1 -D 0 {keyfile}".format(
+            cmd = "numactl -m {numa} dspsr -L 1 -r -minram 1024 {nchan} {nbin} -cpu {cpus} -cuda {cuda_number} -c 1 -D 0.0001 {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
-                nchan="-F {}".format(self.nchannels),
+                nchan="-F {}D".format(self.nchannels),
                 nbin="-b {}".format(self.nbins),
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
