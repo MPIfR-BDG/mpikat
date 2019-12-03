@@ -306,8 +306,8 @@ class ExecuteCommand(object):
             if self._process == None:
                 self._error = True
             self.pid = self._process.pid
-            log.debug("PID of {} is {}".format(
-                self._executable_command, self.pid))
+            #log.debug("PID of {} is {}".format(
+            #    self._executable_command, self.pid))
             self._monitor_thread = threading.Thread(
                 target=self._execution_monitor)
             self._stderr_monitor_thread = threading.Thread(
@@ -457,29 +457,28 @@ class ExecuteCommand(object):
 
     def _png_monitor(self):
         if RUN:
-            # while self._process.poll() == None:
-            while not self._finish_event.isSet():
+            while self._process.poll() == None:
+            #while not self._finish_event.isSet():
                 log.debug("Accessing archive PNG files")
                 try:
                     with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
                         self.fscrunch = base64.b64encode(imageFile.read())
                 except Exception as error:
                     log.debug(error)
-                    log.debug("fscrunch.png is not ready")
+                    #log.debug("fscrunch.png is not ready")
                 try:
                     with open("{}/tscrunch.png".format(self._outpath), "rb") as imageFile:
                         self.tscrunch = base64.b64encode(imageFile.read())
                 except Exception as error:
                     log.debug(error)
-                    log.debug("tscrunch.png is not ready")
+                    #log.debug("tscrunch.png is not ready")
                 try:
                     with open("{}/profile.png".format(self._outpath), "rb") as imageFile:
                         self.profile = base64.b64encode(imageFile.read())
                 except Exception as error:
                     log.debug(error)
-                    log.debug("profile.png is not ready")
-
-                time.sleep(5)
+                    #log.debug("profile.png is not ready")
+                time.sleep(7)
 
 
 class EddPulsarPipelineKeyError(Exception):
@@ -1055,7 +1054,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.info("Staring DSPSR")
         self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
         self._dspsr_pid = self._dspsr.pid
-        log.debug("DSPSR PID is {}".format(self._dspsr_pid))
+        log.debug("_dspsr PID is {}".format(self._dspsr_pid))
         self._dspsr.stdout_callbacks.add(
             self._decode_capture_stdout)
         self._dspsr.stderr_callbacks.add(
@@ -1075,7 +1074,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._polnmerge_proc.stderr_callbacks.add(
             self._handle_eddpolnmerge_stderr)
         self._polnmerge_proc_pid = self._polnmerge_proc.pid
-        log.debug("DSPSR PID is {}".format(self._polnmerge_proc_pid))
+        log.debug("_polnmerge_proc PID is {}".format(self._polnmerge_proc_pid))
         # time.sleep(5)
         ####################################################
         #STARTING MKRECV                                   #
@@ -1091,7 +1090,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._mkrecv_ingest_proc.error_callbacks.add(
             self._error_treatment)
         self._mkrecv_ingest_proc_pid = self._mkrecv_ingest_proc.pid
-        log.debug("DSPSR PID is {}".format(self._mkrecv_ingest_proc_pid))
+        log.debug("_mkrecv_ingest_proc PID is {}".format(self._mkrecv_ingest_proc_pid))
 
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
@@ -1111,7 +1110,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._archive_directory_monitor.profile_callbacks.add(
             self._add_profile_to_sensor)
         self._archive_directory_monitor_pid = self._archive_directory_monitor.pid
-        log.debug("ARCHIVE DIRECTORY MONITOR PID is {}".format(
+        log.debug("_archive_directory_monitor PID is {}".format(
             self._archive_directory_monitor_pid))
 
         # except Exception as error:
