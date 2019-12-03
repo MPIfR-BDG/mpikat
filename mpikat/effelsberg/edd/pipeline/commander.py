@@ -238,7 +238,7 @@ class EddCommander(AsyncDeviceServer):
             json_string = json.dumps({"source-name": "{}".format(self._source.value(
             )), "nchannels": 1024, "nbins": 1024, "ra": 123.4, "dec": -20.1})
             log.debug(json_string)
-            #self._edd_pipeline.req.start(json_string)
+            self._edd_pipeline.req.start(json_string)
             self.first_true = False
             self.last_value = True
 
@@ -246,7 +246,7 @@ class EddCommander(AsyncDeviceServer):
          #   log.debug("observing sensor value is {}".format(
          #       self._observing.value()))
             log.debug("Should send a stop to the pipeline")
-            #self._edd_pipeline.req.stop()
+            self._edd_pipeline.req.stop()
             self.first_true = True
             self.last_value = False
 
