@@ -307,7 +307,8 @@ class ExecuteCommand(object):
             if self._process == None:
                 self._error = True
             self.pid = self._process.pid
-            log.debug("PID of {} is {}".format(self._executable_command, self.pid))
+            log.debug("PID of {} is {}".format(
+                self._executable_command, self.pid))
             self._monitor_thread = threading.Thread(
                 target=self._execution_monitor)
             self._stderr_monitor_thread = threading.Thread(
@@ -457,7 +458,7 @@ class ExecuteCommand(object):
 
     def _png_monitor(self):
         if RUN:
-            #while self._process.poll() == None:
+            # while self._process.poll() == None:
             while not self._finish_event.isSet():
                 log.debug("Accessing archive PNG files")
                 try:
@@ -688,9 +689,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug('{}'.format(str(stdout)))
 
     def _error_treatment(self, callback):
-        #pass
-        #log.debug('reconfigureing')
-        #self.stop_pipeline()
+        # pass
+        # log.debug('reconfigureing')
+        # self.stop_pipeline()
         self.stop_pipeline_with_mkrecv_crashed()
 
     def _save_capture_stdout(self, stdout, callback):
@@ -1111,7 +1112,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._archive_directory_monitor.profile_callbacks.add(
             self._add_profile_to_sensor)
         self._archive_directory_monitor_pid = self._archive_directory_monitor.pid
-        log.debug("ARCHIVE DIRECTORY MONITOR PID is {}".format(self._archive_directory_monitor_pid))
+        log.debug("ARCHIVE DIRECTORY MONITOR PID is {}".format(
+            self._archive_directory_monitor_pid))
 
         # except Exception as error:
         #    msg = "Couldn't start pipeline server {}".format(str(error))
@@ -1230,14 +1232,14 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     log.info("Killing process")
                     proc._process.kill()
             os.remove("/tmp/t2pred.dat")
-""" 
+"""
         try:
 
-            p = psutil.Process(self._mkrecv_ingest_proc_pid)
+            p = os.kill(self._mkrecv_ingest_proc_pid, signal.SIGTERM)
             p.terminate()
-            p = psutil.Process(self._polnmerge_proc_pid)
-            p.terminate()            
-            p = psutil.Process(self._archive_directory_monitor_pid)
+            p = os.kill(self._polnmerge_proc_pid, signal.SIGTERM)
+            p.terminate()
+            p = os.kill(self._archive_directory_monitor_pid, signal.SIGTERM)
             p.terminate()
 
         except Exception as error:
@@ -1247,7 +1249,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         else:
             log.info("Pipeline Stopped {}".format(
                 self._pipeline_sensor_name.value()))
-        
+
     @coroutine
     def stop_pipeline_with_mkrecv_crashed(self):
         """@brief stop the dada_junkdb and dspsr instances."""
@@ -1255,7 +1257,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.debug("Stopping")
             self._timeout = 10
             self.callbacks = set()
-            process = [self._dspsr, self._archive_directory_monitor, self._polnmerge_proc]
+            process = [self._dspsr, self._archive_directory_monitor,
+                       self._polnmerge_proc]
             for proc in process:
                 time.sleep(2)
                 proc.set_finish_event()
@@ -1276,7 +1279,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                         "Failed to terminate proc in alloted time")
                     log.info("Killing process")
                     proc._process.kill()
-            #os.remove("/tmp/t2pred.dat")
+            # os.remove("/tmp/t2pred.dat")
 
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
