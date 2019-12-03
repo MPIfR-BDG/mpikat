@@ -20,6 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 import logging
+import psutil
 import tempfile
 import json
 import os
@@ -305,6 +306,8 @@ class ExecuteCommand(object):
                 self.error = True
             if self._process == None:
                 self._error = True
+            self.pid = self._process.pid
+            log.debug("PID of {} is {}".format(self._executable_command, self.pid))
             self._monitor_thread = threading.Thread(
                 target=self._execution_monitor)
             self._stderr_monitor_thread = threading.Thread(
@@ -1051,6 +1054,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring DSPSR")
         self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
+        self._dspsr_pid = self._dspsr.pid
+        log.debug("DSPSR PID is {}".format(self._dspsr_pid))
         self._dspsr.stdout_callbacks.add(
             self._decode_capture_stdout)
         self._dspsr.stderr_callbacks.add(
@@ -1069,6 +1074,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._decode_capture_stdout)
         self._polnmerge_proc.stderr_callbacks.add(
             self._handle_eddpolnmerge_stderr)
+        self._polnmerge_proc_pid = self._polnmerge_proc.pid
+        log.debug("DSPSR PID is {}".format(self._polnmerge_proc_pid))
         # time.sleep(5)
         ####################################################
         #STARTING MKRECV                                   #
@@ -1083,6 +1090,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._decode_capture_stdout)
         self._mkrecv_ingest_proc.error_callbacks.add(
             self._error_treatment)
+        self._mkrecv_ingest_proc_pid = self._mkrecv_ingest_proc.pid
+        log.debug("DSPSR PID is {}".format(self._mkrecv_ingest_proc_pid))
 
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
@@ -1101,6 +1110,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._add_tscrunch_to_sensor)
         self._archive_directory_monitor.profile_callbacks.add(
             self._add_profile_to_sensor)
+        self._archive_directory_monitor_pid = self._archive_directory_monitor.pid
+        log.debug("ARCHIVE DIRECTORY MONITOR PID is {}".format(self._archive_directory_monitor_pid))
 
         # except Exception as error:
         #    msg = "Couldn't start pipeline server {}".format(str(error))
@@ -1192,6 +1203,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
     @coroutine
     def stop_pipeline(self):
         """@brief stop the dada_junkdb and dspsr instances."""
+        """
         try:
             log.debug("Stopping")
             self._timeout = 10
@@ -1218,6 +1230,15 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     log.info("Killing process")
                     proc._process.kill()
             os.remove("/tmp/t2pred.dat")
+""" 
+        try:
+
+            p = psutil.Process(self._mkrecv_ingest_proc_pid)
+            p.terminate()
+            p = psutil.Process(self._polnmerge_proc_pid)
+            p.terminate()            
+            p = psutil.Process(self._archive_directory_monitor_pid)
+            p.terminate()
 
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
@@ -1226,7 +1247,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         else:
             log.info("Pipeline Stopped {}".format(
                 self._pipeline_sensor_name.value()))
-
+        
     @coroutine
     def stop_pipeline_with_mkrecv_crashed(self):
         """@brief stop the dada_junkdb and dspsr instances."""
