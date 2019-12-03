@@ -1254,7 +1254,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             os.kill(self._dspsr_pid, signal.SIGTERM)
         except Exception as error:
             log.error("cannot kill _dspsr, {}".format(error))
-"""
+        """
         try:
             log.debug("Stopping")
             self._timeout = 10
@@ -1281,8 +1281,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
                         "Failed to terminate proc in alloted time")
                     log.info("Killing process")
                     proc._process.kill()
-            # os.remove("/tmp/t2pred.dat")
-"""
+            # os.remove("/tmp/t2pred.dat")  
+        """
         #except Exception as error:
         #    msg = "Couldn't stop pipeline {}".format(str(error))
         #    log.error(msg)
