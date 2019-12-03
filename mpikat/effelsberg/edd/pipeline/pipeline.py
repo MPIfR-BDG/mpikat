@@ -1311,7 +1311,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             raise EddPulsarPipelineError(msg)
 
         try:
-            self._pipeline_sensor_name.set_value(pipeline_name)
+            #self._pipeline_sensor_name.set_value(pipeline_name)
             log.info("Creating DADA buffer for mkrecv")
             cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dada_key,
                                                                      args=self._config["dada_db_params"]["args"])
