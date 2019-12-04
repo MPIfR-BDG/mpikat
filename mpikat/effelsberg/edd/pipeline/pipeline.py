@@ -1174,7 +1174,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
                         "Failed to terminate proc in alloted time")
                     log.info("Killing process")
                     proc._process.kill()
-            os.remove("/tmp/t2pred.dat")
+            if parse_tag(self.source_name) == "default":        
+                os.remove("/tmp/t2pred.dat")
 
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
@@ -1233,8 +1234,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
                         "Failed to terminate proc in alloted time")
                     log.info("Killing process")
                     proc._process.kill()
-            os.remove("/tmp/t2pred.dat")
-
+            if parse_tag(self.source_name) == "default":
+                os.remove("/tmp/t2pred.dat")
+            
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
             log.error(msg)
