@@ -1390,8 +1390,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         """
         @coroutine
         def deconfigure_wrapper():
-            if self._pipeline_sensor_status.value == 'running':
-                yield self.stop_pipeline()
+            #if self._pipeline_sensor_status.value == 'running':
+            #    yield self.stop_pipeline()
             try:
                 yield self.deconfigure()
             except Exception as error:
