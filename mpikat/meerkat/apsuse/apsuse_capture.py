@@ -1,6 +1,7 @@
 import logging
 import json
 from subprocess import Popen, PIPE
+import itertools
 from tornado.gen import coroutine
 from tornado.ioloop import IOLoop, PeriodicCallback
 from katpoint import Target
@@ -182,6 +183,19 @@ class ApsCapture(object):
             apsuse_cmdline, stdout_handler=log.debug, stderr_handler=log.error)
         self._apsuse_args_sensor.set_value(" ".join(map(str, apsuse_cmdline)))
 
+        def make_beam_list(indices):
+            spec = ""
+            for a, b in itertools.groupby(enumerate(indices), lambda pair: pair[1] - pair[0]):
+                if spec != "":
+                    spec += ","
+                b = list(b)
+                p, q = b[0][1], b[-1][1]
+                if p == q:
+                    spec += "{}".format(p)
+                else:
+                    spec += "{}:{}".format(p, q+1)
+            return spec
+
         # Start MKRECV capture code
         mkrecv_config = {
                 'dada_mode': 4,
@@ -197,7 +211,7 @@ class ApsCapture(object):
                 'interface': self._capture_interface,
                 'timestamp_step': config['idx1-step'],
                 'timestamp_modulus': 1,
-                'beam_ids_csv': ",".join(map(str, config['stream-indices'])),
+                'beam_ids_csv': make_beam_list(config['stream-indices']),
                 'freq_ids_csv': "0:{}:{}".format(config['nchans'], config['nchans-per-heap']),
                 'ngroups_data': ngroups_data,
                 'heap_size': config['heap-size']
