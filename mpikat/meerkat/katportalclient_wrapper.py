@@ -131,9 +131,35 @@ class KatportalClientWrapper(object):
         raise Return(eval(sensor_sample.value))
 
     @coroutine
-    def get_fbfuse_sb_config(self, product_id):
+    def get_fbfuse_target_config(self, product_id):
         sensor_list = [
             "phase-reference",
+            "coherent-beam-shape"
+        ]
+        fbf_config = {}
+        fbfuse_proxy = yield self.get_fbfuse_proxy_id()
+        prefix = "{}_fbfmc_{}_".format(fbfuse_proxy, product_id)
+        query = "^{}({})$".format(
+            prefix, "|".join([s.replace("-", "_") for s in sensor_list]))
+        log.debug("Regex query '{}'".format(query))
+        sensor_samples = yield self._client.sensor_values(
+            query, include_value_ts=False)
+        log.debug("Sensor value: {}".format(sensor_samples))
+        for sensor_name in sensor_list:
+            full_name = "{}{}".format(prefix, sensor_name.replace("-", "_"))
+            sensor_sample = sensor_samples[full_name]
+            log.debug(sensor_sample)
+            if sensor_sample.status != Sensor.STATUSES[Sensor.NOMINAL]:
+                message = "Sensor {} not in NOMINAL state".format(full_name)
+                log.error(message)
+                raise Exception(sensor_name)
+            else:
+                fbf_config[sensor_name] = sensor_sample.value
+        raise Return(fbf_config)
+
+    @coroutine
+    def get_fbfuse_sb_config(self, product_id):
+        sensor_list = [
             "bandwidth",
             "nchannels",
             "centre-frequency",
@@ -162,8 +188,8 @@ class KatportalClientWrapper(object):
             "incoherent-beam-time-resolution"
         ]
         fbf_config = {}
-        component = product_id.replace("array", "fbfuse")
-        prefix = "{}_fbfmc_{}_".format(component, product_id)
+        fbfuse_proxy = yield self.get_fbfuse_proxy_id()
+        prefix = "{}_fbfmc_{}_".format(fbfuse_proxy, product_id)
         query = "^{}({})$".format(
             prefix, "|".join([s.replace("-", "_") for s in sensor_list]))
         log.debug("Regex query '{}'".format(query))
@@ -199,7 +225,7 @@ class KatportalClientWrapper(object):
     @coroutine
     def get_fbfuse_proxy_id(self):
         sensor_sample = yield self._query('sub', 'allocations')
-        for resource, _, _ in eval(sensor_sample):
+        for resource, _, _ in eval(sensor_sample.value):
             if resource.startswith("fbfuse"):
                 raise Return(resource)
         else:

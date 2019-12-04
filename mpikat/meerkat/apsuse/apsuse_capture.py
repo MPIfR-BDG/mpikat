@@ -13,6 +13,8 @@ from mpikat.utils.unix_socket import UDSClient
 
 AVAILABLE_CAPTURE_MEMORY = 3221225472  * 10
 MAX_DADA_BLOCK_SIZE = 1<<28
+OPTIMAL_BLOCK_LENGTH = 10.0 # seconds
+OPTIMAL_CAPTURE_BLOCKS = 8
 
 log = logging.getLogger("mpikat.apsuse_capture")
 
@@ -125,13 +127,31 @@ class ApsCapture(object):
         npartitions = config['nchans'] / config['nchans-per-heap']
         # desired beams here is a list of beam IDs, e.g. [1,2,3,4,5]
         heap_group_size = config['heap-size'] * nbeams * npartitions
-        ngroups_data = int(MAX_DADA_BLOCK_SIZE / heap_group_size)
+
+        heap_group_duration = (heap_group_size / config['nchans-per-heap']) * config['sampling-interval']
+        optimal_heap_groups = OPTIMAL_BLOCK_LENGTH / heap_group_duration
+        if (optimal_heap_groups * heap_group_size) > MAX_DADA_BLOCK_SIZE:
+            ngroups_data = int(MAX_DADA_BLOCK_SIZE / heap_group_size)
+        else:
+            ngroups_data = optimal_heap_groups
+
+        # Move to power of 2 heap groups (not necessary, but helpful)
         ngroups_data = 2**((ngroups_data-1).bit_length())
+
+        # Make sure at least 8 groups used
+        ngroups_data = max(ngroups_data, 8)
 
         # Make DADA buffer and start watchers
         log.info("Creating capture buffer")
         capture_block_size = ngroups_data * heap_group_size
-        capture_block_count = int(AVAILABLE_CAPTURE_MEMORY / capture_block_size)
+
+        if (capture_block_size * OPTIMAL_CAPTURE_BLOCKS > AVAILABLE_CAPTURE_MEMORY):
+            capture_block_count = int(AVAILABLE_CAPTURE_MEMORY / capture_block_size)
+            if capture_block_count < 3:
+                raise Exception("Cannot allocate more than 2 capture blocks")
+        else:
+            capture_block_count = OPTIMAL_CAPTURE_BLOCKS
+
         log.debug("Creating dada buffer for input with key '{}'".format(
             "%s" % self._dada_input_key))
         yield self._make_db(self._dada_input_key, capture_block_size,
@@ -144,7 +164,7 @@ class ApsCapture(object):
 
         # Start APSUSE processing code
         apsuse_cmdline = [
-            #"taskset", "-c", self._apsuse_cpu_set,
+            "taskset", "-c", self._apsuse_cpu_set,
             "apsuse",
             "--input_key", self._dada_input_key,
             "--ngroups", ngroups_data,
@@ -200,7 +220,8 @@ class ApsCapture(object):
 
         log.info("Starting MKRECV")
         self._mkrecv_proc = ManagedProcess(
-            ["mkrecv_nt", "--header",
+            ["taskset", "-c", self._mkrecv_cpu_set,
+             "mkrecv_nt", "--header",
              self._mkrecv_config_filename, "--quiet"],
             stdout_handler=mkrecv_aggregated_output_handler,
             stderr_handler=log.error)
@@ -224,7 +245,7 @@ class ApsCapture(object):
         self._capturing = True
         log.info("Successfully started capture pipeline")
 
-    def target_start(self, beam_info):
+    def target_start(self, beam_info, output_dir):
         # Send target information to apsuse pipeline
         # and trigger file writing
 
@@ -249,7 +270,11 @@ class ApsCapture(object):
         #
         log.info("Target start on capture instance")
         beam_params = []
-        message_dict = {"command": "start", "beam_parameters": beam_params}
+        message_dict = {
+            "command": "start",
+            "directory": output_dir,
+            "beam_parameters": beam_params
+        }
         log.info("Parsing beam information")
         for beam, target_str in beam_info.items():
             if beam in self._internal_beam_mapping:

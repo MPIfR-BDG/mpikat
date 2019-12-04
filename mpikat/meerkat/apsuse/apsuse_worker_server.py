@@ -47,7 +47,6 @@ class ApsWorkerServer(AsyncDeviceServer):
         @params  ip       The interface address on which the server should listen
         @params  port     The port that the server should bind to
         """
-        self._dada_input_key = "dada"
         self._capture_interface = capture_interface
         self._capture_instances = []
         super(ApsWorkerServer, self).__init__(ip, port)
@@ -192,16 +191,14 @@ class ApsWorkerServer(AsyncDeviceServer):
             raise Return(("fail", msg))
         log.info("Config: {}".format(config))
         self._state_sensor.set_value(self.STARTING)
-
         cap_start_futures = []
-
         if "coherent-beams" in config:
             log.info("Creating capture instance for coherent beams")
             coherent_cap = ApsCapture(
                 self._capture_interface,
                 "/tmp/apsuse_capture_coherent.sock",
                 "/tmp/coherent_mkrecv.cfg",
-                "0-2", "2-3",
+                "0-8", "8-11",
                 "coherent", "dada")
             cap_start_futures.append(coherent_cap.capture_start(config["coherent-beams"]))
             self._capture_instances.append(coherent_cap)
@@ -212,7 +209,7 @@ class ApsWorkerServer(AsyncDeviceServer):
                 self._capture_interface,
                 "/tmp/apsuse_capture_incoherent.sock",
                 "/tmp/incoherent_mkrecv.cfg",
-                "3", "4",
+                "12", "13",
                 "incoherent", "caca")
             cap_start_futures.append(incoherent_cap.capture_start(config["incoherent-beams"]))
             self._capture_instances.append(incoherent_cap)
@@ -220,9 +217,9 @@ class ApsWorkerServer(AsyncDeviceServer):
         for future in cap_start_futures:
             yield future
 
-	for capture_instance in self._capture_instances:
-	    for sensor in capture_instance._sensors:
-	        self.add_sensor(sensor)
+        for capture_instance in self._capture_instances:
+            for sensor in capture_instance._sensors:
+                self.add_sensor(sensor)
 
         self.mass_inform(Message.inform('interface-changed'))
         self._state_sensor.set_value(self.CAPTURING)
@@ -261,7 +258,7 @@ class ApsWorkerServer(AsyncDeviceServer):
 
     @request(Str())
     @return_reply()
-    def request_target_start(self, req, beam_info):
+    def request_target_start(self, req, beam_info, output_dir):
         """
         @brief      Request that the worker server starts recording
 
@@ -284,7 +281,7 @@ class ApsWorkerServer(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !target-start ok | (fail [error description]) ]]]
         """
-        log.info("Received target start request") 
+        log.info("Received target start request")
         if self.state != self.CAPTURING:
             return ("fail", "Worker not in 'capturing' state")
         try:
@@ -292,9 +289,9 @@ class ApsWorkerServer(AsyncDeviceServer):
         except Exception as error:
             log.exception("Error while parsing beam information")
             return ("fail", str(error))
-        log.info("Beam information: {}".format(beam_info)) 
+        log.info("Beam information: {}".format(beam_info))
         for capture_instance in self._capture_instances:
-            capture_instance.target_start(beam_info)
+            capture_instance.target_start(beam_info, output_dir)
         self._state_sensor.set_value(self.RECORDING)
         log.info("Target start successful")
         return ("ok",)
@@ -315,7 +312,7 @@ class ApsWorkerServer(AsyncDeviceServer):
         for capture_instance in self._capture_instances:
             capture_instance.target_stop()
         self._state_sensor.set_value(self.CAPTURING)
-        log.info("Target stop request successful") 
+        log.info("Target stop request successful")
         return ("ok",)
 
 

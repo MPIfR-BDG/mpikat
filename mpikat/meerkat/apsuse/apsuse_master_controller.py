@@ -156,7 +156,6 @@ class ApsMasterController(MasterController):
             return ("fail",
                 "JSON streams object does not contain required key: {}".format(
                     str(error)))
-
         @coroutine
         def configure():
             katportal_client = self._katportal_wrapper_type(

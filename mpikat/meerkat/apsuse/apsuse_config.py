@@ -25,7 +25,7 @@ from mpikat.core.ip_manager import ip_range_from_stream
 
 log = logging.getLogger('mpikat.apsuse_config_manager')
 
-DATA_RATE_PER_WORKER = 10e9  # bits / s
+DATA_RATE_PER_WORKER = 3e9  # bits / s
 
 
 DUMMY_FBF_CONFIG = {

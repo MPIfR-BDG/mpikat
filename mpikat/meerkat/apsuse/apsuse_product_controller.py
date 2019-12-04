@@ -21,6 +21,9 @@ SOFTWARE.
 """
 
 import logging
+import time
+import os
+import json
 from copy import deepcopy
 from tornado.gen import coroutine
 from tornado.locks import Event
@@ -78,6 +81,7 @@ class ApsProductController(object):
         self._servers = []
         self._fbf_sb_config = None
         self._state_interrupt = Event()
+        self._base_output_dir = "/output/"
         self.setup_sensors()
 
     def __del__(self):
@@ -228,8 +232,35 @@ class ApsProductController(object):
         self.log.info("Enabling writers")
         self.log.debug("Getting beam positions")
         beam_map = yield self._katportal_client.get_fbfuse_coherent_beam_positions(self._product_id)
-        beam_map.update({"ifbf00000": self._fbf_sb_config["phase-reference"]})
+        target_config = yield self._katportal_client.get_fbfuse_target_config(self._product_id)
+        beam_map.update({"ifbf00000": target_config["phase-reference"]})
         self.log.debug("Beam map: {}".format(beam_map))
+
+        # Now get all information required for APSMETA file
+        output_dir = "{}/{}".format(
+            self._base_output_dir, time.strftime("%Y%M%d_%H%M%S"))
+        os.makedirs(output_dir)
+        proposal_id = yield self._katportal_client.get_proposal_id()
+        sb_id = yield self._katportal_client.get_sb_id()
+        apsuse_meta = {
+            "centre_frequency": self._fbf_sb_config["centre-frequency"],
+            "bandwidth": self._fbf_sb_config["bandwidth"],
+            "coherent_nchans": self._fbf_sb_config["nchannels"] / self._fbf_sb_config["coherent-beam-fscrunch"],
+            "coherent_tsamp": self._fbf_sb_config["coherent-beam-time-resolution"],
+            "incoherent_nchans": self._fbf_sb_config["nchannels"] / self._fbf_sb_config["incoherent-beam-fscrunch"],
+            "incoherent_tsamp": self._fbf_sb_config["incoherent-beam-time-resolution"],
+            "project_name": proposal_id,
+            "sb_id": sb_id,
+            "utc_start": time.strftime("%Y/%M/%d %H:%M:%S"),
+            "beamshape": target_config["coherent-beam-shape"]
+        }
+
+        try:
+            with open("{}/{}/apsuse.meta", "w") as f:
+                f.write(json.dumps(apsuse_meta))
+        except Exception:
+            log.exception("Could not write apsuse.meta file")
+
         enable_futures = []
         for server in self._servers:
             worker_config = self._worker_config_map[server]
@@ -240,7 +271,7 @@ class ApsProductController(object):
             for beam in worker_config.coherent_beams():
                 if beam in beam_map:
                     sub_beam_list[beam] = beam_map[beam]
-            enable_futures.append(server.enable_writers(sub_beam_list))
+            enable_futures.append(server.enable_writers(sub_beam_list, output_dir))
         for future in enable_futures:
             yield future
 
@@ -256,8 +287,8 @@ class ApsProductController(object):
         # determine base output path
         # /output/{proposal_id}/{sb_id}/
         # scan number will be added to the path later
-        # The /output/ path is usually a mount of /beegfs/DATA/TRAPUM
-        base_output_dir = "/output/{}/{}/".format(proposal_id, sb_id)
+        # The /DATA/ path is usually a mount of /beegfs/DATA/TRAPUM
+        self._base_output_dir = "/DATA/{}/{}/".format(proposal_id, sb_id)
         self._fbf_sb_config = yield self._katportal_client.get_fbfuse_sb_config(self._product_id)
         self._fbf_sb_config_sensor.set_value(self._fbf_sb_config)
         self.log.debug("Determined FBFUSE config: {}".format(self._fbf_sb_config))
@@ -293,7 +324,7 @@ class ApsProductController(object):
             "nchans": self._fbf_sb_config["nchannels"] / self._fbf_sb_config["coherent-beam-fscrunch"],
             "nchans-per-heap": self._fbf_sb_config["coherent-beam-subband-nchans"],
             "sampling-interval": self._fbf_sb_config["coherent-beam-time-resolution"],
-            "base-output-dir": "{}/coherent".format(base_output_dir),
+            "base-output-dir": "{}".format(self._base_output_dir),
             "filesize": 1e9
         }
 
@@ -303,7 +334,7 @@ class ApsProductController(object):
             "nchans": self._fbf_sb_config["nchannels"] / self._fbf_sb_config["incoherent-beam-fscrunch"],
             "nchans-per-heap": self._fbf_sb_config["incoherent-beam-subband-nchans"],
             "sampling-interval": self._fbf_sb_config["incoherent-beam-time-resolution"],
-            "base-output-dir": "{}/incoherent".format(base_output_dir),
+            "base-output-dir": "{}".format(self._base_output_dir),
             "filesize": 1e9
         }
 
@@ -373,7 +404,7 @@ class ApsProductController(object):
                     yield self.enable_writers()
                 except Exception:
                     log.exception("error")
-            self._parent.ioloop.add_callback(wait_for_off_target)
+                self._parent.ioloop.add_callback(wait_for_off_target)
 
         @coroutine
         def wait_for_off_target():
@@ -389,8 +420,11 @@ class ApsProductController(object):
                 pass
             else:
                 self.log.info("data-suspect flags now True (off-target/retiling)")
+
+
+
                 yield self.disable_all_writers()
-            self._parent.ioloop.add_callback(wait_for_on_target)
+                self._parent.ioloop.add_callback(wait_for_on_target)
 
         self._parent.ioloop.add_callback(wait_for_on_target)
         server_str = ",".join(["{s.hostname}:{s.port}".format(
