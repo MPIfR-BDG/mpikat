@@ -95,7 +95,7 @@ class DigitiserPacketiserClient(object):
         attempts = 0
         while True:
             response = yield self._safe_request("rxs_packetizer_system_reinit", *args)
-            yield sleep(10)
+            yield sleep(20)
             try:
                 yield self._check_interfaces()
             except PacketiserInterfaceError as error:
