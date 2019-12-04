@@ -945,8 +945,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #CREATING THE PARFILE WITH PSRCAT                  #
         ####################################################
+        os.chdir("/tmp/")
+        """
         try:
-            os.chdir("/tmp/")
+            
             if parse_tag(self.source_name) == "default":
                 cmd = "psrcat -E {source_name}".format(
                     source_name=self.source_name.split("_")[0])
@@ -962,25 +964,26 @@ class EddPulsarPipeline(AsyncDeviceServer):
             yield self.stop_pipeline()
             raise EddPulsarPipelineError(str(error))
         time.sleep(2)
+        
         if parse_tag(self.source_name) == "default":
             while True:
-                if is_accessible('/tmp/{}.par'.format(self.source_name)):
-                    log.debug('/tmp/{}.par'.format(self.source_name))
+                if is_accessible('/tmp/{}.par'.format(self.source_name[1:])):
+                    log.debug('/tmp/{}.par'.format(self.source_name)[1:])
                     break
             self.first_line = []
-            with open('/tmp/{}.par'.format(self.source_name)) as f:
+            with open('/tmp/{}.par'.format(self.source_name)[1:]) as f:
                 self.first_line = f.readline()
                 if self.first_line.split(" ")[0] == "WARNING:":
                     raise EddPulsarPipelineError(
                         "ERROR: {}".format(self.first_line))
-
+        """
         # time.sleep(3)
         ####################################################
         #CREATING THE PREDICTOR WITH TEMPO2                #
         ####################################################
-
-            cmd = 'tempo2 -f /tmp/{}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
-                self.source_name, Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 1.0, float(self._pipeline_config["central_freq"]) + 1.0)
+        if parse_tag(self.source_name) == "default":
+            cmd = 'tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
+                self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 1.0, float(self._pipeline_config["central_freq"]) + 1.0)
             log.debug("Command to run: {}".format(cmd))
             self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
             self.tempo2.stdout_callbacks.add(
@@ -1030,14 +1033,14 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         os.chdir(in_path)
         if parse_tag(self.source_name) == "default":
-            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
+            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
                 nchan="-F {}:D".format(self.nchannels),
                 nbin="-b {}".format(self.nbins),
                 name=self.source_name,
                 predictor="/tmp/t2pred.dat",
-                parfile="/tmp/{}.par".format(self.source_name),
+                #parfile="/tmp/epta/{}.par".format(self.source_name[1:]),
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
