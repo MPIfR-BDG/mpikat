@@ -1030,24 +1030,26 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         os.chdir(in_path)
         if parse_tag(self.source_name) == "default":
-            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -cuda {cuda_number} -P {predictor} -E {parfile} {keyfile}".format(
+            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
                 nchan="-F {}:D".format(self.nchannels),
                 nbin="-b {}".format(self.nbins),
+                name=self.source_name,
                 predictor="/tmp/t2pred.dat",
                 parfile="/tmp/{}.par".format(self.source_name),
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
         elif parse_tag(self.source_name) == "R":
-            #cmd = "numactl -m {numa} dspsr -L 1 -c 1 -D 0.0001 -r -minram 1024 -fft-bench {nchan} {nbin} -cpu {cpus} -cuda {cuda_number}  {keyfile}".format(
-            cmd = "numactl -m {numa} dspsr -L 10 -t 8 -c 1.0 -D 0.0 -r -minram 1024 -Lmin 9 -f 1200 -fft-bench {nchan} {keyfile}".format(
+            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
+            #cmd = "numactl -m {numa} dspsr -L 10 -t 8 -c 1.0 -D 0.0 -r -minram 1024 -Lmin 9 -f 1200 -fft-bench {nchan} {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
                 #nchan="-F {}:D".format(self.nchannels),
                 nchan="-F 32:D",
-                nbin="-b {}".format(self.nbins),
+                name=self.source_name,
+                #nbin="-b {}".format(self.nbins),
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
