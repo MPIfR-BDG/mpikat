@@ -995,6 +995,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             time.sleep(2)
 
             attempts = 0
+            retries = 3
             while True:
                 if attempts >= retries:
                     error = "could not read t2pred.dat"
