@@ -982,7 +982,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #CREATING THE PREDICTOR WITH TEMPO2                #
         ####################################################
-
+        log.debug("{}".format((parse_tag(self.source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))))
         if (parse_tag(self.source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:])):
             cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
                 self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 1.0, float(self._pipeline_config["central_freq"]) + 1.0)
