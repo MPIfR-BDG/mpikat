@@ -995,7 +995,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             time.sleep(2)
 
             attempts = 0
-            retries = 3
+            retries = 5
             while True:
                 if attempts >= retries:
                     error = "could not read t2pred.dat"
@@ -1039,11 +1039,25 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
-        time.sleep(2)
+
+        attempts = 0
+        retries = 5
         while True:
-            if is_accessible('{}'.format(dada_key_file.name)):
-                log.debug('{}'.format(dada_key_file.name))
-                break
+            if attempts >= retries:
+                error = "could not read t2pred.dat"
+                raise EddPulsarPipelineError(error)
+            else:
+                time.sleep(1)
+                if is_accessible('{}'.format(dada_key_file.name)):
+                    log.debug('{} is not available'.format(dada_key_file.name))
+                    break
+                else:
+                    attempts += 1
+        #time.sleep(2)
+        #while True:
+        #    if is_accessible('{}'.format(dada_key_file.name)):
+        #        log.debug('{}'.format(dada_key_file.name))
+        #        break
 
         ####################################################
         #STARTING DSPSR                                    #
