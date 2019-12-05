@@ -20,6 +20,11 @@ class EDDDataStore:
         # Telescope meta data
         self._telescopeMetaData = redis.StrictRedis(host=host, port=port, db=3)
 
+        self._ansible.ping()
+        self._products.ping()
+        self._dataStreams.ping()
+        self._telescopeMetaData.ping()
+
 
     def updateProducts(self):
         """

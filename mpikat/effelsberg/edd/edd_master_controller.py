@@ -345,7 +345,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
 if __name__ == "__main__":
     parser = EDDPipeline.getArgumentParser()
-    parser.add_argument('--redis-ip', dest='redis_ip', type=str,
+    parser.add_argument('--redis-ip', dest='redis_ip', type=str, default="localhost",
                       help='The ip for the redis server')
     parser.add_argument('--redis-port', dest='redis_port', type=int, default=6379,
                       help='The port number for the redis server')
