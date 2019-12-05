@@ -632,13 +632,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
         self.state = "idle"
 
 
-@coroutine
-def on_shutdown(ioloop, server):
-    log.info("Shutting down server")
-    yield server.stop()
-    ioloop.stop()
-
-
 if __name__ == "__main__":
     launchPipelineServer(GatedSpectrometerPipeline)
  

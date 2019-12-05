@@ -11,7 +11,7 @@ class EddServerProductController(ProductController):
     """
     """
 
-    def __init__(self, parent, product_id, r2rm_addr):
+    def __init__(self, parent, product_id, address, port):
         """
         @brief      Construct new instance
 
@@ -22,11 +22,12 @@ class EddServerProductController(ProductController):
                                       e.g. ("127.0.0.1", 5000)
         """
         ProductController.__init__(self, parent, product_id)
-        log.debug("Adress {}, {}".format(r2rm_addr[0], r2rm_addr[1]))
+        log.debug("Adress {}, {}".format(address, port))
         self._client = KATCPClientResource(dict(
-            name="r2rm-client",
-            address=r2rm_addr,
+            name="server-client_{}".format(product_id),
+            address=(address, int(port)),
             controlled=True))
+        self.__product_id = product_id
         self._client.start()
 
     def setup_sensors(self):
@@ -48,7 +49,7 @@ class EddServerProductController(ProductController):
 
     @coroutine
     def _safe_request(self, request_name, *args, **kwargs):
-        log.info("Sending packetiser request '{}' with arguments {}".format(request_name, args))
+        log.info("Sending request '{}' with arguments {}".format(request_name, args))
         yield self._client.until_synced()
         response = yield self._client.req[request_name](*args, **kwargs)
         if not response.reply.reply_ok():
@@ -58,7 +59,6 @@ class EddServerProductController(ProductController):
             log.debug("'{}' request successful".format(request_name))
             raise Return(response)
 
-    @state_change(["capturing", "error"], "idle")
     @coroutine
     def deconfigure(self):
         """
@@ -72,7 +72,9 @@ class EddServerProductController(ProductController):
     @coroutine
     def configure(self, config):
         """
+        @brief      A no-op method for supporting the product controller interface.
         """
+        logging.debug("Send cfg to {}".format(self.__product_id))
         yield self._safe_request("configure", json.dumps(config), timeout=120.0)
 
     @coroutine

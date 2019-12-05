@@ -27,6 +27,7 @@ class DigitiserPacketiserClient(object):
             address=(self._host, self._port),
             controlled=True))
         self._client.start()
+        self._capture_started = False
 
     def stop(self):
         self._client.stop()
@@ -181,14 +182,45 @@ class DigitiserPacketiserClient(object):
                     flags on the packetiser and set for data transmission.
                     This includes the 1PPS flag required by the ROACH2 boards.
         """
-        yield self._safe_request("capture_start", "vh")
+        if not self._capture_started:
+            """
+            Only start capture once and not twice if received configure
+            """
+            self._capture_started = True
+            yield self._safe_request("capture_start", "vh")
+
+    @coroutine
+    def configure(self, config):
+        """
+        @brief Applying configuration recieved in dictionary
+        """
+        yield self.set_sampling_rate(config["sampling_rate"])
+        yield self.set_predecimation(config["predecimation_factor"])
+        yield self.flip_spectrum(config["flip_spectrum"])
+        yield self.set_bit_width(config["bit_width"])
+        yield self.set_destinations(config["v_destinations"], config["h_destinations"])
+        for interface, ip_address in config["interface_addresses"].items():
+            yield self.set_interface_address(interface, ip_address)
+        if "sync_time" in config:
+            yield self.synchronize(config["sync_time"])
+        else:
+            yield self.synchronize()
+        yield self.capture_start()
+
+    @coroutine
+    def deconfigure(self):
+        """
+        @brief Deconfigure. Not doing anythin 
+        """
+        pass
 
     @coroutine
     def capture_stop(self):
         """
         @brief      Stop data transmission for both polarisation channels
         """
-        yield self._safe_request("capture_stop", "vh")
+        log.warning("Not stopping data transmission")
+        #yield self._safe_request("capture_stop", "vh")
 
     @coroutine
     def set_predecimation(self, factor):
