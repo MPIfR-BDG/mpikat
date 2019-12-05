@@ -1059,7 +1059,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
-        else
+        else:
             error = "source is unknown"
             raise EddPulsarPipelineError(error)
 
