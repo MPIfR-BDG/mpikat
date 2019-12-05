@@ -1035,7 +1035,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         os.chdir(in_path)
         
-        if parse_tag(self.source_name) == "default":
+        if (parse_tag(self.source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:])):
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
