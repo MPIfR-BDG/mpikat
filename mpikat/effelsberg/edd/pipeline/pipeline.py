@@ -982,8 +982,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #CREATING THE PREDICTOR WITH TEMPO2                #
         ####################################################
         if parse_tag(self.source_name) == "default":
-            cmd = 'numactl -m {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
-                self.numa_number, self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 1.0, float(self._pipeline_config["central_freq"]) + 1.0)
+            cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
+                self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 1.0, float(self._pipeline_config["central_freq"]) + 1.0)
             log.debug("Command to run: {}".format(cmd))
             self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
             self.tempo2.stdout_callbacks.add(
