@@ -1032,7 +1032,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING DSPSR                                    #
         ####################################################
         os.chdir(in_path)
-        """
+        
         if parse_tag(self.source_name) == "default":
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
@@ -1057,8 +1057,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
-        """        
-        cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
+                
+        #cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring DSPSR")
         self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
