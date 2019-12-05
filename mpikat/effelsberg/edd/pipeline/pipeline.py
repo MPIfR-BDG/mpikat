@@ -999,7 +999,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 if attempts >= retries:
                     error = "could not read t2pred.dat"
                     raise EddPulsarPipelineError(error)
-                else
+                else:
                     time.sleep(1)
                     if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
                         log.debug('{}/t2pred.dat'.format(os.getcwd()))
