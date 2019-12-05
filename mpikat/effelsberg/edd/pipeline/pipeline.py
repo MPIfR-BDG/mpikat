@@ -993,10 +993,24 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self.tempo2.stderr_callbacks.add(
                 self._handle_execution_stderr)
             time.sleep(2)
+
+            attempts = 0
             while True:
-                if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
-                    log.debug('{}/t2pred.dat'.format(os.getcwd()))
-                    break
+                if attempts >= retries:
+                    error = "could not read t2pred.dat"
+                    raise EddPulsarPipelineError(error)
+                else
+                    time.sleep(1)
+                    if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
+                        log.debug('{}/t2pred.dat'.format(os.getcwd()))
+                        break
+                    else:
+                        attempts += 1
+
+            #while True:
+            #    if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
+            #        log.debug('{}/t2pred.dat'.format(os.getcwd()))
+            #        break
         ####################################################
         #CREATING THE DADA HEADERFILE                      #
         ####################################################
