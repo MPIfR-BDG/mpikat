@@ -38,7 +38,7 @@ import os
 import datetime
 import logging
 import signal
-from optparse import OptionParser
+from argparse import ArgumentParser
 import coloredlogs
 import json
 import tempfile
@@ -73,10 +73,9 @@ class EDDPipeline(AsyncDeviceServer):
         self._scpi_interface = None
         self._config = None
         self._subprocesses = []
-        self.mkrec_cmd = []
         self._subprocessMonitor = None
-        self._dada_buffers = []
         AsyncDeviceServer.__init__(self, ip, port) # Async device parent depends on setting e.g. _control_mode in child
+
 
 
     def setup_sensors(self):
@@ -111,7 +110,6 @@ class EDDPipeline(AsyncDeviceServer):
             default="ok",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._device_status)
-
 
         self._status_change_time = Sensor.string(
             "status-change-time",
@@ -431,38 +429,44 @@ def on_shutdown(ioloop, server):
     ioloop.stop()
 
 
-def launchPipelineServer(Pipeline):
-    usage = "usage: %prog [options]"
-    parser = OptionParser(usage=usage)
-    parser.add_option('-H', '--host', dest='host', type=str, default='localhost',
+def getArgumentParser():
+    parser = ArgumentParser()
+    parser.add_argument('-H', '--host', dest='host', type=str, default='localhost',
                       help='Host interface to bind to')
-    parser.add_option('-p', '--port', dest='port', type=int, default=1235,
+    parser.add_argument('-p', '--port', dest='port', type=int, default=1235,
                       help='Port number to bind to')
-    parser.add_option('', '--scpi-interface', dest='scpi_interface', type=str,
+    parser.add_argument('--scpi-interface', dest='scpi_interface', type=str,
                       help='The interface to listen on for SCPI requests',
                       default="")
-    parser.add_option('', '--scpi-port', dest='scpi_port', type=int,
+    parser.add_argument('--scpi-port', dest='scpi_port', type=int,
                       help='The port number to listen on for SCPI requests')
-    parser.add_option('', '--scpi-mode', dest='scpi_mode', action="store_true",
+    parser.add_argument('--scpi-mode', dest='scpi_mode', action="store_true",
                       help='Activate the SCPI interface on startup')
-    parser.add_option('', '--log-level', dest='log_level', type=str,
+    parser.add_argument('--log-level', dest='log_level', type=str,
                       help='Port number of status server instance', default="INFO")
-    (opts, args) = parser.parse_args()
+
+    return parser
+
+
+def launchPipelineServer(Pipeline):
+    parser = getArgumentParser()
+    args = parser.parse_args()
+
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
-    logger.setLevel(opts.log_level.upper())
+    logger.setLevel(args.log_level.upper())
 
-    log.setLevel(opts.log_level.upper())
+    log.setLevel(args.log_level.upper())
     coloredlogs.install(
         fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
              "- %(filename)s:%(lineno)s] %(message)s"),
-        level=opts.log_level.upper(),
+        level=args.log_level.upper(),
         logger=logger)
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting Pipeline instance")
     server = Pipeline(
-        opts.host, opts.port,
-        opts.scpi_interface, opts.scpi_port)
+        args.host, args.port,
+        args.scpi_interface, args.scpi_port)
     log.info("Created Pipeline instance")
     signal.signal(
         signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
@@ -472,12 +476,12 @@ def launchPipelineServer(Pipeline):
         log.info("Starting Pipeline server")
         server.start()
         log.debug("Started Pipeline server")
-        if opts.scpi_mode:
+        if args.scpi_mode:
             log.debug("SCPI mode")
             server.set_control_mode(server.SCPI)
         log.info(
             "Listening at {0}, Ctrl-C to terminate server".format(
-                server.bind_address))\
+                server.bind_address))
 
     ioloop.add_callback(start_and_display)
     ioloop.start()
