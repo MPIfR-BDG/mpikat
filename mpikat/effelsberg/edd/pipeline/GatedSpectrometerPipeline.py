@@ -244,12 +244,14 @@ class GatedSpectrometerPipeline(EDDPipeline):
     VERSION_INFO = ("mpikat-edd-api", 0, 1)
     BUILD_INFO = ("mpikat-edd-implementation", 0, 1, "rc1")
 
+
     def __init__(self, ip, port, scpi_ip, scpi_port):
         """@brief initialize the pipeline."""
         EDDPipeline.__init__(self, ip, port, scpi_ip, scpi_port)
         self.__numa_node_pool = []
         self.mkrec_cmd = []
         self._dada_buffers = []
+
 
     def setup_sensors(self):
         """
@@ -278,6 +280,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
         self._polarization_sensors = {}
 
+
     def add_input_stream_sensor(self, streamid):
         self._polarization_sensors[streamid] = {}
         self._polarization_sensors[streamid]["mkrecv_sensors"] = MkrecvSensors(streamid)
@@ -304,7 +307,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 )
         self.add_sensor(self._polarization_sensors[streamid]["output-buffer-total-read"])
         self.add_sensor(self._polarization_sensors[streamid]["output-buffer-fill-level"])
-
 
 
     @coroutine
@@ -391,7 +393,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
             self.state = "idle"     # no states changed
             raise FailReply("Unknown configuration option: {}".format(str(error)))
 
-
         cfs = json.dumps(self._config, indent=4)
         log.info("Received configuration:\n" + cfs)
         self._edd_config_sensor.set_value(cfs)
@@ -412,8 +413,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
         if len(self._config['input_data_streams']) > len(self.__numa_node_pool):
             raise FailReply("Not enough numa nodes to process {} polarizations!".format(len(self._config['input_data_streams'])))
-
-
 
         #ToDo: Check that all input data streams have the same format, or allow different formats
         for i, streamid in enumerate(self._config['input_data_streams']):
@@ -443,7 +442,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
             rate *= self._config["output_rate_factor"]        # set rate to (100+X)% of expected rate
             self._output_rate_status.set_value(rate / 1E9)
 
-
             log.info('Output parameters calculated from configuration:\n\
                     spectra per block:  {} \n\
                     nChannels:          {} \n\
@@ -452,7 +450,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
                     heap size:          {} byte\n\
                     rate ({:.0f}%):        {} Gbps'.format(nSlices, nChannels, output_bufferSize, integrationTime, output_heapSize, self._config["output_rate_factor"]*100, rate / 1E9))
             self._subprocessMonitor = SubprocessMonitor()
-
 
             numa_node = self.__numa_node_pool[i] 
             log.debug("Associating {} with numa node {}".format(streamid, numa_node))
@@ -491,13 +488,12 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 timestep = cfg["fft_length"] * cfg["naccumulate"]
                 physcpu = ",".join(numa.getInfo()[numa_node]['cores'][1:2])
                 #select network interface
-                nics = numa.getInfo()[numa_node]["net_devices"]
-                fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])  
+                fastest_nic, nic_params = nume.getFastestNic(numa_node)
 
-                log.info("Sending data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nics[fastest_nic]['ip'], nics[fastest_nic]['speed']))
+                log.info("Sending data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nic_params['ip'], nic_params['speed']))
                 cmd = "taskset -c {physcpu} mksend --header {mksend_header} --heap-id-start {heap_id_start} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_rate} --item1-step {timestep} --item2-list {polarization} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_rate} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, heap_id_start=i , timestep=timestep,
                         ofname=ofname, polarization=i, nChannels=nChannels, physcpu=physcpu, integrationTime=integrationTime,
-                        rate=rate, nhops=nhops, heap_size=output_heapSize, ibv_if=nics[fastest_nic]['ip'], 
+                        rate=rate, nhops=nhops, heap_size=output_heapSize, ibv_if=nic_params['ip'],
                         mcast_dest=self._config["output_data_streams"][streamid]['ip'],
                         port_tx=self._config["output_data_streams"][streamid]['port'], **cfg)
                 log.debug("Command to run: {}".format(cmd))
@@ -551,13 +547,12 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 cfg.update(stream_description)
                 if not self._config['dummy_input']:
                     numa_node = self.__numa_node_pool[i]
-                    nics = numa.getInfo()[numa_node]["net_devices"]
-                    fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])
-                    log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nics[fastest_nic]['ip'], nics[fastest_nic]['speed']))
+                    fastest_nic, nic_params = nume.getFastestNic(numa_node)
+                    log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nic_params['ip'], nic_params['speed']))
                     physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
                     cmd = "taskset -c {physcpu} mkrecv_nt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --dada-key {dada_key} \
                     --sync-epoch {sync_time} --sample-clock {sample_rate} \
-                    --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nics[fastest_nic]['ip'], 
+                    --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nic_params['ip'], 
                             **cfg )
                     mk = ManagedProcess(cmd, stdout_handler=self._polarization_sensors[streamid]["mkrecv_sensors"].stdout_handler)
                 else:
@@ -634,4 +629,3 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
 if __name__ == "__main__":
     launchPipelineServer(GatedSpectrometerPipeline)
- 

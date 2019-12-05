@@ -23,10 +23,9 @@ def updateInfo():
         cpurange = open('/sys/devices/system/node/node' + node + '/cpulist').read().strip().split('-')
         __numaInfo[node]['cores'] = map(str, range(int(cpurange[0]), int(cpurange[1])+1))
         __numaInfo[node]['gpus'] = []
-        __numaInfo[node]["net_devices"] = {} 
+        __numaInfo[node]["net_devices"] = {}
         logging.debug("  found {} Cores.".format(len(__numaInfo[node]['cores'])))
 
-    
     logging.debug(__numaInfo)
     # check network devices
     for device in os.listdir("/sys/class/net/"):
@@ -35,7 +34,7 @@ def updateInfo():
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         if os.path.isfile(d):
             node = open(d).read().strip()
-            __numaInfo[node]["net_devices"][device] = {} 
+            __numaInfo[node]["net_devices"][device] = {}
             logging.debug("  - found node {}".format(node))
             __numaInfo[node]["net_devices"][device]['ip'] = ""
             try:
@@ -55,7 +54,6 @@ def updateInfo():
                     logging.warning(" Cannot acess speed for device {}: {}".format(device, e))
 
             __numaInfo[node]["net_devices"][device]['speed'] = int(speed)
-
 
     # check cuda devices:
     pynvml.nvmlInit()
@@ -80,6 +78,16 @@ def getInfo():
     if not __numaInfo:
         updateInfo()
     return __numaInfo
+
+
+def getFastestNic(numa_node):
+    """
+    Returns (name, description) of the fastest nic on given numa_node
+    """
+    nics = getInfo()[numa_node]["net_devices"]
+    fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])
+    return fastest_nic, nics[fastest_nic]
+
 
 if __name__ == "__main__":
     logging.basicConfig(level="DEBUG")
