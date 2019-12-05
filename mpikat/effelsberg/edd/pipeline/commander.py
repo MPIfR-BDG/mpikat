@@ -202,17 +202,22 @@ class EddCommander(AsyncDeviceServer):
         self._source_config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
-        self._status_server = KATCPToIGUIConverter("134.104.70.66", 5001)
+        self._status_server = KATCPToIGUIConverter("134.104.70.66", 6000)
         self._status_server.start()
         self._status_server.sensor_callbacks.add(
             self.sensor_update)
         self._status_server.new_sensor_callbacks.add(
             self.new_sensor)
-        self._edd_pipeline = KATCPClientResource(dict(
+        self._edd_pipeline_focus = KATCPClientResource(dict(
             name='edd_pipeline-client',
             address=("134.104.70.66", 5000),
             controlled=True))
-        self._edd_pipeline.start()
+        self._edd_pipeline_focus.start()
+        self._edd_pipeline_faraday = KATCPClientResource(dict(
+            name='edd_pipeline-client',
+            address=("134.104.70.66", 5001),
+            controlled=True))
+        self._edd_pipeline_faraday.start()
         self.first_true = True
         self.last_value = False
 
@@ -231,13 +236,15 @@ class EddCommander(AsyncDeviceServer):
                 log.debug(json_string)
                 self.first_true = False
                 self.last_value = True
-                self._edd_pipeline.req.start(json_string)
+                self._edd_pipeline_focus.req.start(json_string)
+                self._edd_pipeline_faraday.req.start(json_string)
 
             elif bool(self._observing.value() == 'False') & bool(self.last_value == True):
                 log.debug("Should send a stop to the pipeline")
                 self.first_true = True
                 self.last_value = False
-                self._edd_pipeline.req.stop()
+                self._edd_pipeline_focus.req.stop()
+                self._edd_pipeline_faraday.req.stop()
 
 
     def new_sensor(self, sensor_name, callback):
