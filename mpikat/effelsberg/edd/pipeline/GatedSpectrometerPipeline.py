@@ -24,7 +24,6 @@ from mpikat.utils.process_monitor import SubprocessMonitor
 from mpikat.utils.sensor_watchdog import SensorWatchdog
 from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
-from mpikat.effelsberg.edd.pipeline.pipeline_register import register_pipeline
 from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer
 import mpikat.utils.numa as numa
 
