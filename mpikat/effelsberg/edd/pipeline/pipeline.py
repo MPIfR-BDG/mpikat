@@ -897,7 +897,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             header["sync_time"] = self.sync_epoch
             header["sample_clock"] = float(
-                self.config_dict["sampling_rate"]) / 2.0
+                self.config_dict["sampling_rate"]) / self.config_dict["predecimation_factor"])
         except:
             pass
         ########NEED TO PUT IN THE LOGIC FOR _R here#############
