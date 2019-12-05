@@ -43,48 +43,116 @@ import tempfile
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.GatedSpectrometerPipeline")
 log.setLevel('DEBUG')
 
-POLARIZATIONS = ["polarization_0", "polarization_1"]
+# DADA BUFFERS TO BE USED 
+DADABUFFERS = ["dada", "dadc"]
+
+
+#class DadaBuffer:
+#    def __init__(self, nblocks, blocksize):
+#        """
+#        Interface to a dadabuffer with given number of blocks and blocksize.
+#        The dada buffer is created with an automatically choosen key starting with
+#        dada, dadb, dadc, ....
+#        The buffer is deleted on destruction of the object
+#        """
+#
+#        self.__key = getFreeBufferKey()
+#        self.nblocks = nblocks
+#        self.blocksize = blcoksize
+#    
+#    def allocate(self):
+#
+#
+#
+#    @classmethod
+#    def getFreeBufferKey(cls):
+#        key = int('dada', 16)
+#        while key < key+1024:
+#            p = subprocess.Popen(['dada_dbmeminfo', '-k', hex(key)[2:]], stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+#            if p.wait():
+#                return key
+#            key += 1
+#        raise RuntimeError("No dada key available!")
+#
+#
+#    @property
+#    def key(self):
+#        return hex(self.__key)[:2]
+#
+
+
+
 
 DEFAULT_CONFIG = {
-	    "id": "dummy",                                      # default cfgs for master controler
-    	"type": "dummy",
-	    "address": "dummy",
-        "input_bit_depth" : 12,                             # Input bit-depth
-        "samples_per_heap": 4096,                           # this needs to be consistent with the mkrecv configuration
-        "samples_per_block": 256 * 1024 * 1024,             # 256 Mega sampels per buffer block to allow high res  spectra - the theoretical mazimum is thus 128 M Channels
-        "enabled_polarizations" : ["polarization_0", "polarization_1"],
-        "sample_clock" : 2600000000,
-        "sync_time" : 1562662573.0,
+	    "id": "GatedSpectrometer",                          # default cfgs for master controler. Needs to get a unique ID -- TODO, from ansible
+    	"type": "GatedSpectrometer",
+        "supported_input_formats": {"MPIFR_EDD_Packetizer": [1]},      # supproted input formats name:version
+	    "address": "dummy",                                 # ToDo, address is not a configuration option but found automatically
+        "samples_per_block": 256 * 1024 * 1024,             # 256 Mega sampels per buffer block to allow high res  spectra - the
+                                                            # theoretical  mazimum is thus  128 M Channels.   This option  allows
+                                                            # to tweak  the execution on  low-mem GPUs or  ig the GPU is  shared 
+                                                            # with other  codes
+        "input_data_streams":
+        {
+            "polarization_0" :
+            {
+                "source": "",                               # name of the source for automatic setting of paramters
+                "format": "MPIFR_EDD_Packetizer",
+                "format_version": 1,
+                "ip": "225.0.0.162+3",
+                "port": "7148",
+                "bit_depth" : 12,
+                "sample_rate" : 2600000000,
+                "sync_time" : 1562662573.0,
+                "samples_per_heap": 4096,                     # this needs to be consistent with the mkrecv configuration
+            },
+             "polarization_1" :
+            {
+                "source": "",                               # name of the source for automatic setting of paramters, e.g.: "packetizer1:h_polarization
+                "format": "MPIFR_EDD_Packetizer",
+                "format_version": 1,
+                "ip": "225.0.0.1r6+3",
+                "port": "7148",
+                "bit_depth" : 12,
+                "sample_rate" : 2600000000,
+                "sync_time" : 1562662573.0,
+                "samples_per_heap": 4096,                           # this needs to be consistent with the mkrecv configuration
+            }
+        },
+        "output_data_streams":
+        {
+            "polarization_0" :
+            {
+                "format": "MPIFR_EDD_GatedSpectrometer",
+                "format_version": 1,
+                "ip": "225.0.0.172 225.0.0.173",        #two destinations gate on/off
+                "port": "7152",
+            },
+             "polarization_1" :
+            {
+                "format": "MPIFR_EDD_GatedSpectrometer",
+                "format_version": 1,
+                "ip": "225.0.0.184 225.0.0.185",        #two destinations, one for on, one for off
+                "port": "7152",
+            }
+        },
+
         "fft_length": 1024 * 1024 * 2 * 8,
         "naccumulate": 32,
         "output_bit_depth": 32,
-        "output_directory": "/mnt",
+
         "input_level": 100,
         "output_level": 100,
 
-        "output_type": 'network',                              # ['network', 'disk', 'null'] 
-        "dummy_input": False,                               # Use dummy input instead of mkrecv process.
+        "output_directory": "/mnt",                         # ToDo: Should be a output data stream def.
+        "output_type": 'network',                           # ['network', 'disk', 'null']  ToDo: Should be a output data stream def.
+        "dummy_input": False,                               # Use dummy input instead of mkrecv process. Should be input data stream option.
         "log_level": "debug",
 
         "output_rate_factor": 1.10,                         # True output date rate is multiplied by this factor for sending.
-
-        "polarization_0" :
-        {
-            "mcast_sources": "225.0.0.152+3",
-            "mcast_dest": "225.0.0.172 225.0.0.173",        #two destinations gate on/off
-            "port_rx": "7148",
-            "port_tx": "7152",
-            "dada_key": "dada",                             # output keys are the reverse!
-        },
-         "polarization_1" :
-        {
-            "mcast_sources": "225.0.0.156+3",
-            "mcast_dest": "225.0.0.184 225.0.0.185",        #two destinations, one for on, one for off
-            "port_rx": "7148",
-            "port_tx": "7152",
-            "dada_key": "dadc",
-        }
     }
+
+NON_EXPERT_KEYS = ["fft_length", "naccumulate", "output_bit_depth"]
 
 # static configuration for mkrec. all items that can be configured are passed
 # via cmdline
@@ -180,6 +248,8 @@ class GatedSpectrometerPipeline(EDDPipeline):
         """@brief initialize the pipeline."""
         EDDPipeline.__init__(self, ip, port, scpi_ip, scpi_port)
         self.__numa_node_pool = []
+        self.mkrec_cmd = []
+        self._dada_buffers = []
 
     def setup_sensors(self):
         """
@@ -207,34 +277,33 @@ class GatedSpectrometerPipeline(EDDPipeline):
         self.add_sensor(self._output_rate_status)
 
         self._polarization_sensors = {}
-        for p in POLARIZATIONS:
-            self._polarization_sensors[p] = {}
-            self._polarization_sensors[p]["mkrecv_sensors"] = MkrecvSensors(p)
-            for s in self._polarization_sensors[p]["mkrecv_sensors"].sensors.itervalues():
-                self.add_sensor(s)
-            self._polarization_sensors[p]["input-buffer-fill-level"] = Sensor.float(
-                    "input-buffer-fill-level-{}".format(p),
-                    description="Fill level of the input buffer for polarization{}".format(p),
-                    params=[0, 1]
-                    )
-            self.add_sensor(self._polarization_sensors[p]["input-buffer-fill-level"])
-            self._polarization_sensors[p]["input-buffer-total-write"] = Sensor.float(
-                    "input-buffer-total-write-{}".format(p),
-                    description="Total write into input buffer for polarization {}".format(p),
-                    params=[0, 1]
-                    )
 
-            self.add_sensor(self._polarization_sensors[p]["input-buffer-total-write"])
-            self._polarization_sensors[p]["output-buffer-fill-level"] = Sensor.float(
-                    "output-buffer-fill-level-{}".format(p),
-                    description="Fill level of the output buffer for polarization {}".format(p)
-                    )
-            self._polarization_sensors[p]["output-buffer-total-read"] = Sensor.float(
-                    "output-buffer-total-read-{}".format(p),
-                    description="Total read from output buffer for polarization {}".format(p)
-                    )
-            self.add_sensor(self._polarization_sensors[p]["output-buffer-total-read"])
-            self.add_sensor(self._polarization_sensors[p]["output-buffer-fill-level"])
+    def add_input_stream_sensor(self, streamid):
+        self._polarization_sensors[streamid] = {}
+        self._polarization_sensors[streamid]["mkrecv_sensors"] = MkrecvSensors(streamid)
+        for s in self._polarization_sensors[streamid]["mkrecv_sensors"].sensors.itervalues():
+            self.add_sensor(s)
+        self._polarization_sensors[streamid]["input-buffer-fill-level"] = Sensor.float(
+                "input-buffer-fill-level-{}".format(streamid),
+                description="Fill level of the input buffer for polarization{}".format(streamid),
+                params=[0, 1])
+        self.add_sensor(self._polarization_sensors[streamid]["input-buffer-fill-level"])
+        self._polarization_sensors[streamid]["input-buffer-total-write"] = Sensor.float(
+                "input-buffer-total-write-{}".format(streamid),
+                description="Total write into input buffer for polarization {}".format(streamid),
+                params=[0, 1])
+
+        self.add_sensor(self._polarization_sensors[streamid]["input-buffer-total-write"])
+        self._polarization_sensors[streamid]["output-buffer-fill-level"] = Sensor.float(
+                "output-buffer-fill-level-{}".format(streamid),
+                description="Fill level of the output buffer for polarization {}".format(streamid)
+                )
+        self._polarization_sensors[streamid]["output-buffer-total-read"] = Sensor.float(
+                "output-buffer-total-read-{}".format(streamid),
+                description="Total read from output buffer for polarization {}".format(streamid)
+                )
+        self.add_sensor(self._polarization_sensors[streamid]["output-buffer-total-read"])
+        self.add_sensor(self._polarization_sensors[streamid]["output-buffer-fill-level"])
 
 
 
@@ -260,13 +329,15 @@ class GatedSpectrometerPipeline(EDDPipeline):
         """
         Process a change in the buffer status
         """
-        for p in POLARIZATIONS:
-            if status['key'] == self._config[p]['dada_key']:
-                self._polarization_sensors[p]["input-buffer-total-write"].set_value(status['written'])
-                self._polarization_sensors[p]["input-buffer-fill-level"].set_value(status['fraction-full'])
-            elif status['key'] == self._config[p]['dada_key'][::-1]:
-                self._polarization_sensors[p]["output-buffer-fill-level"].set_value(status['fraction-full'])
-                self._polarization_sensors[p]["output-buffer-total-read"].set_value(status['read'])
+        pass
+        for streamid, stream_description in self._config["input_data_streams"].iteritems():
+            if status['key'] == stream_description['dada_key']:
+                self._polarization_sensors[streamid]["input-buffer-total-write"].set_value(status['written'])
+                self._polarization_sensors[streamid]["input-buffer-fill-level"].set_value(status['fraction-full'])
+        for streamid, stream_description in self._config["input_data_streams"].iteritems():
+            if status['key'] == stream_description['dada_key'][::-1]:
+                self._polarization_sensors[streamid]["output-buffer-fill-level"].set_value(status['fraction-full'])
+                self._polarization_sensors[streamid]["output-buffer-total-read"].set_value(status['read'])
 
 
     @coroutine
@@ -325,39 +396,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
         log.info("Received configuration:\n" + cfs)
         self._edd_config_sensor.set_value(cfs)
 
-        # calculate input buffer parameters
-        self.input_heapSize =  self._config["samples_per_heap"] * self._config['input_bit_depth'] / 8
-        nHeaps = self._config["samples_per_block"] / self._config["samples_per_heap"]
-        input_bufferSize = nHeaps * (self.input_heapSize + 64 / 8)
-        log.info('Input dada parameters created from configuration:\n\
-                heap size:        {} byte\n\
-                heaps per block:  {}\n\
-                buffer size:      {} byte'.format(self.input_heapSize, nHeaps, input_bufferSize))
-
-        # calculate output buffer parameters
-        nSlices = max(self._config["samples_per_block"] / self._config['fft_length'] /  self._config['naccumulate'], 1)
-        nChannels = self._config['fft_length'] / 2 + 1
-        # on / off spectrum  + one side channel item per spectrum
-        output_bufferSize = nSlices * (2 * nChannels * self._config['output_bit_depth'] / 8 + 2 * 8)
-
-        output_heapSize = nChannels * self._config['output_bit_depth'] / 8
-        integrationTime = self._config['fft_length'] * self._config['naccumulate']  / float(self._config["sample_clock"])
-        self._integration_time_status.set_value(integrationTime)
-        rate = output_heapSize / integrationTime # in spead documentation BYTE per second and not bit!
-        rate *= self._config["output_rate_factor"]        # set rate to (100+X)% of expected rate
-        self._output_rate_status.set_value(rate / 1E9)
-
-
-        log.info('Output parameters calculated from configuration:\n\
-                spectra per block:  {} \n\
-                nChannels:          {} \n\
-                buffer size:        {} byte \n\
-                integrationTime :   {} s \n\
-                heap size:          {} byte\n\
-                rate ({:.0f}%):        {} Gbps'.format(nSlices, nChannels, output_bufferSize, integrationTime, output_heapSize, self._config["output_rate_factor"]*100, rate / 1E9))
-        self._subprocessMonitor = SubprocessMonitor()
-
-
         self.__numa_node_pool = []
         # remove numa nodes with missing capabilities 
         for node in numa.getInfo():
@@ -372,16 +410,55 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
         log.debug("{} numa nodes remaining in pool after cosntraints.".format(len(self.__numa_node_pool)))
 
-        if len(self._config['enabled_polarizations']) > len(self.__numa_node_pool):
-            raise FailReply("Not enough numa nodes to process {} polarizations!".format(len(self._config['enabled_polarizations'])))
+        if len(self._config['input_data_streams']) > len(self.__numa_node_pool):
+            raise FailReply("Not enough numa nodes to process {} polarizations!".format(len(self._config['input_data_streams'])))
 
 
-        for i, k in enumerate(self._config['enabled_polarizations']):
+
+        #ToDo: Check that all input data streams have the same format, or allow different formats
+        for i, streamid in enumerate(self._config['input_data_streams']):
+            # calculate input buffer parameters
+            stream_description = self._config['input_data_streams'][streamid]
+            stream_description["dada_key"] = DADABUFFERS[i]
+            self.add_input_stream_sensor(streamid)
+            self.input_heapSize =  stream_description["samples_per_heap"] * stream_description['bit_depth'] / 8
+
+            nHeaps = self._config["samples_per_block"] / stream_description["samples_per_heap"]
+            input_bufferSize = nHeaps * (self.input_heapSize + 64 / 8)
+            log.info('Input dada parameters created from configuration:\n\
+                    heap size:        {} byte\n\
+                    heaps per block:  {}\n\
+                    buffer size:      {} byte'.format(self.input_heapSize, nHeaps, input_bufferSize))
+
+            # calculate output buffer parameters
+            nSlices = max(self._config["samples_per_block"] / self._config['fft_length'] /  self._config['naccumulate'], 1)
+            nChannels = self._config['fft_length'] / 2 + 1
+            # on / off spectrum  + one side channel item per spectrum
+            output_bufferSize = nSlices * (2 * nChannels * self._config['output_bit_depth'] / 8 + 2 * 8)
+
+            output_heapSize = nChannels * self._config['output_bit_depth'] / 8
+            integrationTime = self._config['fft_length'] * self._config['naccumulate']  / float(stream_description["sample_rate"])
+            self._integration_time_status.set_value(integrationTime)
+            rate = output_heapSize / integrationTime # in spead documentation BYTE per second and not bit!
+            rate *= self._config["output_rate_factor"]        # set rate to (100+X)% of expected rate
+            self._output_rate_status.set_value(rate / 1E9)
+
+
+            log.info('Output parameters calculated from configuration:\n\
+                    spectra per block:  {} \n\
+                    nChannels:          {} \n\
+                    buffer size:        {} byte \n\
+                    integrationTime :   {} s \n\
+                    heap size:          {} byte\n\
+                    rate ({:.0f}%):        {} Gbps'.format(nSlices, nChannels, output_bufferSize, integrationTime, output_heapSize, self._config["output_rate_factor"]*100, rate / 1E9))
+            self._subprocessMonitor = SubprocessMonitor()
+
+
             numa_node = self.__numa_node_pool[i] 
-            log.debug("Associating {} with numa node {}".format(k, numa_node))
+            log.debug("Associating {} with numa node {}".format(streamid, numa_node))
 
             # configure dada buffer
-            bufferName = self._config[k]['dada_key']
+            bufferName = stream_description['dada_key']
             yield self._create_ring_buffer(input_bufferSize, 64, bufferName, numa_node)
 
             ofname = bufferName[::-1]
@@ -392,7 +469,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
             # here should be a smarter system to parse the options from the
             # controller to the program without redundant typing of options
             physcpu = numa.getInfo()[numa_node]['cores'][0]
-            cmd = "taskset -c {physcpu} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={input_bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, physcpu=physcpu, **self._config)
+            cmd = "taskset -c {physcpu} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, physcpu=physcpu, bit_depth=stream_description['bit_depth'], **self._config)
             log.debug("Command to run: {}".format(cmd))
 
 
@@ -401,15 +478,15 @@ class GatedSpectrometerPipeline(EDDPipeline):
             self._subprocessMonitor.add(gated_cli, self._subprocess_error)
             self._subprocesses.append(gated_cli)
 
-	    cfg = self._config.copy()
-            cfg.update(self._config[k])
+            cfg = self._config.copy()
+            cfg.update(stream_description)
 
             if self._config["output_type"] == 'network':
                 mksend_header_file = tempfile.NamedTemporaryFile(delete=False)
                 mksend_header_file.write(mksend_header)
                 mksend_header_file.close()
 
-                nhops = len(self._config[k]['mcast_dest'].split())
+                nhops = len(self._config["output_data_streams"][streamid]['ip'].split())
 
                 timestep = cfg["fft_length"] * cfg["naccumulate"]
                 physcpu = ",".join(numa.getInfo()[numa_node]['cores'][1:2])
@@ -417,10 +494,12 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 nics = numa.getInfo()[numa_node]["net_devices"]
                 fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])  
 
-                log.info("Sending data for {} on NIC {} [ {} ] @ {} Mbit/s".format(k, fastest_nic, nics[fastest_nic]['ip'], nics[fastest_nic]['speed']))
-                cmd = "taskset -c {physcpu} mksend --header {mksend_header} --heap-id-start {heap_id_start} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_clock} --item1-step {timestep} --item2-list {polarization} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_clock} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, heap_id_start=i , timestep=timestep,
+                log.info("Sending data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nics[fastest_nic]['ip'], nics[fastest_nic]['speed']))
+                cmd = "taskset -c {physcpu} mksend --header {mksend_header} --heap-id-start {heap_id_start} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_rate} --item1-step {timestep} --item2-list {polarization} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_rate} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, heap_id_start=i , timestep=timestep,
                         ofname=ofname, polarization=i, nChannels=nChannels, physcpu=physcpu, integrationTime=integrationTime,
-                        rate=rate, nhops=nhops, heap_size=output_heapSize, ibv_if=nics[fastest_nic]['ip'], **cfg)
+                        rate=rate, nhops=nhops, heap_size=output_heapSize, ibv_if=nics[fastest_nic]['ip'], 
+                        mcast_dest=self._config["output_data_streams"][streamid]['ip'],
+                        port_tx=self._config["output_data_streams"][streamid]['port'], **cfg)
                 log.debug("Command to run: {}".format(cmd))
 
             elif self._config["output_type"] == 'disk':
@@ -452,33 +531,35 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
         self.state = "starting"
         try:
-            mkrecvheader_file = tempfile.NamedTemporaryFile(delete=False)
-            log.debug("Creating mkrec header file: {}".format(mkrecvheader_file.name))
-            mkrecvheader_file.write(mkrecv_header)
-            # DADA may need this
-            mkrecvheader_file.write("NBIT {}\n".format(self._config["input_bit_depth"]))
-            mkrecvheader_file.write("HEAP_SIZE {}\n".format(self.input_heapSize))
+            for i, streamid in enumerate(self._config['input_data_streams']):
+                stream_description = self._config['input_data_streams'][streamid]
+                mkrecvheader_file = tempfile.NamedTemporaryFile(delete=False)
+                log.debug("Creating mkrec header file: {}".format(mkrecvheader_file.name))
+                mkrecvheader_file.write(mkrecv_header)
+                # DADA may need this
+                # ToDo: Check for input stream definitions
+                mkrecvheader_file.write("NBIT {}\n".format(stream_description["bit_depth"]))
+                mkrecvheader_file.write("HEAP_SIZE {}\n".format(self.input_heapSize))
 
-            mkrecvheader_file.write("\n#OTHER PARAMETERS\n")
-            mkrecvheader_file.write("samples_per_block {}\n".format(self._config["samples_per_block"]))
+                mkrecvheader_file.write("\n#OTHER PARAMETERS\n")
+                mkrecvheader_file.write("samples_per_block {}\n".format(self._config["samples_per_block"]))
 
-            mkrecvheader_file.write("\n#PARAMETERS ADDED AUTOMATICALLY BY MKRECV\n")
-            mkrecvheader_file.close()
+                mkrecvheader_file.write("\n#PARAMETERS ADDED AUTOMATICALLY BY MKRECV\n")
+                mkrecvheader_file.close()
 
-            for i, k in enumerate(self._config['enabled_polarizations']):
                 cfg = self._config.copy()
-                cfg.update(self._config[k])
+                cfg.update(stream_description)
                 if not self._config['dummy_input']:
                     numa_node = self.__numa_node_pool[i]
                     nics = numa.getInfo()[numa_node]["net_devices"]
                     fastest_nic = max(nics.iterkeys(), key=lambda k: nics[k]['speed'])
-                    log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(k, fastest_nic, nics[fastest_nic]['ip'], nics[fastest_nic]['speed']))
+                    log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nics[fastest_nic]['ip'], nics[fastest_nic]['speed']))
                     physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
                     cmd = "taskset -c {physcpu} mkrecv_nt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --dada-key {dada_key} \
-                    --sync-epoch {sync_time} --sample-clock {sample_clock} \
-                    --ibv-if {ibv_if} --port {port_rx} {mcast_sources}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nics[fastest_nic]['ip'],
+                    --sync-epoch {sync_time} --sample-clock {sample_rate} \
+                    --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nics[fastest_nic]['ip'], 
                             **cfg )
-                    mk = ManagedProcess(cmd, stdout_handler=self._polarization_sensors[k]["mkrecv_sensors"].stdout_handler)
+                    mk = ManagedProcess(cmd, stdout_handler=self._polarization_sensors[streamid]["mkrecv_sensors"].stdout_handler)
                 else:
                     log.warning("Creating Dummy input instead of listening to network!")
                     cmd = "dada_junkdb -c 1 -R 1000 -t 3600 -k {dada_key} {mkrecv_header}".format(mkrecv_header=mkrecvheader_file.name,
@@ -495,8 +576,8 @@ class GatedSpectrometerPipeline(EDDPipeline):
         else:
             self.state = "running"
             self.__watchdogs = []
-            for i, k in enumerate(self._config['enabled_polarizations']):
-                wd = SensorWatchdog(self._polarization_sensors[k]["input-buffer-total-write"],
+            for i, k in enumerate(self._config['input_data_streams']):
+                wd = SensorWatchdog(self._polarization_sensors[streamid]["input-buffer-total-write"],
                         10 * self._integration_time_status.value(),
                         self.watchdog_error)
                 wd.start()
