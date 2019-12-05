@@ -245,9 +245,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
     BUILD_INFO = ("mpikat-edd-implementation", 0, 1, "rc1")
 
 
-    def __init__(self, ip, port, scpi_ip, scpi_port):
+    def __init__(self, ip, port):
         """@brief initialize the pipeline."""
-        EDDPipeline.__init__(self, ip, port, scpi_ip, scpi_port)
+        EDDPipeline.__init__(self, ip, port)
         self.__numa_node_pool = []
         self.mkrec_cmd = []
         self._dada_buffers = []

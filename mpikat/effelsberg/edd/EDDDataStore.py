@@ -3,6 +3,8 @@ import json
 import logging
 
 log = logging.getLogger("mpikat.edd_data_store")
+
+
 class EDDDataStore:
     """
     Interface to the data store for the current EDD configuration
@@ -17,6 +19,7 @@ class EDDDataStore:
         self._dataStreams = redis.StrictRedis(host=host, port=port, db=2)
         # Telescope meta data
         self._telescopeMetaData = redis.StrictRedis(host=host, port=port, db=3)
+
 
     def updateProducts(self):
         """
@@ -42,6 +45,7 @@ class EDDDataStore:
                 facts['edd_container'][p]['address'] = facts["ansible_default_ipv4"]['address']
                 self._products[p] = json.dumps(facts['edd_container'][p])
 
+
     def addDataStream(self, streamid, streamdescription):
         if streamid in self._dataStreams:
             nd = json.dumps(streamdescription)
@@ -53,20 +57,19 @@ class EDDDataStore:
                 raise RuntimeError("Invalid configuration")
         self._dataStreams[streamid] = json.dumps(streamdescription)
 
+
     def getDataStream(self, streamid):
         return json.loads(self._dataStreams[streamid])
 
+
     def getProduct(self, productid):
         return json.loads(self._products[productid])
+
 
     @property
     def products(self):
         return self._products.keys()
 
+
     def hasDataStream(self, streamid):
         return streamid in self._dataStreams
-
-
-
-
-

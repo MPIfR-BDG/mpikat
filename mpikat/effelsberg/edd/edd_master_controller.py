@@ -31,7 +31,6 @@ from katcp import Sensor, AsyncReply
 from katcp.kattypes import request, return_reply, Str, Int
 
 from mpikat.effelsberg.edd.edd_roach2_product_controller import ( EddRoach2ProductController)
-from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
 from mpikat.effelsberg.edd.edd_fi_client import EddFitsInterfaceClient
 from mpikat.effelsberg.edd.edd_server_product_controller import EddServerProductController
@@ -46,14 +45,14 @@ class EddMasterController(EDDPipeline.EDDPipeline):
     VERSION_INFO = ("mpikat-edd-api", 0, 2)
     BUILD_INFO = ("mpikat-edd-implementation", 0, 2, "rc1")
 
-    def __init__(self, ip, port, scpi_ip, scpi_port, redis_ip, redis_port):
+    def __init__(self, ip, port, redis_ip, redis_port):
         """
         @brief       Construct new EddMasterController instance
 
         @params  ip       The IP address on which the server should listen
         @params  port     The port that the server should bind to
         """
-        EDDPipeline.EDDPipeline.__init__(self, ip, port, scpi_ip, scpi_port)
+        EDDPipeline.EDDPipeline.__init__(self, ip, port)
         self.__controller = {}
         self.__eddDataStore = EDDDataStore.EDDDataStore(redis_ip, redis_port)
 
@@ -366,7 +365,7 @@ if __name__ == "__main__":
     log.info("Starting Pipeline instance")
     server = EddMasterController(
         args.host, args.port,
-        args.scpi_interface, args.scpi_port, args.redis_ip, args.redis_port)
+        args.redis_ip, args.redis_port)
     log.info("Created Pipeline instance")
     signal.signal(
         signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
@@ -376,9 +375,6 @@ if __name__ == "__main__":
         log.info("Starting Pipeline server")
         server.start()
         log.debug("Started Pipeline server")
-        if args.scpi_mode:
-            log.debug("SCPI mode")
-            server.set_control_mode(server.SCPI)
         log.info(
             "Listening at {0}, Ctrl-C to terminate server".format(
                 server.bind_address))

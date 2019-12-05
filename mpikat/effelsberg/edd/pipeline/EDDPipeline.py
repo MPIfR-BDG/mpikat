@@ -25,7 +25,6 @@ from mpikat.utils.sensor_watchdog import SensorWatchdog
 from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
 from mpikat.effelsberg.edd.pipeline.pipeline_register import register_pipeline
-from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
 import mpikat.utils.numa as numa
 
 from katcp import Sensor, AsyncDeviceServer, AsyncReply, FailReply
@@ -59,42 +58,21 @@ class EDDPipeline(AsyncDeviceServer):
                    "starting", "running", "stopping",
                    "deconfiguring", "error"]
 
-    CONTROL_MODES = ["KATCP", "SCPI"]
-    KATCP, SCPI = CONTROL_MODES
-
-    def __init__(self, ip, port, scpi_ip, scpi_port):
+    def __init__(self, ip, port):
         """@brief initialize the pipeline."""
         self.callbacks = set()
         self._state = "idle"
         self._sensors = []
-        self._control_mode = self.KATCP
-        self._scpi_ip = scpi_ip
-        self._scpi_port = scpi_port
-        self._scpi_interface = None
         self._config = None
         self._subprocesses = []
         self._subprocessMonitor = None
-        AsyncDeviceServer.__init__(self, ip, port) # Async device parent depends on setting e.g. _control_mode in child
-
+        AsyncDeviceServer.__init__(self, ip, port) 
 
 
     def setup_sensors(self):
         """
         @brief Setup monitoring sensors
         """
-        self._control_mode_sensor = Sensor.string(
-            "control-mode",
-            description="The control mode for the EDD",
-            default=self._control_mode,
-            initial_status=Sensor.NOMINAL)
-        self.add_sensor(self._control_mode_sensor)
-
-        self._edd_scpi_interface_addr_sensor = Sensor.string(
-            "scpi-interface-addr",
-            description="The SCPI interface address for this instance",
-            default="{}:{}".format(self._scpi_ip, self._scpi_port),
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._edd_scpi_interface_addr_sensor)
         self._pipeline_sensor_status = Sensor.discrete(
             "pipeline-status",
             description="Status of the pipeline",
@@ -149,77 +127,14 @@ class EDDPipeline(AsyncDeviceServer):
         @brief    Start the server
         """
         AsyncDeviceServer.start(self)
-        self._scpi_interface = EddScpiInterface(
-            self, self._scpi_ip, self._scpi_port, self.ioloop)
 
 
     def stop(self):
         """
         @brief    Stop the server
         """
-        self._scpi_interface.stop()
-        self._scpi_interface = None
         AsyncDeviceServer.stop(self)
 
-
-    @property
-    def katcp_control_mode(self):
-        return self._control_mode == self.KATCP
-
-
-    @property
-    def scpi_control_mode(self):
-        return self._control_mode == self.SCPI
-
-
-    @request(Str())
-    @return_reply()
-    def request_set_control_mode(self, req, mode):
-        """
-        @brief     Set the external control mode for the master controller
-
-        @param     mode   The external control mode to be used by the server
-                          (options: KATCP, SCPI)
-
-        @detail    The EddMasterController supports two methods of external control:
-                   KATCP and SCPI. The server will always respond to a subset of KATCP
-                   commands, however when set to SCPI mode the following commands are
-                   disabled to the KATCP interface:
-                       - configure
-                       - capture_start
-                       - capture_stop
-                       - deconfigure
-                   In SCPI control mode the EddScpiInterface is activated and the server
-                   will respond to SCPI requests.
-
-        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
-        """
-        try:
-            self.set_control_mode(mode)
-        except Exception as error:
-            return ("fail", str(error))
-        else:
-            return ("ok",)
-
-
-    def set_control_mode(self, mode):
-        """
-        @brief     Set the external control mode for the master controller
-
-        @param     mode   The external control mode to be used by the server
-                          (options: KATCP, SCPI)
-        """
-        mode = mode.upper()
-        if not mode in self.CONTROL_MODES:
-            raise UnknownControlMode("Unknown mode '{}', valid modes are '{}' ".format(
-                mode, ", ".join(self.CONTROL_MODES)))
-        else:
-            self._control_mode = mode
-        if self._control_mode == self.SCPI:
-            self._scpi_interface.start()
-        else:
-            self._scpi_interface.stop()
-        self._control_mode_sensor.set_value(self._control_mode)
 
     def _decode_capture_stdout(self, stdout, callback):
         log.debug('{}'.format(str(stdout)))
@@ -248,8 +163,6 @@ class EDDPipeline(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
-        if not self.katcp_control_mode:
-            return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
 
         @coroutine
         def configure_wrapper():
@@ -275,8 +188,6 @@ class EDDPipeline(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !reconfigure ok | (fail [error description]) ]]]
         """
-        if not self.katcp_control_mode:
-            return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
 
         @coroutine
         def reconfigure_wrapper():
@@ -310,8 +221,6 @@ class EDDPipeline(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !capture_start ok | (fail [error description]) ]]]
         """
-        if not self.katcp_control_mode:
-            return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
 
         @coroutine
         def start_wrapper():
@@ -366,8 +275,6 @@ class EDDPipeline(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !capture_stop ok | (fail [error description]) ]]]
         """
-        if not self.katcp_control_mode:
-            return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
 
         @coroutine
         def stop_wrapper():
@@ -398,8 +305,6 @@ class EDDPipeline(AsyncDeviceServer):
 
         @return     katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]
         """
-        if not self.katcp_control_mode:
-            return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
 
         @coroutine
         def deconfigure_wrapper():
@@ -435,13 +340,6 @@ def getArgumentParser():
                       help='Host interface to bind to')
     parser.add_argument('-p', '--port', dest='port', type=int, default=1235,
                       help='Port number to bind to')
-    parser.add_argument('--scpi-interface', dest='scpi_interface', type=str,
-                      help='The interface to listen on for SCPI requests',
-                      default="")
-    parser.add_argument('--scpi-port', dest='scpi_port', type=int,
-                      help='The port number to listen on for SCPI requests')
-    parser.add_argument('--scpi-mode', dest='scpi_mode', action="store_true",
-                      help='Activate the SCPI interface on startup')
     parser.add_argument('--log-level', dest='log_level', type=str,
                       help='Port number of status server instance', default="INFO")
 
@@ -465,8 +363,8 @@ def launchPipelineServer(Pipeline):
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting Pipeline instance")
     server = Pipeline(
-        args.host, args.port,
-        args.scpi_interface, args.scpi_port)
+        args.host, args.port
+        )
     log.info("Created Pipeline instance")
     signal.signal(
         signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
@@ -476,9 +374,6 @@ def launchPipelineServer(Pipeline):
         log.info("Starting Pipeline server")
         server.start()
         log.debug("Started Pipeline server")
-        if args.scpi_mode:
-            log.debug("SCPI mode")
-            server.set_control_mode(server.SCPI)
         log.info(
             "Listening at {0}, Ctrl-C to terminate server".format(
                 server.bind_address))
