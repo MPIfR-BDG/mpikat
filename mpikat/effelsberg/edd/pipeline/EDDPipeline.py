@@ -50,7 +50,15 @@ log.setLevel('DEBUG')
 
 
 class EDDPipeline(AsyncDeviceServer):
-    """@brief critical PFB pipeline class."""
+    """@brief Abstract interface for EDD Pipelines
+
+    Pipelines are required to implement:
+            * configure
+            * capture_start
+            * capture_stop
+            * deconfigure
+    After configure, the current configuration needs to be stored in self._config for reconfigure to work.
+    """
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
 
 
@@ -180,6 +188,12 @@ class EDDPipeline(AsyncDeviceServer):
         raise AsyncReply
 
 
+    @coroutine
+    def configure(self, config_json=""):
+        """@brief Configure the pipeline"""
+        raise NotImplementedError
+
+
     @request()
     @return_reply()
     def request_reconfigure(self, req):
@@ -205,7 +219,30 @@ class EDDPipeline(AsyncDeviceServer):
         raise AsyncReply
 
 
-  
+    @request()
+    @return_reply()
+    def request_reconfigure(self, req):
+        """
+        @brief      Configure the pipeline using the last configuration.
+
+        @return     katcp reply object [[[ !reconfigure ok | (fail [error description]) ]]]
+        """
+
+        @coroutine
+        def reconfigure_wrapper():
+            try:
+                yield self.configure(self._config)
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(reconfigure_wrapper)
+        raise AsyncReply
+
 
     @request()
     @return_reply()
@@ -260,8 +297,8 @@ class EDDPipeline(AsyncDeviceServer):
 
 
     @coroutine
-    def capture_start(self, config_json=""):
-        """@brief start the dspsr instance then turn on dada_junkdb instance."""
+    def capture_start(self):
+        """@brief start the pipeline."""
         raise NotImplementedError
 
 
@@ -291,7 +328,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def capture_stop(self):
-        """@brief stop the dada_junkdb and dspsr instances."""
+        """@brief stop the pipeline."""
         raise NotImplementedError
 
 
@@ -299,7 +336,7 @@ class EDDPipeline(AsyncDeviceServer):
     @return_reply()
     def request_deconfigure(self, req):
         """
-        @brief      Deconfigure the EDD backend.
+        @brief      Deconfigure the pipeline.
 
         @note       This is the KATCP wrapper for the deconfigure command
 
@@ -321,7 +358,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def deconfigure(self):
-        """@brief deconfigure the dspsr pipeline."""
+        """@brief deconfigure the pipeline."""
         raise NotImplementedError
 
 
