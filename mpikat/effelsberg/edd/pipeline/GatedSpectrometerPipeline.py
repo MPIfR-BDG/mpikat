@@ -237,7 +237,6 @@ ITEM9_ID        5640    # payload item (empty step, list, index and sci)
 """
 
 
-@register_pipeline("GatedSpectrometerPipeline")
 class GatedSpectrometerPipeline(EDDPipeline):
     """@brief gated spectrometer pipeline class."""
     VERSION_INFO = ("mpikat-edd-api", 0, 1)
