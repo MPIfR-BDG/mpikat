@@ -306,7 +306,7 @@ class ExecuteCommand(object):
             if self._process == None:
                 self._error = True
             self.pid = self._process.pid
-            #log.debug("PID of {} is {}".format(
+            # log.debug("PID of {} is {}".format(
             #    self._executable_command, self.pid))
             self._monitor_thread = threading.Thread(
                 target=self._execution_monitor)
@@ -458,7 +458,7 @@ class ExecuteCommand(object):
     def _png_monitor(self):
         if RUN:
             while self._process.poll() == None:
-            #while not self._finish_event.isSet():
+                # while not self._finish_event.isSet():
                 log.debug("Accessing archive PNG files")
                 try:
                     with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
@@ -522,10 +522,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._dspsr = None
         self._mkrecv_ingest_proc = None
         #self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
-        #self._status_server.start()
-        #self._status_server.sensor_callbacks.add(
+        # self._status_server.start()
+        # self._status_server.sensor_callbacks.add(
         #    self.sensor_update)
-        #self._status_server.new_sensor_callbacks.add(
+        # self._status_server.new_sensor_callbacks.add(
         #    self.new_sensor)
 
         # self.setup_sensors()
@@ -982,7 +982,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #CREATING THE PREDICTOR WITH TEMPO2                #
         ####################################################
-        log.debug("{}".format((parse_tag(self.source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))))
+        self.pulsar_flag = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))
+        log.debug("{}".format((parse_tag(self.source_name) == "default") & self.pulsar_flag))
         if (parse_tag(self.source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:])):
             cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 8 2 3599.999999999"'.format(
                 self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 1.0, float(self._pipeline_config["central_freq"]) + 1.0)
@@ -1003,12 +1004,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 else:
                     time.sleep(1)
                     if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
-                        log.debug('{}/t2pred.dat'.format(os.getcwd()))
+                        log.debug('found {}/t2pred.dat'.format(os.getcwd()))
                         break
                     else:
                         attempts += 1
 
-            #while True:
+            # while True:
             #    if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
             #        log.debug('{}/t2pred.dat'.format(os.getcwd()))
             #        break
@@ -1044,17 +1045,17 @@ class EddPulsarPipeline(AsyncDeviceServer):
         retries = 5
         while True:
             if attempts >= retries:
-                error = "could not read t2pred.dat"
+                error = "could not read dada_key_file"
                 raise EddPulsarPipelineError(error)
             else:
                 time.sleep(1)
                 if is_accessible('{}'.format(dada_key_file.name)):
-                    log.debug('{} is not available'.format(dada_key_file.name))
+                    log.debug('found {}'.format(dada_key_file.name))
                     break
                 else:
                     attempts += 1
-        #time.sleep(2)
-        #while True:
+        # time.sleep(2)
+        # while True:
         #    if is_accessible('{}'.format(dada_key_file.name)):
         #        log.debug('{}'.format(dada_key_file.name))
         #        break
@@ -1063,8 +1064,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING DSPSR                                    #
         ####################################################
         os.chdir(in_path)
-        
-        if (parse_tag(self.source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:])):
+
+        if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
@@ -1078,7 +1079,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 keyfile=dada_key_file.name)
         elif parse_tag(self.source_name) == "R":
             cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
-            #cmd = "numactl -m {numa} dspsr -L 10 -t 8 -c 1.0 -D 0.0 -r -minram 1024 -Lmin 9 -f 1200 -fft-bench {nchan} {keyfile}".format(
+                # cmd = "numactl -m {numa} dspsr -L 10 -t 8 -c 1.0 -D 0.0 -r
+                # -minram 1024 -Lmin 9 -f 1200 -fft-bench {nchan}
+                # {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
                 #nchan="-F {}:D".format(self.nchannels),
@@ -1133,7 +1136,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._mkrecv_ingest_proc.error_callbacks.add(
             self._error_treatment)
         self._mkrecv_ingest_proc_pid = self._mkrecv_ingest_proc.pid
-        log.debug("_mkrecv_ingest_proc PID is {}".format(self._mkrecv_ingest_proc_pid))
+        log.debug("_mkrecv_ingest_proc PID is {}".format(
+            self._mkrecv_ingest_proc_pid))
 
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
@@ -1168,64 +1172,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     @request()
     @return_reply(Str())
-    def request_stop_archive_monitor(self, req):
-        """
-        @brief      Stop pipeline
-
-        """
-        @coroutine
-        def stop_archive_monitor_wrapper():
-            try:
-                yield self.stop_archive_monitor()
-            except Exception as error:
-                log.exception(str(error))
-                req.reply("fail", str(error))
-            else:
-                req.reply("ok")
-                self._pipeline_sensor_status.set_value("ready")
-        self.ioloop.add_callback(stop_archive_monitor_wrapper)
-        raise AsyncReply
-
-    @coroutine
-    def stop_archive_monitor(self):
-        """@brief stop the dada_junkdb and dspsr instances."""
-        try:
-            log.debug("Stopping")
-            self._timeout = 10
-            process = [self._archive_directory_monitor]
-            for proc in process:
-                time.sleep(2)
-                proc.set_finish_event()
-                proc.finish()
-                log.debug(
-                    "Waiting {} seconds for proc to terminate...".format(self._timeout))
-                now = time.time()
-                while time.time() - now < self._timeout:
-                    retval = proc._process.poll()
-                    if retval is not None:
-                        log.debug(
-                            "Returned a return value of {}".format(retval))
-                        break
-                    else:
-                        time.sleep(0.5)
-                else:
-                    log.warning(
-                        "Failed to terminate proc in alloted time")
-                    log.info("Killing process")
-                    proc._process.kill()
-            if parse_tag(self.source_name) == "default":        
-                os.remove("/tmp/t2pred.dat")
-
-        except Exception as error:
-            msg = "Couldn't stop pipeline {}".format(str(error))
-            log.error(msg)
-            raise EddPulsarPipelineError(msg)
-        else:
-            log.info("Pipeline Stopped {}".format(
-                self._pipeline_sensor_name.value()))
-
-    @request()
-    @return_reply(Str())
     def request_stop(self, req):
         """
         @brief      Stop pipeline
@@ -1247,7 +1193,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
     @coroutine
     def stop_pipeline(self):
         """@brief stop the dada_junkdb and dspsr instances."""
-        
+
         try:
             log.debug("Stopping")
             self._timeout = 10
@@ -1273,12 +1219,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
                         "Failed to terminate proc in alloted time")
                     log.info("Killing process")
                     proc._process.kill()
-            if parse_tag(self.source_name) == "default":
+            if parse_tag(self.source_name) == "default" & self.pulsar_flag:
                 os.remove("/tmp/t2pred.dat")
-            
+
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
             log.error(msg)
+            #self.stop_pipeline_with_mkrecv_crashed()
             raise EddPulsarPipelineError(msg)
         else:
             log.info("Pipeline Stopped {}".format(
@@ -1299,39 +1246,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
             os.kill(self._dspsr_pid, signal.SIGTERM)
         except Exception as error:
             log.error("cannot kill _dspsr, {}".format(error))
-        """
-        try:
-            log.debug("Stopping")
-            self._timeout = 10
-            self.callbacks = set()
-            process = [self._dspsr, self._archive_directory_monitor,
-                       self._polnmerge_proc]
-            for proc in process:
-                time.sleep(2)
-                proc.set_finish_event()
-                proc.finish()
-                log.debug(
-                    "Waiting {} seconds for proc to terminate...".format(self._timeout))
-                now = time.time()
-                while time.time() - now < self._timeout:
-                    retval = proc._process.poll()
-                    if retval is not None:
-                        log.debug(
-                            "Returned a return value of {}".format(retval))
-                        break
-                    else:
-                        time.sleep(0.5)
-                else:
-                    log.warning(
-                        "Failed to terminate proc in alloted time")
-                    log.info("Killing process")
-                    proc._process.kill()
-            # os.remove("/tmp/t2pred.dat")  
-        """
-        #except Exception as error:
-        #    msg = "Couldn't stop pipeline {}".format(str(error))
-        #    log.error(msg)
-        #    raise EddPulsarPipelineError(msg)
+        if parse_tag(self.source_name) == "default" & self.pulsar_flag:
+            os.remove("/tmp/t2pred.dat")
+
         try:
             log.debug("deleting buffers")
             cmd = "dada_db -d -k {0}".format(self._dada_key)
@@ -1356,7 +1273,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             raise EddPulsarPipelineError(msg)
 
         try:
-            #self._pipeline_sensor_name.set_value(pipeline_name)
+            # self._pipeline_sensor_name.set_value(pipeline_name)
             log.info("Creating DADA buffer for mkrecv")
             cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dada_key,
                                                                      args=self._config["dada_db_params"]["args"])
@@ -1372,8 +1289,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.info("Creating DADA buffer for EDDPolnMerge")
             cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dadc_key,
                                                                      args=self._config["dadc_db_params"]["args"])
-            # cmd = "dada_db -k {key} {args}".format(**
-            #                                       self._config["dada_db_params"])
             log.debug("Running command: {0}".format(cmd))
             self._create_transpose_ring_buffer = ExecuteCommand(
                 cmd, outpath=None, resident=False)
@@ -1383,7 +1298,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
         else:
-            log.info("Pipeline Stopped with mkrecv crash, buffers recreated")
+            log.info("Pipeline Stopped with mkrecv crashed, buffers recreated")
 
     @request()
     @return_reply(Str())
@@ -1426,7 +1341,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         """
         @coroutine
         def deconfigure_wrapper():
-            #if self._pipeline_sensor_status.value == 'running':
+            # if self._pipeline_sensor_status.value == 'running':
             #    yield self.stop_pipeline()
             try:
                 yield self.deconfigure()
