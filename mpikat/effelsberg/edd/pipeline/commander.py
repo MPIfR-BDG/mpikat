@@ -225,8 +225,10 @@ class EddCommander(AsyncDeviceServer):
         #log.debug('Settting sensor value for EDD_pipeline sensor : {} with value {}'.format(sensor_value[0],sensor_value[1]))
         self.test_object = self.get_sensor(sensor_value[0].replace("-", "_"))
         self.test_object.set_value(str(sensor_value[1]))
-        self._observing = self.get_sensor("_observing")
-        self._source = self.get_sensor("_source")
+        self._observing = self.get_sensor("observing")
+        self._source = self.get_sensor("source_name")
+        log.debug("object: {}".format(self._source))
+        log.debug("object: {}".format(self._observing))
         if sensor_value[0].replace("-", "_") == "_observing":
             log.debug("_observing  = {}".format((self._observing.value() == 'True')))
             if bool(self.last_value == False) & bool(self.first_true == True) & bool(self._observing.value() == 'True'):
