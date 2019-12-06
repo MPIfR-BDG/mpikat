@@ -237,15 +237,15 @@ class EddCommander(AsyncDeviceServer):
                 log.debug(json_string)
                 self.first_true = False
                 self.last_value = True
-                self._edd_pipeline_focus.req.start(json_string)
-                time.sleep(5)
+                #self._edd_pipeline_focus.req.start(json_string)
+                #time.sleep(5)
                 self._edd_pipeline_faraday.req.start(json_string)
 
             elif bool(self._observing.value() == 'False') & bool(self.last_value == True):
                 log.debug("Should send a stop to the pipeline")
                 self.first_true = True
                 self.last_value = False
-                self._edd_pipeline_focus.req.stop()
+                #self._edd_pipeline_focus.req.stop()
                 self._edd_pipeline_faraday.req.stop()
 
 
