@@ -58,6 +58,11 @@ class EDDPipeline(AsyncDeviceServer):
             * capture_stop
             * deconfigure
     After configure, the current configuration needs to be stored in self._config for reconfigure to work.
+
+    Pipelines can implement:
+            * populate_data_store
+            The receive the address and port for a data store along the request.
+
     """
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
 
@@ -360,6 +365,37 @@ class EDDPipeline(AsyncDeviceServer):
     def deconfigure(self):
         """@brief deconfigure the pipeline."""
         raise NotImplementedError
+
+    @request(Str(), Int())
+    @return_reply()
+    def request_populate_data_store(self, req, host, port):
+        """
+        @brief Populate the data store with opipeline specific informations, as e.g. data stream format
+
+        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        """
+
+        @coroutine
+        def populate_data_store_wrapper():
+            try:
+                yield self.populate_data_store(host, port)
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(populate_data_store_wrapper)
+        raise AsyncReply
+
+
+    @coroutine
+    def populate_data_store(self, host, port):
+        """@brief Populate the data store"""
+        log.debug("Populate data store @ {}:{}".format(host, port))
+        pass
 
 
 

@@ -25,6 +25,7 @@ from mpikat.utils.sensor_watchdog import SensorWatchdog
 from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
 from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer
+from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore 
 import mpikat.utils.numa as numa
 
 from tornado.gen import coroutine
@@ -96,8 +97,7 @@ DEFAULT_CONFIG = {
             "polarization_0" :
             {
                 "source": "",                               # name of the source for automatic setting of paramters
-                "format": "MPIFR_EDD_Packetizer",
-                "format_version": 1,
+                "format": "MPIFR_EDD_Packetizer:1",         # Format has version seperated via colon
                 "ip": "225.0.0.162+3",
                 "port": "7148",
                 "bit_depth" : 12,
@@ -108,9 +108,8 @@ DEFAULT_CONFIG = {
              "polarization_1" :
             {
                 "source": "",                               # name of the source for automatic setting of paramters, e.g.: "packetizer1:h_polarization
-                "format": "MPIFR_EDD_Packetizer",
-                "format_version": 1,
-                "ip": "225.0.0.1r6+3",
+                "format": "MPIFR_EDD_Packetizer:1",
+                "ip": "225.0.0.166+3",
                 "port": "7148",
                 "bit_depth" : 12,
                 "sample_rate" : 2600000000,
@@ -120,18 +119,28 @@ DEFAULT_CONFIG = {
         },
         "output_data_streams":
         {
-            "polarization_0" :
+            "polarization_0_0" :
             {
-                "format": "MPIFR_EDD_GatedSpectrometer",
-                "format_version": 1,
-                "ip": "225.0.0.172 225.0.0.173",        #two destinations gate on/off
+                "format": "MPIFR_EDD_GatedSpectrometer:1",
+                "ip": "225.0.0.172",        #two destinations gate on/off
                 "port": "7152",
             },
-             "polarization_1" :
+            "polarization_0_1" :
             {
-                "format": "MPIFR_EDD_GatedSpectrometer",
-                "format_version": 1,
-                "ip": "225.0.0.184 225.0.0.185",        #two destinations, one for on, one for off
+                "format": "MPIFR_EDD_GatedSpectrometer:1",
+                "ip": "225.0.0.173",        #two destinations gate on/off
+                "port": "7152",
+            },
+             "polarization_1_0" :
+            {
+                "format": "MPIFR_EDD_GatedSpectrometer:1",
+                "ip": "225.0.0.184",        #two destinations, one for on, one for off
+                "port": "7152",
+            },
+             "polarization_1_0" :
+            {
+                "format": "MPIFR_EDD_GatedSpectrometer:1",
+                "ip": "225.0.0.185",        #two destinations, one for on, one for off
                 "port": "7152",
             }
         },
@@ -476,24 +485,33 @@ class GatedSpectrometerPipeline(EDDPipeline):
             cfg = self._config.copy()
             cfg.update(stream_description)
 
+            ip_range = []
+            port = set()
+            for key in self._config["output_data_streams"]:
+                if streamid in key:
+                    ip_range.append(self._config["output_data_streams"][key]['ip'])
+                    port.add(self._config["output_data_streams"][key]['port'])
+            if len(port)!=1:
+                raise FailReply("Output data for one plarization has to be on the same port! ")
+
             if self._config["output_type"] == 'network':
                 mksend_header_file = tempfile.NamedTemporaryFile(delete=False)
                 mksend_header_file.write(mksend_header)
                 mksend_header_file.close()
 
-                nhops = len(self._config["output_data_streams"][streamid]['ip'].split())
+                nhops = len(ip_range)
 
                 timestep = cfg["fft_length"] * cfg["naccumulate"]
                 physcpu = ",".join(numa.getInfo()[numa_node]['cores'][1:2])
                 #select network interface
-                fastest_nic, nic_params = nume.getFastestNic(numa_node)
+                fastest_nic, nic_params = numa.getFastestNic(numa_node)
 
                 log.info("Sending data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nic_params['ip'], nic_params['speed']))
                 cmd = "taskset -c {physcpu} mksend --header {mksend_header} --heap-id-start {heap_id_start} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_rate} --item1-step {timestep} --item2-list {polarization} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_rate} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, heap_id_start=i , timestep=timestep,
                         ofname=ofname, polarization=i, nChannels=nChannels, physcpu=physcpu, integrationTime=integrationTime,
                         rate=rate, nhops=nhops, heap_size=output_heapSize, ibv_if=nic_params['ip'],
-                        mcast_dest=self._config["output_data_streams"][streamid]['ip'],
-                        port_tx=self._config["output_data_streams"][streamid]['port'], **cfg)
+                        mcast_dest=" ".join(ip_range),
+                        port_tx=port.pop(), **cfg)
                 log.debug("Command to run: {}".format(cmd))
 
             elif self._config["output_type"] == 'disk':
@@ -623,6 +641,22 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
         self._dada_buffers = []
         self.state = "idle"
+
+
+
+    @coroutine
+    def populate_data_store(self, host, port):
+        """@brief Populate the data store"""
+        log.debug("Populate data store @ {}:{}".format(host, port))
+        dataStore =  EDDDataStore(host, port)
+        log.debug("Adding output formats to known data formats")
+
+        descr = {"description":"Self descriped spead stream of sepctrometer data with noise diode on/off",
+                "ip": None,
+                "port": None,
+                }
+        dataStore.addDataFormatDefinition("GatedSpectrometer:1", descr)
+
 
 
 if __name__ == "__main__":

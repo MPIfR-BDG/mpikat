@@ -4,6 +4,8 @@ from tornado.gen import coroutine, sleep, Return
 from tornado.ioloop import IOLoop
 from katcp import KATCPClientResource
 
+from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore 
+
 log = logging.getLogger("mpikat.edd_digpack_client")
 
 class DigitiserPacketiserError(Exception):
@@ -266,6 +268,25 @@ class DigitiserPacketiserClient(object):
         sync_epoch = yield self.get_sync_time()
         if sync_epoch != unix_time:
             log.warning("Requested sync time {} not equal to actual sync time {}".format(unix_time, sync_epoch))
+
+    @coroutine
+    def populate_data_store(self, host, port):
+        """@brief Populate the data store"""
+        log.debug("Populate data store @ {}:{}".format(host, port))
+        dataStore =  EDDDataStore(host, port)
+        log.debug("Adding output formats to known data formats")
+
+        descr = {"description": "Digitizer/Packetizer spead. One heap per packet.",
+                "ip": None,
+                "port": None,
+                "bit_depth" : None,                 # Dynamic Parameter
+                "sample_rate" : None,
+                "sync_time" : None,
+                "samples_per_heap": 4096}
+
+        dataStore.addDataFormatDefinition("MPIFR_EDD_Packetizer:1", descr)
+
+
 
 
 if __name__ == "__main__":

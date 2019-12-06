@@ -126,13 +126,11 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                                    {
                                        "source": "focus_cabin_digitizer:v_polarization",
                                        "format": "MPIFR_EDD_Packetizer",
-                                       "format_version": 1
                                    },
                                     "polarization_1" :
                                    {
                                        "source": "focus_cabin_digitizer:h_polarization",
                                        "format": "MPIFR_EDD_Packetizer",
-                                       "format_version": 1
                                    }
                                },
                                "output_data_streams":
@@ -140,14 +138,12 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                                    "polarization_0" :
                                    {
                                        "format": "MPIFR_EDD_GatedSpectrometer",
-                                       "format_version": 1,
                                        "ip": "225.0.0.172 225.0.0.173",
                                        "port": "7152"
                                    },
                                     "polarization_1" :
                                    {
                                        "format": "MPIFR_EDD_GatedSpectrometer",
-                                       "format_version": 1,
                                        "ip": "225.0.0.184 225.0.0.185",
                                        "port": "7152"
                                    }
@@ -217,11 +213,10 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             else:
                 log.debug("Adding new controller for {}".format(packetizer["id"]))
                 self.__controller[packetizer["id"]] = DigitiserPacketiserClient(*packetizer["address"])
+                self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
             yield self.__controller[packetizer["id"]].configure(packetizer)
 
             ofs = dict(format="MPIFR_EDD_Packetizer",
-                        format_version=1,
-                        samples_per_heap=4096,                     # From format, should be by look up
                         sample_rate=packetizer["sampling_rate"] / packetizer["predecimation_factor"],
                         bit_depth=packetizer["bit_width"])
             ofs["sync_time"] = yield self.__controller[packetizer["id"]].get_sync_time()
@@ -241,6 +236,9 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         # Get output streams from products
         for product in config['products']:
             for k, i in product["output_data_streams"].iteritems():
+                # look up data stream in storage
+                dataStream = self.__eddDataStore.getDataFormatDefinition(i['format'])
+                dataStream.update(i)
                 key = "{}:{}".format(product['id'], k)
                 if 'ip' in i:
                     pass
@@ -253,6 +251,9 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         log.debug("Connect data streams with high level description")
         for product in config['products']:
             for k in product["input_data_streams"]:
+
+                datastream = self.__eddDataStore.getDataFormatDefinition(product["input_data_streams"][k]['format'])
+                datastream.update(product["input_data_streams"][k])
                 if not "source" in product["input_data_streams"][k]:
                     log.debug("Source not definied for input stream {} of {} - no lookup but assuming manual definition!".format(k, product['id']))
                     continue
@@ -262,7 +263,8 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                         raise RuntimeError("Unknown data stream {} !".format(s))
 
                 log.debug("Updating {} of {} - with {}".format(k, product['id'], s))
-                product["input_data_streams"][k].update(self.__eddDataStore.getDataStream(s))
+                datastream.update(self.__eddDataStore.getDataStream(s))
+                product["input_data_streams"][k] = datastream
 
         log.debug("Updated configuration:\n '{}'".format(json.dumps(config, indent=2)))
 
@@ -281,6 +283,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 else:
                     log.warning("Manual config of product {}")
                     self.__controller[product_id] = EddServerProductController(self, product_id, product_config["address"], product_config["port"])
+                self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
 
             yield self.__controller[product_id].configure(product_config)
 
