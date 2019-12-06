@@ -1219,7 +1219,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                         "Failed to terminate proc in alloted time")
                     log.info("Killing process")
                     proc._process.kill()
-            if parse_tag(self.source_name) == "default" & self.pulsar_flag:
+            if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
                 os.remove("/tmp/t2pred.dat")
 
         except Exception as error:
@@ -1246,7 +1246,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             os.kill(self._dspsr_pid, signal.SIGTERM)
         except Exception as error:
             log.error("cannot kill _dspsr, {}".format(error))
-        if parse_tag(self.source_name) == "default" & self.pulsar_flag:
+        if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
             os.remove("/tmp/t2pred.dat")
 
         try:
