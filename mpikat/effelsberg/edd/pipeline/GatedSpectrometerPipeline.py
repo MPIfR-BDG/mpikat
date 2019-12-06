@@ -121,25 +121,25 @@ DEFAULT_CONFIG = {
         {
             "polarization_0_0" :
             {
-                "format": "MPIFR_EDD_GatedSpectrometer:1",
+                "format": "GatedSpectrometer:1",
                 "ip": "225.0.0.172",        #two destinations gate on/off
                 "port": "7152",
             },
             "polarization_0_1" :
             {
-                "format": "MPIFR_EDD_GatedSpectrometer:1",
+                "format": "GatedSpectrometer:1",
                 "ip": "225.0.0.173",        #two destinations gate on/off
                 "port": "7152",
             },
              "polarization_1_0" :
             {
-                "format": "MPIFR_EDD_GatedSpectrometer:1",
+                "format": "GatedSpectrometer:1",
                 "ip": "225.0.0.184",        #two destinations, one for on, one for off
                 "port": "7152",
             },
              "polarization_1_0" :
             {
-                "format": "MPIFR_EDD_GatedSpectrometer:1",
+                "format": "GatedSpectrometer:1",
                 "ip": "225.0.0.185",        #two destinations, one for on, one for off
                 "port": "7152",
             }
