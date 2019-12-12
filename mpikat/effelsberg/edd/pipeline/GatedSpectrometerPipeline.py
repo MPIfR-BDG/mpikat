@@ -24,7 +24,7 @@ from mpikat.utils.process_monitor import SubprocessMonitor
 from mpikat.utils.sensor_watchdog import SensorWatchdog
 from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
-from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer
+from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig
 from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore 
 import mpikat.utils.numa as numa
 
@@ -254,7 +254,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
     def __init__(self, ip, port):
         """@brief initialize the pipeline."""
-        EDDPipeline.__init__(self, ip, port)
+        EDDPipeline.__init__(self, ip, port, DEFAULT_CONFIG)
         self.__numa_node_pool = []
         self.mkrec_cmd = []
         self._dada_buffers = []
@@ -265,13 +265,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
         @brief Setup monitoring sensors
         """
         EDDPipeline.setup_sensors(self)
-
-        self._edd_config_sensor = Sensor.string(
-            "current-config",
-            description="The current configuration for the EDD backend",
-            default=json.dumps(DEFAULT_CONFIG, indent=4),
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._edd_config_sensor)
 
         self._integration_time_status = Sensor.float(
             "integration-time",
@@ -377,32 +370,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
         #yield self.deconfigure()
 
         self.state = "configuring"
-        # Merge retrieved config into default via recursive dict merge
-        def __updateConfig(oldo, new):
-            old = oldo.copy()
-            for k in new:
-                if isinstance(old[k], dict):
-                    old[k] = __updateConfig(old[k], new[k])
-                else:
-                    old[k] = new[k]
-            return old
-
-        if isinstance(config_json, str):
-            cfg = json.loads(config_json)
-        elif isinstance(config_json, dict):
-            cfg = config_json
-        else:
-            self.state = "idle"     # no states changed
-            raise FailReply("Cannot handle config type {}. Config has to bei either json formatted string or dict!".format(type(config_json)))
-        try:
-            self._config = __updateConfig(DEFAULT_CONFIG, cfg)
-        except KeyError as error:
-            self.state = "idle"     # no states changed
-            raise FailReply("Unknown configuration option: {}".format(str(error)))
-
+        self.set(config_json)
         cfs = json.dumps(self._config, indent=4)
-        log.info("Received configuration:\n" + cfs)
-        self._edd_config_sensor.set_value(cfs)
+        log.info("Final configuration:\n" + cfs)
 
         self.__numa_node_pool = []
         # remove numa nodes with missing capabilities 

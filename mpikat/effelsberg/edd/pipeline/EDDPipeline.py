@@ -47,6 +47,18 @@ log = logging.getLogger("mpikat.effelsberg.edd.pipeline.EDDPipeline")
 log.setLevel('DEBUG')
 
 
+# Merge retrieved config into default via recursive dict merge
+def updateConfig(oldo, new):
+    old = oldo.copy()
+    for k in new:
+        if isinstance(old[k], dict):
+            old[k] = updateConfig(old[k], new[k])
+        else:
+            old[k] = new[k]
+    return old
+
+
+
 
 
 class EDDPipeline(AsyncDeviceServer):
@@ -57,7 +69,7 @@ class EDDPipeline(AsyncDeviceServer):
             * capture_start
             * capture_stop
             * deconfigure
-    After configure, the current configuration needs to be stored in self._config for reconfigure to work.
+    The currentconfig configuration is stored in self._config for set command to work. 
 
     Pipelines can implement:
             * populate_data_store
@@ -71,15 +83,26 @@ class EDDPipeline(AsyncDeviceServer):
                    "starting", "running", "stopping",
                    "deconfiguring", "error"]
 
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, default_config={}):
         """@brief initialize the pipeline."""
         self.callbacks = set()
         self._state = "idle"
         self._sensors = []
-        self._config = None
+        self.__config = default_config.copy()
+        self._default_config = default_config
         self._subprocesses = []
         self._subprocessMonitor = None
         AsyncDeviceServer.__init__(self, ip, port) 
+
+    @property
+    def _config(self):
+        return self.__config
+    @_config.setter
+    def _config(self, value):
+        if not isinstance(value, dict):
+            raise RuntimeError("_config has to be a dict!")
+        self.__config = value
+        self._edd_config_sensor.set_value(json.dumps(self._config, indent=4))
 
 
     def setup_sensors(self):
@@ -93,6 +116,13 @@ class EDDPipeline(AsyncDeviceServer):
             default="idle",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._pipeline_sensor_status)
+
+        self._edd_config_sensor = Sensor.string(
+            "current-config",
+            description="The current configuration for the EDD backend",
+            default=json.dumps(self._default_config, indent=4),
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._edd_config_sensor)
 
         self._device_status = Sensor.discrete(
             "device-status",
@@ -201,52 +231,69 @@ class EDDPipeline(AsyncDeviceServer):
 
     @request()
     @return_reply()
-    def request_reconfigure(self, req):
+    def request_set_default_config(self, req):
         """
-        @brief      Configure the EDD using the last configuration.
+        @brief      Set the current config to the default config
 
         @return     katcp reply object [[[ !reconfigure ok | (fail [error description]) ]]]
         """
 
-        @coroutine
-        def reconfigure_wrapper():
-            try:
-                yield self.configure(self._config)
-            except FailReply as fr:
-                log.error(str(fr))
-                req.reply("fail", str(fr))
-            except Exception as error:
-                log.exception(str(error))
-                req.reply("fail", str(error))
-            else:
-                req.reply("ok")
-        self.ioloop.add_callback(reconfigure_wrapper)
+        logging.info("Setting default configuration")
+        self._config = self._default_config.copy()
+        req.reply("ok")
         raise AsyncReply
 
 
-    @request()
+    @request(Str())
     @return_reply()
-    def request_reconfigure(self, req):
+    def request_set(self, req, config_json):
         """
-        @brief      Configure the pipeline using the last configuration.
+        @brief      Add the config_json to the current config
 
-        @return     katcp reply object [[[ !reconfigure ok | (fail [error description]) ]]]
+       @note        ToDo:  Device a method to add the sublcass doc string here! 
+
+        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
 
-        @coroutine
-        def reconfigure_wrapper():
-            try:
-                yield self.configure(self._config)
-            except FailReply as fr:
-                log.error(str(fr))
-                req.reply("fail", str(fr))
-            except Exception as error:
-                log.exception(str(error))
-                req.reply("fail", str(error))
-            else:
-                req.reply("ok")
-        self.ioloop.add_callback(reconfigure_wrapper)
+        try:
+            self.set(config_json)
+        except FailReply as fr:
+            log.error(str(fr))
+            req.reply("fail", str(fr))
+        except Exception as error:
+            log.exception(str(error))
+            req.reply("fail", str(error))
+        else:
+            req.reply("ok")
         raise AsyncReply
+
+
+
+    @coroutine
+    def set(self, config_json):
+        """
+        @brief      Add the config_json to the current config
+
+       @note        ToDo:  Device a method to add the sublcass doc string here! 
+
+        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        """
+
+        log.debug("Updating configuration: '{}'".format(config_json))
+        if isinstance(config_json, str):
+            try:
+                cfg = json.loads(config_json)
+            except:
+                raise FailReply("Cannot handle config string {} - Not valid json!".format(type(config_json)))
+        elif isinstance(config_json, dict):
+            cfg = config_json
+        else:
+            raise FailReply("Cannot handle config type {}. Config has to bei either json formatted string or dict!".format(type(config_json)))
+        try:
+            self._config = updateConfig(self._config, cfg)
+        except KeyError as error:
+            raise FailReply("Unknown configuration option: {}".format(str(error)))
+
 
 
     @request()
@@ -335,6 +382,7 @@ class EDDPipeline(AsyncDeviceServer):
     def capture_stop(self):
         """@brief stop the pipeline."""
         raise NotImplementedError
+
 
 
     @request()
