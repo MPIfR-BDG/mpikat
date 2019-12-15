@@ -799,8 +799,21 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.debug("Sync epoch is {}".format(self.sync_epoch))
             yield self._digpack_client.stop()
 
+
         except Exception as error:
             log.info("Cannot configure DigitiserPacketiserClient :{}".format(error))
+
+        try:
+            cmd = "python /media/scratch/jason/ubb_feng_64ch.py 134.104.70.68"
+            log.debug("Running command: {0}".format(cmd))
+            self._program_roach2 = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._program_roach2.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._program_roach2._process.wait()
+        except Exception as error:
+            raise EddPulsarPipelineError(str(error))
+
 
         try:
             log.debug("Unpacked config: {}".format(config))
