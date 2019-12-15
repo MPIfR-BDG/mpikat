@@ -901,6 +901,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._source_name_sensor.set_value(self.source_name)
             self._nchannels.set_value(self.nchannels)
             self._nbins.set_value(self.nbins)
+            log.debug("line904")
         except KeyError as error:
             msg = "Key error from reading config_json: {}".format(
                 str(error))
@@ -911,6 +912,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #cuda_number = self._pipeline_config["cuda"]
         cpu_numbers = NUMA_MODE[self.numa_number][2]
         cuda_number = self.numa_number
+        log.debug("line915")
         try:
             header["sync_time"] = self.sync_epoch
             header["sample_clock"] = float(
@@ -927,6 +929,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
         tstr = Time.now().isot.replace(":", "-")
+        log.debug("line932")
         ####################################################
         #SETTING UP THE INPUT AND SCRUNCH DATA DIRECTORIES #
         ####################################################
