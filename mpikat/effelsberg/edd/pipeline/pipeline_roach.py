@@ -27,7 +27,7 @@ import time
 from astropy.time import Time
 from subprocess import PIPE, Popen
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
-from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
+from mpikat.effelsberg.edd.pipeline.dada_roach import render_dada_header, make_dada_key_string
 import shlex
 import threading
 import base64
@@ -98,14 +98,14 @@ NUMA_MODE = {
 INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15"}
 
 BAND = {
-    0: 1381.25,
-    1: 1543.75,
-    2: 1706.25,
-    3: 1868.75,
-    4: 2031.25,
-    5: 2193.75,
-    6: 2356.25,
-    7: 2518.75
+    0: (1381.25, "239.2.1.150"),
+    1: (1543.75, "239.2.1.151"),
+    2: (1706.25, "239.2.1.152"),
+    3: (1868.75, "239.2.1.153"),
+    4: (2031.25, "239.2.1.154"),
+    5: (2193.75, "239.2.1.155"),
+    6: (2356.25, "239.2.1.156"),
+    7: (2518.75, "239.2.1.157")
 }
 
 """
@@ -888,12 +888,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.info("Unpacked config: {}".format(self._source_config))
             self.bandwidth = self._pipeline_config["bandwidth"]
             header = self._config["dada_header_params"]
-            #if self._source_config["band"]:
+            header["mc_source"] = BAND[self._band_number][1]
+            # if self._source_config["band"]:
             self._band_number = self._source_config["band"]
             log.debug("self._band_number:{}".format(self._band_number))
-            log.debug("frequency_mhz:{}".format(BAND[self._band_number]))
-            header["frequency_mhz"] = BAND[self._band_number]
-            self._central_freq.set_value(str(BAND[self._band_number]))
+            log.debug("frequency_mhz:{}".format(BAND[self._band_number][0]))
+            header["frequency_mhz"] = BAND[self._band_number][0]
+            self._central_freq.set_value(str(BAND[self._band_number][0]))
             header["key"], header["mc_source"], header["bandwidth"], header["interface"] = self._dada_key, self._pipeline_config[
                 "mc_source"], self.bandwidth, INTERFACE[self.numa_number]
             self.source_name, self.nchannels, self.nbins = self._source_config[
@@ -935,9 +936,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         try:
             in_path = os.path.join("/media/scratch/jason/dspsr_output/", self.source_name,
-                                   str(BAND[self._band_number]), tstr, "raw_data")
+                                   str(BAND[self._band_number][0]), tstr, "raw_data")
             out_path = os.path.join(
-                "/media/scratch/jason/dspsr_output/", self.source_name, str(BAND[self._band_number]), tstr, "combined_data")
+                "/media/scratch/jason/dspsr_output/", self.source_name, str(BAND[self._band_number][0]), tstr, "combined_data")
             self.out_path = out_path
             log.debug("Creating directories")
             cmd = "mkdir -p {}".format(in_path)
@@ -1008,7 +1009,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             (parse_tag(self.source_name) == "default") & self.pulsar_flag))
         if (parse_tag(self.source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:])):
             cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 24 2 3599.999999999"'.format(
-                self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(BAND[self._band_number]) - 1.0, float(BAND[self._band_number]) + 1.0)
+                self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(BAND[self._band_number][0]) - 1.0, float(BAND[self._band_number][0]) + 1.0)
             log.debug("Command to run: {}".format(cmd))
             self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
             self.tempo2.stdout_callbacks.add(
