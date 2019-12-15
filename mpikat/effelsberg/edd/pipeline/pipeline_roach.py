@@ -1086,7 +1086,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING DSPSR                                    #
         ####################################################
         os.chdir(in_path)
-
+        log.debug("line1089")
         if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
@@ -1131,6 +1131,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
+        log.debug("line1134")
         cmd = "numactl -m {numa} taskset -c {cpu} edd_roach --log_level=debug".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][1])
         log.debug("Running command: {0}".format(cmd))
@@ -1147,6 +1148,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
+        log.debug("line1151")
         cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_nt --header {dada_header} --dada-mode 4 --quiet".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
