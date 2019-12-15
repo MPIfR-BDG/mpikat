@@ -888,9 +888,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.info("Unpacked config: {}".format(self._source_config))
             self.bandwidth = self._pipeline_config["bandwidth"]
             header = self._config["dada_header_params"]
-            header["mc_source"] = BAND[self._band_number][1]
+
             # if self._source_config["band"]:
             self._band_number = self._source_config["band"]
+            header["mc_source"] = BAND[self._band_number][1]
             log.debug("self._band_number:{}".format(self._band_number))
             log.debug("frequency_mhz:{}".format(BAND[self._band_number][0]))
             header["frequency_mhz"] = BAND[self._band_number][0]
