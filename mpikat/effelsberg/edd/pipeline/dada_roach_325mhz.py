@@ -71,7 +71,7 @@ SAMPLE_CLOCK_START  unset # This should be updated with the sync-time of the pac
 HEAP_SIZE    262144
 
 #SPEAD specifcation for EDD packetiser data stream
-NINDICES    1   # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
+NINDICES    2   # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
 # The first index item is the running timestamp
 IDX1_ITEM   0      # First item of a SPEAD heap
 IDX1_STEP   1048576   # The difference between successive timestamps
