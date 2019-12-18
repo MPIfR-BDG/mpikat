@@ -78,7 +78,8 @@ IDX1_STEP   1048576   # The difference between successive timestamps
 IDX1_MODULO 2600000000
 
 # The second index item distinguish between both polarizations
-#IDX2_ITEM   1
+IDX2_ITEM   2
+IDX2_LIST 0,8
 #IDX2_LIST   0,1
 #IDX2_MASK   0x1
 # end of header
