@@ -438,7 +438,7 @@ class ExecuteCommand(object):
                 if stdout != b"":
                     if (not stdout.startswith("heap")) & (not stdout.startswith("mark")) & (not stdout.startswith("[")) & (not stdout.startswith("-> parallel")) & (not stdout.startswith("-> sequential")):
                         self.stdout = stdout
-                        time.sleep(1)
+                        time.sleep(0.1)
                     # print self.stdout, self._command
 
             if not self._finish_event.isSet():
@@ -460,7 +460,7 @@ class ExecuteCommand(object):
                 stderr = self._process.stderr.readline().rstrip("\n\r")
                 if stderr != b"":
                     self.stderr = stderr
-                    time.sleep(1)
+                    time.sleep(0.1)
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
                 # the event is set, that means that command does not
