@@ -1081,8 +1081,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
             delete=False)
         log.debug("Writing dada key file to {0}".format(
             dada_key_file.name))
-        key_string = make_dada_key_string(self._dadc_key)
-        dada_key_file.write(make_dada_key_string(self._dadc_key))
+        key_string = make_dada_key_string(self._dada_key)
+        dada_key_file.write(make_dada_key_string(self._dada_key))
+        #key_string = make_dada_key_string(self._dadc_key)
+        #dada_key_file.write(make_dada_key_string(self._dadc_key))
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
@@ -1157,6 +1159,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING EDDPolnMerge                             #
         ####################################################
         log.debug("line1134")
+        """
         cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge --log_level=info".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][1])
         log.debug("Running command: {0}".format(cmd))
@@ -1169,6 +1172,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._handle_eddpolnmerge_stderr)
         self._polnmerge_proc_pid = self._polnmerge_proc.pid
         log.debug("_polnmerge_proc PID is {}".format(self._polnmerge_proc_pid))
+        """
         # time.sleep(5)
         ####################################################
         #STARTING MKRECV                                   #
