@@ -1196,7 +1196,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
         cmd = "numactl -m {} taskset -c {} python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
-            numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][3],in_path, out_path)
+            self.numa_number, NUMA_MODE[self.numa_number][3],in_path, out_path)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring archive monitor")
         self._archive_directory_monitor = ExecuteCommand(
