@@ -436,12 +436,12 @@ class ExecuteCommand(object):
         # Monitor the execution and also the stdout
         if RUN:
             while self._process.poll() == None:
-                pass
-                #stdout = self._process.stdout.readline().rstrip("\n\r")
-                #if stdout != b"":
-                #    if (not stdout.startswith("heap")) & (not stdout.startswith("mark")) & (not stdout.startswith("[")) & (not stdout.startswith("-> parallel")) & (not stdout.startswith("-> sequential")):
+                #pass
+                stdout = self._process.stdout.readline().rstrip("\n\r")
+                if stdout != b"":
+                    if (not stdout.startswith("heap")) & (not stdout.startswith("mark")) & (not stdout.startswith("[")) & (not stdout.startswith("-> parallel")) & (not stdout.startswith("-> sequential")):
                 #    #pass
-                #    self.stdout = stdout
+                    self.stdout = stdout
                 #    # print self.stdout, self._command
 
             if not self._finish_event.isSet():
@@ -1081,10 +1081,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
             delete=False)
         log.debug("Writing dada key file to {0}".format(
             dada_key_file.name))
-        key_string = make_dada_key_string(self._dada_key)
-        dada_key_file.write(make_dada_key_string(self._dada_key))
-        #key_string = make_dada_key_string(self._dadc_key)
-        #dada_key_file.write(make_dada_key_string(self._dadc_key))
+        #key_string = make_dada_key_string(self._dada_key)
+        #dada_key_file.write(make_dada_key_string(self._dada_key))
+        key_string = make_dada_key_string(self._dadc_key)
+        dada_key_file.write(make_dada_key_string(self._dadc_key))
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
@@ -1159,7 +1159,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING EDDPolnMerge                             #
         ####################################################
         log.debug("line1134")
-        """
+        
         cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge --log_level=info".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][1])
         log.debug("Running command: {0}".format(cmd))
@@ -1172,7 +1172,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._handle_eddpolnmerge_stderr)
         self._polnmerge_proc_pid = self._polnmerge_proc.pid
         log.debug("_polnmerge_proc PID is {}".format(self._polnmerge_proc_pid))
-        """
+        
         # time.sleep(5)
         ####################################################
         #STARTING MKRECV                                   #
@@ -1195,7 +1195,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
-        """
+        
         cmd = "numactl -m {} taskset -c {} python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
             self.numa_number, NUMA_MODE[self.numa_number][3],in_path, out_path)
         log.debug("Running command: {0}".format(cmd))
@@ -1213,7 +1213,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._archive_directory_monitor_pid = self._archive_directory_monitor.pid
         log.debug("_archive_directory_monitor PID is {}".format(
             self._archive_directory_monitor_pid))
-        """
+        
         # except Exception as error:
         #    msg = "Couldn't start pipeline server {}".format(str(error))
         #    log.error(msg)
