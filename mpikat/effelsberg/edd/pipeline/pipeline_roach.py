@@ -438,7 +438,7 @@ class ExecuteCommand(object):
                 if stdout != b"":
                     if (not stdout.startswith("heap")) & (not stdout.startswith("mark")) & (not stdout.startswith("[")) & (not stdout.startswith("-> parallel")) & (not stdout.startswith("-> sequential")):
                         self.stdout = stdout
-                        time.sleep(0.1)
+                        #time.sleep(0.1)
                     # print self.stdout, self._command
 
             if not self._finish_event.isSet():
@@ -460,7 +460,7 @@ class ExecuteCommand(object):
                 stderr = self._process.stderr.readline().rstrip("\n\r")
                 if stderr != b"":
                     self.stderr = stderr
-                    time.sleep(0.1)
+                    #time.sleep(0.1)
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
                 # the event is set, that means that command does not
@@ -1107,6 +1107,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         os.chdir(in_path)
         log.debug("line1089")
+        """
         if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
@@ -1136,7 +1137,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         else:
             error = "source is unknown"
             raise EddPulsarPipelineError(error)
-
+        """
         #cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring DSPSR")
