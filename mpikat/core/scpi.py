@@ -220,13 +220,14 @@ class Example(ScpiAsyncDeviceServer):
     def request_dummy_test(self, req, message):
         print message
 
+
 @coroutine
 def on_shutdown(ioloop, server):
     log.info("Shutting down interface")
     yield server.stop()
     ioloop.stop()
 
-if __name__ == "__main__":
+def launch_server(server):
     # This line is required to bypass tornado error when no handler is
     # is set on the root logger
     logging.getLogger().addHandler(logging.NullHandler())
@@ -235,8 +236,11 @@ if __name__ == "__main__":
         level=logging.DEBUG,
         logger=log)
     ioloop = IOLoop.current()
-    server = Example("", 5000, ioloop)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
     ioloop.add_callback(server.start)
     ioloop.start()
+
+if __name__ == "__main__":
+    server = Example("0.0.0.0", 5000, ioloop)
+    launch_server(server)
