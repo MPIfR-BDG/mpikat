@@ -436,11 +436,13 @@ class ExecuteCommand(object):
         # Monitor the execution and also the stdout
         if RUN:
             while self._process.poll() == None:
-                stdout = self._process.stdout.readline().rstrip("\n\r")
-                if stdout != b"":
-                    #if (not stdout.startswith("heap")) & (not stdout.startswith("mark")) & (not stdout.startswith("[")) & (not stdout.startswith("-> parallel")) & (not stdout.startswith("-> sequential")):
-                    self.stdout = stdout
-                    # print self.stdout, self._command
+                pass
+                #stdout = self._process.stdout.readline().rstrip("\n\r")
+                #if stdout != b"":
+                #    if (not stdout.startswith("heap")) & (not stdout.startswith("mark")) & (not stdout.startswith("[")) & (not stdout.startswith("-> parallel")) & (not stdout.startswith("-> sequential")):
+                #    #pass
+                #    self.stdout = stdout
+                #    # print self.stdout, self._command
 
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
