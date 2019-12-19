@@ -1178,26 +1178,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING MKRECV                                   #
         ####################################################
         log.debug("line1151")
-        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_nt --header {dada_header} --dada-mode 4 --quiet".format(
-            numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
-        log.debug("Running command: {0}".format(cmd))
-        log.info("Staring MKRECV")
-        self._mkrecv_ingest_proc = ExecuteCommand(
-            cmd, outpath=None, resident=True)
-        self._mkrecv_ingest_proc.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._mkrecv_ingest_proc.error_callbacks.add(
-            self._error_treatment)
-        self._mkrecv_ingest_proc_pid = self._mkrecv_ingest_proc.pid
-        log.debug("_mkrecv_ingest_proc PID is {}".format(
-            self._mkrecv_ingest_proc_pid))
-
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
         
         cmd = "numactl -m {} taskset -c {} python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
-            self.numa_number, NUMA_MODE[self.numa_number][3],in_path, out_path)
+            self.numa_number, NUMA_MODE[self.numa_number][3] ,in_path, out_path)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring archive monitor")
         self._archive_directory_monitor = ExecuteCommand(
@@ -1213,6 +1199,23 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._archive_directory_monitor_pid = self._archive_directory_monitor.pid
         log.debug("_archive_directory_monitor PID is {}".format(
             self._archive_directory_monitor_pid))
+
+
+        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_nt --header {dada_header} --dada-mode 4 --quiet".format(
+            numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
+        log.debug("Running command: {0}".format(cmd))
+        log.info("Staring MKRECV")
+        self._mkrecv_ingest_proc = ExecuteCommand(
+            cmd, outpath=None, resident=True)
+        self._mkrecv_ingest_proc.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._mkrecv_ingest_proc.error_callbacks.add(
+            self._error_treatment)
+        self._mkrecv_ingest_proc_pid = self._mkrecv_ingest_proc.pid
+        log.debug("_mkrecv_ingest_proc PID is {}".format(
+            self._mkrecv_ingest_proc_pid))
+
+
         
         # except Exception as error:
         #    msg = "Couldn't start pipeline server {}".format(str(error))
