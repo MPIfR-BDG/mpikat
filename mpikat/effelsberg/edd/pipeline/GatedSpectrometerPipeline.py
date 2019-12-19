@@ -533,7 +533,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 cfg.update(stream_description)
                 if not self._config['dummy_input']:
                     numa_node = self.__numa_node_pool[i]
-                    fastest_nic, nic_params = nume.getFastestNic(numa_node)
+                    fastest_nic, nic_params = numa.getFastestNic(numa_node)
                     log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nic_params['ip'], nic_params['speed']))
                     physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
                     cmd = "taskset -c {physcpu} mkrecv_nt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --dada-key {dada_key} \
