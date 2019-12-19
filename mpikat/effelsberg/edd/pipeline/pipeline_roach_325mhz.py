@@ -438,8 +438,8 @@ class ExecuteCommand(object):
             while self._process.poll() == None:
                 stdout = self._process.stdout.readline().rstrip("\n\r")
                 if stdout != b"":
-                    if (not stdout.startswith("heap")) & (not stdout.startswith("mark")) & (not stdout.startswith("[")) & (not stdout.startswith("-> parallel")) & (not stdout.startswith("-> sequential")):
-                        self.stdout = stdout
+                    #if (not stdout.startswith("heap")) & (not stdout.startswith("mark")) & (not stdout.startswith("[")) & (not stdout.startswith("-> parallel")) & (not stdout.startswith("-> sequential")):
+                    self.stdout = stdout
                     # print self.stdout, self._command
 
             if not self._finish_event.isSet():
