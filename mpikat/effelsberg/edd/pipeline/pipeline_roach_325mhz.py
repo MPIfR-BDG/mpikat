@@ -1195,6 +1195,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
+        """
         cmd = "numactl -m {} taskset -c {} python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
             self.numa_number, NUMA_MODE[self.numa_number][3],in_path, out_path)
         log.debug("Running command: {0}".format(cmd))
@@ -1212,7 +1213,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._archive_directory_monitor_pid = self._archive_directory_monitor.pid
         log.debug("_archive_directory_monitor PID is {}".format(
             self._archive_directory_monitor_pid))
-
+        """
         # except Exception as error:
         #    msg = "Couldn't start pipeline server {}".format(str(error))
         #    log.error(msg)
