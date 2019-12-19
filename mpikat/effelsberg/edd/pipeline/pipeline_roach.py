@@ -826,7 +826,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._pipeline_config = json.loads(config_json)
             self._config = CONFIG
             self._dada_key = "dada"
-            self._dadc_key = "cada"
+            self._dadc_key = "dadc"
         except Exception as error:
             log.info("Cannot unpack config json :{}".format(error))
 
