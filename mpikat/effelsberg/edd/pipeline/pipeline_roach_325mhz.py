@@ -819,6 +819,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._program_roach2.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._program_roach2._process.wait()
+            time.sleep(2)
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
 
@@ -1110,7 +1111,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         os.chdir(in_path)
         log.debug("line1089")
-        """
+        
         if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
@@ -1140,8 +1141,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         else:
             error = "source is unknown"
             raise EddPulsarPipelineError(error)
-        """
-        cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
+        
+        #cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring DSPSR")
         self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
