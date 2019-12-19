@@ -92,8 +92,8 @@ CONFIG = {
 }
 
 NUMA_MODE = {
-    0: ("0-9", "10", "11,12,13,14"),
-    1: ("18-19", "29", "30,31")
+    0: ("0-9", "10", "11,12", "13"),
+    1: ("18-19", "20", "21,22", "23")
 }
 INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15"}
 
@@ -1195,8 +1195,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
-        cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
-            in_path, out_path)
+        cmd = "numactl -m {} taskset -c {} python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
+            numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][3],in_path, out_path)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring archive monitor")
         self._archive_directory_monitor = ExecuteCommand(
