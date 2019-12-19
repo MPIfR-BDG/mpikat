@@ -61,13 +61,13 @@ CONFIG = {
     },
     "dada_db_params":
     {
-        "args": "-n 16 -b 2621440000 -p -l",
+        "args": "-n 16 -b 262144000 -p -l",
         "key": "dada"
     },
     "dadc_db_params":
     {
-        "args": "-n 16 -b 2621440000 -p -l",
-        "key": "dadg"
+        "args": "-n 16 -b 262144000 -p -l",
+        "key": "cada"
     },
     "dada_header_params":
     {
@@ -826,7 +826,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._pipeline_config = json.loads(config_json)
             self._config = CONFIG
             self._dada_key = "dada"
-            self._dadc_key = "dadg"
+            self._dadc_key = "cada"
         except Exception as error:
             log.info("Cannot unpack config json :{}".format(error))
 
