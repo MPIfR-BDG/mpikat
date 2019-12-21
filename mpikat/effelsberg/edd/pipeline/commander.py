@@ -239,7 +239,7 @@ class EddCommander(AsyncDeviceServer):
                 log.debug("Should send a start command to the pipeline with source name : {}".format(
                     self._source.value()))
                 json_string = json.dumps({"source-name": "{}".format(self._source.value(
-                )), "nchannels": 2048, "nbins": 1024, "ra": 123.4, "dec": -20.1, "band":9})
+                ).source.split("_")[0]), "nchannels": 2048, "nbins": 1024, "ra": 123.4, "dec": -20.1, "band":9})
                 log.debug(json_string)
                 self.first_true = False
                 self.last_value = True
@@ -251,7 +251,7 @@ class EddCommander(AsyncDeviceServer):
                 log.debug("Should send a stop to the pipeline")
                 self.first_true = True
                 self.last_value = False
-                #self._edd_pipeline_focus.req.stop()
+                self._edd_pipeline_focus.req.stop()
                 self._edd_pipeline_faraday.req.stop()
 
 
