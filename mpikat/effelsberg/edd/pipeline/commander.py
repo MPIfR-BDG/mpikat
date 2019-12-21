@@ -236,10 +236,10 @@ class EddCommander(AsyncDeviceServer):
             #log.debug("source_name = {}".format(self._source.value()))
             if bool(self.last_value == False) & bool(self.first_true == True) & bool(self._observing.value() == 'True'):
                 log.debug("observing  = {}".format((self._observing.value() == 'True')))
-                log.debug("source_name = {}".format(source_name_split))
+                log.debug("source_name = {}".format(source_name_split[0]))
                 log.debug("Should send a start command to the pipeline with source name : {}".format(
                     self._source.value().split("_")[0]))
-                json_string = json.dumps({"source-name": "{}".format(source_name_split), "nchannels": 2048, "nbins": 1024, "ra": 123.4, "dec": -20.1, "band":9})
+                json_string = json.dumps({"source-name": "{}".format(self._source.value().split("_")[0]), "nchannels": 2048, "nbins": 1024, "ra": 123.4, "dec": -20.1, "band":9})
                 log.debug(json_string)
                 self.first_true = False
                 self.last_value = True
