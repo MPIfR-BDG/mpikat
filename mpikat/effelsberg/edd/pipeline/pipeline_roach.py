@@ -1175,15 +1175,15 @@ class EddPulsarPipeline(AsyncDeviceServer):
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
-        #self._mkrecv_ingest_proc = ExecuteCommand(
-        #    cmd, outpath=None, resident=True)
-        #self._mkrecv_ingest_proc.stdout_callbacks.add(
-        #    self._decode_capture_stdout)
-        #self._mkrecv_ingest_proc.error_callbacks.add(
-        #    self._error_treatment)
-        #self._mkrecv_ingest_proc_pid = self._mkrecv_ingest_proc.pid
-        #log.debug("_mkrecv_ingest_proc PID is {}".format(
-        #    self._mkrecv_ingest_proc_pid))
+        self._mkrecv_ingest_proc = ExecuteCommand(
+            cmd, outpath=None, resident=True)
+        self._mkrecv_ingest_proc.stdout_callbacks.add(
+            self._decode_capture_stdout)
+        self._mkrecv_ingest_proc.error_callbacks.add(
+            self._error_treatment)
+        self._mkrecv_ingest_proc_pid = self._mkrecv_ingest_proc.pid
+        log.debug("_mkrecv_ingest_proc PID is {}".format(
+            self._mkrecv_ingest_proc_pid))
 
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
