@@ -1108,7 +1108,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         os.chdir(in_path)
         log.debug("line1089")
-        """
+        
         if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
@@ -1138,11 +1138,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
         else:
             error = "source is unknown"
             raise EddPulsarPipelineError(error)
-        """
+        
         #cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring DSPSR")
-        """
+        
         self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
         self._dspsr_pid = self._dspsr.pid
         log.debug("_dspsr PID is {}".format(self._dspsr_pid))
@@ -1150,7 +1150,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._decode_capture_stdout)
         self._dspsr.stderr_callbacks.add(
             self._handle_execution_stderr)
-        """
+        
         # time.sleep(5)
         ####################################################
         #STARTING EDDPolnMerge                             #
@@ -1173,10 +1173,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING MKRECV                                   #
         ####################################################
         log.debug("line1151")
+
         cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_nt --header {dada_header} --dada-mode 4 --quiet".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
+        """
         self._mkrecv_ingest_proc = ExecuteCommand(
             cmd, outpath=None, resident=True)
         self._mkrecv_ingest_proc.stdout_callbacks.add(
@@ -1186,7 +1188,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._mkrecv_ingest_proc_pid = self._mkrecv_ingest_proc.pid
         log.debug("_mkrecv_ingest_proc PID is {}".format(
             self._mkrecv_ingest_proc_pid))
-
+        """
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
