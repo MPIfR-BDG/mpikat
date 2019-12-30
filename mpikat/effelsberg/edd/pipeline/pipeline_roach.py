@@ -313,7 +313,7 @@ class ExecuteCommand(object):
             try:
                 self._process = Popen(self._executable_command,
                                       #stdout=PIPE,
-                                      stderr=PIPE,
+                                      #stderr=PIPE,
                                       bufsize=1,
                                       # shell=True,
                                       universal_newlines=True)
@@ -434,6 +434,7 @@ class ExecuteCommand(object):
     def _execution_monitor(self):
         # Monitor the execution and also the stdout
         if RUN:
+            pass
             while self._process.poll() == None:
                 stdout = self._process.stdout.readline().rstrip("\n\r")
                 if stdout != b"":
