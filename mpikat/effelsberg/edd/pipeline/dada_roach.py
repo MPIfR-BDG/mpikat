@@ -53,19 +53,19 @@ DADA_MODE    4                       # The mode, 4=full dada functionality
 ORDER        TFP                       # Here we are only capturing one polarisation, so data is time only
 SYNC_TIME    {{sync_time}}
 CLOCK_SAMPLE  {{sample_clock}}
-PACKET_SIZE 8400
-NTHREADS 32
-NHEAPS 256
-NGROUPS_DATA  4096
-NGROUPS_TEMP  2048
-NHEAPS_SWITCH 1024
+PACKET_SIZE 8192
+#NTHREADS 2
+#NHEAPS 256
+#NGROUPS_DATA  4096
+#NGROUPS_TEMP  2048
+#NHEAPS_SWITCH 1024
 MCAST_SOURCES {{mc_source}}   # 239.2.1.150 (+7)
 PORT         60001
 UDP_IF       unset
 IBV_IF       {{interface}}  # This is the ethernet interface on which to capture
 IBV_VECTOR   -1          # IBV forced into polling mode
 IBV_MAX_POLL 10
-BUFFER_SIZE 16777216
+#BUFFER_SIZE 16777216
 #BUFFER_SIZE 1048576
 SAMPLE_CLOCK_START  unset # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock                     
 HEAP_SIZE    262144
