@@ -1196,6 +1196,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             in_path, out_path)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring archive monitor")
+        """
         self._archive_directory_monitor = ExecuteCommand(
             cmd, outpath=out_path, resident=True)
         self._archive_directory_monitor.stdout_callbacks.add(
@@ -1209,7 +1210,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._archive_directory_monitor_pid = self._archive_directory_monitor.pid
         log.debug("_archive_directory_monitor PID is {}".format(
             self._archive_directory_monitor_pid))
-
+        """
         # except Exception as error:
         #    msg = "Couldn't start pipeline server {}".format(str(error))
         #    log.error(msg)
@@ -1219,7 +1220,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.info("Took {} s to start".format(self._timer * 86400))
         log.info("Starting pipeline {}".format(
             self._pipeline_sensor_name.value()))
-
+        
     @request()
     @return_reply(Str())
     def request_stop(self, req):
