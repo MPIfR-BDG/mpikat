@@ -326,8 +326,8 @@ class ExecuteCommand(object):
             self.pid = self._process.pid
             # log.debug("PID of {} is {}".format(
             #    self._executable_command, self.pid))
-            self._monitor_thread = threading.Thread(
-                target=self._execution_monitor)
+            #self._monitor_thread = threading.Thread(
+            #    target=self._execution_monitor)
             self._stderr_monitor_thread = threading.Thread(
                 target=self._stderr_monitor)
             self._monitor_thread.start()
