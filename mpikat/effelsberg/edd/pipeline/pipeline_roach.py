@@ -312,7 +312,7 @@ class ExecuteCommand(object):
         if RUN:
             try:
                 self._process = Popen(self._executable_command,
-                                      stdout=PIPE,
+                                      #stdout=PIPE,
                                       stderr=PIPE,
                                       bufsize=1,
                                       # shell=True,
@@ -720,14 +720,14 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug(returncode)
 
     def _handle_execution_stderr(self, stderr, callback):
-        #if bool(stderr[:8] == "Finished") & bool("." not in stderr):
-        #    self._time_processed.set_value(stderr)
-        #    log.info(stderr)
+        if bool(stderr[:8] == "Finished") & bool("." not in stderr):
+            self._time_processed.set_value(stderr)
+            log.info(stderr)
         #if bool(stderr[:8] == "Finished"):
         #    self._time_processed.set_value(stderr)
         #    log.info(stderr)
-        #if bool(stderr[:8] != "Finished"):
-        log.info(stderr)
+        if bool(stderr[:8] != "Finished"):
+            log.info(stderr)
 
     def _handle_eddpolnmerge_stderr(self, stderr, callback):
         log.debug(stderr)
