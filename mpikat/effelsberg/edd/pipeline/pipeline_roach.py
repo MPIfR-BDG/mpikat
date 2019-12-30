@@ -1154,7 +1154,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._dspsr.stderr_callbacks.add(
             self._handle_execution_stderr)
         
-        time.sleep(5)
+        #time.sleep(5)
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
@@ -1171,13 +1171,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._handle_eddpolnmerge_stderr)
         self._polnmerge_proc_pid = self._polnmerge_proc.pid
         log.debug("_polnmerge_proc PID is {}".format(self._polnmerge_proc_pid))
-        time.sleep(5)
+        #time.sleep(5)
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
         log.debug("line1151")
 
-        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_nt --header {dada_header} --dada-mode 4 ".format(
+        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_nt --header {dada_header} --dada-mode 4 --quiet --pyspead".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
