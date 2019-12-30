@@ -794,8 +794,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             #yield self._digpack_client.set_sampling_rate(self.config_dict["sampling_rate"])
             #yield self._digpack_client.set_bit_width(self.config_dict["nbits"])
             #yield self._digpack_client.set_destinations("{}:{}".format(self.config_dict["mc_source"].split(",")[0],
-                                                                       self.config_dict["mc_streaming_port"]), "{}:{}".format(self.config_dict["mc_source"].split(",")[1],
-                                                                                                                              self.config_dict["mc_streaming_port"]))
+            #                                                           self.config_dict["mc_streaming_port"]), "{}:{}".format(self.config_dict["mc_source"].split(",")[1],
+            #                                                                                                                  self.config_dict["mc_streaming_port"]))
 
             #yield self._digpack_client.set_predecimation_factor(self.config_dict["predecimation_factor"])
             #yield self._digpack_client.set_flipsignalspectrum(self.config_dict["flip_band"])
