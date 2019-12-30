@@ -1154,7 +1154,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._dspsr.stderr_callbacks.add(
             self._handle_execution_stderr)
         
-        # time.sleep(5)
+        time.sleep(5)
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
@@ -1171,7 +1171,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._handle_eddpolnmerge_stderr)
         self._polnmerge_proc_pid = self._polnmerge_proc.pid
         log.debug("_polnmerge_proc PID is {}".format(self._polnmerge_proc_pid))
-        # time.sleep(5)
+        time.sleep(5)
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
