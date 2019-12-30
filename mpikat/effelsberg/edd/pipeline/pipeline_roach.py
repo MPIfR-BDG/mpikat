@@ -61,12 +61,12 @@ CONFIG = {
     },
     "dada_db_params":
     {
-        "args": "-n 16 -b 2621440000 -p -l",
+        "args": "-n 16 -b 262144000 -p -l",
         "key": "dada"
     },
     "dadc_db_params":
     {
-        "args": "-n 16 -b 2621440000 -p -l",
+        "args": "-n 16 -b 262144000 -p -l",
         "key": "dadc"
     },
     "dada_header_params":
@@ -720,14 +720,14 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug(returncode)
 
     def _handle_execution_stderr(self, stderr, callback):
-        if bool(stderr[:8] == "Finished") & bool("." not in stderr):
-            self._time_processed.set_value(stderr)
-            log.info(stderr)
+        #if bool(stderr[:8] == "Finished") & bool("." not in stderr):
+        #    self._time_processed.set_value(stderr)
+        #    log.info(stderr)
         #if bool(stderr[:8] == "Finished"):
         #    self._time_processed.set_value(stderr)
         #    log.info(stderr)
-        if bool(stderr[:8] != "Finished"):
-            log.info(stderr)
+        #if bool(stderr[:8] != "Finished"):
+        log.info(stderr)
 
     def _handle_eddpolnmerge_stderr(self, stderr, callback):
         log.debug(stderr)
@@ -1181,7 +1181,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
-        """
+        
         self._mkrecv_ingest_proc = ExecuteCommand(
             cmd, outpath=None, resident=True)
         self._mkrecv_ingest_proc.stdout_callbacks.add(
@@ -1191,7 +1191,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._mkrecv_ingest_proc_pid = self._mkrecv_ingest_proc.pid
         log.debug("_mkrecv_ingest_proc PID is {}".format(
             self._mkrecv_ingest_proc_pid))
-        """
+        
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
@@ -1254,7 +1254,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             #process = [self._mkrecv_ingest_proc,
             #           self._polnmerge_proc, self._archive_directory_monitor]
             #process = [self._polnmerge_proc, self._archive_directory_monitor]
-            process = [self._polnmerge_proc]
+            process = [self._mkrecv_ingest_proc, self._polnmerge_proc]
             for proc in process:
                 time.sleep(2)
                 proc.set_finish_event()
