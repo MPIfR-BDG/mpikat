@@ -720,7 +720,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug(returncode)
 
     def _handle_execution_stderr(self, stderr, callback):
-        if bool(stderr[:8] == "Finished") & bool("." not in stderr):
+        #if bool(stderr[:8] == "Finished") & bool("." not in stderr):
+        #    self._time_processed.set_value(stderr)
+        #    log.info(stderr)
+        if bool(stderr[:8] == "Finished"):
             self._time_processed.set_value(stderr)
             log.info(stderr)
         if bool(stderr[:8] != "Finished"):
