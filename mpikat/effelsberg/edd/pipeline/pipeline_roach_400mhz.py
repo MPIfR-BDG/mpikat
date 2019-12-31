@@ -61,12 +61,12 @@ CONFIG = {
     },
     "dada_db_params":
     {
-        "args": "-n 64 -b 65536000 -p -l",
+        "args": "-n 80 -b 65536000 -p -l",
         "key": "dada"
     },
     "dadc_db_params":
     {
-        "args": "-n 128 -b 65536000 -p -l",
+        "args": "-n 80 -b 65536000 -p -l",
         "key": "dadc"
     },
     "dada_header_params":

@@ -54,11 +54,11 @@ ORDER        TFP                       # Here we are only capturing one polarisa
 SYNC_TIME    {{sync_time}}
 CLOCK_SAMPLE  {{sample_clock}}
 #PACKET_SIZE 9200
-NTHREADS 32
-NHEAPS 256
-NGROUPS_DATA  4096
-NGROUPS_TEMP  2048
-NHEAPS_SWITCH 1024
+#NTHREADS 32
+#NHEAPS 256
+#NGROUPS_DATA  4096
+#NGROUPS_TEMP  2048
+#NHEAPS_SWITCH 1024
 MCAST_SOURCES {{mc_source}}   # 239.2.1.150 (+7)
 PORT         60001
 UDP_IF       unset
