@@ -53,8 +53,8 @@ DADA_MODE    4                       # The mode, 4=full dada functionality
 ORDER        TFP                       # Here we are only capturing one polarisation, so data is time only
 SYNC_TIME    {{sync_time}}
 CLOCK_SAMPLE  {{sample_clock}}
-PACKET_SIZE 9200
-NTHREADS 4
+#PACKET_SIZE 9200
+NTHREADS 32
 #NHEAPS 256
 #NGROUPS_DATA  4096
 #NGROUPS_TEMP  2048
