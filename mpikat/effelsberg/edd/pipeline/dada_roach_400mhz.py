@@ -79,7 +79,7 @@ IDX1_MODULO 2600000000
 
 # The second index item distinguish between both polarizations
 IDX2_ITEM   2
-IDX2_LIST 0x18,0x20,0x28,0x30
+IDX2_LIST 0x18,0x20,0x28
 #IDX2_LIST   0,1
 #IDX2_MASK   0x1
 # end of header
