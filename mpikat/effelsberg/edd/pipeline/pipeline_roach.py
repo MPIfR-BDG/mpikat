@@ -312,8 +312,8 @@ class ExecuteCommand(object):
         if RUN:
             try:
                 self._process = Popen(self._executable_command,
-                                      #stdout=PIPE,
-                                      #stderr=PIPE,
+                                      stdout=PIPE,
+                                      stderr=PIPE,
                                       bufsize=1,
                                       # shell=True,
                                       universal_newlines=True)
@@ -434,7 +434,7 @@ class ExecuteCommand(object):
     def _execution_monitor(self):
         # Monitor the execution and also the stdout
         if RUN:
-            pass
+            #pass
             while self._process.poll() == None:
                 stdout = self._process.stdout.readline().rstrip("\n\r")
                 if stdout != b"":
@@ -458,7 +458,7 @@ class ExecuteCommand(object):
 
     def _stderr_monitor(self):
         if RUN:
-            pass
+            #pass
             while self._process.poll() == None:
                 stderr = self._process.stderr.readline().rstrip("\n\r")
                 if stderr != b"":
