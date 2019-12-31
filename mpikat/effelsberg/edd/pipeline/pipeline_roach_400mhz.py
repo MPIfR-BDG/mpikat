@@ -27,7 +27,7 @@ import time
 from astropy.time import Time
 from subprocess import PIPE, Popen
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
-from mpikat.effelsberg.edd.pipeline.dada_roach_325mhz import render_dada_header, make_dada_key_string
+from mpikat.effelsberg.edd.pipeline.dada_roach_400mhz import render_dada_header, make_dada_key_string
 import shlex
 import threading
 import base64
