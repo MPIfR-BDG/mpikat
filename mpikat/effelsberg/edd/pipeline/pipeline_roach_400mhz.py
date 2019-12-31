@@ -76,13 +76,13 @@ CONFIG = {
         "instrument": "EDD",
         "frequency_mhz": 1300,
         "receiver_name": "P217",
-        "mc_source": "239.2.1.153+3",
-        "bandwidth": 400.0,
+        "mc_source": "239.2.1.153+2",
+        "bandwidth": 300.0,
         "tsamp": 0.08,
         "nbit": 8,
         "ndim": 2,
         "npol": 2,
-        "nchan": 32,
+        "nchan": 24,
         "resolution": 1,
         "dsb": 1,
         "ra": "123",
@@ -1160,7 +1160,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         log.debug("line1134")
         
-        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge -p 4 --log_level=info".format(
+        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge -p 3 --log_level=info".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][1])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDRoach")
