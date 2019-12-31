@@ -61,12 +61,12 @@ CONFIG = {
     },
     "dada_db_params":
     {
-        "args": "-n 10 -b 81920000 -p -l",
+        "args": "-n 10 -b 32768000 -p -l",
         "key": "dada"
     },
     "dadc_db_params":
     {
-        "args": "-n 10 -b 81920000 -p -l",
+        "args": "-n 10 -b 32768000 -p -l",
         "key": "dadc"
     },
     "dada_header_params":
@@ -76,7 +76,7 @@ CONFIG = {
         "instrument": "EDD",
         "frequency_mhz": 1300,
         "receiver_name": "P217",
-        "mc_source": "239.2.1.154",
+        "mc_source": "239.2.1.153+3",
         "bandwidth": 400.0,
         "tsamp": 0.08,
         "nbit": 8,
