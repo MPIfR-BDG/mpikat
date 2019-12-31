@@ -66,7 +66,7 @@ CONFIG = {
     },
     "dadc_db_params":
     {
-        "args": "-n 64 -b 32768000 -p -l",
+        "args": "-n 128 -b 32768000 -p -l",
         "key": "dadc"
     },
     "dada_header_params":
