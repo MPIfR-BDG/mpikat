@@ -796,16 +796,16 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._digpack_port = self.config_dict["digpack_port"]
             self._digpack_client = DigitiserPacketiserClient(
                 self._digpack_ip, self._digpack_port)
-            #yield self._digpack_client.set_sampling_rate(self.config_dict["sampling_rate"])
-            #yield self._digpack_client.set_bit_width(self.config_dict["nbits"])
-            #yield self._digpack_client.set_destinations("{}:{}".format(self.config_dict["mc_source"].split(",")[0],
-            #                                                           self.config_dict["mc_streaming_port"]), "{}:{}".format(self.config_dict["mc_source"].split(",")[1],
-            #                                                                                                                  self.config_dict["mc_streaming_port"]))
+            yield self._digpack_client.set_sampling_rate(self.config_dict["sampling_rate"])
+            yield self._digpack_client.set_bit_width(self.config_dict["nbits"])
+            yield self._digpack_client.set_destinations("{}:{}".format(self.config_dict["mc_source"].split(",")[0],
+                                                                       self.config_dict["mc_streaming_port"]), "{}:{}".format(self.config_dict["mc_source"].split(",")[1],
+                                                                                                                              self.config_dict["mc_streaming_port"]))
  
-            #yield self._digpack_client.set_predecimation_factor(self.config_dict["predecimation_factor"])
-            #yield self._digpack_client.set_flipsignalspectrum(self.config_dict["flip_band"])
+            yield self._digpack_client.set_predecimation_factor(self.config_dict["predecimation_factor"])
+            yield self._digpack_client.set_flipsignalspectrum(self.config_dict["flip_band"])
             yield self._digpack_client.synchronize()
-            #yield self._digpack_client.capture_start()
+            yield self._digpack_client.capture_start()
 
             self.sync_epoch = yield self._digpack_client.get_sync_time()
             log.debug("Sync epoch is {}".format(self.sync_epoch))
