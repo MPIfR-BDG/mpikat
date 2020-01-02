@@ -315,7 +315,8 @@ class ExecuteCommand(object):
                                       stdout=PIPE,
                                       stderr=PIPE,
                                       bufsize=1,
-                                      shell=True,
+                                      #shell=True,
+                                      close_fds=True, 
                                       universal_newlines=True)
             except Exception as error:
                 log.exception("Error while launching command: {}".format(
