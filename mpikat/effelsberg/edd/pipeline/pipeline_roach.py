@@ -817,7 +817,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
         except Exception as error:
             log.info("Cannot configure DigitiserPacketiserClient :{}".format(error))
-            
+        """ 
         try:
             cmd = "python /media/scratch/jason/ubb_feng_64ch.py 134.104.70.68"
             log.debug("Running command: {0}".format(cmd))
@@ -828,7 +828,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._program_roach2._process.wait()
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
-        
+        """
 
         try:
             log.debug("Unpacked config: {}".format(config))
