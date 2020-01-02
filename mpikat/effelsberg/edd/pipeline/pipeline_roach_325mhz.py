@@ -61,12 +61,12 @@ CONFIG = {
     },
     "dada_db_params":
     {
-        "args": "-n 20 -b 52428800 -p -l",
+        "args": "-n 4 -b 5242880000 -p -l",
         "key": "dada"
     },
     "dadc_db_params":
     {
-        "args": "-n 20 -b 52428800 -p -l",
+        "args": "-n 4 -b 5242880000 -p -l",
         "key": "dadc"
     },
     "dada_header_params":
@@ -864,6 +864,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._create_transpose_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._create_transpose_ring_buffer._process.wait()
+            log.info("Now sleep for 180 second")
+            time.sleep(180)
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
         else:
