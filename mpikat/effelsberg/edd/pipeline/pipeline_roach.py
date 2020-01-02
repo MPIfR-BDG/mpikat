@@ -314,7 +314,7 @@ class ExecuteCommand(object):
                 self._process = Popen(self._executable_command,
                                       stdout=PIPE,
                                       stderr=PIPE,
-                                      bufsize=1,
+                                      bufsize=4096,
                                       #shell=True,
                                       close_fds=True, 
                                       universal_newlines=True)
