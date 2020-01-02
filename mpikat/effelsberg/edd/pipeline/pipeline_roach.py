@@ -856,8 +856,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._create_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._create_ring_buffer._process.wait()
-            log.info("Now sleep for 180 second")
-            time.sleep(180)
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
         try:
@@ -872,6 +870,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._create_transpose_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._create_transpose_ring_buffer._process.wait()
+            log.info("Now sleep for 120 second")
+            time.sleep(120)
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
         else:
