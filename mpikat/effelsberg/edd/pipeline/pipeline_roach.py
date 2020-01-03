@@ -97,7 +97,8 @@ NUMA_MODE = {
     0: ("0-4", "5", "6,7,8,9", "10"),
     1: ("18-23", "24", "25,26,27,28,29", "30")
 }
-INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15"}
+INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15", 2: "10.10.1.16", 3: "10.10.1.17" }
+
 
 BAND = {
     0: (850.0, "239.2.1.150"),
@@ -930,7 +931,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self.frequency_mhz = BAND[self._band_number][0]
             self._central_freq.set_value(str(BAND[self._band_number][0]))
             header["key"], header["bandwidth"], header[
-                "interface"] = self._dada_key, self.bandwidth, INTERFACE[self.numa_number]
+                "interface"] = self._dada_key, self.bandwidth, INTERFACE[self._pipeline_config["interface"]]
             self.source_name, self.nchannels, self.nbins = self._source_config[
                 "source-name"], self._source_config["nchannels"], self._source_config["nbins"]
             self._source_name_sensor.set_value(self.source_name)
