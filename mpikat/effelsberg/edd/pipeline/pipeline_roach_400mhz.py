@@ -57,16 +57,16 @@ CONFIG = {
     "base_output_dir": os.getcwd(),
     "dspsr_params":
     {
-        "args": "-L 10 -r -minram 1024"
+        "args": "-L 10 -r -minram 2048"
     },
     "dada_db_params":
     {
-        "args": "-n 32 -b 104857600 -p -l",
+        "args": "-n 16 -b 1048576000 -p -l",
         "key": "dada"
     },
     "dadc_db_params":
     {
-        "args": "-n 32 -b 104857600 -p -l",
+        "args": "-n 16 -b 1048576000 -p -l",
         "key": "dadc"
     },
     "dada_header_params":
