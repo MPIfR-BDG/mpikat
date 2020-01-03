@@ -61,14 +61,14 @@ CONFIG = {
     },
     "dada_db_params":
     {
-        #"args": "-n 32 -b 26214400 -p -l",
-        "args": "-n 4 -b 2621440000 -p -l -c 1",
+        "args": "-n 32 -b 26214400 -p -l",
+        #"args": "-n 4 -b 2621440000 -p -l -c 1",
         "key": "dada"
     },
     "dadc_db_params":
     {
-        #"args": "-n 32 -b 26214400 -p -l",
-        "args": "-n 4 -b 2621440000 -p -l -c 1",
+        "args": "-n 32 -b 26214400 -p -l",
+        #"args": "-n 4 -b 2621440000 -p -l -c 1",
         "key": "dadc"
     },
     "dada_header_params":
@@ -78,9 +78,9 @@ CONFIG = {
         "instrument": "EDD",
         "frequency_mhz": 1400.4,
         "receiver_name": "P217",
-        "mc_source": "239.2.1.154",
-        "bandwidth": 162.5,
-        "tsamp": 0.000625,
+        "mc_source": "239.2.1.150",
+        "bandwidth": 100,
+        "tsamp": 0.08,
         "nbit": 8,
         "ndim": 2,
         "npol": 2,
@@ -94,21 +94,20 @@ CONFIG = {
 }
 
 NUMA_MODE = {
-    0: ("0-9", "10", "11,12,13,14"),
-    1: ("18-19", "20", "21")
+    0: ("0-4", "5", "6,7,8,9", "10"),
+    1: ("18-23", "24", "25,26,27,28,29", "30")
 }
 INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15"}
 
 BAND = {
-    0: (1291.25, "239.2.1.150"),
-    1: (1453.75, "239.2.1.151"),
-    2: (1616.25, "239.2.1.152"),
-    3: (1778.75, "239.2.1.153"),
-    4: (1941.25, "239.2.1.154"),
-    5: (2103.75, "239.2.1.155"),
-    6: (2266.25, "239.2.1.156"),
-    7: (2428.75, "239.2.1.157"),
-    8: (1293.75, "239.2.1.150")
+    0: (850, "239.2.1.150"),
+    1: (950, "239.2.1.151"),
+    2: (1050, "239.2.1.152"),
+    3: (1150, "239.2.1.153"),
+    4: (1250, "239.2.1.154"),
+    5: (1350, "239.2.1.155"),
+    6: (1450, "239.2.1.156"),
+    7: (1550, "239.2.1.157")
 }
 """
 Assuming the bottom of the 7 beams pulsa mode band is 1210
@@ -317,8 +316,8 @@ class ExecuteCommand(object):
                                       stdout=PIPE,
                                       stderr=PIPE,
                                       bufsize=-1,
-                                      #shell=True,
-                                      close_fds=True, 
+                                      # shell=True,
+                                      close_fds=True,
                                       universal_newlines=True)
             except Exception as error:
                 log.exception("Error while launching command: {}".format(
@@ -437,13 +436,13 @@ class ExecuteCommand(object):
     def _execution_monitor(self):
         # Monitor the execution and also the stdout
         if RUN:
-            #pass
+            # pass
             while self._process.poll() == None:
                 stdout = self._process.stdout.readline().rstrip("\n\r")
                 if stdout != b"":
                     if (not stdout.startswith("heap")) & (not stdout.startswith("mark")) & (not stdout.startswith("[")) & (not stdout.startswith("-> parallel")) & (not stdout.startswith("-> sequential")):
                         self.stdout = stdout
-                        #time.sleep(0.1)
+                        # time.sleep(0.1)
                     # print self.stdout, self._command
 
             if not self._finish_event.isSet():
@@ -461,12 +460,12 @@ class ExecuteCommand(object):
 
     def _stderr_monitor(self):
         if RUN:
-            #pass
+            # pass
             while self._process.poll() == None:
                 stderr = self._process.stderr.readline().rstrip("\n\r")
                 if stderr != b"":
                     self.stderr = stderr
-                    #time.sleep(0.1)
+                    # time.sleep(0.1)
             if not self._finish_event.isSet():
                 # For the command which runs for a while, if it stops before
                 # the event is set, that means that command does not
@@ -728,7 +727,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         if bool(stderr[:8] == "Finished") & bool("." not in stderr):
             self._time_processed.set_value(stderr)
             log.info(stderr)
-        #if bool(stderr[:8] == "Finished"):
+        # if bool(stderr[:8] == "Finished"):
         #    self._time_processed.set_value(stderr)
         #    log.info(stderr)
         if bool(stderr[:8] != "Finished"):
@@ -804,7 +803,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             yield self._digpack_client.set_destinations("{}:{}".format(self.config_dict["mc_source"].split(",")[0],
                                                                        self.config_dict["mc_streaming_port"]), "{}:{}".format(self.config_dict["mc_source"].split(",")[1],
                                                                                                                               self.config_dict["mc_streaming_port"]))
- 
+
             yield self._digpack_client.set_predecimation_factor(self.config_dict["predecimation_factor"])
             yield self._digpack_client.set_flipsignalspectrum(self.config_dict["flip_band"])
             yield self._digpack_client.synchronize()
@@ -814,10 +813,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.debug("Sync epoch is {}".format(self.sync_epoch))
             yield self._digpack_client.stop()
 
-
         except Exception as error:
             log.info("Cannot configure DigitiserPacketiserClient :{}".format(error))
-        
+
         try:
             cmd = "python /media/scratch/jason/ubb_feng_64ch.py 134.104.70.68"
             log.debug("Running command: {0}".format(cmd))
@@ -828,7 +826,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._program_roach2._process.wait()
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
-        
 
         try:
             log.debug("Unpacked config: {}".format(config))
@@ -926,7 +923,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.debug("frequency_mhz:{}".format(BAND[self._band_number][0]))
             header["frequency_mhz"] = BAND[self._band_number][0]
             self._central_freq.set_value(str(BAND[self._band_number][0]))
-            header["key"], header["bandwidth"], header["interface"] = self._dada_key, self.bandwidth, INTERFACE[self.numa_number]
+            header["key"], header["bandwidth"], header[
+                "interface"] = self._dada_key, self.bandwidth, INTERFACE[self.numa_number]
             self.source_name, self.nchannels, self.nbins = self._source_config[
                 "source-name"], self._source_config["nchannels"], self._source_config["nbins"]
             self._source_name_sensor.set_value(self.source_name)
@@ -960,15 +958,16 @@ class EddPulsarPipeline(AsyncDeviceServer):
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
         tstr = Time.now().isot.replace(":", "-")
+        tdate = tstr.split("T")[0]
         log.debug("line932")
         ####################################################
         #SETTING UP THE INPUT AND SCRUNCH DATA DIRECTORIES #
         ####################################################
         try:
-            in_path = os.path.join("/media/scratch/jason/dspsr_output/", self.source_name,
-                                   str(BAND[self._band_number][0]), tstr, "raw_data")
+            in_path = os.path.join("/media/scratch/jason/dspsr_output/", tdate, self.source_name,
+                                   str(self.frequency_mhz), tstr, "raw_data")
             out_path = os.path.join(
-                "/media/scratch/jason/dspsr_output/", self.source_name, str(BAND[self._band_number][0]), tstr, "combined_data")
+                "/media/scratch/jason/dspsr_output/", tdate, self.source_name, str(self.frequency_mhz), tstr, "combined_data")
             self.out_path = out_path
             log.debug("Creating directories")
             cmd = "mkdir -p {}".format(in_path)
@@ -1118,7 +1117,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         os.chdir(in_path)
         log.debug("line1089")
-        
+
         if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
@@ -1148,11 +1147,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
         else:
             error = "source is unknown"
             raise EddPulsarPipelineError(error)
-        
+
         #cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring DSPSR")
-        
+
         self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
         self._dspsr_pid = self._dspsr.pid
         log.debug("_dspsr PID is {}".format(self._dspsr_pid))
@@ -1160,8 +1159,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._decode_capture_stdout)
         self._dspsr.stderr_callbacks.add(
             self._handle_execution_stderr)
-        
-        #time.sleep(5)
+
+        # time.sleep(5)
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
@@ -1178,7 +1177,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._handle_eddpolnmerge_stderr)
         self._polnmerge_proc_pid = self._polnmerge_proc.pid
         log.debug("_polnmerge_proc PID is {}".format(self._polnmerge_proc_pid))
-        #time.sleep(5)
+        # time.sleep(5)
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
@@ -1188,7 +1187,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
-        
+
         self._mkrecv_ingest_proc = ExecuteCommand(
             cmd, outpath=None, resident=True)
         self._mkrecv_ingest_proc.stdout_callbacks.add(
@@ -1198,7 +1197,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._mkrecv_ingest_proc_pid = self._mkrecv_ingest_proc.pid
         log.debug("_mkrecv_ingest_proc PID is {}".format(
             self._mkrecv_ingest_proc_pid))
-        
+
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
@@ -1206,7 +1205,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             in_path, out_path)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring archive monitor")
-        
+
         self._archive_directory_monitor = ExecuteCommand(
             cmd, outpath=out_path, resident=True)
         self._archive_directory_monitor.stdout_callbacks.add(
@@ -1220,7 +1219,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._archive_directory_monitor_pid = self._archive_directory_monitor.pid
         log.debug("_archive_directory_monitor PID is {}".format(
             self._archive_directory_monitor_pid))
-                # except Exception as error:
+        # except Exception as error:
         #    msg = "Couldn't start pipeline server {}".format(str(error))
         #    log.error(msg)
         #    raise EddPulsarPipelineError(msg)
@@ -1229,7 +1228,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.info("Took {} s to start".format(self._timer * 86400))
         log.info("Starting pipeline {}".format(
             self._pipeline_sensor_name.value()))
-        
+
     @request()
     @return_reply(Str())
     def request_stop(self, req):
