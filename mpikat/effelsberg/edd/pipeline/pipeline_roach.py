@@ -798,17 +798,18 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._digpack_port = self.config_dict["digpack_port"]
             self._digpack_client = DigitiserPacketiserClient(
                 self._digpack_ip, self._digpack_port)
-            yield self._digpack_client.set_sampling_rate(self.config_dict["sampling_rate"])
-            yield self._digpack_client.set_bit_width(self.config_dict["nbits"])
-            yield self._digpack_client.set_destinations("{}:{}".format(self.config_dict["mc_source"].split(",")[0],
-                                                                       self.config_dict["mc_streaming_port"]), "{}:{}".format(self.config_dict["mc_source"].split(",")[1],
-                                                                                                                              self.config_dict["mc_streaming_port"]))
+            if self.config_dict["reconfigure_digpack"] == 1:
+                yield self._digpack_client.set_sampling_rate(self.config_dict["sampling_rate"])
+                yield self._digpack_client.set_bit_width(self.config_dict["nbits"])
+                yield self._digpack_client.set_destinations("{}:{}".format(self.config_dict["mc_source"].split(",")[0],
+                                                                           self.config_dict["mc_streaming_port"]), "{}:{}".format(self.config_dict["mc_source"].split(",")[1],
+                                                                                                                                  self.config_dict["mc_streaming_port"]))
 
-            yield self._digpack_client.set_predecimation_factor(self.config_dict["predecimation_factor"])
-            yield self._digpack_client.set_flipsignalspectrum(self.config_dict["flip_band"])
-            yield self._digpack_client.synchronize()
-            yield self._digpack_client.capture_start()
-
+                yield self._digpack_client.set_predecimation_factor(self.config_dict["predecimation_factor"])
+                yield self._digpack_client.set_flipsignalspectrum(self.config_dict["flip_band"])
+                yield self._digpack_client.capture_start()
+            if self.config_dict["resynchronize_digpack"] == 1:
+                yield self._digpack_client.synchronize()
             self.sync_epoch = yield self._digpack_client.get_sync_time()
             log.debug("Sync epoch is {}".format(self.sync_epoch))
             yield self._digpack_client.stop()
@@ -817,13 +818,15 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.info("Cannot configure DigitiserPacketiserClient :{}".format(error))
 
         try:
-            cmd = "python /media/scratch/jason/ubb_feng_64ch.py 134.104.70.68"
-            log.debug("Running command: {0}".format(cmd))
-            self._program_roach2 = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._program_roach2.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._program_roach2._process.wait()
+            if self.config_dict["reconfigure_roach"] == 1:
+                cmd = "python /media/scratch/jason/ubb_feng_64ch.py 134.104.70.68"
+                log.debug("Running command: {0}".format(cmd))
+                self._program_roach2 = ExecuteCommand(
+                    cmd, outpath=None, resident=False)
+                self._program_roach2.stdout_callbacks.add(
+                    self._decode_capture_stdout)
+                self._program_roach2._process.wait()
+            time.sleep(1)
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
 
@@ -867,8 +870,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._create_transpose_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._create_transpose_ring_buffer._process.wait()
-            log.info("Now sleep for 180 second")
-            time.sleep(180)
+            if self.config_dict["reconfigure_roach"] == 1:
+                for i in range(180):
+                    log.info("Sleeping for 180 seconds : {} seconds passed".format(i))
+                    time.sleep(1)
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
         else:
