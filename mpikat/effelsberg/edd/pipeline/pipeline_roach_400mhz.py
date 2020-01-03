@@ -865,6 +865,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._create_transpose_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._create_transpose_ring_buffer._process.wait()
+            if self.config_dict["reconfigure_roach"] == 1:
+                for i in range(180):
+                    log.info("Sleeping for 180 seconds : {} seconds passed".format(i))
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
         else:
