@@ -1130,7 +1130,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 predictor="/tmp/t2pred.dat",
                 parfile="/tmp/epta/{}.par".format(self.source_name[1:]),
                 cpus=cpu_numbers,
-                cuda_number=cuda_number,
+                cuda_number="1,1",
+                #cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
         elif parse_tag(self.source_name) == "R":
             cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
