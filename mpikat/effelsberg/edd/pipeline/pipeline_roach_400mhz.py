@@ -61,12 +61,12 @@ CONFIG = {
     },
     "dada_db_params":
     {
-        "args": "-n 16 -b 524288000 -p -l",
+        "args": "-n 16 -b 786432000 -p -l",
         "key": "dada"
     },
     "dadc_db_params":
     {
-        "args": "-n 16 -b 524288000 -p -l",
+        "args": "-n 16 -b 786432000 -p -l",
         "key": "dadc"
     },
     "dada_header_params":
@@ -74,17 +74,17 @@ CONFIG = {
         "filesize": 32000000000,
         "telescope": "Effelsberg",
         "instrument": "EDD",
-        "frequency_mhz": 1200,
+        "frequency_mhz": 1250,
         "receiver_name": "P217",
-        "mc_source": "239.2.1.153+1",
-        "bandwidth": 200.0,
+        "mc_source": "239.2.1.153+2",
+        "bandwidth": 300.0,
         "tsamp": 0.08,
         "nbit": 8,
         "ndim": 2,
         "npol": 2,
-        "nchan": 16,
+        "nchan": 24,
         "resolution": 1,
-        "idx2_list": "0x18,0x20",
+        "idx2_list": "0x18,0x20,0x28",
         "dsb": 1,
         "ra": "123",
         "dec": "-10"
@@ -803,8 +803,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 yield self._digpack_client.set_predecimation_factor(self.config_dict["predecimation_factor"])
                 yield self._digpack_client.set_flipsignalspectrum(self.config_dict["flip_band"])
                 yield self._digpack_client.capture_start()
-            yield self._digpack_client.synchronize()
-
+            if self.config_dict["resynchronize_digpack"] == 1:
+            	yield self._digpack_client.synchronize()
             self.sync_epoch = yield self._digpack_client.get_sync_time()
             log.debug("Sync epoch is {}".format(self.sync_epoch))
             yield self._digpack_client.stop()
