@@ -868,6 +868,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             if self.config_dict["reconfigure_roach"] == 1:
                 for i in range(180):
                     log.info("Sleeping for 180 seconds : {} seconds passed".format(i))
+                    time.sleep(1)
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
         else:
@@ -1141,7 +1142,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
                 #nchan="-F {}:D".format(self.nchannels),
-                nchan="-F 32:D",
+                nchan="-F 64:D",
                 name=self.source_name,
                 #nbin="-b {}".format(self.nbins),
                 cpus=cpu_numbers,
