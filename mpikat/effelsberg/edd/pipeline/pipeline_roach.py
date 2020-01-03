@@ -965,6 +965,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         tstr = Time.now().isot.replace(":", "-")
         tdate = tstr.split("T")[0]
         log.debug("line932")
+        log.debug(tdate)
         ####################################################
         #SETTING UP THE INPUT AND SCRUNCH DATA DIRECTORIES #
         ####################################################
