@@ -57,7 +57,7 @@ CONFIG = {
     "base_output_dir": os.getcwd(),
     "dspsr_params":
     {
-        "args": "-L 10 -r -minram 2048"
+        "args": "-L 10 -r -minram 1024"
     },
     "dada_db_params":
     {
@@ -74,7 +74,7 @@ CONFIG = {
         "filesize": 32000000000,
         "telescope": "Effelsberg",
         "instrument": "EDD",
-        "frequency_mhz": 1250,
+        "frequency_mhz": 1300,
         "receiver_name": "P217",
         "mc_source": "239.2.1.153+3",
         "bandwidth": 400.0,
