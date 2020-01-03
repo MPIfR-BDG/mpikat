@@ -94,7 +94,7 @@ CONFIG = {
 
 NUMA_MODE = {
     0: ("0-9", "10", "11,12", "13"),
-    1: ("18-23", "24", "25,26", "27")
+    1: ("18-23", "24", "25,26,27,28,29", "30")
 }
 INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15"}
 
@@ -1130,7 +1130,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 predictor="/tmp/t2pred.dat",
                 parfile="/tmp/epta/{}.par".format(self.source_name[1:]),
                 cpus=cpu_numbers,
-                cuda_number="1,1",
+                cuda_number="1,1,1,1",
                 #cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
         elif parse_tag(self.source_name) == "R":
