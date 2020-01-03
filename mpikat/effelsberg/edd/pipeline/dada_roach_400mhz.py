@@ -79,7 +79,7 @@ IDX1_MODULO 2600000000
 
 # The second index item distinguish between both polarizations
 IDX2_ITEM   2
-IDX2_LIST 0x18,0x20,0x28
+IDX2_LIST {idx2_list}
 #IDX2_LIST   0,1
 #IDX2_MASK   0x1
 # end of header
@@ -106,6 +106,7 @@ DADA_DEFAULTS = {
     "ndim": 2,
     "npol": 2,
     "nchan": 32,
+    "idx2_list": "0x18,0x20",
     "resolution": 1,
     "dsb": 0,
     "key": "dada"
