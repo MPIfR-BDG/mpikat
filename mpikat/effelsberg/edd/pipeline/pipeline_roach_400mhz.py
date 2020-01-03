@@ -922,7 +922,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             #header["mc_source"] = BAND[self._band_number][1]
             # log.debug("self._band_number:{}".format(self._band_number))
             # log.debug("frequency_mhz:{}".format(BAND[self._band_number][0]))
-            #header["frequency_mhz"] = BAND[self._band_number][0]
+            header["frequency_mhz"] = self.frequency_mhz
             # self._central_freq.set_value(str(BAND[self._band_number][0]))
             header["key"], header["bandwidth"], header[
                 "interface"] = self._dada_key, self.bandwidth, INTERFACE[self.numa_number]
