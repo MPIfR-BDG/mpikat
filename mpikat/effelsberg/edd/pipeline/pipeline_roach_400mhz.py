@@ -1121,7 +1121,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         os.chdir(in_path)
         log.debug("line1089")
         if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
-            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
+            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -x 1024 -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
                 nchan="-F {}:D".format(self.nchannels),
@@ -1130,11 +1130,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 predictor="/tmp/t2pred.dat",
                 parfile="/tmp/epta/{}.par".format(self.source_name[1:]),
                 cpus=cpu_numbers,
-                cuda_number="1,1,1,1",
-                #cuda_number=cuda_number,
+                #cuda_number="1,",
+                cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
         elif parse_tag(self.source_name) == "R":
-            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
+            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -x 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
                 # cmd = "numactl -m {numa} dspsr -L 10 -t 8 -c 1.0 -D 0.0 -r
                 # -minram 1024 -Lmin 9 -f 1200 -fft-bench {nchan}
                 # {keyfile}".format(
@@ -1167,7 +1167,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         log.debug("line1134")
 
-        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge -p 3 --log_level=info".format(
+        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge -p 4 --log_level=info".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][1])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDRoach")
