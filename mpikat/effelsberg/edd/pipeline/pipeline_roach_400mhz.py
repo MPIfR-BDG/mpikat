@@ -961,15 +961,24 @@ class EddPulsarPipeline(AsyncDeviceServer):
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
         tstr = Time.now().isot.replace(":", "-")
+        tdate = tstr.split("T")[0]
         log.debug("line932")
         ####################################################
         #SETTING UP THE INPUT AND SCRUNCH DATA DIRECTORIES #
         ####################################################
         try:
-            in_path = os.path.join("/media/scratch/jason/dspsr_output/", self.source_name,
+            in_path = os.path.join("/media/scratch/jason/dspsr_output/", tdate, self.source_name,
                                    str(self.frequency_mhz), tstr, "raw_data")
             out_path = os.path.join(
-                "/media/scratch/jason/dspsr_output/", self.source_name, str(self.frequency_mhz), tstr, "combined_data")
+                "/media/scratch/jason/dspsr_output/", tdate, self.source_name, str(self.frequency_mhz), tstr, "combined_data")
+
+
+            #in_path = os.path.join("/media/scratch/jason/dspsr_output/", self.source_name,
+            #                       str(self.frequency_mhz), , "raw_data")
+            #out_path = os.path.join(
+            #    "/media/scratch/jason/dspsr_output/", self.source_name, str(self.frequency_mhz), tstr, "combined_data")
+
+
             self.out_path = out_path
             log.debug("Creating directories")
             cmd = "mkdir -p {}".format(in_path)
