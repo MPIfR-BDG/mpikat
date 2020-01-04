@@ -208,16 +208,26 @@ class EddCommander(AsyncDeviceServer):
             self.sensor_update)
         self._status_server.new_sensor_callbacks.add(
             self.new_sensor)
-        self._edd_pipeline_focus = KATCPClientResource(dict(
-            name='edd_pipeline-client',
+        self._edd00_numa0 = KATCPClientResource(dict(
+            name='_edd00_numa0-client',
             address=("134.104.70.66", 5000),
             controlled=True))
-        self._edd_pipeline_focus.start()
-        self._edd_pipeline_faraday = KATCPClientResource(dict(
-            name='edd_pipeline-client',
+        self._edd00_numa0.start()
+        self._edd00_numa1 = KATCPClientResource(dict(
+            name='_edd00_numa1-client',
             address=("134.104.70.66", 5001),
             controlled=True))
-        self._edd_pipeline_faraday.start()
+        self._edd00_numa1.start()
+        self._edd01_numa0 = KATCPClientResource(dict(
+            name='_edd01_numa0-client',
+            address=("134.104.70.67", 6000),
+            controlled=True))
+        self._edd01_numa0.start()
+        self._edd01_numa1 = KATCPClientResource(dict(
+            name='_edd01_numa1-client',
+            address=("134.104.70.67", 5001),
+            controlled=True))
+        self._edd01_numa1.start()
         self.first_true = True
         self.last_value = False
 
@@ -227,7 +237,7 @@ class EddCommander(AsyncDeviceServer):
         self.test_object.set_value(str(sensor_value[1]))
         self._observing = self.get_sensor("observing")
         self._source = self.get_sensor("source_name")
-        source_name_split = self._source.value().split("_")
+        #source_name_split = self._source.value().split("_")
         #log.debug("sensor_value[0] : {}".format(sensor_value[0]))
         #log.debug("object: {}".format(self._source))
         #log.debug("object: {}".format(self._observing))
@@ -236,23 +246,29 @@ class EddCommander(AsyncDeviceServer):
             #log.debug("source_name = {}".format(self._source.value()))
             if bool(self.last_value == False) & bool(self.first_true == True) & bool(self._observing.value() == 'True'):
                 log.debug("observing  = {}".format((self._observing.value() == 'True')))
-                log.debug("source_name = {}".format(source_name_split[0]))
+                log.debug("source_name = {}".format(self._source.value()))
                 log.debug("Should send a start command to the pipeline with source name : {}".format(
-                    self._source.value().split("_")[0]))
-                json_string = json.dumps({"source-name": "{}".format(self._source.value().split("_")[0]), "nchannels": 2048, "nbins": 1024, "ra": 123.4, "dec": -20.1, "band":9})
+                    self._source.value()))
+                json_string = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 2048, "nbins": 1024, "ra": 123.4, "dec": -20.1, "band":0})
+                json_string_1mc = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 2048, "nbins": 1024, "ra": 123.4, "dec": -20.1, "band":5})
                 log.debug(json_string)
+                log.debug(json_string_1mc)
                 self.first_true = False
                 self.last_value = True
-                self._edd_pipeline_focus.req.start(json_string)
                 time.sleep(5)
-                self._edd_pipeline_faraday.req.start(json_string)
+                self._edd00_numa0.req.start(json_string)
+                self._edd00_numa1.req.start(json_string)
+                self._edd01_numa0.req.start(json_string)
+                self._edd01_numa1.req.start(json_string_1mc)
 
             elif bool(self._observing.value() == 'False') & bool(self.last_value == True):
                 log.debug("Should send a stop to the pipeline")
                 self.first_true = True
                 self.last_value = False
-                self._edd_pipeline_focus.req.stop()
-                self._edd_pipeline_faraday.req.stop()
+                self._edd00_numa0.req.stop()
+                self._edd00_numa1.req.stop()
+                self._edd01_numa0.req.stop()
+                self._edd01_numa0.req.stop()
 
 
     def new_sensor(self, sensor_name, callback):
