@@ -79,7 +79,7 @@ IDX1_MODULO 3200000000
 
 # The second index item distinguish between both polarizations
 IDX2_ITEM   2
-IDX2_LIST 0:8:8
+IDX2_LIST {{idx2_list}}
 #IDX2_LIST   0,1
 #IDX2_MASK   0x1
 # end of header
@@ -100,8 +100,9 @@ DADA_DEFAULTS = {
     "instrument": "EDD",
     "receiver_name": "lband",
     "frequency_mhz": 1400.4,
-    "bandwidth": 800,
-    "tsamp": 0.000625,
+    "bandwidth": 200,
+    "tsamp": 0.08,
+    "idx2_list": "0x20,0x28",
     "nbit": 8,
     "ndim": 2,
     "npol": 2,

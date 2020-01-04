@@ -77,8 +77,8 @@ CONFIG = {
         "frequency_mhz": 1400.4,
         "receiver_name": "P217",
         "mc_source": "239.2.1.154",
-        "bandwidth": 325.0,
-        "tsamp": 0.000625,
+        "bandwidth": 200.0,
+        "tsamp": 0.08,
         "nbit": 8,
         "ndim": 2,
         "npol": 2,
@@ -95,19 +95,11 @@ NUMA_MODE = {
     0: ("0-9", "10", "11,12", "13"),
     1: ("18-20", "21", "22,23", "24")
 }
-INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15"}
+INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15", 2: "10.10.1.16", 3: "10.10.1.17" }
 
 BAND = {
-    0: (1291.25, "239.2.1.150"),
-    1: (1453.75, "239.2.1.151"),
-    2: (1616.25, "239.2.1.152"),
-    3: (1778.75, "239.2.1.153"),
-    4: (1941.25, "239.2.1.154"),
-    5: (2103.75, "239.2.1.155"),
-    6: (2266.25, "239.2.1.156"),
-    7: (2428.75, "239.2.1.157"),
-    8: (1291.25, "239.2.1.151,239.2.1.152"),
-    9: (1372.5, "239.2.1.151,239.2.1.152")
+    0: (1300.0, "239.2.1.154,239.2.1.155", "0x20,0x28"),
+    1: (1400.0, "239.2.1.155,239.2.1.156", "0x28,0x30")
 }
 """
 Assuming the bottom of the 7 beams pulsa mode band is 1210
@@ -921,11 +913,14 @@ class EddPulsarPipeline(AsyncDeviceServer):
             # if self._source_config["band"]:
             self._band_number = self._source_config["band"]
             header["mc_source"] = BAND[self._band_number][1]
+            header["idx2_list"] = BAND[self._band_number][2]
             log.debug("self._band_number:{}".format(self._band_number))
             log.debug("frequency_mhz:{}".format(BAND[self._band_number][0]))
+            log.debug("mc_source:{}".format(BAND[self._band_number][1])) 
+            log.debug("idx2_list:{}".format(BAND[self._band_number][2]))
             header["frequency_mhz"] = BAND[self._band_number][0]
             self._central_freq.set_value(str(BAND[self._band_number][0]))
-            header["key"], header["bandwidth"], header["interface"] = self._dada_key, self.bandwidth, INTERFACE[self.numa_number]
+            header["key"], header["bandwidth"], header["interface"] = self._dada_key, self.bandwidth, INTERFACE[self._pipeline_config["interface"]]
             self.source_name, self.nchannels, self.nbins = self._source_config[
                 "source-name"], self._source_config["nchannels"], self._source_config["nbins"]
             self._source_name_sensor.set_value(self.source_name)
