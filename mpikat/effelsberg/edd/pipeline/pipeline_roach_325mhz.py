@@ -962,11 +962,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #SETTING UP THE INPUT AND SCRUNCH DATA DIRECTORIES #
         ####################################################
         try:
-         	in_path = os.path.join("/media/scratch/jason/dspsr_output/", tdate, self.source_name,
-                                   str(self.frequency_mhz), tstr, "raw_data")
+         	in_path = os.path.join("/media/scratch/jason/dspsr_output/", tdate, self.source_name, str(self.frequency_mhz), tstr, "raw_data")
          	log.debug(in_path)
-            out_path = os.path.join(
-                "/media/scratch/jason/dspsr_output/", tdate, self.source_name, str(self.frequency_mhz), tstr, "combined_data")
+            out_path = os.path.join("/media/scratch/jason/dspsr_output/", tdate, self.source_name, str(self.frequency_mhz), tstr, "combined_data")
             log.debug(out_path)
             self.out_path = out_path
             log.debug("Creating directories")
