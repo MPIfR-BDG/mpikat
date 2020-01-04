@@ -794,8 +794,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 yield self._digpack_client.set_predecimation_factor(self.config_dict["predecimation_factor"])
                 yield self._digpack_client.set_flipsignalspectrum(self.config_dict["flip_band"])
                 yield self._digpack_client.capture_start()                
-            yield self._digpack_client.synchronize()
-            
+            if self.config_dict["resynchronize_digpack"] == 1:
+                yield self._digpack_client.synchronize()
 
             self.sync_epoch = yield self._digpack_client.get_sync_time()
             log.debug("Sync epoch is {}".format(self.sync_epoch))
