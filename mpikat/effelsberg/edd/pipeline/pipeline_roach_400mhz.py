@@ -74,17 +74,17 @@ CONFIG = {
         "filesize": 32000000000,
         "telescope": "Effelsberg",
         "instrument": "EDD",
-        "frequency_mhz": 1300,
+        "frequency_mhz": 1200,
         "receiver_name": "P217",
-        "mc_source": "239.2.1.153+3",
-        "bandwidth": 400.0,
+        "mc_source": "239.2.1.153+2",
+        "bandwidth": 200.0,
         "tsamp": 0.08,
         "nbit": 8,
         "ndim": 2,
         "npol": 2,
-        "nchan": 32,
+        "nchan": 16,
         "resolution": 1,
-        "idx2_list": "0x18,0x20,0x28,0x30",
+        "idx2_list": "0x18,0x20",
         "dsb": 1,
         "ra": "123",
         "dec": "-10"
@@ -1169,7 +1169,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         log.debug("line1134")
 
-        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge -p 4 --log_level=info".format(
+        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge -p 2 --log_level=info".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][1])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDRoach")
