@@ -268,7 +268,7 @@ class EddCommander(AsyncDeviceServer):
                 self._edd00_numa0.req.stop()
                 self._edd00_numa1.req.stop()
                 self._edd01_numa0.req.stop()
-                self._edd01_numa0.req.stop()
+                self._edd01_numa1.req.stop()
 
 
     def new_sensor(self, sensor_name, callback):
