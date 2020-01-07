@@ -255,7 +255,7 @@ class EddCommander(AsyncDeviceServer):
                 log.debug("Should send a start command to the pipeline with source name : {}".format(
                     self._source.value()))
                 json_string = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":0})
-                json_string_1mc = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 2048, "nbins": 1024, "ra": 123.4, "dec": -20.1, "band":5})
+                json_string_1mc = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":5})
                 log.debug(json_string)
                 log.debug(json_string_1mc)
                 self.first_true = False
