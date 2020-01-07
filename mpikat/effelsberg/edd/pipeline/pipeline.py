@@ -1009,6 +1009,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 try:
                     os.kill(self.tempo2_pid, 0)
                     log.debug("Tempo2 still running")
+                    time.sleep(1)
                 except OSError:
                     break
 
