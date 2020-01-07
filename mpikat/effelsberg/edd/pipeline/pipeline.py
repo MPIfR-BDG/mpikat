@@ -999,11 +999,20 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 200, float(self._pipeline_config["central_freq"]) + 200)
             log.debug("Command to run: {}".format(cmd))
             self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
+            self.tempo2_pid = self.tempo2.pid
             self.tempo2.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self.tempo2.stderr_callbacks.add(
                 self._handle_execution_stderr)
-            time.sleep(7)
+            
+            while True:
+                try:
+                    os.kill(self.tempo2_pid, 0):
+                    log.debug("Tempo2 still running")
+                except OSError:
+                    break
+
+
 
             attempts = 0
             retries = 5
