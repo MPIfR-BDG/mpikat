@@ -169,8 +169,8 @@ class EddDummyStatusServer(AsyncDeviceServer):
     @return_reply()
     def request_set_source(self, req, observing, source_name, ra, dec):
         """Add two numbers"""
-        self._source.set_value(str(ra))
-        self._source.set_value(str(dec))
+        self._ra.set_value(str(ra))
+        self._dec.set_value(str(dec))
         self._source.set_value(str(source_name))
         self._observing.set_value(str(observing))
         req.reply("ok")
