@@ -880,6 +880,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             header = self._config["dada_header_params"]
             header["ra"] = self._source_config["ra"]
             header["dec"] = self._source_config["dec"]
+            header['mode'] = self._source_config['mode']
             header["key"] = self._dada_key
             header["mc_source"] = self._pipeline_config[
                 "mc_source"]
@@ -914,6 +915,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         # except Exception as error:
         #    raise EddPulsarPipelineError(str(error))
         header["source_name"] = self.source_name
+
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
         tstr = Time.now().isot.replace(":", "-")
