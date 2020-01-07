@@ -995,8 +995,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self.pulsar_flag = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))
         log.debug("{}".format((parse_tag(self.source_name) == "default") & self.pulsar_flag))
         if (parse_tag(self.source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:])):
-            cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 12 2 3599.999999999"'.format(
-                self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 1, float(self._pipeline_config["central_freq"]) + 1)
+            cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 24 12 3599.999999999"'.format(
+                self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 200, float(self._pipeline_config["central_freq"]) + 200)
             log.debug("Command to run: {}".format(cmd))
             self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
             self.tempo2.stdout_callbacks.add(
