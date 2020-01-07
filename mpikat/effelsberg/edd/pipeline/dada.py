@@ -30,7 +30,7 @@ OBS_OVERLAP  0                   # bytes by which neighbouring files overlap
 SOURCE       {{source_name}}               # name of the astronomical source
 RA           {{ra}}               # Right Ascension of the source
 DEC          {{dec}}               # Declination of the source
-
+MODE {{mode}}                      # Observation type
 # description of the instrument
 TELESCOPE    {{telescope}}       # telescope name
 INSTRUMENT   {{instrument}}              # instrument name
@@ -97,6 +97,7 @@ DADA_DEFAULTS = {
     "dec": "00:00:00.00",
     "telescope": "Effelsberg",
     "instrument": "EDD",
+    "mode": "PSR"
     "receiver_name": "lband",
     "frequency_mhz": 1400.4,
     "bandwidth": 800,
