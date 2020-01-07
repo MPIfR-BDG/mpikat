@@ -146,8 +146,8 @@ class EddDummyStatusServer(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._observing)
         self._source = Sensor.string(
-            "source",
-            description="source",
+            "source_name",
+            description="source_name",
             default="N/A",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._source)
