@@ -886,6 +886,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 "mc_source"]
             header["frequency_mhz"] = self.frequency_mhz
             header["bandwidth"] = self.bandwidth
+            header["mc_streaming_port"] = self.config_dict["mc_streaming_port"]
             header["interface"] = INTERFACE[self._pipeline_config["interface"]]
             self.source_name = self._source_config[
                 "source-name"]

@@ -60,7 +60,7 @@ NGROUPS_DATA  4096
 NGROUPS_TEMP  2048
 NHEAPS_SWITCH 1024
 MCAST_SOURCES {{mc_source}}   # 239.2.1.150 (+7)
-PORT         7148
+PORT         {{mc_streaming_port}}
 UDP_IF       unset
 IBV_IF       {{interface}}  # This is the ethernet interface on which to capture
 IBV_VECTOR   -1          # IBV forced into polling mode
@@ -102,6 +102,7 @@ DADA_DEFAULTS = {
     "frequency_mhz": 1400.4,
     "bandwidth": 800,
     "tsamp": 0.000625,
+    "mc_streaming_port" : 7148,
     "nbit": 8,
     "ndim": 1,
     "npol": 2,
