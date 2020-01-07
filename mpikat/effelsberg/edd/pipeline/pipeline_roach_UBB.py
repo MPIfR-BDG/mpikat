@@ -27,7 +27,7 @@ import time
 from astropy.time import Time
 from subprocess import PIPE, Popen
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
-from mpikat.effelsberg.edd.pipeline.dada_roach_400mhz import render_dada_header, make_dada_key_string
+from mpikat.effelsberg.edd.pipeline.dada_roach_UBB import render_dada_header, make_dada_key_string
 import shlex
 import threading
 import base64
@@ -75,16 +75,16 @@ CONFIG = {
         "telescope": "Effelsberg",
         "instrument": "EDD",
         "frequency_mhz": 1300,
-        "receiver_name": "P217",
+        "receiver_name": "UBB",
         "mc_source": "239.2.1.153+3",
-        "bandwidth": 400.0,
+        "bandwidth": 1137.5,
         "tsamp": 0.08,
         "nbit": 8,
         "ndim": 2,
         "npol": 2,
-        "nchan": 32,
+        "nchan": 56,
         "resolution": 1,
-        "idx2_list": "0x18,0x20,0x28,0x30",
+        "idx2_list": "0x8,0x10,0x18,0x20,0x28,0x30,0x38",
         "dsb": 1,
         "ra": "123",
         "dec": "-10"
@@ -97,6 +97,17 @@ NUMA_MODE = {
     1: ("18-23", "24", "25,26,27,28,29", "30")
 }
 INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15", 2: "10.10.1.16", 3: "10.10.1.17" }
+
+#UBB BAND EDGE
+#1290.0
+#1452.5
+#1615.0
+#1777.5
+#1940.0
+#2102.5
+#2265.0
+#2427.5
+#2590.0
 
 BAND = {
     0: (1291.25, "239.2.1.150"),
@@ -1042,15 +1053,23 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug("{}".format(
             (parse_tag(self.source_name) == "default") & self.pulsar_flag))
         if (parse_tag(self.source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:])):
-            cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 24 12 3599.999999999"'.format(
-                self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(self.frequency_mhz) - 200.0, float(self.frequency_mhz) + 200.0)
+            cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 24 2 3599.999999999"'.format(
+                self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(self.frequency_mhz) - 650.0, float(self.frequency_mhz) + 650.0)
             log.debug("Command to run: {}".format(cmd))
             self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
+            self.tempo2_pid = self.tempo2.pid
             self.tempo2.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self.tempo2.stderr_callbacks.add(
                 self._handle_execution_stderr)
-            time.sleep(2)
+            
+            while True:
+                try:
+                    os.kill(self.tempo2_pid, 0)
+                    log.debug("Tempo2 still running")
+                    time.sleep(1)
+                except OSError:
+                    break
 
             attempts = 0
             retries = 5
@@ -1171,7 +1190,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         log.debug("line1134")
 
-        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge -p 4 --log_level=info".format(
+        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge -p 7 --log_level=info".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][1])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDRoach")
