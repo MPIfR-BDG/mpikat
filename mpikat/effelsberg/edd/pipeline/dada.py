@@ -97,7 +97,7 @@ DADA_DEFAULTS = {
     "dec": "00:00:00.00",
     "telescope": "Effelsberg",
     "instrument": "EDD",
-    "mode": "PSR"
+    "mode": "PSR",
     "receiver_name": "lband",
     "frequency_mhz": 1400.4,
     "bandwidth": 800,
