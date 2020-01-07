@@ -140,7 +140,7 @@ class EddDummyStatusServer(AsyncDeviceServer):
         self.add_sensor(self._pipeline_sensor_status)
 
         self._observing = Sensor.string(
-            "_observing",
+            "observing",
             description="_observing",
             default="N/A",
             initial_status=Sensor.UNKNOWN)
