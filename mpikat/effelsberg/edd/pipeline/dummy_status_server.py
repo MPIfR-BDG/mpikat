@@ -146,19 +146,33 @@ class EddDummyStatusServer(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._observing)
         self._source = Sensor.string(
-            "_source",
-            description="_source",
+            "source",
+            description="source",
             default="N/A",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._source)
+        self._ra = Sensor.string(
+            "ra",
+            description="ra",
+            default="N/A",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._ra)
+        self._dec = Sensor.string(
+            "dec",
+            description="dec",
+            default="N/A",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._dec)
 
     @coroutine
-    @request(Str(), Str())
+    @request(Str(), Str(), Str(), Str())
     @return_reply()
-    def request_set_source(self, req, observing, source_name):
+    def request_set_source(self, req, observing, source_name, ra, dec):
         """Add two numbers"""
-        self._observing.set_value(str(observing))
+        self._source.set_value(str(ra))
+        self._source.set_value(str(dec))
         self._source.set_value(str(source_name))
+        self._observing.set_value(str(observing))
         req.reply("ok")
         raise AsyncReply
 
