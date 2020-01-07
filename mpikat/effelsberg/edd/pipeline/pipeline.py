@@ -878,10 +878,18 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 "central_freq"], self._pipeline_config["bandwidth"]
             self._central_freq.set_value(str(self.frequency_mhz))
             header = self._config["dada_header_params"]
-            header["key"], header["mc_source"], header["frequency_mhz"], header["bandwidth"], header["interface"] = self._dada_key, self._pipeline_config[
-                "mc_source"], self.frequency_mhz, self.bandwidth, INTERFACE[self._pipeline_config["interface"]]
-            self.source_name, self.nchannels, self.nbins = self._source_config[
-                "source-name"], self._source_config["nchannels"], self._source_config["nbins"]
+            header["ra"] = self._source_config["ra"]
+            header["dec"] = self._source_config["dec"]
+            header["key"] = self._dada_key
+            header["mc_source"] = self._pipeline_config[
+                "mc_source"]
+            header["frequency_mhz"] = self.frequency_mhz
+            header["bandwidth"] = self.bandwidth
+            header["interface"] = INTERFACE[self._pipeline_config["interface"]]
+            self.source_name = self._source_config[
+                "source-name"]
+            self.nchannels = self._source_config["nchannels"]
+            self.nbins = self._source_config["nbins"]
             self._source_name_sensor.set_value(self.source_name)
             self._nchannels.set_value(self.nchannels)
             self._nbins.set_value(self.nbins)
@@ -891,8 +899,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.error(msg)
             raise EddPulsarPipelineKeyError(msg)
 
-        #cpu_numbers = self._pipeline_config["cpus"]
-        #cuda_number = self._pipeline_config["cuda"]
         cpu_numbers = NUMA_MODE[self.numa_number][2]
         cuda_number = self.numa_number
         try:

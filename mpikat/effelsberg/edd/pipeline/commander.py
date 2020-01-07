@@ -202,7 +202,8 @@ class EddCommander(AsyncDeviceServer):
         self._source_config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
-        self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
+        #self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
+        self._status_server = KATCPToIGUIConverter("134.104.70.66", 6000)        
         self._status_server.start()
         self._status_server.sensor_callbacks.add(
             self.sensor_update)
@@ -237,6 +238,8 @@ class EddCommander(AsyncDeviceServer):
         self.test_object.set_value(str(sensor_value[1]))
         self._observing = self.get_sensor("observing")
         self._source = self.get_sensor("source_name")
+        self._ra = self.get_sensor("ra")
+        self._dec = self.get_sensor("dec")
         #source_name_split = self._source.value().split("_")
         #log.debug("sensor_value[0] : {}".format(sensor_value[0]))
         #log.debug("object: {}".format(self._source))
@@ -247,28 +250,30 @@ class EddCommander(AsyncDeviceServer):
             if bool(self.last_value == False) & bool(self.first_true == True) & bool(self._observing.value() == 'True'):
                 log.debug("observing  = {}".format((self._observing.value() == 'True')))
                 log.debug("source_name = {}".format(self._source.value()))
+                log.debug("source ra = {}".format(self._ra.value()))
+                log.debug("source dec = {}".format(self._dec.value()))
                 log.debug("Should send a start command to the pipeline with source name : {}".format(
                     self._source.value()))
-                json_string = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 2048, "nbins": 1024, "ra": 123.4, "dec": -20.1, "band":0})
+                json_string = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":0})
                 json_string_1mc = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 2048, "nbins": 1024, "ra": 123.4, "dec": -20.1, "band":5})
                 log.debug(json_string)
                 log.debug(json_string_1mc)
                 self.first_true = False
                 self.last_value = True
-                time.sleep(5)
+                #time.sleep(5)
                 self._edd00_numa0.req.start(json_string)
-                self._edd00_numa1.req.start(json_string)
-                self._edd01_numa0.req.start(json_string)
-                self._edd01_numa1.req.start(json_string_1mc)
+                #self._edd00_numa1.req.start(json_string)
+                #self._edd01_numa0.req.start(json_string)
+                #self._edd01_numa1.req.start(json_string_1mc)
 
             elif bool(self._observing.value() == 'False') & bool(self.last_value == True):
                 log.debug("Should send a stop to the pipeline")
                 self.first_true = True
                 self.last_value = False
                 self._edd00_numa0.req.stop()
-                self._edd00_numa1.req.stop()
-                self._edd01_numa0.req.stop()
-                self._edd01_numa1.req.stop()
+                #self._edd00_numa1.req.stop()
+                #self._edd01_numa0.req.stop()
+                #self._edd01_numa1.req.stop()
 
 
     def new_sensor(self, sensor_name, callback):
