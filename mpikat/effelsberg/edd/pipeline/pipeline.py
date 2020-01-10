@@ -79,7 +79,7 @@ CONFIG = {
         "mc_source": "239.2.1.154",
         "bandwidth": 800,
         "tsamp": 0.000625,
-        "mode" : "PSR"
+        "mode" : "PSR",
         "nbit": 8,
         "ndim": 1,
         "npol": 2,
