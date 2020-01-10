@@ -260,9 +260,9 @@ class EddCommander(AsyncDeviceServer):
                 log.debug(json_string_1mc)
                 self.first_true = False
                 self.last_value = True
-                #time.sleep(5)
+                time.sleep(2)
                 self._edd00_numa0.req.start(json_string)
-                #self._edd00_numa1.req.start(json_string)
+                self._edd00_numa1.req.start(json_string)
                 #self._edd01_numa0.req.start(json_string)
                 #self._edd01_numa1.req.start(json_string_1mc)
 
@@ -271,7 +271,7 @@ class EddCommander(AsyncDeviceServer):
                 self.first_true = True
                 self.last_value = False
                 self._edd00_numa0.req.stop()
-                #self._edd00_numa1.req.stop()
+                self._edd00_numa1.req.stop()
                 #self._edd01_numa0.req.stop()
                 #self._edd01_numa1.req.stop()
 
