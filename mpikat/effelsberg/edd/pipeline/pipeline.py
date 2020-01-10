@@ -1056,7 +1056,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         os.chdir(in_path)
 
-        if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
+        if (parse_tag(self.source_name) == "default") and self.pulsar_flag:
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 1024 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
@@ -1069,7 +1069,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
 
-        elif (parse_tag(self.source_name) == "R") & self.pulsar_flag:
+        elif (parse_tag(self.source_name) == "R") and self.pulsar_flag:
             cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
@@ -1080,7 +1080,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 keyfile=dada_key_file.name)
 
         elif (parse_tag(self.source_name) == "R") and (not self.pulsar_flag):
-            if (self.source_name[:2] == "3C" & self.source_name[-3:] == "O_R") or (self.source_name[:3] == "NGC" & self.source_name[-4:]=="ON_R"):
+            if (self.source_name[:2] == "3C" and self.source_name[-3:] == "O_R") or (self.source_name[:3] == "NGC" and self.source_name[-4:]=="ON_R"):
                 cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-On -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
                     numa=self.numa_number,
                     args=self._config["dspsr_params"]["args"],
@@ -1089,7 +1089,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     cpus=cpu_numbers,
                     cuda_number=cuda_number,
                     keyfile=dada_key_file.name)
-            elif (self.source_name[:3] == "NGC" & self.source_name[-5:] == "OFF_R") or (self.source_name[:2] == "3C" & self.source_name[-3:] == "N_R") or (self.source_name[:2] == "3C" & self.source_name[-3:] == "S_R"):
+            elif (self.source_name[:3] == "NGC" and self.source_name[-5:] == "OFF_R") or (self.source_name[:2] == "3C" and self.source_name[-3:] == "N_R") or (self.source_name[:2] == "3C" and self.source_name[-3:] == "S_R"):
                 cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-Off -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
                     numa=self.numa_number,
                     args=self._config["dspsr_params"]["args"],
