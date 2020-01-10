@@ -54,7 +54,7 @@ ORDER        TFP                       # Here we are only capturing one polarisa
 SYNC_TIME    {{sync_time}}
 CLOCK_SAMPLE  {{sample_clock}}
 #PACKET_SIZE 9200
-#NTHREADS 32
+NTHREADS 32
 #NHEAPS 256
 #NGROUPS_DATA  4096
 #NGROUPS_TEMP  2048
