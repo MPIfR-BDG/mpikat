@@ -912,6 +912,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
             header["tsamp"] = 1 / (2.0 * self.bandwidth)
         except:
             pass
+        self.pulsar_flag = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))
+        if (parse_tag(self.source_name) == "default") and (not self.pulsar_flag):
+            pass
+        else:
+            error = "source is not pulsar or calibrator"
+            raise EddPulsarPipelineError(error)
+
         ########NEED TO PUT IN THE LOGIC FOR _R here#############
         # try:
         #    self.source_name = self.source_name.split("_")[0]
@@ -961,7 +968,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #CREATING THE PREDICTOR WITH TEMPO2                #
         ####################################################
-        self.pulsar_flag = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))
+
 
         self.pulsar_flag_with_R = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:-2]))
         """
