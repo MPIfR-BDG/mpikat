@@ -969,10 +969,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
             header["mode"] = "Pulsar"
         elif self.pulsar_flag_with_R:
             header["mode"] = "CAL"
-        else:
+        elif (not self.pulsar_flag) and (not self.pulsar_flag_with_R):
             header["mode"] = "FluxCal"
         else:
-            log.debug("Not in any mode")
+            error = "source is unknown"
+            raise EddPulsarPipelineError(error)
         log.debug("Observating mode = {}".format(header["mode"]))
         log.debug("{}".format(
             (parse_tag(self.source_name) == "default") & self.pulsar_flag))
