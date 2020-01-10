@@ -79,6 +79,7 @@ CONFIG = {
         "mc_source": "239.2.1.154",
         "bandwidth": 800,
         "tsamp": 0.000625,
+        "mode" : "PSR"
         "nbit": 8,
         "ndim": 1,
         "npol": 2,
@@ -880,7 +881,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             header = self._config["dada_header_params"]
             header["ra"] = self._source_config["ra"]
             header["dec"] = self._source_config["dec"]
-            header['mode'] = self._source_config['mode']
+            #header['mode'] = self._source_config['mode']
             header["key"] = self._dada_key
             header["mc_source"] = self._pipeline_config[
                 "mc_source"]
