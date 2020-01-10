@@ -1046,6 +1046,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(self.frequency_mhz) - 200.0, float(self.frequency_mhz) + 200.0)
             log.debug("Command to run: {}".format(cmd))
             self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
+            self.tempo2_pid = self.tempo2.pid
             self.tempo2.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self.tempo2.stderr_callbacks.add(
