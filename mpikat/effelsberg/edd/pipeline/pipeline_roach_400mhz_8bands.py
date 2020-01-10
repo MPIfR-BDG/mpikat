@@ -76,7 +76,7 @@ CONFIG = {
         "instrument": "EDD",
         "frequency_mhz": 1408.875,
         "receiver_name": "P217",
-        "mc_source": "239.2.1.153+3",
+        "mc_source": "239.2.1.150+7",
         "bandwidth": 400.0,
         "tsamp": 0.16,
         "nbit": 8,
