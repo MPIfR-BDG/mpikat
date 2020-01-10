@@ -950,8 +950,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             header["sync_time"] = self.sync_epoch
             header["sample_clock"] = float(
                 self.config_dict["sampling_rate"]) / float(self.config_dict["predecimation_factor"])
-            #header["tsamp"] = 16 * 1 / (self.bandwidth)
-            #log.debug("TSAMP = {}".format(header["tsamp"]))
+            header["tsamp"] = 64 * 1 / (self.bandwidth)
+            log.debug("TSAMP = {}".format(header["tsamp"]))
         except:
             pass
         self.pulsar_flag = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))
