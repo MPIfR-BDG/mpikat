@@ -1055,7 +1055,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING DSPSR                                    #
         ####################################################
         os.chdir(in_path)
-
+        log.debug("pulsar_flag = {}".format(self.pulsar_flag))
+        log.debug("source_name = {}".format(self.source_name))
+        
         if (parse_tag(self.source_name) == "default") and self.pulsar_flag:
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 1024 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
