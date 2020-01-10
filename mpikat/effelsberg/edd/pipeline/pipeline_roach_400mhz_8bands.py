@@ -1152,7 +1152,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
                 #nchan="-F {}:D".format(self.nchannels),
-                nchan="-F 1024:D",
+                nchan="-F {}:D".format(self.nchannels),
                 name=self.source_name,
                 #nbin="-b {}".format(self.nbins),
                 cpus=cpu_numbers,
