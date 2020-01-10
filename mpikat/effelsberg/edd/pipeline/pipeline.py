@@ -964,7 +964,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self.pulsar_flag = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))
 
         self.pulsar_flag_with_R = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:-2]))
-
+        """
         if self.pulsar_flag:
             header["mode"] = "Pulsar"
         elif self.pulsar_flag_with_R:
@@ -975,6 +975,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             error = "source is unknown"
             raise EddPulsarPipelineError(error)
         log.debug("Observating mode = {}".format(header["mode"]))
+        """
         log.debug("{}".format(
             (parse_tag(self.source_name) == "default") & self.pulsar_flag))
         if (parse_tag(self.source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:])):
@@ -1075,7 +1076,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
 
-        elif self.pulsar_flag_with_R:
+        elif parse_tag(self.source_name) == "R":
             cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
@@ -1084,7 +1085,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
-
+        """
         elif (parse_tag(self.source_name) == "R") and (not self.pulsar_flag) and (not self.pulsar_flag_with_R):
             if (self.source_name[:2] == "3C" and self.source_name[-3:] == "O_R") or (self.source_name[:3] == "NGC" and self.source_name[-4:]=="ON_R"):
                 cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-On -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
@@ -1104,6 +1105,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     cpus=cpu_numbers,
                     cuda_number=cuda_number,
                     keyfile=dada_key_file.name)
+        """            
         else:
             error = "source is unknown"
             raise EddPulsarPipelineError(error)
