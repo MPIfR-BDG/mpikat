@@ -933,6 +933,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
             #log.debug("TSAMP = {}".format(header["tsamp"]))
         except:
             pass
+        self.pulsar_flag = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))
+        if ((parse_tag(self.source_name) == "default") or (parse_tag(self.source_name) != "R")) and (not self.pulsar_flag):
+            error = "source is not pulsar or calibrator"
+            raise EddPulsarPipelineError(error)
         ########NEED TO PUT IN THE LOGIC FOR _R here#############
         # try:
         #    self.source_name = self.source_name.split("_")[0]
@@ -1016,13 +1020,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #CREATING THE PREDICTOR WITH TEMPO2                #
         ####################################################
-        self.pulsar_flag = is_accessible(
-            '/tmp/epta/{}.par'.format(self.source_name[1:]))
         log.debug("{}".format(
             (parse_tag(self.source_name) == "default") & self.pulsar_flag))
         if (parse_tag(self.source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:])):
             cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 24 2 3599.999999999"'.format(
-                self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(self.frequency_mhz) - 650.0, float(self.frequency_mhz) + 650.0)
+                self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(self.frequency_mhz) - 325.0, float(self.frequency_mhz) + 325.0)
             log.debug("Command to run: {}".format(cmd))
             self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
             self.tempo2_pid = self.tempo2.pid
@@ -1131,8 +1133,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 # {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
-                #nchan="-F {}:D".format(self.nchannels),
-                nchan="-F 1024:D",
+                nchan="-F {}:D".format(self.nchannels),
+                #nchan="-F 1024:D",
                 name=self.source_name,
                 #nbin="-b {}".format(self.nbins),
                 cpus=cpu_numbers,
@@ -1158,7 +1160,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         log.debug("line1134")
 
-        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge -p 7 --log_level=info".format(
+        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge -p 4 --log_level=info".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][1])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDRoach")
