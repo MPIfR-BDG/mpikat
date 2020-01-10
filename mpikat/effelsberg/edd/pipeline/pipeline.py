@@ -968,7 +968,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         if self.pulsar_flag:
             header["mode"] = "Pulsar"
         elif self.pulsar_flag_with_R:
-            header["mode"] = "CAL"
+            header["mode"] = "Pulsar"
         elif (not self.pulsar_flag) and (not self.pulsar_flag_with_R):
             header["mode"] = "FluxCal"
         else:
