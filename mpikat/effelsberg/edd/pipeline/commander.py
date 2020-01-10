@@ -218,6 +218,7 @@ class EddCommander(AsyncDeviceServer):
             name='_edd00_numa1-client',
             address=("134.104.70.66", 5001),
             controlled=True))
+        """
         self._edd00_numa1.start()
         self._edd01_numa0 = KATCPClientResource(dict(
             name='_edd01_numa0-client',
@@ -229,6 +230,7 @@ class EddCommander(AsyncDeviceServer):
             address=("134.104.70.67", 5001),
             controlled=True))
         self._edd01_numa1.start()
+        """
         self.first_true = True
         self.last_value = False
 
@@ -260,7 +262,7 @@ class EddCommander(AsyncDeviceServer):
                 log.debug(json_string_1mc)
                 self.first_true = False
                 self.last_value = True
-                time.sleep(2)
+                time.sleep(5)
                 self._edd00_numa0.req.start(json_string)
                 self._edd00_numa1.req.start(json_string)
                 #self._edd01_numa0.req.start(json_string)
@@ -338,8 +340,8 @@ class EddCommander(AsyncDeviceServer):
         #    log.info("Pipeline still running, stopping pipeline")
         # yield self.deconfigure()
         super(EddCommander, self).stop()
-        #yield self._edd_pipeline.stop()
-        #yield self._status_server.stop()
+        yield self._edd_pipeline.stop()
+        yield self._status_server.stop()
 
     def setup_sensors(self):
         """
