@@ -96,7 +96,8 @@ NUMA_MODE = {
     0: ("0-9", "10", "11,12,13,14"),
     1: ("18-28", "29", "30,31,32,33")
 }
-INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15", 2: "10.10.1.16", 3: "10.10.1.17" }
+INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15",
+             2: "10.10.1.16", 3: "10.10.1.17"}
 
 """
 Central frequency of each band should be with BW of 162.5
@@ -955,47 +956,23 @@ class EddPulsarPipeline(AsyncDeviceServer):
             yield self.stop_pipeline()
             raise EddPulsarPipelineError(str(error))
 
-        ####################################################
-        #CREATING THE PARFILE WITH PSRCAT                  #
-        ####################################################
         os.chdir("/tmp/")
-        """
-        try:
-            
-            if parse_tag(self.source_name) == "default":
-                cmd = "psrcat -E {source_name}".format(
-                    source_name=self.source_name.split("_")[0])
-                log.debug("Command to run: {}".format(cmd))
-                self.psrcat = ExecuteCommand(cmd, outpath=None, resident=False)
-                self.psrcat.stdout_callbacks.add(
-                    self._save_capture_stdout)
-                self.psrcat.stderr_callbacks.add(
-                    self._handle_execution_stderr)
-            # os.chdir(in_path)
 
-        except Exception as error:
-            yield self.stop_pipeline()
-            raise EddPulsarPipelineError(str(error))
-        time.sleep(2)
-        
-        if parse_tag(self.source_name) == "default":
-            while True:
-                if is_accessible('/tmp/{}.par'.format(self.source_name[1:])):
-                    log.debug('/tmp/{}.par'.format(self.source_name)[1:])
-                    break
-            self.first_line = []
-            with open('/tmp/{}.par'.format(self.source_name)[1:]) as f:
-                self.first_line = f.readline()
-                if self.first_line.split(" ")[0] == "WARNING:":
-                    raise EddPulsarPipelineError(
-                        "ERROR: {}".format(self.first_line))
-        """
-        # time.sleep(3)
         ####################################################
         #CREATING THE PREDICTOR WITH TEMPO2                #
         ####################################################
         self.pulsar_flag = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))
-        log.debug("{}".format((parse_tag(self.source_name) == "default") & self.pulsar_flag))
+        if self.pulsar_flag:
+            header["mode"] = "Pulsar"
+        elif (parse_tag(self.source_name) == "R") & (self.pulsar_flag):
+            header["mode"] = "CAL"
+        elif (parse_tag(self.source_name) == "R") & (not self.pulsar_flag):
+            header["mode"] = "FluxCal"
+        else:
+            log.debug("Not in any mode")
+        log.debug("Observating mode = {}".format(header["mode"]))
+        log.debug("{}".format(
+            (parse_tag(self.source_name) == "default") & self.pulsar_flag))
         if (parse_tag(self.source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:])):
             cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 24 2 3599.999999999"'.format(
                 self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 1, Time.now().mjd + 1, float(self._pipeline_config["central_freq"]) - 200, float(self._pipeline_config["central_freq"]) + 200)
@@ -1006,7 +983,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._decode_capture_stdout)
             self.tempo2.stderr_callbacks.add(
                 self._handle_execution_stderr)
-            
+
             while True:
                 try:
                     os.kill(self.tempo2_pid, 0)
@@ -1014,8 +991,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     time.sleep(1)
                 except OSError:
                     break
-
-
 
             attempts = 0
             retries = 5
@@ -1076,17 +1051,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     break
                 else:
                     attempts += 1
-        # time.sleep(2)
-        # while True:
-        #    if is_accessible('{}'.format(dada_key_file.name)):
-        #        log.debug('{}'.format(dada_key_file.name))
-        #        break
-
         ####################################################
         #STARTING DSPSR                                    #
         ####################################################
         os.chdir(in_path)
-        
+
         if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 1024 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
@@ -1099,24 +1068,40 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
-        elif parse_tag(self.source_name) == "R":
+
+        elif (parse_tag(self.source_name) == "R") & self.pulsar_flag:
             cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
-                # cmd = "numactl -m {numa} dspsr -L 10 -t 8 -c 1.0 -D 0.0 -r
-                # -minram 1024 -Lmin 9 -f 1200 -fft-bench {nchan}
-                # {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
-                #nchan="-F {}:D".format(self.nchannels),
                 nchan="-F {}:D".format(self.nchannels),
                 name=self.source_name,
-                #nbin="-b {}".format(self.nbins),
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
+
+        elif (parse_tag(self.source_name) == "R") and (not self.pulsar_flag):
+            if (self.source_name[:2] == "3C" & self.source_name[-3:] == "O_R") or (self.source_name[:3] == "NGC" & self.source_name[-4:]=="ON_R"):
+                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-On -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
+                    numa=self.numa_number,
+                    args=self._config["dspsr_params"]["args"],
+                    nchan="-F {}:D".format(self.nchannels),
+                    name=self.source_name,
+                    cpus=cpu_numbers,
+                    cuda_number=cuda_number,
+                    keyfile=dada_key_file.name)
+            elif (self.source_name[:3] == "NGC" & self.source_name[-5:] == "OFF_R") or (self.source_name[:2] == "3C" & self.source_name[-3:] == "N_R") or (self.source_name[:2] == "3C" & self.source_name[-3:] == "S_R"):
+                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-Off -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
+                    numa=self.numa_number,
+                    args=self._config["dspsr_params"]["args"],
+                    nchan="-F {}:D".format(self.nchannels),
+                    name=self.source_name,
+                    cpus=cpu_numbers,
+                    cuda_number=cuda_number,
+                    keyfile=dada_key_file.name)
         else:
             error = "source is unknown"
             raise EddPulsarPipelineError(error)
-        
+
         #cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring DSPSR")
@@ -1247,7 +1232,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
             log.error(msg)
-            #self.stop_pipeline_with_mkrecv_crashed()
+            # self.stop_pipeline_with_mkrecv_crashed()
             raise EddPulsarPipelineError(msg)
         else:
             log.info("Pipeline Stopped {}".format(

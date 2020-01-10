@@ -31,6 +31,7 @@ SOURCE       {{source_name}}               # name of the astronomical source
 RA           {{ra}}               # Right Ascension of the source
 DEC          {{dec}}               # Declination of the source
 MODE {{mode}}                      # Observation type
+CALFREQ {{calfreq}}
 # description of the instrument
 TELESCOPE    {{telescope}}       # telescope name
 INSTRUMENT   {{instrument}}              # instrument name
@@ -98,6 +99,7 @@ DADA_DEFAULTS = {
     "telescope": "Effelsberg",
     "instrument": "EDD",
     "mode": "PSR",
+    "calfreq": 1.0,
     "receiver_name": "lband",
     "frequency_mhz": 1400.4,
     "bandwidth": 800,

@@ -76,15 +76,15 @@ CONFIG = {
         "instrument": "EDD",
         "frequency_mhz": 1300,
         "receiver_name": "UBB",
-        "mc_source": "239.2.1.153+3",
-        "bandwidth": 1137.5,
-        "tsamp": 0.08,
+        "mc_source": "239.2.1.150+3",
+        "bandwidth": 650.0,
+        "tsamp": 0.04923076923076923,
         "nbit": 8,
         "ndim": 2,
         "npol": 2,
-        "nchan": 56,
+        "nchan": 32,
         "resolution": 1,
-        "idx2_list": "0x8,0x10,0x18,0x20,0x28,0x30,0x38",
+        "idx2_list": "0,8,16,24",
         "dsb": 1,
         "ra": "123",
         "dec": "-10"
@@ -96,49 +96,25 @@ NUMA_MODE = {
     0: ("0-4", "5", "6,7,8,9", "10"),
     1: ("18-23", "24", "25,26,27,28,29", "30")
 }
-INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15", 2: "10.10.1.16", 3: "10.10.1.17" }
+INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15",
+             2: "10.10.1.16", 3: "10.10.1.17"}
 
-#UBB BAND EDGE
-#1290.0
-#1452.5
-#1615.0
-#1777.5
-#1940.0
-#2102.5
-#2265.0
-#2427.5
-#2590.0
+# UBB BAND EDGE
+# 1290.0
+# 1452.5
+# 1615.0
+# 1777.5
+# 1940.0
+# 2102.5
+# 2265.0
+# 2427.5
+# 2590.0
 
 BAND = {
-    0: (1291.25, "239.2.1.150"),
-    1: (1453.75, "239.2.1.151"),
-    2: (1616.25, "239.2.1.152"),
-    3: (1778.75, "239.2.1.153"),
-    4: (1941.25, "239.2.1.154"),
-    5: (2103.75, "239.2.1.155"),
-    6: (2266.25, "239.2.1.156"),
-    7: (2428.75, "239.2.1.157"),
-    8: (1291.25, "239.2.1.150,239.2.1.151"),
-    9: (1372.5, "239.2.1.150,239.2.1.151")
+    0: (1614.84375, "239.2.1.150+3", "0,8,16,24"),
+    1: (2264.84375, "239.2.1.154+3", "32,40,48,56")
 }
-"""
-Assuming the bottom of the 7 beams pulsa mode band is 1210
-In [3]: for i in range(8):
-   ...:     print 1210+i*162.5+(162.5/2)
-"""
-"""
-Central frequency of each band should be with BW of 162.5
-239.2.1.150 2528.90625
-239.2.1.151 2366.40625
-239.2.1.152 2203.9075
-239.2.1.153 2041.40625
-239.2.1.154 1878.90625
-239.2.1.155 1716.405
-239.2.1.156 1553.9075
-239.2.1.157 1391.40625
 
-
-"""
 
 sensors = {"ra": 123, "dec": -10, "source-name": "J1939+2134",
            "scannum": 0, "subscannum": 1}
@@ -262,15 +238,7 @@ class KATCPToIGUIConverter(object):
         log.debug("Sensors added since last update: {}".format(added))
         # for name in list(added):
         for name in ["source_name", "observing", "timestamp"]:
-            # if name == 'observing':
-            #log.debug("Setting sampling strategy and callbacks on sensor '{}'".format(name))
-            # strat3 = ('event-rate', 2.0, 3.0)              #event-rate doesn't work
-            # self.rc.set_sampling_strategy(name, strat3)    #KATCPSensorError:
-            # Error setting strategy
-            # not sure that auto means here
             self.rc.set_sampling_strategy(name, "auto")
-            #self.rc.set_sampling_strategy(name, ["period", (1)])
-        #self.rc.set_sampling_strategy(name, "event")
             self.rc.set_sensor_listener(name, self._sensor_updated)
             self.new_sensor = name
             #log.debug("Setting new sensor with name = {}".format(name))
@@ -815,7 +783,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 yield self._digpack_client.set_flipsignalspectrum(self.config_dict["flip_band"])
                 yield self._digpack_client.capture_start()
             if self.config_dict["resynchronize_digpack"] == 1:
-            	yield self._digpack_client.synchronize()
+                yield self._digpack_client.synchronize()
             self.sync_epoch = yield self._digpack_client.get_sync_time()
             log.debug("Sync epoch is {}".format(self.sync_epoch))
             yield self._digpack_client.stop()
@@ -878,7 +846,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._create_transpose_ring_buffer._process.wait()
             if self.config_dict["reconfigure_roach"] == 1:
                 for i in range(180):
-                    log.info("Sleeping for 180 seconds : {} seconds passed".format(i))
+                    log.info(
+                        "Sleeping for 180 seconds : {} seconds passed".format(i))
                     time.sleep(1)
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
@@ -924,22 +893,21 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._timer = Time.now()
             self._source_config = json.loads(config_json)
             log.info("Unpacked config: {}".format(self._source_config))
-            self.bandwidth = self._pipeline_config["bandwidth"]
             header = self._config["dada_header_params"]
-            self.frequency_mhz, self.bandwidth = self._pipeline_config[
-                "central_freq"], self._pipeline_config["bandwidth"]
-            self._central_freq.set_value(str(self.frequency_mhz))
-            # if self._source_config["band"]:
-            #self._band_number = self._source_config["band"]
-            #header["mc_source"] = BAND[self._band_number][1]
-            # log.debug("self._band_number:{}".format(self._band_number))
-            # log.debug("frequency_mhz:{}".format(BAND[self._band_number][0]))
+            self._band_number = self._source_config["band"]
+            header["mc_source"] = BAND[self._band_number][1]
+            log.debug("self._band_number:{}".format(self._band_number))
+            log.debug("frequency_mhz:{}".format(BAND[self._band_number][0]))
+            self.frequency_mhz = BAND[self._band_number][0]
+            self.bandwidth = 650.0
             header["ra"] = self._source_config["ra"]
             header["dec"] = self._source_config["dec"]
+            header["idx2_list"] = BAND[self._band_number][2]
             header["frequency_mhz"] = self.frequency_mhz
-            # self._central_freq.set_value(str(BAND[self._band_number][0]))
-            header["key"], header["bandwidth"], header[
-                "interface"] = self._dada_key, self.bandwidth, INTERFACE[self._pipeline_config["interface"]]
+            self._central_freq.set_value(str(self.frequency_mhz))
+            header["key"] = self._dada_key
+            header["bandwidth"] = self.bandwidth
+            header["interface"] = INTERFACE[self._pipeline_config["interface"]]
             self.source_name, self.nchannels, self.nbins = self._source_config[
                 "source-name"], self._source_config["nchannels"], self._source_config["nbins"]
             self._source_name_sensor.set_value(self.source_name)
@@ -961,7 +929,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             header["sync_time"] = self.sync_epoch
             header["sample_clock"] = float(
                 self.config_dict["sampling_rate"]) / float(self.config_dict["predecimation_factor"])
-            #header["tsamp"] = 16 * 1 / (self.bandwidth)
+            header["tsamp"] = 32 * 1 / (self.bandwidth)
             #log.debug("TSAMP = {}".format(header["tsamp"]))
         except:
             pass
@@ -1062,7 +1030,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._decode_capture_stdout)
             self.tempo2.stderr_callbacks.add(
                 self._handle_execution_stderr)
-            
+
             while True:
                 try:
                     os.kill(self.tempo2_pid, 0)
@@ -1153,7 +1121,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 predictor="/tmp/t2pred.dat",
                 parfile="/tmp/epta/{}.par".format(self.source_name[1:]),
                 cpus=cpu_numbers,
-                #cuda_number="1,",
+                # cuda_number="1,",
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
         elif parse_tag(self.source_name) == "R":
