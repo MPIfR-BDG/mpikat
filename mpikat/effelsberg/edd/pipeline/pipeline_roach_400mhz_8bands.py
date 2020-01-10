@@ -61,12 +61,12 @@ CONFIG = {
     },
     "dada_db_params":
     {
-        "args": "-n 16 -b 1048576000 -p -l",
+        "args": "-n 16 -b 209715200 -p -l",
         "key": "dada"
     },
     "dadc_db_params":
     {
-        "args": "-n 16 -b 1048576000 -p -l",
+        "args": "-n 16 -b 209715200 -p -l",
         "key": "dadc"
     },
     "dada_header_params":
@@ -74,17 +74,17 @@ CONFIG = {
         "filesize": 32000000000,
         "telescope": "Effelsberg",
         "instrument": "EDD",
-        "frequency_mhz": 1400,
+        "frequency_mhz": 1408.875,
         "receiver_name": "P217",
         "mc_source": "239.2.1.153+3",
         "bandwidth": 400.0,
-        "tsamp": 0.08,
+        "tsamp": 0.16,
         "nbit": 8,
         "ndim": 2,
         "npol": 2,
-        "nchan": 32,
+        "nchan": 64,
         "resolution": 1,
-        "idx2_list": "20,28,30,31",
+        "idx2_list": "0,8,16,24,32,40,48,56",
         "dsb": 1,
         "ra": "123",
         "dec": "-10"
@@ -94,7 +94,7 @@ CONFIG = {
 
 NUMA_MODE = {
     0: ("0-4", "5", "6,7,8,9", "10"),
-    1: ("18-23", "24", "25,26,27,28,29", "30")
+    1: ("18-28", "29,30,31", "32,33", "34")
 }
 INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15", 2: "10.10.1.16", 3: "10.10.1.17" }
 
@@ -1171,7 +1171,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         log.debug("line1134")
 
-        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge -p 4 --log_level=info".format(
+        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge -p 8 --log_level=info".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][1])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDRoach")
