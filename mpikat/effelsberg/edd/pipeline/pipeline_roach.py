@@ -1058,7 +1058,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._decode_capture_stdout)
             self.tempo2.stderr_callbacks.add(
                 self._handle_execution_stderr)
-            time.sleep(2)
+            while True:
+                try:
+                    os.kill(self.tempo2_pid, 0)
+                    log.debug("Tempo2 still running")
+                    time.sleep(1)
+                except OSError:
+                    break
 
             attempts = 0
             retries = 5
