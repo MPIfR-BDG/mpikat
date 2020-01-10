@@ -954,6 +954,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
             #log.debug("TSAMP = {}".format(header["tsamp"]))
         except:
             pass
+        self.pulsar_flag = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))
+        if ((parse_tag(self.source_name) == "default") or (parse_tag(self.source_name) != "R")) and (not self.pulsar_flag):
+            error = "source is not pulsar or calibrator"
+            raise EddPulsarPipelineError(error)
         ########NEED TO PUT IN THE LOGIC FOR _R here#############
         # try:
         #    self.source_name = self.source_name.split("_")[0]
