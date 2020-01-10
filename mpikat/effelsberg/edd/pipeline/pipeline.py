@@ -1085,6 +1085,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
+        else:
+            error = "source is unknown"
+            raise EddPulsarPipelineError(error)
         """
         elif (parse_tag(self.source_name) == "R") and (not self.pulsar_flag) and (not self.pulsar_flag_with_R):
             if (self.source_name[:2] == "3C" and self.source_name[-3:] == "O_R") or (self.source_name[:3] == "NGC" and self.source_name[-4:]=="ON_R"):
@@ -1106,9 +1109,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     cuda_number=cuda_number,
                     keyfile=dada_key_file.name)
         """            
-        else:
-            error = "source is unknown"
-            raise EddPulsarPipelineError(error)
+
 
         #cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
         log.debug("Running command: {0}".format(cmd))
