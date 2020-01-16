@@ -93,8 +93,8 @@ CONFIG = {
 }
 
 NUMA_MODE = {
-    0: ("0-4", "5", "6,7,8,9", "10"),
-    1: ("18-23", "24", "25,26,27,28,29", "30")
+    0: ("0-5", "6", "7,8,9", "10"),
+    1: ("18-21", "22", "23,24,25", "26")
 }
 INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15",
              2: "10.10.1.16", 3: "10.10.1.17"}
@@ -235,7 +235,7 @@ class KATCPToIGUIConverter(object):
         removed = self.previous_sensors.difference(current_sensors)
         log.debug("Sensors removed since last update: {}".format(removed))
         added = current_sensors.difference(self.previous_sensors)
-        log.debug("Sensors added since last update: {}".format(added))
+        log.debug("Sensors added sinceG last update: {}".format(added))
         # for name in list(added):
         for name in ["source_name", "observing", "timestamp"]:
             self.rc.set_sampling_strategy(name, "auto")
