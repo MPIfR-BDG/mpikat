@@ -83,7 +83,7 @@ class KatcpCli(Cmd):
         self.port = port
         self.katcp_parser = katcp.MessageParser()
         self.start_client()
-        Cmd.__init__(self, *args, **kwargs)
+        Cmd.__init__(self, *args, persistent_history_file='~/.katcp_cli_history', **kwargs)
 
     def start_client(self):
         log.info("Client connecting to port {self.host}:{self.port}".format(**locals()))
