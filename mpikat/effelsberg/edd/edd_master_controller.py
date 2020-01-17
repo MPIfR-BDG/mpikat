@@ -279,10 +279,10 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 log.warning("Config received for {}, but no controller exists yet.".format(product_id))
                 if product_id in self.__eddDataStore.products:
                     product = self.__eddDataStore.getProduct(product_id)
-                    self.__controller[product_id] = EddServerProductController(self, product_id, product["address"], product["port"])
+                    self.__controller[product_id] = EddServerProductController(product_id, product["address"], product["port"])
                 else:
                     log.warning("Manual config of product {}")
-                    self.__controller[product_id] = EddServerProductController(self, product_id, product_config["address"], product_config["port"])
+                    self.__controller[product_id] = EddServerProductController(product_id, product_config["address"], product_config["port"])
                 self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
 
             yield self.__controller[product_id].configure(product_config)
@@ -342,6 +342,17 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         for cid, controller in self.__controller.iteritems():
             logging.debug("  - Capture stop: {}".format(cid))
             yield controller.capture_stop()
+
+
+    @coroutine
+    def set(self, config):
+        """
+        Distribute the settings among the connected components
+        """
+
+        for cid, item in config:
+            logging.debug("  - Aplying setting: {}:{}".format(cid, item))
+            yield self.__controller[cid].set(item)
 
 
 
