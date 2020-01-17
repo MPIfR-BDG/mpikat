@@ -1,10 +1,11 @@
+from __future__ import print_function
 import logging
 import time
 from tornado.gen import coroutine, sleep, Return
 from tornado.ioloop import IOLoop
 from katcp import KATCPClientResource
 
-from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore 
+from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 
 log = logging.getLogger("mpikat.edd_digpack_client")
 
@@ -212,7 +213,7 @@ class DigitiserPacketiserClient(object):
     @coroutine
     def deconfigure(self):
         """
-        @brief Deconfigure. Not doing anythin 
+        @brief Deconfigure. Not doing anythin
         """
         pass
 
@@ -227,7 +228,7 @@ class DigitiserPacketiserClient(object):
     @coroutine
     def set_predecimation(self, factor):
         """
-        @brief      Set predcimation factor 
+        @brief      Set predcimation factor
         """
         yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
 
@@ -291,9 +292,9 @@ class DigitiserPacketiserClient(object):
 
 if __name__ == "__main__":
     import coloredlogs
-    from argparse import ArgumentParser 
+    from argparse import ArgumentParser
     parser = ArgumentParser(description="Configures edd digitiezer.")
-    parser.add_argument('host', type=str, nargs=1,
+    parser.add_argument('host', type=str, 
         help='Digitizer interface to bind to.')
     parser.add_argument('-p', '--port', dest='port', type=long,
         help='Port number to bind to', default=7147)
@@ -312,6 +313,11 @@ if __name__ == "__main__":
 
     parser.add_argument('--flip_spectrum', action="store_true", default=False)
     args = parser.parse_args()
+    print("Configuring paketizer {}:{}".format(args.host, args.port))
+    for v in vars(args):
+        print("  - {}: {}".format(v, getattr(args, v)))
+
+
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
     coloredlogs.install(

@@ -371,6 +371,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
         self.state = "configuring"
         self.set(config_json)
+
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
 
