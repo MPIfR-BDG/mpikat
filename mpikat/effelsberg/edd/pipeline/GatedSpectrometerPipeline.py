@@ -25,7 +25,7 @@ from mpikat.utils.sensor_watchdog import SensorWatchdog
 from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
 from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig
-from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore 
+from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 import mpikat.utils.numa as numa
 
 from tornado.gen import coroutine
@@ -97,6 +97,7 @@ DEFAULT_CONFIG = {
             "polarization_0" :
             {
                 "source": "",                               # name of the source for automatic setting of paramters
+                "description": "",
                 "format": "MPIFR_EDD_Packetizer:1",         # Format has version seperated via colon
                 "ip": "225.0.0.162+3",
                 "port": "7148",
@@ -108,6 +109,7 @@ DEFAULT_CONFIG = {
              "polarization_1" :
             {
                 "source": "",                               # name of the source for automatic setting of paramters, e.g.: "packetizer1:h_polarization
+                "description": "",
                 "format": "MPIFR_EDD_Packetizer:1",
                 "ip": "225.0.0.166+3",
                 "port": "7148",
@@ -137,7 +139,7 @@ DEFAULT_CONFIG = {
                 "ip": "225.0.0.184",        #two destinations, one for on, one for off
                 "port": "7152",
             },
-             "polarization_1_0" :
+             "polarization_1_1" :
             {
                 "format": "GatedSpectrometer:1",
                 "ip": "225.0.0.185",        #two destinations, one for on, one for off
@@ -371,7 +373,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
         #yield self.deconfigure()
 
         self.state = "configuring"
-        self.set(config_json)
+        yield self.set(config_json)
 
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
