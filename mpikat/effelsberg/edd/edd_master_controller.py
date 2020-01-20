@@ -283,7 +283,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 else:
                     log.warning("Manual config of product {}")
                     self.__controller[product_id] = EddServerProductController(product_id, product_config["address"], product_config["port"])
-                self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
+                yield self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
 
             yield self.__controller[product_id].configure(product_config)
 
@@ -296,6 +296,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         self._edd_config_sensor.set_value(json.dumps(config))
         #self._update_products_sensor()
         log.info("Successfully configured EDD")
+        raise Return("Successfully configured EDD") 
 
 
     @coroutine

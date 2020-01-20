@@ -197,6 +197,8 @@ class DigitiserPacketiserClient(object):
         """
         @brief Applying configuration recieved in dictionary
         """
+        self._capture_started = False
+        yield self._safe_request("capture_stop", "vh")
         yield self.set_sampling_rate(config["sampling_rate"])
         yield self.set_predecimation(config["predecimation_factor"])
         yield self.flip_spectrum(config["flip_spectrum"])
@@ -215,7 +217,8 @@ class DigitiserPacketiserClient(object):
         """
         @brief Deconfigure. Not doing anythin
         """
-        pass
+        raise Return()
+
 
     @coroutine
     def capture_stop(self):
@@ -223,6 +226,7 @@ class DigitiserPacketiserClient(object):
         @brief      Stop data transmission for both polarisation channels
         """
         log.warning("Not stopping data transmission")
+        raise Return()
         #yield self._safe_request("capture_stop", "vh")
 
     @coroutine
@@ -286,6 +290,7 @@ class DigitiserPacketiserClient(object):
                 "samples_per_heap": 4096}
 
         dataStore.addDataFormatDefinition("MPIFR_EDD_Packetizer:1", descr)
+        raise Return()
 
 
 
