@@ -61,12 +61,12 @@ CONFIG = {
     },
     "dada_db_params":
     {
-        "args": "-n 32 -b 1048576000 -p -l",
+        "args": "-n 16 -b 1048576000 -p -l",
         "key": "dada"
     },
     "dadc_db_params":
     {
-        "args": "-n 32 -b 1048576000 -p -l",
+        "args": "-n 16 -b 1048576000 -p -l",
         "key": "dadc"
     },
     "dada_header_params":
@@ -1114,7 +1114,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         os.chdir(in_path)
         log.debug("line1089")
         if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
-            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -x 1024 -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
+            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -x 10240 -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
                 nchan="-F {}:D".format(self.nchannels),
@@ -1127,7 +1127,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
         elif parse_tag(self.source_name) == "R":
-            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -x 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
+            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -x 10240 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
                 # cmd = "numactl -m {numa} dspsr -L 10 -t 8 -c 1.0 -D 0.0 -r
                 # -minram 1024 -Lmin 9 -f 1200 -fft-bench {nchan}
                 # {keyfile}".format(
