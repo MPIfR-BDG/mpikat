@@ -72,7 +72,7 @@ if __name__ == "__main__":
     ioloop = IOLoop.current()
     client = ConfigClient(args.host, port=args.port)
 
-    print("Configured client.")
+    print("Configure client ...")
     @coroutine
     def configure():
         try:
@@ -82,5 +82,4 @@ if __name__ == "__main__":
             raise error
     ioloop.run_sync(configure)
 
-    ioloop.start()
 
