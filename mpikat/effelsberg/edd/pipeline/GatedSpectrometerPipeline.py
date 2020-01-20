@@ -364,8 +364,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
         """
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
+
         if self.state != "idle":
-            raise FailReply('Cannot configure pipeline. Pipeline state {}.'.format(self.state))
+            log.warning("Configure received while in state: {} - deconfigureing first ...".format(self.state))
         # alternatively we should automatically deconfigure
         #yield self.deconfigure()
 
