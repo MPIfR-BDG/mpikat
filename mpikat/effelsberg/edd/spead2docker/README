@@ -1,6 +1,0 @@
-
-cd docker/
-docker build -t spead2edd .
-docker run --net=host -ti -v
-/home/spobs/fits_interface/mpikat/mpikat/effelsberg/edd/:/software/ -u `id -u` --env="DISPLAY" -e XAUTHORITY=/home/spobs/.Xauthority -v /home/spobs:/home/spobs -v /etc/passwd:/etc/passwd --name spead2recv -d -p 5000:5000 spead2edd bash
-
