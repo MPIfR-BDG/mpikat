@@ -51,8 +51,11 @@ def updateConfig(oldo, new):
     old = oldo.copy()
     for k in new:
         if isinstance(old[k], dict):
+            log.debug("update sub dict for key: {}".format(k))
             old[k] = updateConfig(old[k], new[k])
         else:
+            if type(old[k]) != type(new[k]):
+                log.warning("Update option {} with different type! Old value(type) {}({}), new {}({}) ".format(k, old[k], type(old[k]), new[k], type(new[k])))
             old[k] = new[k]
     return old
 
@@ -225,7 +228,7 @@ class EDDPipeline(AsyncDeviceServer):
     @coroutine
     def configure(self, config_json=""):
         """@brief Configure the pipeline"""
-       pass
+        pass
 
 
     @request()
@@ -280,21 +283,25 @@ class EDDPipeline(AsyncDeviceServer):
 
         log.debug("Updating configuration: '{}'".format(config_json))
         if isinstance(config_json, str):
+            log.debug("Received config as string")
             try:
                 cfg = json.loads(config_json)
             except:
-                raise FailReply("Cannot handle config string {} - Not valid json!".format(type(config_json)))
+                log.error("Error parsing json")
+                raise FailReply("Cannot handle config string {} - Not valid json!".format(config_json))
         elif isinstance(config_json, dict):
+            log.debug("Received config as dict")
             cfg = config_json
         else:
             raise FailReply("Cannot handle config type {}. Config has to bei either json formatted string or dict!".format(type(config_json)))
         try:
+            log.debug("Updating config")
             self._config = updateConfig(self.__config, cfg)
             log.debug("Updated config: '{}'".format(self._config))
         except KeyError as error:
             raise FailReply("Unknown configuration option: {}".format(str(error)))
-        except E as error:
-            raise FailReply("Unknown ERROR".format(str(error)))
+        except Exception as error:
+            raise FailReply("Unknown ERROR: {}".format(str(error)))
 
 
 

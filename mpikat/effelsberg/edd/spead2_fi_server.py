@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 import tornado
+from tornado.gen import coroutine
 import logging
 import signal
 import socket
@@ -8,21 +9,22 @@ import errno
 import coloredlogs
 import base64
 import numpy as np
-import ctypes as C
-import math as m
+import ctypes
+import json
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from StringIO import StringIO
 from Queue import Queue, Empty, Full
 from datetime import datetime
-from threading import Thread, Event, RLock
-from optparse import OptionParser
-from katcp import AsyncDeviceServer, Sensor, ProtocolFlags
-from katcp.kattypes import (Int, Str, request, return_reply)
-import spead2
-import spead2.recv
+from threading import Thread, Event
 
+import spead2
+
+from katcp import Sensor, ProtocolFlags
+from katcp.kattypes import (Int, Str, request, return_reply)
+
+import mpikat.effelsberg.edd.pipeline.EDDPipeline as EDDPipeline
 import mpikat.utils.numa as numa
 
 log = logging.getLogger("mpikat.spead_fi_server")
@@ -192,7 +194,7 @@ class FitsInterfaceServer(EDDPipeline.EDDPipeline):
         @param  fw_ip              IP address of the FITS writer
         @param  fw_port            Port number to connect to FITS writer
         """
-        EDDPipeline.EDDPipeline.__init__(self, ip, port, dict(input_data_streams={}))
+        EDDPipeline.EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[]))
         self._configured = False
         self._capture_interface = None
         self._fw_connection_manager = FitsWriterConnectionManager(
@@ -339,9 +341,8 @@ class FitsInterfaceServer(EDDPipeline.EDDPipeline):
         self.heap_group = len(self._config['input_data_streams'])
 
         self.mc_interface = []
-        self.mc_port = None 
-        for i, streamid in enumerate(self._config['input_data_streams']):
-            stream_description = self._config['input_data_streams'][streamid]
+        self.mc_port = None
+        for stream_description in self._config['input_data_streams']:
             self.mc_interface.append(stream_description['ip'])
             if self.mc_port is None:
                 self.mc_port = stream_description['port']
@@ -494,24 +495,24 @@ class HeapPacket(object):
 
 
 def build_fw_type(nsections, nchannels):
-    class FWData(C.LittleEndianStructure):
+    class FWData(ctypes.LittleEndianStructure):
         _fields_ = [
-            ('section_id', C.c_uint32),
-            ('nchannels', C.c_uint32),
-            ('data', C.c_float * nchannels)
+            ('section_id', ctypes.c_uint32),
+            ('nchannels', ctypes.c_uint32),
+            ('data', ctypes.c_float * nchannels)
         ]
 
-    class FWPacket(C.LittleEndianStructure):
+    class FWPacket(ctypes.LittleEndianStructure):
         _fields_ = [
-            ("data_type", C.c_char * 4),
-            ("channel_data_type", C.c_char * 4),
-            ("packet_size", C.c_uint32),
-            ("backend_name", C.c_char * 8),
-            ("timestamp", C.c_char * 28),
-            ("integration_time", C.c_uint32),
-            ("blank_phases", C.c_uint32),
-            ("nsections", C.c_uint32),
-            ("blocking_factor", C.c_uint32),
+            ("data_type", ctypes.c_char * 4),
+            ("channel_data_type", ctypes.c_char * 4),
+            ("packet_size", ctypes.c_uint32),
+            ("backend_name", ctypes.c_char * 8),
+            ("timestamp", ctypes.c_char * 28),
+            ("integration_time", ctypes.c_uint32),
+            ("blank_phases", ctypes.c_uint32),
+            ("nsections", ctypes.c_uint32),
+            ("blocking_factor", ctypes.c_uint32),
             ("sections", FWData * nsections)
         ]
     return FWPacket
@@ -523,7 +524,7 @@ def build_fw_object(nsections, nchannels, timestamp, integration_time,
     packet = packet_format()
     packet.data_type = "EEEI"
     packet.channel_data_type = "F   "
-    packet.packet_size = C.sizeof(packet_format)
+    packet.packet_size = ctypes.sizeof(packet_format)
     packet.backend_name = "EDDSPEAD"
     packet.timestamp = timestamp
     packet.integration_time = integration_time
@@ -533,7 +534,7 @@ def build_fw_object(nsections, nchannels, timestamp, integration_time,
     for ii in range(nsections):
         packet.sections[ii].section_id = ii + 1
         packet.sections[ii].nchannels = nchannels
-        C.addressof(packet.sections[ii].data), 0, C.sizeof(
+        ctypes.addressof(packet.sections[ii].data), 0, ctypes.sizeof(
             packet.sections[ii].data)
     return packet
 
@@ -639,6 +640,7 @@ def on_shutdown(ioloop, server):
 
 if __name__ == "__main__":
     parser = EDDPipeline.getArgumentParser()
+    # ToDo: pass fits writer properties as configuration
     parser.add_argument('--fw-ip', dest='fw_ip', type=str, default="localhost",
                       help='The ip for the fits writer')
     parser.add_argument('--fw-port', dest='fw_port', type=int, default=5002,
@@ -651,7 +653,7 @@ if __name__ == "__main__":
     coloredlogs.install(
         fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
              "- %(filename)s:%(lineno)s] %(message)s"),
-        level=opts.log_level.upper(),
+        level=args.log_level.upper(),
         logger=log)
 
     ioloop = tornado.ioloop.IOLoop.current()
