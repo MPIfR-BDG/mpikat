@@ -32,7 +32,6 @@ from katcp.kattypes import request, return_reply, Str, Int
 
 from mpikat.effelsberg.edd.edd_roach2_product_controller import ( EddRoach2ProductController)
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
-from mpikat.effelsberg.edd.edd_fi_client import EddFitsInterfaceClient
 from mpikat.effelsberg.edd.edd_server_product_controller import EddServerProductController
 
 import mpikat.effelsberg.edd.pipeline.EDDPipeline as EDDPipeline
@@ -235,6 +234,9 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         log.debug("Identify additional output streams")
         # Get output streams from products
         for product in config['products']:
+            if not "output_data_streams" in product:
+                continue
+
             for k, i in product["output_data_streams"].iteritems():
                 # look up data stream in storage
                 dataStream = self.__eddDataStore.getDataFormatDefinition(i['format'])
@@ -288,11 +290,12 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             yield self.__controller[product_id].configure(product_config)
 
         # ToDo: Unify FitsInterfaceClient with ServerProductController 
-        log.info("Configuring FITS interfaces")
-        for fi_config in config["fits_interfaces"]:
-            fi = EddFitsInterfaceClient(fi_config["id"], fi_config["address"])
-            yield fi.configure(fi_config)
-            self.__controller[fi_config["id"]] = fi
+#        log.info("Configuring FITS interfaces")
+#        for fi_config in config["fits_interfaces"]:
+#            fi = EddFitsInterfaceClient(fi_config["id"], fi_config["address"])
+#            yield fi.configure(fi_config)
+#            self.__controller[fi_config["id"]] = fi
+
         self._edd_config_sensor.set_value(json.dumps(config))
         #self._update_products_sensor()
         log.info("Successfully configured EDD")
@@ -343,6 +346,24 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         for cid, controller in self.__controller.iteritems():
             logging.debug("  - Capture stop: {}".format(cid))
             yield controller.capture_stop()
+
+
+    @coroutine
+    def measurement_start(self):
+        """
+        """
+        for cid, controller in self.__controller.iteritems():
+            logging.debug("  - Measurement start: {}".format(cid))
+            yield controller.measurement_start()
+
+
+    @coroutine
+    def measurement_stop(self):
+        """
+        """
+        for cid, controller in self.__controller.iteritems():
+            logging.debug("  - Measurement stop: {}".format(cid))
+            yield controller.measurement_stop()
 
 
     @coroutine

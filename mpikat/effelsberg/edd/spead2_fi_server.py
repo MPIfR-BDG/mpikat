@@ -23,6 +23,8 @@ from katcp.kattypes import (Int, Str, request, return_reply)
 import spead2
 import spead2.recv
 
+import mpikat.utils.numa as numa
+
 log = logging.getLogger("mpikat.spead_fi_server")
 
 sensor_logging_queue = Queue()
@@ -168,7 +170,7 @@ class FitsWriterConnectionManager(Thread):
         self._server_socket.close()
 
 
-class FitsInterfaceServer(AsyncDeviceServer):
+class FitsInterfaceServer(EDDPipeline.EDDPipeline):
     """
     Class providing an interface between EDD processes and the
     Effelsberg FITS writer
@@ -181,24 +183,22 @@ class FitsInterfaceServer(AsyncDeviceServer):
         ProtocolFlags.MESSAGE_IDS,
     ]))
 
-    def __init__(self, katcp_interface, katcp_port, capture_interface,
-                 capture_port, fw_ip, fw_port):
+    def __init__(self, ip, port, fw_ip, fw_port):
         """
         @brief Initialization of the FitsInterfaceServer object
 
         @param  katcp_interface    Interface address to serve on
         @param  katcp_port         Port number to serve on
-        @param  capture_interface  Interface to capture data on
         @param  fw_ip              IP address of the FITS writer
         @param  fw_port            Port number to connect to FITS writer
         """
+        EDDPipeline.EDDPipeline.__init__(self, ip, port, dict(input_data_streams={}))
         self._configured = False
-        self._capture_interface = capture_interface
+        self._capture_interface = None
         self._fw_connection_manager = FitsWriterConnectionManager(
             fw_ip, fw_port)
         self._capture_thread = None
         self._shutdown = False
-        super(FitsInterfaceServer, self).__init__(katcp_interface, katcp_port)
 
     def start(self):
         """
@@ -236,13 +236,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
         """
         @brief   Setup monitoring sensors
         """
-        self._device_status_sensor = Sensor.discrete(
-            "device-status",
-            description="Health status of FIServer",
-            params=self.DEVICE_STATUSES,
-            default="ok",
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._device_status_sensor)
+        EDDPipeline.EDDPipeline.setup_sensors(self)
         self._heap_group_sensor = Sensor.integer(
             "heap_group",
             description="Number of heaps for a timestamp",
@@ -313,43 +307,53 @@ class FitsInterfaceServer(AsyncDeviceServer):
         power.seek(0)
         power_png = base64.b64encode(power.buf).replace("\n", "")
         return power_png
-        
+
+
     def _stop_capture(self):
         if self._capture_thread:
             log.debug("Cleaning up capture thread")
             self._capture_thread.stop()
             self._capture_thread.join()
-            self._capture_thread = None 
+            self._capture_thread = None
             log.debug("Capture thread cleaned")
 
-    @request(Str(), Int(), Int(), Int())
-    @return_reply()
-    def request_configure(self, req, mc_interface, mc_port, nmcg, heap_group):
-        """
-        @brief      Configure the FITS interface server
 
-        @param      mc_interface   Array of multicast group IPs
-        @param      mc_port        Port number to multicast stream
-        @param      nmcg           Number of multicast groups
-        @param      heap_group     Number of heaps with same timestamp
+    @coroutine
+    def configure(self, config_json):
+        log.info("Configuring Fits interface")
+        log.debug("Configuration string: '{}'".format(config_json))
 
-        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
-        """
-        ip = mc_interface.split(",")
-        message = (["mc_ip: {}".format(ip[i]) for i in range(nmcg)], 
-            "mc_port: {}, nmcg: {}, heap_group: {}".format(mc_port, nmcg, heap_group))
-        log.info("Configuring FITS interface server with params: {}".format(message))
-        self.heap_group = heap_group
-        self.nmcg = nmcg
+        self.state = "configuring"
+        yield self.set(config_json)
+
+        cfs = json.dumps(self._config, indent=4)
+        log.info("Final configuration:\n" + cfs)
+
+        # find fastest nic on host
+        nic_name, nic_description = numa.getFastestNic()
+        self._capture_interface = nic_description['ip']
+        log.info("Capturing on interface {}, ip: {}, speed: {} Mbit/s".format(nic_name, nic_description['ip'], nic_description['speed']))
+
+        #ToDo: allow streams with multiple multicast groups and multiple ports
+        self.nmcg = len(self._config['input_data_streams'])
+        self.heap_group = len(self._config['input_data_streams'])
+
         self.mc_interface = []
-        for i in range(self.nmcg):
-            self.mc_interface.append(ip[i])
-        self.mc_port = mc_port
+        self.mc_port = None 
+        for i, streamid in enumerate(self._config['input_data_streams']):
+            stream_description = self._config['input_data_streams'][streamid]
+            self.mc_interface.append(stream_description['ip'])
+            if self.mc_port is None:
+                self.mc_port = stream_description['port']
+            else:
+                if self.mc_port != stream_description['port']:
+                    raise RuntimeError("All input streams have to use the same port!!!")
+
         self._fw_connection_manager.drop_connection()
         self._stop_capture()
         self._configured = True
         self._nmcg_sensor.set_value(self.nmcg)
-        return ("ok",)
+
 
     @request()
     @return_reply()
@@ -376,7 +380,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
                                            self.mc_port,
                                            self._capture_interface,
                                            self.nmcg,
-                                           self.heap_group, 
+                                           self.heap_group,
                                            handler)
         self._capture_thread.start()
         return ("ok",)
@@ -402,7 +406,7 @@ class FitsInterfaceServer(AsyncDeviceServer):
 
 class CaptureData(Thread):
     """
-    @brief     Captures heaps from one or more streams that are transmitted in SPEAD format 
+    @brief     Captures heaps from one or more streams that are transmitted in SPEAD format
     """
 
     def __init__(self, mc_ip, mc_port, capture_ip, nmcg, heap_group, handler):
@@ -452,10 +456,10 @@ class CaptureData(Thread):
 class HeapPacket(object):
     def __init__(self):
         self._first_heap = True
-    
+
     def heap_items(self):
         """
-        @brief      Description of heap items 
+        @brief      Description of heap items
         """
         self.ig = spead2.ItemGroup()
         self.ig.add_item(5632, "timestamp_count", "", (6,), dtype=">B")
@@ -547,9 +551,9 @@ class StreamHandler(object):
         @param  transmit_soc       FITS writer interface to which the data is sent
         @param  max_age            timeout
         """
-        self._nsections = heap_group 
+        self._nsections = heap_group
         self._data_to_fw = {}
-        self._nphases = 1 
+        self._nphases = 1
         self._transmit_socket = transmit_socket
         self._max_age = max_age
         self._first_heap = True
@@ -633,39 +637,27 @@ def on_shutdown(ioloop, server):
     ioloop.stop()
 
 
-def main():
-    usage = "usage: %prog [options]"
-    parser = OptionParser(usage=usage)
-    parser.add_option('', '--host', dest='host', type=str,
-                      help='Host interface to bind to', default='127.0.0.1')
-    parser.add_option('-p', '--port', dest='port', type=int,
-                      help='Port number to bind to', default=5000)
-    parser.add_option('', '--cap-ip', dest='cap_ip', type=str,
-                      help='Host interface to bind to for data capture',
-                      default='127.0.0.1')
-    parser.add_option('', '--cap-port', dest='cap_port', type=int,
-                      help='Port number to bind to for data capture',
-                      default=5001)
-    parser.add_option('', '--fw-ip', dest='fw_ip', type=str,
-                      help='IP to serve on for FW connections',
-                      default='127.0.0.1')
-    parser.add_option('', '--fw-port', dest='fw_port', type=int,
-                      help='Port to serve on for FW connections',
-                      default=5002)
-    parser.add_option('', '--log-level', dest='log_level', type=str,
-                      help='Default logging level', default="INFO")
-    (opts, args) = parser.parse_args()
+if __name__ == "__main__":
+    parser = EDDPipeline.getArgumentParser()
+    parser.add_argument('--fw-ip', dest='fw_ip', type=str, default="localhost",
+                      help='The ip for the fits writer')
+    parser.add_argument('--fw-port', dest='fw_port', type=int, default=5002,
+                      help='The port number for the redis server')
+    args = parser.parse_args()
+
     logging.getLogger().addHandler(logging.NullHandler())
+    log = logging.getLogger('mpikat')
+    log.setLevel(args.log_level.upper())
     coloredlogs.install(
         fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
              "- %(filename)s:%(lineno)s] %(message)s"),
         level=opts.log_level.upper(),
         logger=log)
-    log.setLevel(opts.log_level.upper())
+
     ioloop = tornado.ioloop.IOLoop.current()
+    log.info("Starting Pipeline instance")
     server = FitsInterfaceServer(
-        opts.host, opts.port, opts.cap_ip,
-        opts.cap_port, opts.fw_ip, opts.fw_port)
+        args.host, args.port, args.fw_ip, args.fw_port)
     # Hook up to SIGINT so that ctrl-C results in a clean shutdown
     signal.signal(signal.SIGINT,
                   lambda sig, frame: ioloop.add_callback_from_signal(
@@ -677,7 +669,3 @@ def main():
             server.bind_address))
     ioloop.add_callback(start_and_display)
     ioloop.start()
-
-
-if __name__ == "__main__":
-    main()

@@ -225,7 +225,7 @@ class EDDPipeline(AsyncDeviceServer):
     @coroutine
     def configure(self, config_json=""):
         """@brief Configure the pipeline"""
-        raise NotImplementedError
+       pass
 
 
     @request()
@@ -353,7 +353,7 @@ class EDDPipeline(AsyncDeviceServer):
     @coroutine
     def capture_start(self):
         """@brief start the pipeline."""
-        raise NotImplementedError
+        pass
 
 
     @request()
@@ -383,9 +383,73 @@ class EDDPipeline(AsyncDeviceServer):
     @coroutine
     def capture_stop(self):
         """@brief stop the pipeline."""
-        raise NotImplementedError
+        pass
+
+    @request()
+    @return_reply()
+    def request_measurement_start(self, req):
+        """
+        @brief      Start
+
+        @note       This is the KATCP wrapper for the measurement_start command
+
+        @return     katcp reply object [[[ !measurement_start ok | (fail [error description]) ]]]
+        """
+
+        @coroutine
+        def wrapper():
+            try:
+                yield self.measurement_start()
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(wrapper)
+        raise AsyncReply
 
 
+
+    @coroutine
+    def measurement_start(self):
+        """@brief start the emasurement."""
+        pass
+
+
+    @request()
+    @return_reply()
+    def request_measurement_stop(self, req):
+        """
+        @brief      Start
+
+        @note       This is the KATCP wrapper for the measurement_stop command
+
+        @return     katcp reply object [[[ !measurement_start ok | (fail [error description]) ]]]
+        """
+
+        @coroutine
+        def wrapper():
+            try:
+                yield self.measurement_stop()
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(wrapper)
+        raise AsyncReply
+
+
+    @coroutine
+    def measurement_stop(self):
+        """@brief stop the emasurement."""
+        pass
 
     @request()
     @return_reply()
@@ -414,7 +478,7 @@ class EDDPipeline(AsyncDeviceServer):
     @coroutine
     def deconfigure(self):
         """@brief deconfigure the pipeline."""
-        raise NotImplementedError
+        pass
 
     @request(Str(), Int())
     @return_reply()
