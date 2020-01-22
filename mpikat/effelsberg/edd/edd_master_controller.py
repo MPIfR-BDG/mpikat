@@ -369,13 +369,12 @@ if __name__ == "__main__":
     logging.getLogger().addHandler(logging.NullHandler())
     log = logging.getLogger('mpikat')
     log.setLevel(args.log_level.upper())
-
-    log.setLevel(args.log_level.upper())
     coloredlogs.install(
         fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
              "- %(filename)s:%(lineno)s] %(message)s"),
         level=args.log_level.upper(),
         logger=log)
+
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting Pipeline instance")
     server = EddMasterController(
