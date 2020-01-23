@@ -62,7 +62,7 @@ class ManagedProcess(object):
         if isinstance(cmdlineargs, str):
             cmdlineargs = cmdlineargs.split()
         self._proc = Popen(map(str, cmdlineargs), stdout=PIPE, stderr=PIPE, 
-                           shell=False, close_fds=True)
+                           shell=False, env=environ, close_fds=True)
         if stdout_handler:
             self._stdout_handler = stdout_handler
         else:

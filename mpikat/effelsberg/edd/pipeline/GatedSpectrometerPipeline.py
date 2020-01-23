@@ -450,8 +450,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
             log.debug("Command to run: {}".format(cmd))
 
 
-            cudaDevice =numa.getInfo()[numa_node]['gpus'][0]
+            cudaDevice = numa.getInfo()[numa_node]['gpus'][0]
             gated_cli = ManagedProcess(cmd, env={"CUDA_VISIBLE_DEVICES": cudaDevice})
+            log.debug("Visble Cuda Device: {}".format(cudaDevice))
             self._subprocessMonitor.add(gated_cli, self._subprocess_error)
             self._subprocesses.append(gated_cli)
 
