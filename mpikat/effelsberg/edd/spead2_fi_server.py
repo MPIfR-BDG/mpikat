@@ -20,6 +20,7 @@ from datetime import datetime
 from threading import Thread, Event
 
 import spead2
+import spead2.recv
 
 from katcp import Sensor, ProtocolFlags
 from katcp.kattypes import (Int, Str, request, return_reply)
@@ -67,6 +68,7 @@ class FitsWriterNotConnected(Exception):
     pass
 
 
+
 class FitsWriterConnectionManager(Thread):
     """
     A class to handle TCP connections to the APEX FITS writer.
@@ -91,6 +93,7 @@ class FitsWriterConnectionManager(Thread):
         self._transmit_socket = None
         self._reset_server_socket()
 
+
     def _reset_server_socket(self):
         if self._server_socket:
             self._server_socket.close()
@@ -104,6 +107,7 @@ class FitsWriterConnectionManager(Thread):
         log.debug("Binding to {}".format(self._address))
         self._server_socket.bind(self._address)
         self._server_socket.listen(1)
+
 
     def _accept_connection(self):
         log.debug("Accepting connections on FW server socket")
@@ -127,17 +131,19 @@ class FitsWriterConnectionManager(Thread):
                     "Unexpected error on socket accept: {}".format(str(error)))
                 raise error
 
+
     def drop_connection(self):
         """
         @brief   Drop any current FITS writer connection
         """
-        if self._transmit_socket:
+        if not self._transmit_socket is None:
             self._transmit_socket.shutdown(socket.SHUT_RDWR)
             self._transmit_socket.close()
             self._transmit_socket = None
             self._has_connection.clear()
 
-    def get_transmit_socket(self, timeout=2):
+
+    def get_transmit_socket(self, timeout=20):
         """
         @brief   Get the active FITS writer connection
 
@@ -152,11 +158,13 @@ class FitsWriterConnectionManager(Thread):
                 time.sleep(0.1)
         raise FitsWriterNotConnected
 
+
     def stop(self):
         """
         @brief   Stop the server
         """
         self._shutdown.set()
+
 
     def run(self):
         while not self._shutdown.is_set():
@@ -372,7 +380,7 @@ class FitsInterfaceServer(EDDPipeline.EDDPipeline):
         try:
             fw_socket = self._fw_connection_manager.get_transmit_socket()
         except Exception as error:
-            log.exception(str(error))
+            log.exception("Exception in getting fits writer transmit socker: {}".format(error))
             return ("fail", str(error))
         log.info("Starting FITS interface capture")
         self._stop_capture()
