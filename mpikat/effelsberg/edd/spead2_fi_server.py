@@ -202,7 +202,7 @@ class FitsInterfaceServer(EDDPipeline.EDDPipeline):
         @param  fw_ip              IP address of the FITS writer
         @param  fw_port            Port number to connect to FITS writer
         """
-        EDDPipeline.EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[]))
+        EDDPipeline.EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[], id="fits_interface", type="fits_interface"))
         self._configured = False
         self._capture_interface = None
         self._fw_connection_manager = FitsWriterConnectionManager(
