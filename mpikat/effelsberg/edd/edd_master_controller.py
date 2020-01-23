@@ -252,14 +252,24 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         log.debug("Connect data streams with high level description")
         for product in config['products']:
+            counter = 0
             for k in product["input_data_streams"]:
+                if isinstance(product["input_data_streams"], dict):
+                    inputStream = product["input_data_streams"][k]
+                elif isinstance(product["input_data_streams"], list):
+                    inputStream = k
+                    k = counter
+                    counter += 1
+                else:
+                    raise RuntimeError("Input streams has to be dict ofr list, got: {}!".format(type(product["input_data_streams"])))
 
-                datastream = self.__eddDataStore.getDataFormatDefinition(product["input_data_streams"][k]['format'])
-                datastream.update(product["input_data_streams"][k])
-                if not "source" in product["input_data_streams"][k]:
+
+                datastream = self.__eddDataStore.getDataFormatDefinition(inputStream['format'])
+                datastream.update(inputStream)
+                if not "source" in inputStream:
                     log.debug("Source not definied for input stream {} of {} - no lookup but assuming manual definition!".format(k, product['id']))
                     continue
-                s = product["input_data_streams"][k]["source"]
+                s = inputStream["source"]
 
                 if not self.__eddDataStore.hasDataStream(s):
                         raise RuntimeError("Unknown data stream {} !".format(s))
@@ -274,7 +284,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         for product_config in config["products"]:
             product_id = product_config["id"]
             #ToDo : Unify roach2 to bring under ansible control + ServerproductController
-            if product_config["type"] == "roach2":
+            if "type" in product_config and product_config["type"] == "roach2":
                 self._products[product_id] = EddRoach2ProductController(self, product_id,
                                                                         (self._r2rm_host, self._r2rm_port))
             elif product_id not in self.__controller:
