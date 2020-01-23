@@ -295,7 +295,6 @@ class EDDPipeline(AsyncDeviceServer):
         else:
             raise FailReply("Cannot handle config type {}. Config has to bei either json formatted string or dict!".format(type(config_json)))
         try:
-            log.debug("Updating config")
             self._config = updateConfig(self.__config, cfg)
             log.debug("Updated config: '{}'".format(self._config))
         except KeyError as error:

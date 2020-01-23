@@ -84,10 +84,9 @@ DADABUFFERS = ["dada", "dadc"]
 
 
 DEFAULT_CONFIG = {
-	    "id": "GatedSpectrometer",                          # default cfgs for master controler. Needs to get a unique ID -- TODO, from ansible
-    	"type": "GatedSpectrometer",
+        "id": "GatedSpectrometer",                          # default cfgs for master controler. Needs to get a unique ID -- TODO, from ansible
+        "type": "GatedSpectrometer",
         "supported_input_formats": {"MPIFR_EDD_Packetizer": [1]},      # supproted input formats name:version
-	    "address": "dummy",                                 # ToDo, address is not a configuration option but found automatically
         "samples_per_block": 256 * 1024 * 1024,             # 256 Mega sampels per buffer block to allow high res  spectra - the
                                                             # theoretical  mazimum is thus  128 M Channels.   This option  allows
                                                             # to tweak  the execution on  low-mem GPUs or  ig the GPU is  shared 
@@ -101,8 +100,8 @@ DEFAULT_CONFIG = {
                 "format": "MPIFR_EDD_Packetizer:1",         # Format has version seperated via colon
                 "ip": "225.0.0.162+3",
                 "port": "7148",
-                "bit_depth" : 12,
-                "sample_rate" : 2600000000,
+                "bit_depth" : 8,
+                "sample_rate" : 3200000000,
                 "sync_time" : 1562662573.0,
                 "samples_per_heap": 4096,                     # this needs to be consistent with the mkrecv configuration
             },
@@ -113,8 +112,8 @@ DEFAULT_CONFIG = {
                 "format": "MPIFR_EDD_Packetizer:1",
                 "ip": "225.0.0.166+3",
                 "port": "7148",
-                "bit_depth" : 12,
-                "sample_rate" : 2600000000,
+                "bit_depth" : 8,
+                "sample_rate" : 3200000000,
                 "sync_time" : 1562662573.0,
                 "samples_per_heap": 4096,                           # this needs to be consistent with the mkrecv configuration
             }
@@ -136,13 +135,13 @@ DEFAULT_CONFIG = {
              "polarization_1_0" :
             {
                 "format": "GatedSpectrometer:1",
-                "ip": "225.0.0.184",        #two destinations, one for on, one for off
+                "ip": "225.0.0.174",        #two destinations, one for on, one for off
                 "port": "7152",
             },
              "polarization_1_1" :
             {
                 "format": "GatedSpectrometer:1",
-                "ip": "225.0.0.185",        #two destinations, one for on, one for off
+                "ip": "225.0.0.175",        #two destinations, one for on, one for off
                 "port": "7152",
             }
         },
@@ -489,7 +488,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 log.debug("Command to run: {}".format(cmd))
 
             elif self._config["output_type"] == 'disk':
-		ofpath = os.path.join(cfg["output_directory"], ofname)
+                ofpath = os.path.join(cfg["output_directory"], ofname)
                 log.debug("Writing output to {}".format(ofpath))
                 if not os.path.isdir(ofpath):
                     os.mkdir(ofpath)
