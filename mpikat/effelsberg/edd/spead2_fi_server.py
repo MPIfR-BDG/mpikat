@@ -452,8 +452,10 @@ class CaptureData(Thread):
         self.rb = self.stream.ringbuffer
 
     def mcg_subscription(self):
+        log.debug(" Multicast subscribe ...")
         for i in range(self._nmcg):
-            self.stream.add_udp_reader(self._mc_ip[i], self._mc_port, max_size = 9200L,
+            log.debug(" - Subs {}: ip: {}, port: {}".format(i,self._mc_ip[i], self._mc_port ))
+            self.stream.add_udp_reader(self._mc_ip[i], int(self._mc_port), max_size = 9200L,
                 buffer_size= 1073741820L, interface_address=self._capture_ip)
 
     def run(self):
