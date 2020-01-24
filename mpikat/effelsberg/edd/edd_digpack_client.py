@@ -219,6 +219,18 @@ class DigitiserPacketiserClient(object):
         """
         raise Return()
 
+    @coroutine
+    def measurement_start(self):
+        """
+        """
+        raise Return()
+
+    @coroutine
+    def measurement_stop(self):
+        """
+        """
+        raise Return()
+
 
     @coroutine
     def capture_stop(self):
