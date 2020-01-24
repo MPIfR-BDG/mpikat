@@ -193,7 +193,7 @@ class FitsInterfaceServer(EDDPipeline.EDDPipeline):
         ProtocolFlags.MESSAGE_IDS,
     ]))
 
-    def __init__(self, ip, port, fw_ip, fw_port):
+    def __init__(self, ip, port):
         """
         @brief Initialization of the FitsInterfaceServer object
 
@@ -202,29 +202,12 @@ class FitsInterfaceServer(EDDPipeline.EDDPipeline):
         @param  fw_ip              IP address of the FITS writer
         @param  fw_port            Port number to connect to FITS writer
         """
-        EDDPipeline.EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[], id="fits_interface", type="fits_interface"))
+        EDDPipeline.EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[], id="fits_interface", type="fits_interface", fits_writer_ip="localhost", fits_writer_port=5002))
         self._configured = False
         self._capture_interface = None
-        self._fw_connection_manager = FitsWriterConnectionManager(
-            fw_ip, fw_port)
+        self._fw_connection_manager = None
         self._capture_thread = None
         self._shutdown = False
-
-    def start(self):
-        """
-        @brief   Start the server
-        """
-        self._fw_connection_manager.start()
-        super(FitsInterfaceServer, self).start()
-
-    def stop(self):
-        """
-        @brief   Stop the server
-        """
-        self._shutdown = True
-        self._stop_capture()
-        self._fw_connection_manager.stop()
-        super(FitsInterfaceServer, self).stop()
 
     @property
     def heap_group(self):
@@ -358,10 +341,35 @@ class FitsInterfaceServer(EDDPipeline.EDDPipeline):
                 if self.mc_port != stream_description['port']:
                     raise RuntimeError("All input streams have to use the same port!!!")
 
-        self._fw_connection_manager.drop_connection()
+        if self._fw_connection_manager is not None:
+            self._fw_connection_manager.drop_connection()
+            self._fw_connection_manager.stop()
+        self._fw_connection_manager = FitsWriterConnectionManager( self._config["fits_writer_ip"], self._config["fits_writer_port"])
+        self._fw_connection_manager.start()
+
         self._stop_capture()
         self._configured = True
         self._nmcg_sensor.set_value(self.nmcg)
+
+
+    @coroutine
+    def measurement_start(self):
+        """
+        """
+        try:
+            fw_socket = self._fw_connection_manager.get_transmit_socket()
+        except Exception as error:
+            raise RuntimeError("Exception in getting fits writer transmit socker: {}".format(error))
+        log.info("Starting FITS interface capture")
+        self._stop_capture()
+        handler = StreamHandler(self.heap_group, fw_socket)
+        self._capture_thread = CaptureData(self.mc_interface,
+                                           self.mc_port,
+                                           self._capture_interface,
+                                           self.nmcg,
+                                           self.heap_group,
+                                           handler)
+        self._capture_thread.start()
 
 
     @request()
@@ -378,21 +386,18 @@ class FitsInterfaceServer(EDDPipeline.EDDPipeline):
             log.error(msg)
             return ("fail", msg)
         try:
-            fw_socket = self._fw_connection_manager.get_transmit_socket()
+            self.measurement_start()
         except Exception as error:
-            log.exception("Exception in getting fits writer transmit socker: {}".format(error))
             return ("fail", str(error))
-        log.info("Starting FITS interface capture")
-        self._stop_capture()
-        handler = StreamHandler(self.heap_group, fw_socket)
-        self._capture_thread = CaptureData(self.mc_interface,
-                                           self.mc_port,
-                                           self._capture_interface,
-                                           self.nmcg,
-                                           self.heap_group,
-                                           handler)
-        self._capture_thread.start()
         return ("ok",)
+
+
+
+    @coroutine
+    def measurement_start(self):
+        log.info("Stopping FITS interface capture")
+        self._stop_capture()
+        self._fw_connection_manager.drop_connection()
 
     @request()
     @return_reply()
@@ -407,9 +412,7 @@ class FitsInterfaceServer(EDDPipeline.EDDPipeline):
             msg = "FITS interface server is not configured"
             log.error(msg)
             return ("fail", msg)
-        log.info("Stopping FITS interface capture")
-        self._stop_capture()
-        self._fw_connection_manager.drop_connection()
+        self.measurement_stop()
         return ("ok",)
 
 
