@@ -96,13 +96,14 @@ class FitsWriterConnectionManager(Thread):
 
     def drop_connection(self):
         """
-        @brief   Drop any current FITS writer connection
+        @brief   Drop any current FITS writer connection and waits for new one.
         """
         if not self._transmit_socket is None:
             self._transmit_socket.shutdown(socket.SHUT_RDWR)
             self._transmit_socket.close()
             self._transmit_socket = None
             self._has_connection.clear()
+            self._accept_connection()
 
 
     def get_transmit_socket(self, timeout=20):
@@ -165,7 +166,7 @@ class FitsInterfaceServer(EDDPipeline):
         @param  fw_ip              IP address of the FITS writer
         @param  fw_port            Port number to connect to FITS writer
         """
-        EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[], id="fits_interface", type="fits_interface", fits_writer_ip="localhost", fits_writer_port=5002))
+        EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[], id="fits_interface", type="fits_interface", fits_writer_ip="0.0.0.0", fits_writer_port=5002))
         self._configured = False
         self._capture_interface = None
         self._fw_connection_manager = None
