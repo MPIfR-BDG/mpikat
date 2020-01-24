@@ -499,7 +499,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 cmd = "dada_dbnull -z -k {}".format(ofname)
 
             log.debug("Command to run: {}".format(cmd))
-            mks = ManagedProcess(cmd)
+            mks = ManagedProcess(cmd, env={"CUDA_VISIBLE_DEVICES": cudaDevice})
             self._subprocessMonitor.add(mks, self._subprocess_error)
             self._subprocesses.append(mks)
 
