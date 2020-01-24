@@ -11,9 +11,6 @@ import base64
 import numpy as np
 import ctypes
 import json
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 from StringIO import StringIO
 from Queue import Queue, Empty, Full
 from datetime import datetime
@@ -31,41 +28,6 @@ import mpikat.utils.numa as numa
 log = logging.getLogger("mpikat.spead_fi_server")
 
 sensor_logging_queue = Queue()
-
-DEFAULT_BLOB = "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"
-
-
-class StopEventException(Exception):
-    pass
-
-
-class FitsWriterNotConnected(Exception):
-    pass
 
 
 
@@ -156,7 +118,7 @@ class FitsWriterConnectionManager(Thread):
                 return self._transmit_socket
             else:
                 time.sleep(0.1)
-        raise FitsWriterNotConnected
+        raise RuntimeError("Fits writer not connected!")
 
 
     def stop(self):
@@ -178,6 +140,7 @@ class FitsWriterConnectionManager(Thread):
                 continue
         self.drop_connection()
         self._server_socket.close()
+
 
 
 class FitsInterfaceServer(EDDPipeline):
@@ -209,21 +172,26 @@ class FitsInterfaceServer(EDDPipeline):
         self._capture_thread = None
         self._shutdown = False
 
+
     @property
     def heap_group(self):
         return self._heap_group_sensor.value()
+
 
     @heap_group.setter
     def heap_group(self, value):
         self._heap_group_sensor.set_value(value)
 
+
     @property
     def nmcg(self):
         return self._nmcg_sensor.value()
 
+
     @nmcg.setter
     def nmcg(self, value):
         self._nmcg_sensor.set_value(value)
+
 
     def setup_sensors(self):
         """
@@ -254,52 +222,6 @@ class FitsInterfaceServer(EDDPipeline):
             default=1,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._integration_time_sensor)
-        self._power_status_sensor = Sensor.string(
-            "POWER_STATUS_PNG",
-            description="Power in each stream",
-            default= DEFAULT_BLOB,
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._power_status_sensor)
-        self._update_sensors_callback = tornado.ioloop.PeriodicCallback(
-            self.update_sensors, 5000)
-        self._update_sensors_callback.start()
-
-    def update_sensors(self):
-        try:
-            log.debug("Updating sensor values")
-            q_has_data = False
-            while True:
-                try:
-                    data = sensor_logging_queue.get(False)
-                    q_has_data = True
-                except Empty:
-                    break
-            if not q_has_data:
-                log.debug("No updates available for sensors")
-                return
-            self._integration_time_sensor.set_value(data.integration_time)
-            self._heap_group_sensor.set_value(data.nsections)
-            self._nchannels_sensor.set_value(data.sections[0].nchannels)
-            self._power_status_sensor.set_value(self.plot_data(data))
-        except Exception:
-            log.exception("Exception while updating sensor values")
-
-    def plot_data(self, packet):
-        fig = plt.figure(1)
-        plt.clf()
-        fig.suptitle("Power Status")
-        logX_ndON = (np.log10(packet.sections[0].data)*10)
-        logX_ndOFF = (np.log10(packet.sections[1].data)*10)
-        ax1 = plt.subplot(211)
-        plt.plot(logX_ndON[:])
-        ax2 = plt.subplot(212)
-        plt.plot(logX_ndOFF[:])
-        power = StringIO()
-        #fig.savefig('plot.png', dpi=fig.dpi)
-        plt.savefig(power, format='png', dpi=100)
-        power.seek(0)
-        power_png = base64.b64encode(power.buf).replace("\n", "")
-        return power_png
 
 
     def _stop_capture(self):
@@ -347,7 +269,7 @@ class FitsInterfaceServer(EDDPipeline):
         self._fw_connection_manager = FitsWriterConnectionManager( self._config["fits_writer_ip"], self._config["fits_writer_port"])
         self._fw_connection_manager.start()
 
-        self._stop_capture()
+        #self._stop_capture()
         self._configured = True
         self._nmcg_sensor.set_value(self.nmcg)
 
@@ -394,7 +316,7 @@ class FitsInterfaceServer(EDDPipeline):
 
 
     @coroutine
-    def measurement_start(self):
+    def measurement_stop(self):
         log.info("Stopping FITS interface capture")
         self._stop_capture()
         self._fw_connection_manager.drop_connection()
@@ -414,6 +336,7 @@ class FitsInterfaceServer(EDDPipeline):
             return ("fail", msg)
         self.measurement_stop()
         return ("ok",)
+
 
 
 class CaptureData(Thread):
@@ -465,6 +388,7 @@ class CaptureData(Thread):
         self.resource_allocation()
         self.mcg_subscription()
         self._handler(self.stream)
+
 
 
 class HeapPacket(object):
