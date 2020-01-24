@@ -94,7 +94,7 @@ CONFIG = {
 
 NUMA_MODE = {
     0: ("0-5", "6", "7,8,9", "10"),
-    1: ("18-21", "22", "23,24,25,26,27,28,29,30,31,32", "33")
+    1: ("18-21", "22", "23-34", "33")
 }
 INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15",
              2: "10.10.1.16", 3: "10.10.1.17"}
@@ -933,7 +933,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             #log.debug("TSAMP = {}".format(header["tsamp"]))
         except:
             pass
-        self.pulsar_flag = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))
+        self.pulsar_flag = is_accessible(
+            '/tmp/epta/{}.par'.format(self.source_name[1:]))
         if ((parse_tag(self.source_name) == "default") or (parse_tag(self.source_name) != "R")) and (not self.pulsar_flag):
             error = "source is not pulsar or calibrator"
             raise EddPulsarPipelineError(error)
@@ -1141,8 +1142,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
         elif parse_tag(self.source_name) == "FB":
-        	cmd = " numactl -m 1 taskset -c 19,20,21,22,23,24,25,26,27,28 digifil -threads 10 -F 512 -b-32 -d 1 -I 0 -t 50 keyfile"
-        	 #pass
+            cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 12 -F 512 -b-32 -d 1 -I 0 -t 50 {keyfile}".format(
+                numa=self.numa_number,
+                cpus=cpu_numbers,
+                keyfile=dada_key_file.name)
+            # pass
         else:
             error = "source is unknown"
             raise EddPulsarPipelineError(error)
@@ -1278,6 +1282,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     proc._process.kill()
             if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
                 os.remove("/tmp/t2pred.dat")
+            try:
+                os.remove("./core")
+            except Exception as error:
+                log.debug("cannot delete core")
 
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
