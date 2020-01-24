@@ -25,7 +25,7 @@ import spead2.recv
 from katcp import Sensor, ProtocolFlags
 from katcp.kattypes import (Int, Str, request, return_reply)
 
-import mpikat.effelsberg.edd.pipeline.EDDPipeline as EDDPipeline
+from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig
 import mpikat.utils.numa as numa
 
 log = logging.getLogger("mpikat.spead_fi_server")
@@ -180,7 +180,7 @@ class FitsWriterConnectionManager(Thread):
         self._server_socket.close()
 
 
-class FitsInterfaceServer(EDDPipeline.EDDPipeline):
+class FitsInterfaceServer(EDDPipeline):
     """
     Class providing an interface between EDD processes and the
     Effelsberg FITS writer
@@ -202,7 +202,7 @@ class FitsInterfaceServer(EDDPipeline.EDDPipeline):
         @param  fw_ip              IP address of the FITS writer
         @param  fw_port            Port number to connect to FITS writer
         """
-        EDDPipeline.EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[], id="fits_interface", type="fits_interface", fits_writer_ip="localhost", fits_writer_port=5002))
+        EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[], id="fits_interface", type="fits_interface", fits_writer_ip="localhost", fits_writer_port=5002))
         self._configured = False
         self._capture_interface = None
         self._fw_connection_manager = None
@@ -229,7 +229,7 @@ class FitsInterfaceServer(EDDPipeline.EDDPipeline):
         """
         @brief   Setup monitoring sensors
         """
-        EDDPipeline.EDDPipeline.setup_sensors(self)
+        EDDPipeline.setup_sensors(self)
         self._heap_group_sensor = Sensor.integer(
             "heap_group",
             description="Number of heaps for a timestamp",
@@ -644,43 +644,6 @@ class StreamHandler(object):
                 len(self._data_to_fw)))
 
 
-@tornado.gen.coroutine
-def on_shutdown(ioloop, server):
-    log.info("Shutting down FITS writer interface server")
-    yield server.stop()
-    ioloop.stop()
-
 
 if __name__ == "__main__":
-    parser = EDDPipeline.getArgumentParser()
-    # ToDo: pass fits writer properties as configuration
-    parser.add_argument('--fw-ip', dest='fw_ip', type=str, default="localhost",
-                      help='The ip for the fits writer')
-    parser.add_argument('--fw-port', dest='fw_port', type=int, default=5002,
-                      help='The port number for the redis server')
-    args = parser.parse_args()
-
-    logging.getLogger().addHandler(logging.NullHandler())
-    log = logging.getLogger('mpikat')
-    log.setLevel(args.log_level.upper())
-    coloredlogs.install(
-        fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
-             "- %(filename)s:%(lineno)s] %(message)s"),
-        level=args.log_level.upper(),
-        logger=log)
-
-    ioloop = tornado.ioloop.IOLoop.current()
-    log.info("Starting Pipeline instance")
-    server = FitsInterfaceServer(
-        args.host, args.port, args.fw_ip, args.fw_port)
-    # Hook up to SIGINT so that ctrl-C results in a clean shutdown
-    signal.signal(signal.SIGINT,
-                  lambda sig, frame: ioloop.add_callback_from_signal(
-                    on_shutdown, ioloop, server))
-
-    def start_and_display():
-        server.start()
-        log.info("Listening at {0}, Ctrl-C to terminate server".format(
-            server.bind_address))
-    ioloop.add_callback(start_and_display)
-    ioloop.start()
+    launchPipelineServer(FitsInterfaceServer)
