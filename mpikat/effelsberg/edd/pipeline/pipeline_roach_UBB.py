@@ -938,8 +938,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             '/tmp/epta/{}.par'.format(self.source_name[1:]))
         if ((parse_tag(self.source_name) == "default") or (parse_tag(self.source_name) != "R")) and (not self.pulsar_flag):
             if (parse_tag(self.source_name) != "FB"):
-            	error = "source is not pulsar or calibrator"
-            	raise EddPulsarPipelineError(error)
+                error = "source is not pulsar or calibrator"
+                raise EddPulsarPipelineError(error)
         ########NEED TO PUT IN THE LOGIC FOR _R here#############
         # try:
         #    self.source_name = self.source_name.split("_")[0]
@@ -1190,24 +1190,24 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
-
-        cmd = "numactl -m {} taskset -c {} python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
-            self.numa_number, NUMA_MODE[self.numa_number][3], in_path, out_path)
-        log.debug("Running command: {0}".format(cmd))
-        log.info("Staring archive monitor")
-        self._archive_directory_monitor = ExecuteCommand(
-            cmd, outpath=out_path, resident=True)
-        self._archive_directory_monitor.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._archive_directory_monitor.fscrunch_callbacks.add(
-            self._add_fscrunch_to_sensor)
-        self._archive_directory_monitor.tscrunch_callbacks.add(
-            self._add_tscrunch_to_sensor)
-        self._archive_directory_monitor.profile_callbacks.add(
-            self._add_profile_to_sensor)
-        self._archive_directory_monitor_pid = self._archive_directory_monitor.pid
-        log.debug("_archive_directory_monitor PID is {}".format(
-            self._archive_directory_monitor_pid))
+        if parse_tag(self.source_name) != "FB":
+            cmd = "numactl -m {} taskset -c {} python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
+                self.numa_number, NUMA_MODE[self.numa_number][3], in_path, out_path)
+            log.debug("Running command: {0}".format(cmd))
+            log.info("Staring archive monitor")
+            self._archive_directory_monitor = ExecuteCommand(
+                cmd, outpath=out_path, resident=True)
+            self._archive_directory_monitor.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._archive_directory_monitor.fscrunch_callbacks.add(
+                self._add_fscrunch_to_sensor)
+            self._archive_directory_monitor.tscrunch_callbacks.add(
+                self._add_tscrunch_to_sensor)
+            self._archive_directory_monitor.profile_callbacks.add(
+                self._add_profile_to_sensor)
+            self._archive_directory_monitor_pid = self._archive_directory_monitor.pid
+            log.debug("_archive_directory_monitor PID is {}".format(
+                self._archive_directory_monitor_pid))
 
         cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_nt --header {dada_header} --dada-mode 4 --quiet".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
