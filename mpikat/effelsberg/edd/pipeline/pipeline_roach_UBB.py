@@ -1260,7 +1260,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             log.debug("Stopping")
             self._timeout = 10
-            if parse_tag(self.source_name) = "FB":
+            if parse_tag(self.source_name) == "FB":
                 process = [self._mkrecv_ingest_proc,
                            self._polnmerge_proc]
             else:
