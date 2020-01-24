@@ -43,7 +43,7 @@ import tempfile
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.GatedSpectrometerPipeline")
 log.setLevel('DEBUG')
 
-# DADA BUFFERS TO BE USED 
+# DADA BUFFERS TO BE USED
 DADABUFFERS = ["dada", "dadc"]
 
 
@@ -59,7 +59,7 @@ DADABUFFERS = ["dada", "dadc"]
 #        self.__key = getFreeBufferKey()
 #        self.nblocks = nblocks
 #        self.blocksize = blcoksize
-#    
+#
 #    def allocate(self):
 #
 #
@@ -89,7 +89,7 @@ DEFAULT_CONFIG = {
         "supported_input_formats": {"MPIFR_EDD_Packetizer": [1]},      # supproted input formats name:version
         "samples_per_block": 256 * 1024 * 1024,             # 256 Mega sampels per buffer block to allow high res  spectra - the
                                                             # theoretical  mazimum is thus  128 M Channels.   This option  allows
-                                                            # to tweak  the execution on  low-mem GPUs or  ig the GPU is  shared 
+                                                            # to tweak  the execution on  low-mem GPUs or  ig the GPU is  shared
                                                             # with other  codes
         "input_data_streams":
         {
@@ -191,9 +191,6 @@ NINDICES            1      # Although there is more than one index, we are only 
 
 # The first index item is the running timestamp
 IDX1_ITEM           0      # First item of a SPEAD heap
-# Modulo to create  a delay to syncronize multiple mkrecv instances - should be
-# a prime of heaps to wait
-IDX1_MODULO         118751 # approx 0.2 s @ 2.6GHz  # other primes: 149993, 349403, 454199, 799529, 1044149
 
 # Add side item to buffer
 SCI_LIST            2
@@ -378,7 +375,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
         log.info("Final configuration:\n" + cfs)
 
         self.__numa_node_pool = []
-        # remove numa nodes with missing capabilities 
+        # remove numa nodes with missing capabilities
         for node in numa.getInfo():
             if len(numa.getInfo()[node]['gpus']) < 1:
                 log.debug("Not enough gpus on numa node {} - removing from pool.".format(node))
@@ -387,7 +384,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 log.debug("Not enough nics on numa node {} - removing from pool.".format(node))
                 continue
             else:
-                self.__numa_node_pool.append(node) 
+                self.__numa_node_pool.append(node)
 
         log.debug("{} numa nodes remaining in pool after cosntraints.".format(len(self.__numa_node_pool)))
 
@@ -431,7 +428,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                     rate ({:.0f}%):        {} Gbps'.format(nSlices, nChannels, output_bufferSize, integrationTime, output_heapSize, self._config["output_rate_factor"]*100, rate / 1E9))
             self._subprocessMonitor = SubprocessMonitor()
 
-            numa_node = self.__numa_node_pool[i] 
+            numa_node = self.__numa_node_pool[i]
             log.debug("Associating {} with numa node {}".format(streamid, numa_node))
 
             # configure dada buffer
@@ -540,9 +537,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
                     fastest_nic, nic_params = numa.getFastestNic(numa_node)
                     log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nic_params['ip'], nic_params['speed']))
                     physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
-                    cmd = "taskset -c {physcpu} mkrecv_nt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --dada-key {dada_key} \
-                    --sync-epoch {sync_time} --sample-clock {sample_rate} \
-                    --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nic_params['ip'], 
+                    cmd = "taskset -c {physcpu} mkrecv_nt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --idx1-modulo {sample_rate} \
+                    --dada-key {dada_key} --sync-epoch {sync_time} --sample-clock {sample_rate} \
+                    --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nic_params['ip'],
                             **cfg )
                     mk = ManagedProcess(cmd, stdout_handler=self._polarization_sensors[streamid]["mkrecv_sensors"].stdout_handler)
                 else:
