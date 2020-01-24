@@ -203,6 +203,8 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         elif "packetizers" not in config:
             log.warning("No packetizers in config!")
             config["packetizers"] = []
+        if not 'products' in config:
+            config["products"] = []
 
         # Get output streams from packetizer and configure packetizer
         log.info("Configuring digitisers/packetisers")
@@ -263,7 +265,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 else:
                     raise RuntimeError("Input streams has to be dict ofr list, got: {}!".format(type(product["input_data_streams"])))
 
-
                 datastream = self.__eddDataStore.getDataFormatDefinition(inputStream['format'])
                 datastream.update(inputStream)
                 if not "source" in inputStream:
@@ -279,7 +280,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 product["input_data_streams"][k] = datastream
 
         log.debug("Updated configuration:\n '{}'".format(json.dumps(config, indent=2)))
-
         log.info("Configuring products")
         for product_config in config["products"]:
             product_id = product_config["id"]
@@ -299,15 +299,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
             yield self.__controller[product_id].configure(product_config)
 
-        # ToDo: Unify FitsInterfaceClient with ServerProductController 
-#        log.info("Configuring FITS interfaces")
-#        for fi_config in config["fits_interfaces"]:
-#            fi = EddFitsInterfaceClient(fi_config["id"], fi_config["address"])
-#            yield fi.configure(fi_config)
-#            self.__controller[fi_config["id"]] = fi
-
         self._edd_config_sensor.set_value(json.dumps(config))
-        #self._update_products_sensor()
         log.info("Successfully configured EDD")
         raise Return("Successfully configured EDD") 
 
