@@ -1264,8 +1264,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 process = [self._mkrecv_ingest_proc,
                            self._polnmerge_proc]
             else:
-                process = [self._mkrecv_ingest_proc,
-                           self._polnmerge_proc]
+            	process = [self._mkrecv_ingest_proc,
+                       self._polnmerge_proc, self._archive_directory_monitor]
 
             for proc in process:
                 time.sleep(2)
