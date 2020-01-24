@@ -77,14 +77,14 @@ class EddServerProductController(object):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        self._safe_request("capture_stop")
+        self._safe_request("measurement_start")
 
     @coroutine
     def measurement_stop(self):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        self._safe_request("capture_stop")
+        self._safe_request("measurement_stop")
 
 
     @coroutine
