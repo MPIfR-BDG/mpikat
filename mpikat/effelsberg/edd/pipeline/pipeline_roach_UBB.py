@@ -1142,7 +1142,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 keyfile=dada_key_file.name)
         elif parse_tag(self.source_name) == "FB":
         	cmd = " numactl -m 1 taskset -c 19,20,21,22,23,24,25,26,27,28 digifil -threads 10 -F 512 -b-32 -d 1 -I 0 -t 50 keyfile"
-        	 pass
+        	 #pass
         else:
             error = "source is unknown"
             raise EddPulsarPipelineError(error)
