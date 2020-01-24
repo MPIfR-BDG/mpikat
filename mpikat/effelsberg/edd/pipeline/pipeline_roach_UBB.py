@@ -1293,6 +1293,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 os.remove("./core")
             except Exception as error:
                 log.debug("cannot delete core")
+            if parse_tag(self.source_name) == "FB":
+            	try:
+            		os.kill(self._dspsr_pid, signal.SIGTERM)
+            	except Exception as error:
+            		log.debug("cannot kill digifil process")
+
+
 
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
