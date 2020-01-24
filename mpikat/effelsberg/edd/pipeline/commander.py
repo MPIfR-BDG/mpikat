@@ -136,7 +136,7 @@ class KATCPToIGUIConverter(object):
         added = current_sensors.difference(self.previous_sensors)
         log.debug("Sensors added since last update: {}".format(added))
         for name in list(added):
-        #for name in ["source_name", "observing", "timestamp"]:
+            # for name in ["source_name", "observing", "timestamp"]:
             # if name == 'observing':
             #log.debug("Setting sampling strategy and callbacks on sensor '{}'".format(name))
             # strat3 = ('event-rate', 2.0, 3.0)              #event-rate doesn't work
@@ -203,7 +203,7 @@ class EddCommander(AsyncDeviceServer):
         self._dspsr = None
         self._mkrecv_ingest_proc = None
         self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
-        #self._status_server = KATCPToIGUIConverter("134.104.70.66", 6000)        
+        #self._status_server = KATCPToIGUIConverter("134.104.70.66", 6000)
         self._status_server.start()
         self._status_server.sensor_callbacks.add(
             self.sensor_update)
@@ -250,23 +250,64 @@ class EddCommander(AsyncDeviceServer):
             #log.debug("observing  = {}".format((self._observing.value() == 'True')))
             #log.debug("source_name = {}".format(self._source.value()))
             if bool(self.last_value == False) & bool(self.first_true == True) & bool(self._observing.value() == 'True'):
-                log.debug("observing  = {}".format((self._observing.value() == 'True')))
+                log.debug("observing  = {}".format(
+                    (self._observing.value() == 'True')))
                 log.debug("source_name = {}".format(self._source.value()))
                 log.debug("source ra = {}".format(self._ra.value()))
                 log.debug("source dec = {}".format(self._dec.value()))
                 log.debug("Should send a start command to the pipeline with source name : {}".format(
                     self._source.value()))
-                json_string = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":0})
-                json_string_1mc = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":5})
-                log.debug(json_string)
-                log.debug(json_string_1mc)
+
+                if self._source.value().split("_")[1] == "2K":
+                    json_string_numa0 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[2]), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
+                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[2]), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
+
+                if self._source.value().split("_")[1] == "4K":
+                    json_string_numa0 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[2]), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
+                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[2]), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
+
+                if self._source.value().split("_")[1] == "8K":
+                    json_string_numa0 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[2]), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
+                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[2]), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
+
+                if self._source.value().split("_")[1] == "16K":
+                    json_string_numa0 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[2]), "nchannels": 8192, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
+                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[2]), "nchannels": 8192, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
+
+                else:
+                    json_string_numa0 = json.dumps({"source-name": "{}".format(self._source.value(
+                    )), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
+                    json_string_numa1 = json.dumps({"source-name": "{}".format(self._source.value(
+                    )), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
+
+                log.debug("JSON string waiting to be sent:")
+                log.debug(json_string_numa0)
+                log.debug(json_string_numa1)
                 self.first_true = False
                 self.last_value = True
                 time.sleep(5)
-                self._edd00_numa0.req.start(json_string)
-                self._edd00_numa1.req.start(json_string)
-                #self._edd01_numa0.req.start(json_string)
-                #self._edd01_numa1.req.start(json_string_1mc)
+                self._edd00_numa0.req.start(json_string_numa0)
+                self._edd00_numa1.req.start(json_string_numa1)
+
+                #json_string = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":0})
+                #json_string_1mc = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":5})
+                # log.debug(json_string)
+                # log.debug(json_string_1mc)
+                #self.first_true = False
+                #self.last_value = True
+                # time.sleep(5)
+                # self._edd00_numa0.req.start(json_string)
+                # self._edd00_numa1.req.start(json_string)
+                # self._edd01_numa0.req.start(json_string)
+                # self._edd01_numa1.req.start(json_string_1mc)
 
             elif bool(self._observing.value() == 'False') & bool(self.last_value == True):
                 log.debug("Should send a stop to the pipeline")
@@ -274,9 +315,8 @@ class EddCommander(AsyncDeviceServer):
                 self.last_value = False
                 self._edd00_numa0.req.stop()
                 self._edd00_numa1.req.stop()
-                #self._edd01_numa0.req.stop()
-                #self._edd01_numa1.req.stop()
-
+                # self._edd01_numa0.req.stop()
+                # self._edd01_numa1.req.stop()
 
     def new_sensor(self, sensor_name, callback):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))

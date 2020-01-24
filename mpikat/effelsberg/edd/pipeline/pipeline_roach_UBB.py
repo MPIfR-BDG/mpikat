@@ -94,7 +94,7 @@ CONFIG = {
 
 NUMA_MODE = {
     0: ("0-5", "6", "7,8,9", "10"),
-    1: ("18-21", "22", "23,24,25", "26")
+    1: ("18-21", "22", "23,24,25,26,27,28,29,30,31,32", "33")
 }
 INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15",
              2: "10.10.1.16", 3: "10.10.1.17"}
@@ -1140,6 +1140,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
+        elif parse_tag(self.source_name) == "FB":
+        	cmd = " numactl -m 1 taskset -c 19,20,21,22,23,24,25,26,27,28 digifil -threads 10 -F 512 -b-32 -d 1 -I 0 -t 50 keyfile"
+        	 pass
         else:
             error = "source is unknown"
             raise EddPulsarPipelineError(error)
