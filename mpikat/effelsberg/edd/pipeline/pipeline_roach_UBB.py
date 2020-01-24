@@ -1296,7 +1296,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             if parse_tag(self.source_name) == "FB":
             	try:
             		log.debug("trying to kill digifil")
-            		os.kill(self._dspsr_pid, signal.SIGTERM)
+            		os.system("kill -9 $(pidof 'digifil')")
             	except Exception as error:
             		log.debug("cannot kill digifil process")
 
