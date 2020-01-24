@@ -1295,6 +1295,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 log.debug("cannot delete core")
             if parse_tag(self.source_name) == "FB":
             	try:
+            		log.debug("trying to kill digifil")
             		os.kill(self._dspsr_pid, signal.SIGTERM)
             	except Exception as error:
             		log.debug("cannot kill digifil process")
