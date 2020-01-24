@@ -1260,8 +1260,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             log.debug("Stopping")
             self._timeout = 10
-            process = [self._mkrecv_ingest_proc,
-                       self._polnmerge_proc, self._archive_directory_monitor]
+            if parse_tag(self.source_name) = "FB":
+                process = [self._mkrecv_ingest_proc,
+                           self._polnmerge_proc]
+            else:
+                process = [self._mkrecv_ingest_proc,
+                           self._polnmerge_proc]
+
             for proc in process:
                 time.sleep(2)
                 proc.set_finish_event()
@@ -1315,6 +1320,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.error("cannot kill _dspsr, {}".format(error))
         if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
             os.remove("/tmp/t2pred.dat")
+        try:
+        	log.debug("removing core if there is any")
+        	os.remove("./core")
+        except Exception as error:
+        	log.error("cannot remove core, {}".format(error))
 
         try:
             log.debug("deleting buffers")
