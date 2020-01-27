@@ -1,8 +1,7 @@
 import logging
 import json
 from tornado.gen import Return, coroutine
-from katcp import Sensor, Message, KATCPClientResource
-from mpikat.core.product_controller import ProductController, state_change
+from katcp import KATCPClientResource
 
 log = logging.getLogger("mpikat.edd_server_product_controller")
 
@@ -62,14 +61,14 @@ class EddServerProductController(object):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        self._safe_request("capture_start")
+        yield self._safe_request("capture_start")
 
     @coroutine
     def capture_stop(self):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        self._safe_request("capture_stop")
+        yield self._safe_request("capture_stop")
 
 
     @coroutine
@@ -77,14 +76,14 @@ class EddServerProductController(object):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        self._safe_request("measurement_start")
+        yield self._safe_request("measurement_start")
 
     @coroutine
     def measurement_stop(self):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        self._safe_request("measurement_stop")
+        yield self._safe_request("measurement_stop")
 
 
     @coroutine
