@@ -231,6 +231,7 @@ def launch_server(server):
     # This line is required to bypass tornado error when no handler is
     # is set on the root logger
     logging.getLogger().addHandler(logging.NullHandler())
+
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
         level=logging.DEBUG,
@@ -242,5 +243,7 @@ def launch_server(server):
     ioloop.start()
 
 if __name__ == "__main__":
-    server = Example("0.0.0.0", 5000, ioloop)
+    server = Example("0.0.0.0", 5000)
     launch_server(server)
+
+
