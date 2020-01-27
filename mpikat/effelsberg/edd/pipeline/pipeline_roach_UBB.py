@@ -1116,10 +1116,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
 
         if parse_tag(self.source_name) == "R":
-        	log.debug("setting noise diode firing to 0.5 every 1s")
+            log.debug("setting noise diode firing to 0.5 every 1s")
             yield self._digpack_client.set_noise_diode_firing("0.5", "1.0")
         else:
-        	log.debug("setting noise diode firing to 0 every 1s")
+            log.debug("setting noise diode firing to 0 every 1s")
             yield self._digpack_client.set_noise_diode_firing("0", "1.0")
 
         os.chdir(in_path)
