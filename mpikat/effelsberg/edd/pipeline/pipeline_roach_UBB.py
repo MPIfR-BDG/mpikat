@@ -1114,6 +1114,14 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING DSPSR                                    #
         ####################################################
+
+        if parse_tag(self.source_name) == "R":
+        	log.debug("setting noise diode firing to 0.5 every 1s")
+            yield self._digpack_client.set_noise_diode_firing("0.5", "1.0")
+        else:
+        	log.debug("setting noise diode firing to 0 every 1s")
+            yield self._digpack_client.set_noise_diode_firing("0", "1.0")
+
         os.chdir(in_path)
         log.debug("line1089")
         if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
@@ -1264,8 +1272,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 process = [self._mkrecv_ingest_proc,
                            self._polnmerge_proc]
             else:
-            	process = [self._mkrecv_ingest_proc,
-                       self._polnmerge_proc, self._archive_directory_monitor]
+                process = [self._mkrecv_ingest_proc,
+                           self._polnmerge_proc, self._archive_directory_monitor]
 
             for proc in process:
                 time.sleep(2)
@@ -1294,13 +1302,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
             except Exception as error:
                 log.debug("cannot delete core")
             if parse_tag(self.source_name) == "FB":
-            	try:
-            		log.debug("trying to kill digifil")
-            		os.system("kill -9 $(pidof 'digifil')")
-            	except Exception as error:
-            		log.debug("cannot kill digifil process")
-
-
+                try:
+                    log.debug("trying to kill digifil")
+                    os.system("kill -9 $(pidof 'digifil')")
+                except Exception as error:
+                    log.debug("cannot kill digifil process")
 
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
@@ -1329,10 +1335,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
         if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
             os.remove("/tmp/t2pred.dat")
         try:
-        	log.debug("removing core if there is any")
-        	os.remove("./core")
+            log.debug("removing core if there is any")
+            os.remove("./core")
         except Exception as error:
-        	log.error("cannot remove core, {}".format(error))
+            log.error("cannot remove core, {}".format(error))
 
         try:
             log.debug("deleting buffers")

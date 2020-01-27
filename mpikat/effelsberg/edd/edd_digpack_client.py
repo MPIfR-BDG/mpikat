@@ -156,6 +156,17 @@ class DigitiserPacketiserClient(object):
         yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
 
     @coroutine
+    def set_noise_diode_firing(self, fraction, cycle_length):
+        """
+        @brief      Sets the noise_diode firing fraction
+
+        @param      factor (e.g. 0, 0.5, 1)
+
+        """
+        yield self._safe_request("noise_source", "now", fraction, cycle_length)
+
+
+    @coroutine
     def set_flipsignalspectrum(self, value):
         """
         @brief      Sets the rxs-packetizer-edd-flipsignalspectrum data out of the packetiser
