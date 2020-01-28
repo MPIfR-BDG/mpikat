@@ -259,7 +259,7 @@ class EddCommander(AsyncDeviceServer):
                     self._source.value()))
                 if len(self._source.value().split("_")) == 1:
                     log.debug("source name is {} can't use for pulsar observation".format(self._source.value()))
-                    break
+                    
                 else:    
                     log.debug("mode = {}".format(
                         self._source.value().split("_")[1]))
