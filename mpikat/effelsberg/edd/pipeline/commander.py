@@ -267,7 +267,7 @@ class EddCommander(AsyncDeviceServer):
                 if self._source.value().split("_")[1] == "2K":
                     log.debug("making JSON for mode = {}".format(self._source.value().split("_")[1]))
                     json_source_name = self._source.value().split("_")
-                    log.debug("json_source_name= {}_{}".format(json_source_name[0],json_source_name[2])
+                    log.debug("json_source_name= {}_{}".format(json_source_name[0],json_source_name[2]))
                     json_string_numa0 = json.dumps({"source-name": "{}_{}".format(json_source_name[0],json_source_name[2]), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":1})
                     json_string_numa1 = json.dumps({"source-name": "{}_{}".format(json_source_name[0],json_source_name[2]), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":0})
                     #log.debug(json_string_numa0)
