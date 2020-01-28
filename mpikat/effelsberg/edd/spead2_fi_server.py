@@ -422,8 +422,6 @@ class HeapPacket(object):
             setattr(self, item.name, item.value)
         ts_count = ''
         sync = ''
-        if(self.ndStatus == 1):
-            self.timestamp_count = self.timestamp
         for i in range(6):
             ts_count = ts_count+'{0:08b}'.format(self.timestamp_count[i])
             sync = sync+'{0:08b}'.format(self.synctime[i])
@@ -434,6 +432,8 @@ class HeapPacket(object):
         self.integtime = (self.nspectrum*self.fft_length)/self.sampling_rate
         t = (sync+((ts_count+(self.nspectrum*self.fft_length)/2)/self.sampling_rate))
         self.timestamp = datetime.fromtimestamp(t).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-2]
+
+
 
 
 def build_fw_type(nsections, nchannels):
