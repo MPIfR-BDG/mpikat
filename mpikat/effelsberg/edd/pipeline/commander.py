@@ -258,35 +258,47 @@ class EddCommander(AsyncDeviceServer):
                 log.debug("Should send a start command to the pipeline with source name : {}".format(
                     self._source.value()))
 
+                if self._source.value().split("_")[1] == "1K":
+                    json_string_numa0 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[2]), "nchannels": 512, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
+                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[2]), "nchannels": 512, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
+
                 if self._source.value().split("_")[1] == "2K":
                     json_string_numa0 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
-                    ).split("_")[2]), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
-                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
                     ).split("_")[2]), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
+                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[2]), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
 
                 if self._source.value().split("_")[1] == "4K":
                     json_string_numa0 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
-                    ).split("_")[2]), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
-                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
                     ).split("_")[2]), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
+                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[2]), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
 
                 if self._source.value().split("_")[1] == "8K":
                     json_string_numa0 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
-                    ).split("_")[2]), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
-                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
                     ).split("_")[2]), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
+                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[2]), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
 
                 if self._source.value().split("_")[1] == "16K":
                     json_string_numa0 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
-                    ).split("_")[2]), "nchannels": 8192, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
-                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
                     ).split("_")[2]), "nchannels": 8192, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
+                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[2]), "nchannels": 8192, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
+
+                if self._source.value().split("_")[1] == "FB":
+                    json_string_numa0 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[1]), "nchannels": 8192, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
+                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
+                    ).split("_")[1]), "nchannels": 8192, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
 
                 else:
                     json_string_numa0 = json.dumps({"source-name": "{}".format(self._source.value(
-                    )), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
+                    )), "nchannels": 512, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
                     json_string_numa1 = json.dumps({"source-name": "{}".format(self._source.value(
-                    )), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
+                    )), "nchannels": 512, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
 
                 log.debug("JSON string waiting to be sent:")
                 log.debug(json_string_numa0)
@@ -315,8 +327,6 @@ class EddCommander(AsyncDeviceServer):
                 self.last_value = False
                 self._edd00_numa0.req.stop()
                 self._edd00_numa1.req.stop()
-                # self._edd01_numa0.req.stop()
-                # self._edd01_numa1.req.stop()
 
     def new_sensor(self, sensor_name, callback):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))
