@@ -303,12 +303,12 @@ class EddCommander(AsyncDeviceServer):
                     json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
                     ).split("_")[1]), "nchannels": 8192, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
 
-                else:
-                    log.debug("making JSON for mode = {}".format(self._source.value().split("_")[1]))
-                    json_string_numa0 = json.dumps({"source-name": "{}".format(self._source.value(
-                    )), "nchannels": 512, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
-                    json_string_numa1 = json.dumps({"source-name": "{}".format(self._source.value(
-                    )), "nchannels": 512, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
+                #else:
+                #    log.debug("making JSON for mode = {}".format(self._source.value().split("_")[1]))
+                #    json_string_numa0 = json.dumps({"source-name": "{}".format(self._source.value(
+                #    )), "nchannels": 512, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
+                #    json_string_numa1 = json.dumps({"source-name": "{}".format(self._source.value(
+                #    )), "nchannels": 512, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
 
                 log.debug("JSON string waiting to be sent:")
                 log.debug(json_string_numa0)
