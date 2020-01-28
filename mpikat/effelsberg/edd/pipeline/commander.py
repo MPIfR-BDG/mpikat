@@ -257,7 +257,7 @@ class EddCommander(AsyncDeviceServer):
                 log.debug("source dec = {}".format(self._dec.value()))
                 log.debug("Should send a start command to the pipeline with source name : {}".format(
                     self._source.value()))
-
+                log.debug("mode = {}".format(self._source.value().split("_")[1]))
                 if self._source.value().split("_")[1] == "1K":
                     json_string_numa0 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value(
                     ).split("_")[2]), "nchannels": 512, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
