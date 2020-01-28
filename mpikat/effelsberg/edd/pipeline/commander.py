@@ -266,14 +266,14 @@ class EddCommander(AsyncDeviceServer):
 
                 if self._source.value().split("_")[1] == "2K":
                     log.debug("making JSON for mode = {}".format(self._source.value().split("_")[1]))
-                    json_source_name = self._source.value().split("_")
-                    json_string_numa0 = json.dumps({"source-name": "{}".format(json_source_name[1]), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":1})
-                    json_string_numa1 = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":0})
-                    log.debug(json_string_numa0)
-                    log.debug(json_string_numa1)
+                    #json_source_name = self._source.value().split("_")
+                    #json_string_numa0 = json.dumps({"source-name": "{}".format(json_source_name[1]), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":1})
+                    #json_string_numa1 = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":0})
+                    #log.debug(json_string_numa0)
+                    #log.debug(json_string_numa1)
                     #log.debug("{}".format({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value().split("_")[2]), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1}))
-                    #json_string_numa0 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value().split("_")[2]), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
-                    #json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value().split("_")[2]), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
+                    json_string_numa0 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value().split("_")[2]), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
+                    json_string_numa1 = json.dumps({"source-name": "{}_{}".format(self._source.value().split("_")[0], self._source.value().split("_")[2]), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 0})
 
                 if self._source.value().split("_")[1] == "4K":
                     log.debug("making JSON for mode = {}".format(self._source.value().split("_")[1]))
