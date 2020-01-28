@@ -265,8 +265,9 @@ class FitsInterfaceServer(EDDPipeline):
                     raise RuntimeError("All input streams have to use the same port!!!")
 
         if self._fw_connection_manager is not None:
-            self._fw_connection_manager.drop_connection()
             self._fw_connection_manager.stop()
+            self._fw_connection_manager.drop_connection()
+            self._fw_connection_manager.join()
         self._fw_connection_manager = FitsWriterConnectionManager( self._config["fits_writer_ip"], self._config["fits_writer_port"])
         self._fw_connection_manager.start()
 
@@ -368,8 +369,10 @@ class CaptureData(Thread):
         """
         @brief      Stop the capture thread
         """
+        self._handler.stop = True
         self.stream.stop()
         self._stop_event.set()
+
 
     def resource_allocation(self):
         thread_pool = spead2.ThreadPool(threads=4)
@@ -503,6 +506,7 @@ class StreamHandler(object):
         self._nheaps = 0
         self._complete_heaps = 0
         self._incomplete_heaps = 0
+        self.stop = False
 
     def __call__(self, stream):
         """
@@ -525,6 +529,8 @@ class StreamHandler(object):
             if not self._first_heap:
                 self.aggregate_data(self.packet)
             self._first_heap = False
+            if self.stop:
+                break
 
     def aggregate_data(self, packet):
         sec_id = packet.polID
