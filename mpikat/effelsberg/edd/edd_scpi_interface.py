@@ -44,8 +44,11 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         @note       Suports SCPI request: 'EDD:CONFIGURE'
         """
         yield self.__controller.configure()
+        #self.__controller.capture_start()
 
     @scpi_request()
+    @raise_or_ok
+    @coroutine
     def request_edd_deconfigure(self, req):
         """
         @brief      Deconfigure the EDD backend
@@ -57,6 +60,8 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         yield self.__controller.deconfigure()
 
     @scpi_request()
+    @raise_or_ok
+    @coroutine
     def request_edd_start(self, req):
         """
         @brief      Start the EDD backend processing
@@ -65,9 +70,11 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:START'
         """
-        yield self.__controller.capture_start()
+        yield self.__controller.measurement_start()
 
     @scpi_request()
+    @raise_or_ok
+    @coroutine
     def request_edd_stop(self, req):
         """
         @brief      Stop the EDD backend processing
@@ -76,7 +83,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:STOP'
         """
-        yield self.__controller.capture_stop()
+        yield self.__controller.measurement_stop()
 
     @scpi_request(str)
     @raise_or_ok
@@ -111,9 +118,9 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 if __name__ == "__main__":
 
     parser = EDDPipeline.getArgumentParser()
-    parser.add_argument('--master-controller-ip', dest='master_ip', type=str, default="localhost",
+    parser.add_argument('--master-controller-ip', dest='master_ip', type=str, default="edd01",
                       help='The ip for the master controller')
-    parser.add_argument('--master-controller-port', dest='master_port', type=int, default=1239,
+    parser.add_argument('--master-controller-port', dest='master_port', type=int, default=7147,
                       help='The port number for the master controller')
     args = parser.parse_args()
 
