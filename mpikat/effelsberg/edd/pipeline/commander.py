@@ -211,12 +211,12 @@ class EddCommander(AsyncDeviceServer):
             self.new_sensor)
         self._edd00_numa0 = KATCPClientResource(dict(
             name='_edd00_numa0-client',
-            address=("134.104.70.66", 5000),
+            address=("134.104.70.66", 6000),
             controlled=True))
         self._edd00_numa0.start()
         self._edd00_numa1 = KATCPClientResource(dict(
             name='_edd00_numa1-client',
-            address=("134.104.70.66", 5001),
+            address=("134.104.70.66", 6001),
             controlled=True))
         self._edd00_numa1.start()
         """
