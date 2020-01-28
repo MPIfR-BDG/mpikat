@@ -422,11 +422,15 @@ class HeapPacket(object):
             setattr(self, item.name, item.value)
         ts_count = ''
         sync = ''
+        if(self.ndStatus == 1):
+            self.timestamp_count = self.timestamp
         for i in range(6):
             ts_count = ts_count+'{0:08b}'.format(self.timestamp_count[i])
             sync = sync+'{0:08b}'.format(self.synctime[i])
         ts_count = int(ts_count,2)
         sync = int(sync,2)
+        if(self.ndStatus == 1):
+            sync += 0.0001
         self.integtime = (self.nspectrum*self.fft_length)/self.sampling_rate
         t = (sync+((ts_count+(self.nspectrum*self.fft_length)/2)/self.sampling_rate))
         self.timestamp = datetime.fromtimestamp(t).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-2]
@@ -490,7 +494,7 @@ class StreamHandler(object):
         @param  transmit_soc       FITS writer interface to which the data is sent
         @param  max_age            timeout
         """
-        self._nsections = heap_group
+        self._nsections = 2
         self._data_to_fw = {}
         self._nphases = 1
         self._transmit_socket = transmit_socket
@@ -523,8 +527,10 @@ class StreamHandler(object):
             self._first_heap = False
 
     def aggregate_data(self, packet):
-        sec_id = (packet.polID*2)+packet.ndStatus
-        key = tuple(packet.timestamp_count)
+        sec_id = packet.polID
+        self._nphases = packet.ndStatus
+        #key = tuple(packet.timestamp_count)
+        key = tuple(packet.timestamp)
         if key not in self._data_to_fw:
             fw_pkt = build_fw_object(self._nsections, int(packet.nchannels), packet.timestamp,
                                      (packet.integtime*1000), self._nphases)
