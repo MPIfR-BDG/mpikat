@@ -98,12 +98,13 @@ class FitsWriterConnectionManager(Thread):
         """
         @brief   Drop any current FITS writer connection and waits for new one.
         """
+        log.debug("Drop connection")
         if not self._transmit_socket is None:
             self._transmit_socket.shutdown(socket.SHUT_RDWR)
             self._transmit_socket.close()
             self._transmit_socket = None
             self._has_connection.clear()
-            self._accept_connection()
+            #self._accept_connection()
 
 
     def get_transmit_socket(self, timeout=20):
@@ -584,6 +585,7 @@ class StreamHandler(object):
                 log.debug("Heap statistics: total_heaps: {}, complete_heaps: {}, incomplete_heaps: {}".format(
                           self._nheaps, self._complete_heaps, self._incomplete_heaps))
                 self._transmit_socket.send(bytearray(fw_packet))
+                log.debug("Len of bytearray: {}".format(len(bytearray(fw_packet))))
                 del self._data_to_fw[key]
         log.debug(
             "Number of active packets post-flush: {}".format(
