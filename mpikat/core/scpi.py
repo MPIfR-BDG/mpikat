@@ -9,6 +9,7 @@ from tornado.gen import Return, coroutine, sleep
 from threading import Thread, Event
 from Queue import Queue
 from datetime import datetime
+import time
 
 log = logging.getLogger("mpikat.scpi")
 
@@ -218,7 +219,8 @@ class Example(ScpiAsyncDeviceServer):
     @raise_or_ok
     @coroutine
     def request_dummy_test(self, req, message):
-        print message
+        print('received message {}, sleeping (5s) ...'.format(message))
+        time.sleep(5)
 
 
 @coroutine

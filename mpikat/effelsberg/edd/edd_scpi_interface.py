@@ -43,7 +43,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:CONFIGURE'
         """
-        yield self.__controller.configure()
+        self.__controller.configure()
         #self.__controller.capture_start()
 
     @scpi_request()
@@ -57,7 +57,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:DECONFIGURE'
         """
-        yield self.__controller.deconfigure()
+        self.__controller.deconfigure()
 
     @scpi_request()
     @raise_or_ok
@@ -70,7 +70,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:START'
         """
-        yield self.__controller.measurement_start()
+        self.__controller.measurement_start()
 
     @scpi_request()
     @raise_or_ok
@@ -83,7 +83,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:STOP'
         """
-        yield self.__controller.measurement_stop()
+        self.__controller.measurement_stop()
 
     @scpi_request(str)
     @raise_or_ok
@@ -104,7 +104,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
             d[i] = {}
             d = d[i]
         d[p[-1]] = o
-        yield self.__controller.set(g)
+        self.__controller.set(g)
 
     @scpi_request(str)
     def request_edd_construct(self, req, message):
