@@ -316,12 +316,12 @@ class FitsInterfaceServer(EDDPipeline):
         return ("ok",)
 
 
-
     @coroutine
     def measurement_stop(self):
         log.info("Stopping FITS interface capture")
         self._stop_capture()
         self._fw_connection_manager.drop_connection()
+
 
     @request()
     @return_reply()
@@ -431,11 +431,20 @@ class HeapPacket(object):
         ts_count = int(ts_count,2)
         sync = int(sync,2)
         if(self.ndStatus == 1):
-            sync += 0.0001
+            sync += 0.0050
         self.integtime = (self.nspectrum*self.fft_length)/self.sampling_rate
         t = (sync+((ts_count+(self.nspectrum*self.fft_length)/2)/self.sampling_rate))
-        self.timestamp = datetime.fromtimestamp(t).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-2]
+        def local_to_utc(t):
+            secs = time.mktime(t)
+            return time.gmtime(secs)
 
+        log.debug(type(t))
+        log.debug(t)
+
+        dto = datetime.fromtimestamp(float(t))
+        self.timestamp = time.strftime('%Y-%m-%dT%H:%M:%S', local_to_utc(dto.timetuple() ))
+        self.timestamp += ".{}UTC ".format(int((float(t) - int(t)) * 10000))
+        log.debug(self.timestamp)
 
 
 
@@ -571,7 +580,7 @@ class StreamHandler(object):
                 log.debug(
                     "Sending complete packet with timestamp: {}".format(
                         timestamp))
-                log.debug("Ringbuffer size: {}".format(self.rb.size()))
+                log.debug("Heaps in Ringbuffer: {}".format(self.rb.size()))
                 log.debug("Heap statistics: total_heaps: {}, complete_heaps: {}, incomplete_heaps: {}".format(
                           self._nheaps, self._complete_heaps, self._incomplete_heaps))
                 self._transmit_socket.send(bytearray(fw_packet))
