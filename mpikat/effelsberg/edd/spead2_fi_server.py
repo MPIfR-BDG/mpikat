@@ -416,13 +416,14 @@ class HeapPacket(object):
         return self.ig
 
     def unpack_heap(self, heap):
+        log.debug("Unpacking heap")
         items = self.ig.update(heap)
         for item in items.values():
             if (item.id == 5635) and (self._first_heap):
                 self.nchannels = int((item.value/2)+1)
                 self.ig.add_item(5640, "data", "", (self.nchannels,), dtype="<f")
                 self._first_heap = False
-            log.info("Iname: {}, Ivalue: {}".format(item.name, item.value))
+            log.debug("   Iname: {}, Ivalue: {}".format(item.name, item.value))
             setattr(self, item.name, item.value)
         ts_count = ''
         sync = ''
@@ -439,13 +440,10 @@ class HeapPacket(object):
             secs = time.mktime(t)
             return time.gmtime(secs)
 
-        log.debug(type(t))
-        log.debug(t)
-
         dto = datetime.fromtimestamp(float(t))
         self.timestamp = time.strftime('%Y-%m-%dT%H:%M:%S', local_to_utc(dto.timetuple() ))
         self.timestamp += ".{}UTC ".format(int((float(t) - int(t)) * 10000))
-        log.debug(self.timestamp)
+        log.debug("Setting packet timestamp: {}".format(self.timestamp))
 
 
 
@@ -547,16 +545,16 @@ class StreamHandler(object):
     def aggregate_data(self, packet):
         sec_id = packet.polID
         self._nphases = packet.ndStatus
-        #key = tuple(packet.timestamp_count)
         key = packet.timestamp
         if key not in self._data_to_fw:
-            fw_pkt = build_fw_object(self._nsections, int(packet.nchannels), packet.timestamp,
+            # DROP DC CHANNEL
+            fw_pkt = build_fw_object(self._nsections, int(packet.nchannels) - 1, packet.timestamp,
                                      (packet.integtime*1000), self._nphases)
-            fw_pkt.sections[int(sec_id)].data[:]=packet.data
+            fw_pkt.sections[int(sec_id)].data[:]=packet.data[1:]
             self._data_to_fw[key] = [time.time(), 1, fw_pkt]
         else:
             self._data_to_fw[key][1] += 1
-            self._data_to_fw[key][2].sections[int(sec_id)].data[:] = packet.data
+            self._data_to_fw[key][2].sections[int(sec_id)].data[:] = packet.data[1:]
         self.flush()
 
     def flush(self):
@@ -575,6 +573,7 @@ class StreamHandler(object):
                 log.warning(("Age exceeds maximum age. Incomplete packet"
                              " will be dropped."))
                 del self._data_to_fw[key]
+                #ToDo: Implement proper queue that waits for a reasonable time, depending on the integration time, or the number of packages in it
             elif timestamp < self._last_package_send_time:
                 log.warning(("Packet older than latest send, will be dropped."))
                 del self._data_to_fw[key]
@@ -591,12 +590,19 @@ class StreamHandler(object):
                 log.debug("Heap statistics: total_heaps: {}, complete_heaps: {}, incomplete_heaps: {}".format(
                           self._nheaps, self._complete_heaps, self._incomplete_heaps))
                 self._transmit_socket.send(bytearray(fw_packet))
+
+#                fn = "fw_packet_{}.dat".format(timestamp)
+#                with open(fn, 'wb') as ofile:
+#
+#                    log.debug("WROTE PACKAGE TO DISK")
+#                    ofile.write(bytearray(fw_packet))
+
+
                 self._last_package_send_time = timestamp
                 log.debug("Len of bytearray: {}".format(len(bytearray(fw_packet))))
                 del self._data_to_fw[key]
-        log.debug(
-            "Number of active packets post-flush: {}".format(
-                len(self._data_to_fw)))
+        log.debug( "Number of active packets post-flush: {}".format( len(self._data_to_fw)))
+        log.debug( " hits: {}".format(hits))
 
 
 
