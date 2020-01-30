@@ -33,8 +33,6 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
 
     @scpi_request()
-    @raise_or_ok
-    @coroutine
     def request_edd_configure(self, req):
         """
         @brief      Configure the EDD backend
@@ -43,12 +41,9 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:CONFIGURE'
         """
-        self.__controller.configure()
-        #self.__controller.capture_start()
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.configure))
 
     @scpi_request()
-    @raise_or_ok
-    @coroutine
     def request_edd_deconfigure(self, req):
         """
         @brief      Deconfigure the EDD backend
@@ -57,11 +52,9 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:DECONFIGURE'
         """
-        self.__controller.deconfigure()
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.deconfigure))
 
     @scpi_request()
-    @raise_or_ok
-    @coroutine
     def request_edd_start(self, req):
         """
         @brief      Start the EDD backend processing
@@ -70,11 +63,9 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:START'
         """
-        self.__controller.measurement_start()
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_start))
 
     @scpi_request()
-    @raise_or_ok
-    @coroutine
     def request_edd_stop(self, req):
         """
         @brief      Stop the EDD backend processing
@@ -84,10 +75,9 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         @note       Suports SCPI request: 'EDD:STOP'
         """
         self.__controller.measurement_stop()
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_stop))
 
     @scpi_request(str)
-    @raise_or_ok
-    @coroutine
     def request_edd_set(self, req, message):
         """
         @brief     Set an option for an edd backend component.
@@ -104,7 +94,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
             d[i] = {}
             d = d[i]
         d[p[-1]] = o
-        self.__controller.set(g)
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.set, g))
 
     @scpi_request(str)
     def request_edd_construct(self, req, message):
