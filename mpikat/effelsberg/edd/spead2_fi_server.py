@@ -499,7 +499,7 @@ class StreamHandler(object):
     Aggregates heaps that belong to a heap_group from one or more streams
     and sends to the fits writer
     """
-    def __init__(self, heap_group, transmit_socket, max_age=5.0):
+    def __init__(self, heap_group, transmit_socket, max_age=15.0):
         """
         @brief      Initialization of the StreamHandler thread
 
@@ -517,6 +517,7 @@ class StreamHandler(object):
         self._complete_heaps = 0
         self._incomplete_heaps = 0
         self.stop = False
+        self._last_package_send_time = 0
 
     def __call__(self, stream):
         """
@@ -531,6 +532,7 @@ class StreamHandler(object):
         for heap in stream:
             self._nheaps += 1
             if isinstance(heap, spead2.recv.IncompleteHeap):
+                log.warning('Received incomplete heap!')
                 self._incomplete_heaps += 1
                 continue
             else:
@@ -546,7 +548,7 @@ class StreamHandler(object):
         sec_id = packet.polID
         self._nphases = packet.ndStatus
         #key = tuple(packet.timestamp_count)
-        key = tuple(packet.timestamp)
+        key = packet.timestamp
         if key not in self._data_to_fw:
             fw_pkt = build_fw_object(self._nsections, int(packet.nchannels), packet.timestamp,
                                      (packet.integtime*1000), self._nphases)
@@ -566,11 +568,15 @@ class StreamHandler(object):
             "Number of active packets pre-flush: {}".format(
                 len(self._data_to_fw)))
         now = time.time()
+
         for key in sorted(self._data_to_fw.iterkeys()):
             timestamp, hits, fw_packet = self._data_to_fw[key]
             if ((now - timestamp) > self._max_age):
                 log.warning(("Age exceeds maximum age. Incomplete packet"
-                             " will be flushed to FITS writer."))
+                             " will be dropped."))
+                del self._data_to_fw[key]
+            elif timestamp < self._last_package_send_time:
+                log.warning(("Packet older than latest send, will be dropped."))
                 del self._data_to_fw[key]
             elif (hits == self._nsections):
                 try:
@@ -585,6 +591,7 @@ class StreamHandler(object):
                 log.debug("Heap statistics: total_heaps: {}, complete_heaps: {}, incomplete_heaps: {}".format(
                           self._nheaps, self._complete_heaps, self._incomplete_heaps))
                 self._transmit_socket.send(bytearray(fw_packet))
+                self._last_package_send_time = timestamp
                 log.debug("Len of bytearray: {}".format(len(bytearray(fw_packet))))
                 del self._data_to_fw[key]
         log.debug(
