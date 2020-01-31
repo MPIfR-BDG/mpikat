@@ -25,6 +25,8 @@ import json
 import os
 import time
 from astropy.time import Time
+import astropy.units as u
+from astropy.coordinates import SkyCoord
 from subprocess import PIPE, Popen
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
 from mpikat.effelsberg.edd.pipeline.dada_roach_UBB import render_dada_header, make_dada_key_string
@@ -901,8 +903,15 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.debug("frequency_mhz:{}".format(BAND[self._band_number][0]))
             self.frequency_mhz = BAND[self._band_number][0]
             self.bandwidth = 650.0
-            header["ra"] = self._source_config["ra"]
-            header["dec"] = self._source_config["dec"]
+
+            # DSPSR RA DEC format gives me hell!
+            c = SkyCoord("{} {}".format(self._source_config[
+                         "ra"], self._source_config["dec"]), unit=(u.deg, u.deg))
+            header["ra"] = c.to_string("hmsdms").split(" ")[0].replace("h", ":").replace("m", ":").replace("s", "")
+            header["dec"] = c.to_string("hmsdms").split(" ")[1].replace("d", ":").replace("m", ":").replace("s", "")
+
+            #header["ra"] = self._source_config["ra"]
+            #header["dec"] = self._source_config["dec"]
             header["idx2_list"] = BAND[self._band_number][2]
             header["frequency_mhz"] = BAND[self._band_number][0]
             self._central_freq.set_value(str(BAND[self._band_number][0]))
@@ -1116,7 +1125,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
 
         self._digpack_client = DigitiserPacketiserClient(
-                self._digpack_ip, self._digpack_port)
+            self._digpack_ip, self._digpack_port)
 
         if parse_tag(self.source_name) == "R" and self.numa_number == 0:
             log.debug("setting noise diode firing to 0.5 every 1s")
