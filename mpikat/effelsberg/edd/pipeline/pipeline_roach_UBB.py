@@ -1166,7 +1166,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
         elif parse_tag(self.source_name) == "FB":
-            cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 12 -F 512 -b-32 -d 1 -I 0 -t 50 {keyfile}".format(
+            cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 12 -F 512 -b-8 -d 1 -I 0 -t 50 {keyfile}".format(
                 numa=self.numa_number,
                 cpus=cpu_numbers,
                 keyfile=dada_key_file.name)
