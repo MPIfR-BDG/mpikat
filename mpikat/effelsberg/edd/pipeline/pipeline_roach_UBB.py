@@ -1127,10 +1127,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._digpack_client = DigitiserPacketiserClient(
             self._digpack_ip, self._digpack_port)
 
-        if parse_tag(self.source_name) == "R" and self.numa_number == 0:
+        if parse_tag(self.source_name) == "R":
             log.debug("setting noise diode firing to 0.5 every 1s")
             yield self._digpack_client.set_noise_diode_firing("0.5", "1.0")
-        elif self.numa_number == 0:
+        else:
             log.debug("setting noise diode firing to 0 every 1s")
             yield self._digpack_client.set_noise_diode_firing("0", "1.0")
 
