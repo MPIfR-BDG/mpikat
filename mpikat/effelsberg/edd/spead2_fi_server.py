@@ -27,7 +27,6 @@ import mpikat.utils.numa as numa
 
 log = logging.getLogger("mpikat.spead_fi_server")
 
-sensor_logging_queue = Queue()
 
 
 # Convert side channel item to
@@ -173,63 +172,14 @@ class FitsInterfaceServer(EDDPipeline):
         @param  fw_ip              IP address of the FITS writer
         @param  fw_port            Port number to connect to FITS writer
         """
-        EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[], id="fits_interface", type="fits_interface", fits_writer_ip="0.0.0.0", fits_writer_port=5002))
+        EDDPipeline.__init__(self, ip, port, dict(input_data_streams=[],
+            id="fits_interface", type="fits_interface",
+            fits_writer_ip="0.0.0.0", fits_writer_port=5002))
         self._configured = False
         self._capture_interface = None
         self._fw_connection_manager = None
         self._capture_thread = None
         self._shutdown = False
-
-
-    @property
-    def heap_group(self):
-        return self._heap_group_sensor.value()
-
-
-    @heap_group.setter
-    def heap_group(self, value):
-        self._heap_group_sensor.set_value(value)
-
-
-    @property
-    def nmcg(self):
-        return self._nmcg_sensor.value()
-
-
-    @nmcg.setter
-    def nmcg(self, value):
-        self._nmcg_sensor.set_value(value)
-
-
-    def setup_sensors(self):
-        """
-        @brief   Setup monitoring sensors
-        """
-        EDDPipeline.setup_sensors(self)
-        self._heap_group_sensor = Sensor.integer(
-            "heap_group",
-            description="Number of heaps for a timestamp",
-            default=1,
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._heap_group_sensor)
-        self._nmcg_sensor = Sensor.integer(
-            "nMCG",
-            description="Number of multicast groups",
-            default=1,
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._nmcg_sensor)
-        self._nchannels_sensor = Sensor.integer(
-            "nchannels",
-            description="Number of channels in each section",
-            default=1,
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._nchannels_sensor)
-        self._integration_time_sensor = Sensor.float(
-            "integration_time",
-            description="Integration time",
-            default=1,
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._integration_time_sensor)
 
 
     def _stop_capture(self):
@@ -258,8 +208,6 @@ class FitsInterfaceServer(EDDPipeline):
         log.info("Capturing on interface {}, ip: {}, speed: {} Mbit/s".format(nic_name, nic_description['ip'], nic_description['speed']))
 
         #ToDo: allow streams with multiple multicast groups and multiple ports
-        self.nmcg = len(self._config['input_data_streams'])
-        self.heap_group = len(self._config['input_data_streams'])
 
         self.mc_interface = []
         self.mc_port = None
@@ -281,7 +229,6 @@ class FitsInterfaceServer(EDDPipeline):
 
         #self._stop_capture()
         self._configured = True
-        self._nmcg_sensor.set_value(self.nmcg)
 
 
     @coroutine
@@ -368,6 +315,7 @@ class CaptureData(Thread):
         self._stop_event = Event()
         self._handler = handler
 
+
     def stop(self):
         """
         @brief      Stop the capture thread
@@ -378,11 +326,13 @@ class CaptureData(Thread):
 
 
     def resource_allocation(self):
+        #ToDo: fix magic numbers for parameters in spead stream
         thread_pool = spead2.ThreadPool(threads=4)
         self.stream = spead2.recv.Stream(thread_pool, spead2.BUG_COMPAT_PYSPEAD_0_5_2, max_heaps=64, ring_heaps=64, contiguous_only = False)
         pool = spead2.MemoryPool(16384, ((32*4*1024**2)+1024), max_free=64, initial=64)
         self.stream.set_memory_allocator(pool)
         self.rb = self.stream.ringbuffer
+
 
     def mcg_subscription(self):
         log.debug(" Multicast subscribe ...")
@@ -429,9 +379,10 @@ class HeapPacket(object):
             log.debug(" Storing iname: {}, Ivalue: {} w. type {}".format(item.name, getattr(self, item.name), type(getattr(self, item.name))))
 
         self.integration_time = (self.naccumulate * self.fft_length) / float(self.sampling_rate)
+        self.data /= self.number_of_input_samples
 
         t = self.sync_time + self.timestamp_count / float(self.sampling_rate) + self.integration_time / 2
-        if(self.noise_diode_status== 1):
+        if(self.noise_diode_status == 1):
             t += 0.0050
 
         def local_to_utc(t):
@@ -439,10 +390,9 @@ class HeapPacket(object):
             return time.gmtime(secs)
 
         dto = datetime.fromtimestamp(float(t))
-        # ToDo: Blank should be at the end according to specification, either
-        # update code or specs!
-        self.timestamp = time.strftime(' %Y-%m-%dT%H:%M:%S', local_to_utc(dto.timetuple() ))
-        self.timestamp += ".{:04d}UTC".format(int((float(t) - int(t)) * 10000))
+        # Blank should be at the end according to specification
+        self.timestamp = time.strftime('%Y-%m-%dT%H:%M:%S', local_to_utc(dto.timetuple() ))
+        self.timestamp += ".{:04d}UTC ".format(int((float(t) - int(t)) * 10000))
         log.debug("Setting packet timestamp: {}".format(self.timestamp))
 
 
@@ -546,12 +496,16 @@ class StreamHandler(object):
     def aggregate_data(self, packet):
         sec_id = packet.polarization
         nphases = packet.noise_diode_status
+        #ToDo: Remove this hack for dropping one gate
+        if packet.noise_diode_status == 1:
+            return
         # Constantas two polarizations
         key = packet.timestamp
         if key not in self._data_to_fw:
             # DROP DC CHANNEL
+            # ToDo: nphase naming and blank_phase 
             fw_pkt = build_fw_object(self._nsections, int(packet.nchannels) - 1, packet.timestamp,
-                                     int(packet.integration_time * 1000), int(nphases))
+                                     int(packet.integration_time * 1000), 2 - int(nphases))
             # Direct numpy copy behaves weired as memory alignment is expected
             # but ctypes may not align?
             #fw_pkt.sections[int(sec_id)].data[:]=packet.data[1:]
@@ -588,11 +542,6 @@ class StreamHandler(object):
                 log.warning(("Packet older than latest send, will be dropped."))
                 del self._data_to_fw[key]
             elif (hits == self._nsections):
-                try:
-                    sensor_logging_queue.put((fw_packet), False)
-                except Queue.Full:
-                    sensor_logging_queue.get()
-                    sensor_logging_queue.put((fw_packet), False)
                 log.debug(
                     "Sending complete packet with timestamp: {}".format(
                         timestamp))
