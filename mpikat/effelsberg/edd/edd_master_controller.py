@@ -232,6 +232,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             ofs["ip"] = packetizer["h_destinations"].split(':')[0]
             ofs["port"] = packetizer["h_destinations"].split(':')[1]
             self.__eddDataStore.addDataStream(key, ofs)
+            yield self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
 
         log.debug("Identify additional output streams")
         # Get output streams from products
@@ -289,7 +290,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                                                                         (self._r2rm_host, self._r2rm_port))
             elif product_id not in self.__controller:
                 log.warning("Config received for {}, but no controller exists yet.".format(product_id))
-                yield self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
                 if product_id in self.__eddDataStore.products:
                     product = self.__eddDataStore.getProduct(product_id)
                     self.__controller[product_id] = EddServerProductController(product_id, product["address"], product["port"])
