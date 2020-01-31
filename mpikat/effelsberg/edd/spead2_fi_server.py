@@ -30,6 +30,12 @@ log = logging.getLogger("mpikat.spead_fi_server")
 sensor_logging_queue = Queue()
 
 
+# Convert side channel item to
+def convert48_64(A):
+    assert (len(A) == 6)
+    npd = np.array(A, dtype=np.uint64)
+    return np.sum(256**np.arange(0,6, dtype=np.uint64)[::-1] * npd)
+
 
 class FitsWriterConnectionManager(Thread):
     """
@@ -266,6 +272,7 @@ class FitsInterfaceServer(EDDPipeline):
                     raise RuntimeError("All input streams have to use the same port!!!")
 
         if self._fw_connection_manager is not None:
+            log.warning("Replacing fw_connection manager")
             self._fw_connection_manager.stop()
             self._fw_connection_manager.drop_connection()
             self._fw_connection_manager.join()
@@ -287,12 +294,10 @@ class FitsInterfaceServer(EDDPipeline):
             raise RuntimeError("Exception in getting fits writer transmit socker: {}".format(error))
         log.info("Starting FITS interface capture")
         self._stop_capture()
-        handler = StreamHandler(self.heap_group, fw_socket)
+        handler = StreamHandler(fw_socket)
         self._capture_thread = CaptureData(self.mc_interface,
                                            self.mc_port,
                                            self._capture_interface,
-                                           self.nmcg,
-                                           self.heap_group,
                                            handler)
         self._capture_thread.start()
 
@@ -347,22 +352,19 @@ class CaptureData(Thread):
     @brief     Captures heaps from one or more streams that are transmitted in SPEAD format
     """
 
-    def __init__(self, mc_ip, mc_port, capture_ip, nmcg, heap_group, handler):
+    def __init__(self, mc_ip, mc_port, capture_ip, handler):
         """
         @brief      Initialization of the CaptureData thread
 
         @param  mc_ip              Array of multicast group IPs
         @param  mc_port            Port number of multicast streams
         @param  capture_ip         Interface to capture streams from MCG  on
-        @param  nmcg               number of multicast groups to subscribe
-        @param  heap_group         numbers of heaps for a given timestamp
         @param  handler            Object that handles data in the stream
         """
         Thread.__init__(self, name=self.__class__.__name__)
         self._mc_ip = mc_ip
         self._mc_port = mc_port
         self._capture_ip = capture_ip
-        self._nmcg = nmcg
         self._stop_event = Event()
         self._handler = handler
 
@@ -384,9 +386,9 @@ class CaptureData(Thread):
 
     def mcg_subscription(self):
         log.debug(" Multicast subscribe ...")
-        for i in range(self._nmcg):
+        for i, mg in enumerate(self._mc_ip):
             log.debug(" - Subs {}: ip: {}, port: {}".format(i,self._mc_ip[i], self._mc_port ))
-            self.stream.add_udp_reader(self._mc_ip[i], int(self._mc_port), max_size = 9200L,
+            self.stream.add_udp_reader(mg, int(self._mc_port), max_size = 9200L,
                 buffer_size= 1073741820L, interface_address=self._capture_ip)
 
     def run(self):
@@ -398,57 +400,58 @@ class CaptureData(Thread):
 
 class HeapPacket(object):
     def __init__(self):
-        self._first_heap = True
-
-    def heap_items(self):
-        """
-        @brief      Description of heap items
-        """
+        #Description of heap items
         self.ig = spead2.ItemGroup()
-        self.ig.add_item(5632, "timestamp_count", "", (6,), dtype=">B")
-        self.ig.add_item(5633, "polID", "", (1,), dtype=">I")
-        self.ig.add_item(5634, "ndStatus", "", (1,), dtype=">I")
-        self.ig.add_item(5635, "fft_length", "", (1,), dtype=">I")
-        self.ig.add_item(5636, "nheaps", "", (1,), dtype=">I")
-        self.ig.add_item(5637, "synctime", "", (6,), dtype=">B")
-        self.ig.add_item(5638, "sampling_rate", "", (1,), dtype=">I")
-        self.ig.add_item(5639, "nspectrum", "", (1,), dtype=">I")
-        return self.ig
+        self.ig.add_item(5632, "timestamp_count", "", (6,), dtype=">u1")
+        self.ig.add_item(5633, "polarization", "", (6,), dtype=">u1")
+        self.ig.add_item(5634, "noise_diode_status", "", (6,), dtype=">u1")
+        self.ig.add_item(5635, "fft_length", "", (6,), dtype=">u1")
+        self.ig.add_item(5636, "number_of_input_samples", "", (6,), dtype=">u1")
+        self.ig.add_item(5637, "sync_time", "", (6,), dtype=">u1")
+        self.ig.add_item(5638, "sampling_rate", "", (6,), dtype=">u1")
+        self.ig.add_item(5639, "naccumulate", "", (6,), dtype=">u1")
 
     def unpack_heap(self, heap):
         log.debug("Unpacking heap")
         items = self.ig.update(heap)
+        if 'data' not in items:
+            # Should be on first heap only
+            fft_length = convert48_64(items['fft_length'].value)
+            self.nchannels = int((fft_length/2)+1)
+            self.ig.add_item(5640, "data", "", (self.nchannels,), dtype="<f")
+            items = self.ig.update(heap)
+
         for item in items.values():
-            if (item.id == 5635) and (self._first_heap):
-                self.nchannels = int((item.value/2)+1)
-                self.ig.add_item(5640, "data", "", (self.nchannels,), dtype="<f")
-                self._first_heap = False
-            log.debug("   Iname: {}, Ivalue: {}".format(item.name, item.value))
-            setattr(self, item.name, item.value)
-        ts_count = ''
-        sync = ''
-        for i in range(6):
-            ts_count = ts_count+'{0:08b}'.format(self.timestamp_count[i])
-            sync = sync+'{0:08b}'.format(self.synctime[i])
-        ts_count = int(ts_count,2)
-        sync = int(sync,2)
-        if(self.ndStatus == 1):
-            sync += 0.0050
-        self.integtime = (self.nspectrum*self.fft_length)/self.sampling_rate
-        t = (sync+((ts_count+(self.nspectrum*self.fft_length)/2)/self.sampling_rate))
+            if item.name != 'data':
+                setattr(self, item.name, convert48_64(item.value))
+            else:
+                setattr(self, item.name, item.value)
+            log.debug(" Storing iname: {}, Ivalue: {} w. type {}".format(item.name, getattr(self, item.name), type(getattr(self, item.name))))
+
+        self.integration_time = (self.naccumulate * self.fft_length) / float(self.sampling_rate)
+
+        t = self.sync_time + self.timestamp_count / float(self.sampling_rate) + self.integration_time / 2
+        if(self.noise_diode_status== 1):
+            t += 0.0050
+
         def local_to_utc(t):
             secs = time.mktime(t)
             return time.gmtime(secs)
 
         dto = datetime.fromtimestamp(float(t))
-        self.timestamp = time.strftime('%Y-%m-%dT%H:%M:%S', local_to_utc(dto.timetuple() ))
-        self.timestamp += ".{}UTC ".format(int((float(t) - int(t)) * 10000))
+        # ToDo: Blank should be at the end according to specification, either
+        # update code or specs!
+        self.timestamp = time.strftime(' %Y-%m-%dT%H:%M:%S', local_to_utc(dto.timetuple() ))
+        self.timestamp += ".{:04d}UTC".format(int((float(t) - int(t)) * 10000))
         log.debug("Setting packet timestamp: {}".format(self.timestamp))
+
+
 
 
 
 def build_fw_type(nsections, nchannels):
     class FWData(ctypes.LittleEndianStructure):
+        _pack_ = 1
         _fields_ = [
             ('section_id', ctypes.c_uint32),
             ('nchannels', ctypes.c_uint32),
@@ -456,17 +459,18 @@ def build_fw_type(nsections, nchannels):
         ]
 
     class FWPacket(ctypes.LittleEndianStructure):
+        _pack_ = 1
         _fields_ = [
-            ("data_type", ctypes.c_char * 4),
-            ("channel_data_type", ctypes.c_char * 4),
-            ("packet_size", ctypes.c_uint32),
-            ("backend_name", ctypes.c_char * 8),
-            ("timestamp", ctypes.c_char * 28),
-            ("integration_time", ctypes.c_uint32),
-            ("blank_phases", ctypes.c_uint32),
-            ("nsections", ctypes.c_uint32),
-            ("blocking_factor", ctypes.c_uint32),
-            ("sections", FWData * nsections)
+            ("data_type", ctypes.c_char * 4),               #     0 -  3
+            ("channel_data_type", ctypes.c_char * 4),       #     4 -  7
+            ("packet_size", ctypes.c_uint32),               #     8 - 11
+            ("backend_name", ctypes.c_char * 8),            #    12 - 19
+            ("timestamp", ctypes.c_char * 28),              #    20 - 48
+            ("integration_time", ctypes.c_uint32),          #    49 - 53
+            ("blank_phases", ctypes.c_uint32),              #    54 - 57 alternate between 1 and 2 cal on or off
+            ("nsections", ctypes.c_uint32),                 #    57 - 61 number of sections
+            ("blocking_factor", ctypes.c_uint32),           #    61-63 spectra per section ?
+            ("sections", FWData * nsections)                #    actual section data
         ]
     return FWPacket
 
@@ -484,6 +488,7 @@ def build_fw_object(nsections, nchannels, timestamp, integration_time,
     packet.blank_phases = blank_phases
     packet.nsections = nsections
     packet.blocking_factor = 1
+
     for ii in range(nsections):
         packet.sections[ii].section_id = ii + 1
         packet.sections[ii].nchannels = nchannels
@@ -497,25 +502,24 @@ class StreamHandler(object):
     Aggregates heaps that belong to a heap_group from one or more streams
     and sends to the fits writer
     """
-    def __init__(self, heap_group, transmit_socket, max_age=15.0):
+    def __init__(self, transmit_socket, max_age=15.0):
         """
         @brief      Initialization of the StreamHandler thread
 
-        @param  heap_group         Number of heaps for a given timestamp
         @param  transmit_soc       FITS writer interface to which the data is sent
         @param  max_age            timeout
         """
-        self._nsections = 2
         self._data_to_fw = {}
-        self._nphases = 1
         self._transmit_socket = transmit_socket
         self._max_age = max_age
-        self._first_heap = True
         self._nheaps = 0
         self._complete_heaps = 0
         self._incomplete_heaps = 0
-        self.stop = False
         self._last_package_send_time = 0
+
+        self._nsections = 2
+        # ToDo: make configurable option
+        self._dump_tcp_packages = True
 
     def __call__(self, stream):
         """
@@ -526,36 +530,40 @@ class StreamHandler(object):
         self.rb = stream.ringbuffer
         log.info("Reading stream..")
         self.packet = HeapPacket()
-        self.packet.heap_items()
         for heap in stream:
             self._nheaps += 1
+            log.debug('Received heap {} - previously {} completed, {} incompleted'.format(self._nheaps, self._complete_heaps, self._incomplete_heaps))
             if isinstance(heap, spead2.recv.IncompleteHeap):
-                log.warning('Received incomplete heap!')
+                log.warning('Received incomplete heap - received only {} / {} bytes.'.format(heap.received_length, heap.heap_length))
                 self._incomplete_heaps += 1
                 continue
             else:
                 self._complete_heaps += 1
             self.packet.unpack_heap(heap)
-            if not self._first_heap:
-                self.aggregate_data(self.packet)
-            self._first_heap = False
-            if self.stop:
-                break
+            self.aggregate_data(self.packet)
+
 
     def aggregate_data(self, packet):
-        sec_id = packet.polID
-        self._nphases = packet.ndStatus
+        sec_id = packet.polarization
+        nphases = packet.noise_diode_status
+        # Constantas two polarizations
         key = packet.timestamp
         if key not in self._data_to_fw:
             # DROP DC CHANNEL
             fw_pkt = build_fw_object(self._nsections, int(packet.nchannels) - 1, packet.timestamp,
-                                     (packet.integtime*1000), self._nphases)
-            fw_pkt.sections[int(sec_id)].data[:]=packet.data[1:]
+                                     int(packet.integration_time * 1000), int(nphases))
+            # Direct numpy copy behaves weired as memory alignment is expected
+            # but ctypes may not align?
+            #fw_pkt.sections[int(sec_id)].data[:]=packet.data[1:]
+
+            ctypes.memmove(ctypes.byref(fw_pkt.sections[int(sec_id)].data), packet.data.ctypes.data + 4,
+                    packet.data.size * 4 - 4)
             self._data_to_fw[key] = [time.time(), 1, fw_pkt]
         else:
             self._data_to_fw[key][1] += 1
-            self._data_to_fw[key][2].sections[int(sec_id)].data[:] = packet.data[1:]
+            ctypes.memmove(ctypes.byref(self._data_to_fw[key][2].sections[int(sec_id)].data), packet.data.ctypes.data + 4, packet.data.size * 4 - 4)
         self.flush()
+
 
     def flush(self):
         """
@@ -573,7 +581,9 @@ class StreamHandler(object):
                 log.warning(("Age exceeds maximum age. Incomplete packet"
                              " will be dropped."))
                 del self._data_to_fw[key]
-                #ToDo: Implement proper queue that waits for a reasonable time, depending on the integration time, or the number of packages in it
+                #ToDo: Implement proper queue that waits for a reasonable time,
+                #e.g. depending on the integration time, or the number of
+                #packages in it
             elif timestamp < self._last_package_send_time:
                 log.warning(("Packet older than latest send, will be dropped."))
                 del self._data_to_fw[key]
@@ -591,12 +601,11 @@ class StreamHandler(object):
                           self._nheaps, self._complete_heaps, self._incomplete_heaps))
                 self._transmit_socket.send(bytearray(fw_packet))
 
-#                fn = "fw_packet_{}.dat".format(timestamp)
-#                with open(fn, 'wb') as ofile:
-#
-#                    log.debug("WROTE PACKAGE TO DISK")
-#                    ofile.write(bytearray(fw_packet))
-
+                fn = "/tmp/fw_packet_{}.dat".format(timestamp)
+                if self._dump_tcp_packages:
+                    with open(fn, 'wb') as ofile:
+                        log.debug("Wrote package to disk: {}".format(fn))
+                        ofile.write(bytearray(fw_packet))
 
                 self._last_package_send_time = timestamp
                 log.debug("Len of bytearray: {}".format(len(bytearray(fw_packet))))
