@@ -202,8 +202,8 @@ class EddCommander(AsyncDeviceServer):
         self._source_config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
-        self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
-        #self._status_server = KATCPToIGUIConverter("134.104.70.66", 7000)
+        #self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
+        self._status_server = KATCPToIGUIConverter("134.104.70.66", 7000)
         self._status_server.start()
         self._status_server.sensor_callbacks.add(
             self.sensor_update)
@@ -408,7 +408,7 @@ class EddCommander(AsyncDeviceServer):
         # for sensor in self._pipeline_instance.sensors:
         #log.debug("sensor name is {}".format(sensor))
         self.add_sensor(Sensor.string("{}".format(sensor), description="{}".format(sensor),
-                                      default="0", initial_status=Sensor.UNKNOWN))
+                                      default="N/A", initial_status=Sensor.UNKNOWN))
         # self.add_sensor(sensor)
         self._managed_sensors.append(sensor)
         self.mass_inform(Message.inform('interface-changed'))
@@ -442,9 +442,9 @@ class EddCommander(AsyncDeviceServer):
         # if self._pipeline_sensor_status.value() == "ready":
         #    log.info("Pipeline still running, stopping pipeline")
         # yield self.deconfigure()
-        yield super(EddCommander, self).stop()
-        #yield self._edd_pipeline.stop()
-        #yield self._status_server.stop()
+        super(EddCommander, self).stop()
+        yield self._edd_pipeline.stop()
+        yield self._status_server.stop()
 
     def setup_sensors(self):
         """
