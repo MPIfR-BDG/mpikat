@@ -442,9 +442,9 @@ class EddCommander(AsyncDeviceServer):
         # if self._pipeline_sensor_status.value() == "ready":
         #    log.info("Pipeline still running, stopping pipeline")
         # yield self.deconfigure()
-        super(EddCommander, self).stop()
-        yield self._edd_pipeline.stop()
-        yield self._status_server.stop()
+        yield super(EddCommander, self).stop()
+        #yield self._edd_pipeline.stop()
+        #yield self._status_server.stop()
 
     def setup_sensors(self):
         """
