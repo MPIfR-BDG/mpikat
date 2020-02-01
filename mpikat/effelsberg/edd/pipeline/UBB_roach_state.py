@@ -664,13 +664,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #    initial_status=Sensor.UNKNOWN)
         #self.add_sensor(self._pipeline_sensor_status)
 
-        self._state_sensor = LoggingSensor.discrete(
+        self._state_sensor = Sensor.discrete(
             "state",
             params = self.STATES,
             description = "The current state of this worker instance",
             default = self.IDLE,
             initial_status = Sensor.NOMINAL)
-        self._state_sensor.set_logger(log)
+        #self._state_sensor.set_logger(log)
         self.add_sensor(self._state_sensor)
 
 
