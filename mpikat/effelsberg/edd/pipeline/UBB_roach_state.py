@@ -800,7 +800,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     @coroutine
     def configure_pipeline(self, config_json):
-		self._state_sensor.set_value(self.PREPARING)
+	self._state_sensor.set_value(self.PREPARING)
         try:
             self.config_json = config_json
             self.config_dict = json.loads(self.config_json)
