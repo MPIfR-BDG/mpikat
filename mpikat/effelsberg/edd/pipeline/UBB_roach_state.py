@@ -924,12 +924,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
                                     @endcode
         """
         if not self.ready:
-        	log.info("pipeline is not int ready state, current state is {}".format(self.state))
-        	if self.capturing:
-        		log.info("pipeline is still captureing, issuing stop now, please send the start command again")
-        		yield self.stop.pipeline()
-        	if self.starting:
-        		log.info("pipeline is starting, do not send multiple start")
+            log.info("pipeline is not int ready state, current state is {}".format(self.state))
+            if self.capturing:
+                log.info("pipeline is still captureing, issuing stop now, please send the start command again")
+                yield self.stop.pipeline()
+            if self.starting:
+                log.info("pipeline is starting, do not send multiple start")
             return ("fail", "pipeline is not in READY state")
 
         @coroutine
