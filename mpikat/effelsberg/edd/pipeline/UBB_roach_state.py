@@ -1393,7 +1393,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             # self.stop_pipeline_with_mkrecv_crashed()
             raise EddPulsarPipelineError(msg)
         else:
-        	self._state_sensor.set_value(self.READY)
+            self._state_sensor.set_value(self.READY)
             log.info("Pipeline Stopped {}".format(
                 self._pipeline_sensor_name.value()))
 
