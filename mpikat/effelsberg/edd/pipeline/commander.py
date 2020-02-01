@@ -408,7 +408,7 @@ class EddCommander(AsyncDeviceServer):
         # for sensor in self._pipeline_instance.sensors:
         #log.debug("sensor name is {}".format(sensor))
         self.add_sensor(Sensor.string("{}".format(sensor), description="{}".format(sensor),
-                                      default="N/A", initial_status=Sensor.UNKNOWN))
+                                      default="0", initial_status=Sensor.UNKNOWN))
         # self.add_sensor(sensor)
         self._managed_sensors.append(sensor)
         self.mass_inform(Message.inform('interface-changed'))
@@ -442,9 +442,9 @@ class EddCommander(AsyncDeviceServer):
         # if self._pipeline_sensor_status.value() == "ready":
         #    log.info("Pipeline still running, stopping pipeline")
         # yield self.deconfigure()
-        super(EddCommander, self).stop()
-        yield self._edd_pipeline.stop()
-        yield self._status_server.stop()
+        yield super(EddCommander, self).stop()
+        #yield self._edd_pipeline.stop()
+        #yield self._status_server.stop()
 
     def setup_sensors(self):
         """
