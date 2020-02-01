@@ -923,18 +923,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
                                     }
                                     @endcode
         """
-        log.info("checking status")
-        if not self.ready:
-            log.info("pipeline is not int ready state")
-            if self.capturing:
-                log.info("pipeline is still captureing, issuing stop now, please send the start command again")
-                yield self.stop.pipeline()
-            if self.starting:
-                log.info("pipeline is starting, do not send multiple start")
-                return
-                #raise Exception("fail pipeline is not in READY state")
-        log.info("starting pipeline")
-
         @coroutine
         def start_wrapper():
             try:
@@ -953,6 +941,17 @@ class EddPulsarPipeline(AsyncDeviceServer):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
         # if self.state == "ready":
         #    self.state = "starting"
+        log.info("checking status")
+        if not self.ready:
+            log.info("pipeline is not int ready state")
+            if self.capturing:
+                log.info("pipeline is still captureing, issuing stop now, please send the start command again")
+                yield self.stop.pipeline()
+            if self.starting:
+                log.info("pipeline is starting, do not send multiple start")
+                return
+                #raise Exception("fail pipeline is not in READY state")
+        log.info("starting pipeline")
         self._state_sensor.set_value(self.STARTING)
         try:
             self._timer = Time.now()
