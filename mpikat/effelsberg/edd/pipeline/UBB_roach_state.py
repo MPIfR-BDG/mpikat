@@ -931,7 +931,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             if self.starting:
                 log.info("pipeline is starting, do not send multiple start")
                 raise Exception("fail pipeline is not in READY state")
-
+        log.info("starting pipeline")   
         @coroutine
         def start_wrapper():
             try:
