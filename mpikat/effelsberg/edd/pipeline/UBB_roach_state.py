@@ -930,7 +930,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 yield self.stop.pipeline()
             if self.starting:
                 log.info("pipeline is starting, do not send multiple start")
-                return ("fail pipeline is not in READY state")
+                return "fail pipeline is not in READY state"
 
         @coroutine
         def start_wrapper():
