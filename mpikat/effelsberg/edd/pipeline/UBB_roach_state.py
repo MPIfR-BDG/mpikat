@@ -930,7 +930,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 yield self.stop.pipeline()
             if self.starting:
                 log.info("pipeline is starting, do not send multiple start")
-                return "fail pipeline is not in READY state"
+                raise Exception("fail pipeline is not in READY state")
 
         @coroutine
         def start_wrapper():
@@ -1340,7 +1340,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
         """@brief stop the dada_junkdb and dspsr instances."""
         if not self.capturing:
         	log.info("pipeline is not captureing, can't stop now, current state = {}".format(self.state))
-        	return ("fail", "pipeline is not in CAPTURTING state, current state = {}".format(self.state))
+        	raise Exception("pipeline is not in CAPTURTING state, current state = {}".format(self.state))	
+
+        	#return ("fail", "pipeline is not in CAPTURTING state, current state = {}".format(self.state))
         self._state_sensor.set_value(self.STOPPING)
         try:
             log.debug("Stopping")
