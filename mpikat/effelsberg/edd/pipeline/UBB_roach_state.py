@@ -941,6 +941,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
         # if self.state == "ready":
         #    self.state = "starting"
+        self._fscrunch.set_value(BLANK_IMAGE)
+        self._tscrunch.set_value(BLANK_IMAGE)
+        self._profile.set_value(BLANK_IMAGE)
         log.info("checking status")
         if not self.ready:
             log.info("pipeline is not int ready state")
@@ -1191,9 +1194,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
         if parse_tag(self.source_name) == "R":
             log.debug("setting noise diode firing to 0.5 every 1s")
             yield self._digpack_client.set_noise_diode_firing("0.5", "1.0")
+            time.sleep(2)
         else:
             log.debug("setting noise diode firing to 0 every 1s")
             yield self._digpack_client.set_noise_diode_firing("0", "1.0")
+            time.sleep(2)
 
         yield self._digpack_client.stop()
 
