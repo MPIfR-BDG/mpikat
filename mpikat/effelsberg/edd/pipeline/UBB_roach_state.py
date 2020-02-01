@@ -1567,7 +1567,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
 
 @coroutine
-def on_shutdown(ioloop, server):
+def on_shutdown(self, ioloop, server):
     log.info('Shutting down server')
     if self.capturing:
         log.info("Pipeline still running, stopping pipeline")
