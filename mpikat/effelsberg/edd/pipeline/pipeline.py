@@ -1069,9 +1069,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug("source_name = {}".format(self.source_name))
 
         if (parse_tag(self.source_name) == "default") and self.pulsar_flag:
-            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
+            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x {xlength} -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
+                xlength = self._source_config["xlength"]
                 nchan="-F {}:D".format(self.nchannels),
                 nbin="-b {}".format(self.nbins),
                 name=self.source_name,
