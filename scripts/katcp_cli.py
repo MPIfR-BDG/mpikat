@@ -44,6 +44,12 @@ class StreamClient(DeviceClient):
     def __init__(self, server_host, server_port, stream=sys.stdout):
         self.stream = stream
         super(StreamClient, self).__init__(server_host, server_port)
+        self.commands = set()
+
+    def inform_help(self, msg):
+        """ Handls inform"""
+        self.unhandled_inform(msg)
+        self.commands.add(msg.arguments[0])
 
     def to_stream(self, prefix, msg):
         self.stream.write("%s:\n%s\n" %
@@ -60,6 +66,7 @@ class StreamClient(DeviceClient):
     def unhandled_request(self, msg):
         """Deal with unhandled replies"""
         self.to_stream("Unhandled request", msg)
+
 
 
 class KatcpCli(Cmd):
@@ -111,6 +118,17 @@ class KatcpCli(Cmd):
             reason = "\n".join(traceback.format_exception(
                 e_type, e_value, trace, 20))
             log.exception(reason)
+
+    def complete_katcp(self, text, line, begidx, endidx):
+        """
+        Tab completion for katcp requests.
+        """
+        if not self.client.commands:
+            # ToDo: this request should be silent and not be printed on the cli
+            # ...
+            self.client.ioloop.add_callback(self.client.send_message, "?help")
+
+        return self.basic_complete(text, line, begidx, endidx, self.client.commands)
 
     def do_connect(self, arg, opts=None):
         """
