@@ -25,6 +25,8 @@ import json
 import os
 import time
 from astropy.time import Time
+import astropy.units as u
+from astropy.coordinates import SkyCoord
 from subprocess import PIPE, Popen
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
@@ -502,6 +504,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
     PIPELINE_STATES = ["idle", "configuring", "ready",
                        "starting", "running", "stopping",
                        "deconfiguring", "error"]
+    STATES = ["idle", "preparing", "ready", "starting", "capturing", "stopping", "error"]
+    IDLE, PREPARING, READY, STARTING, CAPTURING, STOPPING, ERROR = STATES
 
     def __init__(self, ip, port):
         """
@@ -542,20 +546,52 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))
         self.add_pipeline_sensors(sensor_name)
 
-    def notify(self):
-        """@brief callback function."""
-        for callback in self.callbacks:
-            callback(self._state, self)
+#    def notify(self):
+#        """@brief callback function."""
+#        for callback in self.callbacks:
+#            callback(self._state, self)
+
+#    @property
+#    def state(self):
+#        """@brief property of the pipeline state."""
+#        return self._state
+
+#    @state.setter
+#    def state(self, value):
+#        self._state = value
+#        self.notify()
+
+    @property
+    def capturing(self):
+        return self.state == self.CAPTURING
+
+    @property
+    def idle(self):
+        return self.state == self.IDLE
+
+    @property
+    def starting(self):
+        return self.state == self.STARTING
+
+    @property
+    def stopping(self):
+        return self.state == self.STOPPING
+
+    @property
+    def ready(self):
+        return self.state == self.READY
+
+    @property
+    def preparing(self):
+        return self.state == self.PREPARING
+
+    @property
+    def error(self):
+        return self.state == self.ERROR
 
     @property
     def state(self):
-        """@brief property of the pipeline state."""
-        return self._state
-
-    @state.setter
-    def state(self, value):
-        self._state = value
-        self.notify()
+        return self._state_sensor.value()
 
     def add_pipeline_sensors(self, sensor):
         """
@@ -587,7 +623,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         @parma callback object return from the callback function from the pipeline
         """
         log.info('New state of the pipeline is {}'.format(str(state)))
-        self._pipeline_sensor_status.set_value(str(state))
+        #self._pipeline_sensor_status.set_value(str(state))
 
     @coroutine
     def start(self):
@@ -617,13 +653,14 @@ class EddPulsarPipeline(AsyncDeviceServer):
                                                    "the name of the pipeline", "")
         self.add_sensor(self._pipeline_sensor_name)
 
-        self._pipeline_sensor_status = Sensor.discrete(
-            "pipeline-status",
-            description="Status of the pipeline",
-            params=self.PIPELINE_STATES,
-            default="idle",
-            initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._pipeline_sensor_status)
+        self._state_sensor = Sensor.discrete(
+            "state",
+            params = self.STATES,
+            description = "The current state of this worker instance",
+            default = self.IDLE,
+            initial_status = Sensor.NOMINAL)
+        #self._state_sensor.set_logger(log)
+        self.add_sensor(self._state_sensor)
 
         self._tscrunch = Sensor.string(
             "tscrunch_PNG",
@@ -744,12 +781,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                self._pipeline_sensor_status.set_value("ready")
+                #self._pipeline_sensor_status.set_value("ready")
         self.ioloop.add_callback(configure_wrapper)
         raise AsyncReply
 
     @coroutine
     def configure_pipeline(self, config_json):
+    self._state_sensor.set_value(self.PREPARING)
         try:
             self.config_json = config_json
             self.config_dict = json.loads(self.config_json)
@@ -835,7 +873,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
         else:
-            self.state = "ready"
+            #self.state = "ready"dddd
+            self._state_sensor.set_value(self.READY)
             log.info("Pipeline instance {} configured".format(
                 self._pipeline_sensor_name.value()))
 
@@ -863,7 +902,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                self._pipeline_sensor_status.set_value("running")
+                #self._pipeline_sensor_status.set_value("running")
         self.ioloop.add_callback(start_wrapper)
         raise AsyncReply
 
@@ -872,6 +911,21 @@ class EddPulsarPipeline(AsyncDeviceServer):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
         # if self.state == "ready":
         #    self.state = "starting"
+        self._fscrunch.set_value(BLANK_IMAGE)
+        self._tscrunch.set_value(BLANK_IMAGE)
+        self._profile.set_value(BLANK_IMAGE)
+        log.info("checking status")
+        if not self.ready:
+            log.info("pipeline is not int ready state")
+            if self.capturing:
+                log.info("pipeline is still captureing, issuing stop now, please send the start command again")
+                yield self.stop_pipeline()
+            if self.starting:
+                log.info("pipeline is starting, do not send multiple start")
+                return
+                #raise Exception("fail pipeline is not in READY state")
+        log.info("starting pipeline")
+        self._state_sensor.set_value(self.STARTING)
         try:
             self._timer = Time.now()
             self._source_config = json.loads(config_json)
@@ -880,8 +934,14 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 "central_freq"], self._pipeline_config["bandwidth"]
             self._central_freq.set_value(str(self.frequency_mhz))
             header = self._config["dada_header_params"]
-            header["ra"] = self._source_config["ra"]
-            header["dec"] = self._source_config["dec"]
+            #header["ra"] = self._source_config["ra"]
+            #header["dec"] = self._source_config["dec"]
+            # DSPSR RA DEC format gives me hell!
+            c = SkyCoord("{} {}".format(self._source_config[
+                         "ra"], self._source_config["dec"]), unit=(u.deg, u.deg))
+            header["ra"] = c.to_string("hmsdms").split(" ")[0].replace("h", ":").replace("m", ":").replace("s", "")
+            header["dec"] = c.to_string("hmsdms").split(" ")[1].replace("d", ":").replace("m", ":").replace("s", "")
+
             #header['mode'] = self._source_config['mode']
             header["key"] = self._dada_key
             header["mc_source"] = self._pipeline_config[
@@ -1189,6 +1249,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         # else:
         self._timer = Time.now() - self._timer
         log.info("Took {} s to start".format(self._timer * 86400))
+        self._state_sensor.set_value(self.CAPTURING)
         log.info("Starting pipeline {}".format(
             self._pipeline_sensor_name.value()))
 
@@ -1208,14 +1269,17 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                self._pipeline_sensor_status.set_value("ready")
+                #self._pipeline_sensor_status.set_value("ready")
         self.ioloop.add_callback(stop_wrapper)
         raise AsyncReply
 
     @coroutine
     def stop_pipeline(self):
         """@brief stop the dada_junkdb and dspsr instances."""
-
+        if not self.capturing:
+            log.info("pipeline is not captureing, can't stop now, current state = {}".format(self.state))
+            raise Exception("pipeline is not in CAPTURTING state, current state = {}".format(self.state))
+        self._state_sensor.set_value(self.STOPPING)
         try:
             log.debug("Stopping")
             self._timeout = 10
@@ -1250,6 +1314,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             # self.stop_pipeline_with_mkrecv_crashed()
             raise EddPulsarPipelineError(msg)
         else:
+            self._state_sensor.set_value(self.READY)
             log.info("Pipeline Stopped {}".format(
                 self._pipeline_sensor_name.value()))
 
@@ -1321,6 +1386,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             raise EddPulsarPipelineError(str(error))
         else:
             log.info("Pipeline Stopped with mkrecv crashed, buffers recreated")
+            self._state_sensor.set_value(self.READY)
 
     @request()
     @return_reply(Str())
@@ -1338,7 +1404,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                self._pipeline_sensor_status.set_value("ready")
+                #self._pipeline_sensor_status.set_value("ready")
         self.ioloop.add_callback(kill_wrapper)
         raise AsyncReply
 
@@ -1372,7 +1438,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                self._pipeline_sensor_status.set_value("idle")
+                #self._pipeline_sensor_status.set_value("idle")
         self.ioloop.add_callback(deconfigure_wrapper)
         raise AsyncReply
 
@@ -1410,20 +1476,21 @@ class EddPulsarPipeline(AsyncDeviceServer):
         else:
             log.info("Deconfigured pipeline {}".format(
                 self._pipeline_sensor_name.value()))
+            self._state_sensor.set_value(self.IDLE) 
             self._pipeline_sensor_name.set_value("")
 
 
 @coroutine
 def on_shutdown(ioloop, server):
     log.info('Shutting down server')
-    if server._pipeline_sensor_status.value() == "running":
-        log.info("Pipeline still running, stopping pipeline")
-        yield server.stop_pipeline()
-        time.sleep(10)
-    if server._pipeline_sensor_status.value() != "idle":
-        log.info("Pipeline still configured, deconfiguring pipeline")
-        yield server.deconfigure()
-
+    #if server._pipeline_sensor_status.value() == "running":
+    #    log.info("Pipeline still running, stopping pipeline")
+    #    yield server.stop_pipeline()
+    #    time.sleep(10)
+    #if server._pipeline_sensor_status.value() != "idle":
+    #    log.info("Pipeline still configured, deconfiguring pipeline")
+    #    yield server.deconfigure()
+#
     yield server.deconfigure()
     yield server.stop()
     ioloop.stop()
