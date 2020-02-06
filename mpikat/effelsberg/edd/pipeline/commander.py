@@ -202,8 +202,8 @@ class EddCommander(AsyncDeviceServer):
         self._source_config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
-        self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
-        #self._status_server = KATCPToIGUIConverter("134.104.70.66", 7000)
+        #self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
+        self._status_server = KATCPToIGUIConverter("134.104.70.66", 7000)
         self._status_server.start()
         self._status_server.sensor_callbacks.add(
             self.sensor_update)
@@ -257,6 +257,7 @@ class EddCommander(AsyncDeviceServer):
                 log.debug("source dec = {}".format(self._dec.value()))
                 log.debug("Should send a start command to the pipeline with source name : {}".format(
                     self._source.value()))
+                """
                 if len(self._source.value().split("_")) == 1:
                     log.debug("source name is {} can't use for pulsar observation".format(self._source.value()))
                     
@@ -361,15 +362,15 @@ class EddCommander(AsyncDeviceServer):
                     time.sleep(5)
                     self._edd00_numa0.req.start(json_string_numa0)
                     self._edd00_numa1.req.start(json_string_numa1)
-
-                #json_string = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":0})
+                """
+                json_string = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":0})
                 #json_string_1mc = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":5})
-                # log.debug(json_string)
+                log.debug(json_string)
                 # log.debug(json_string_1mc)
-                #self.first_true = False
-                #self.last_value = True
+                self.first_true = False
+                self.last_value = True
                 # time.sleep(5)
-                # self._edd00_numa0.req.start(json_string)
+                self._edd00_numa0.req.start(json_string)
                 # self._edd00_numa1.req.start(json_string)
                 # self._edd01_numa0.req.start(json_string)
                 # self._edd01_numa1.req.start(json_string_1mc)
@@ -379,7 +380,7 @@ class EddCommander(AsyncDeviceServer):
                 self.first_true = True
                 self.last_value = False
                 self._edd00_numa0.req.stop()
-                self._edd00_numa1.req.stop()
+               #self._edd00_numa1.req.stop()
 
     def new_sensor(self, sensor_name, callback):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))
