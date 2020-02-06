@@ -143,9 +143,9 @@ class KATCPToIGUIConverter(object):
             # self.rc.set_sampling_strategy(name, strat3)    #KATCPSensorError:
             # Error setting strategy
             # not sure that auto means here
-            #self.rc.set_sampling_strategy(name, "auto")
-            self.rc.set_sampling_strategy(name, ["period", (1)])
-        #self.rc.set_sampling_strategy(name, "event")
+            self.rc.set_sampling_strategy(name, "auto")
+            #self.rc.set_sampling_strategy(name, ["period", (1)])
+            #self.rc.set_sampling_strategy(name, "event")
             self.rc.set_sensor_listener(name, self._sensor_updated)
             self.new_sensor = name
             #log.debug("Setting new sensor with name = {}".format(name))
@@ -214,6 +214,7 @@ class EddCommander(AsyncDeviceServer):
             address=("134.104.70.66", 6000),
             controlled=True))
         self._edd00_numa0.start()
+        log.debug("system init")
         #self._edd00_numa1 = KATCPClientResource(dict(
         #    name='_edd00_numa1-client',
         #    address=("134.104.70.66", 6001),
