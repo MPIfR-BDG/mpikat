@@ -743,7 +743,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._time_processed.set_value(stderr)
             log.debug(stderr)
         if bool(stderr[:8] != "Finished"):
-            log.debug(stderr)
+            log.info(stderr)
 
     def _handle_eddpolnmerge_stderr(self, stderr, callback):
         log.debug(stderr)
