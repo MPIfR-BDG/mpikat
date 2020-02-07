@@ -245,10 +245,10 @@ ITEM9_ID        5640    # payload item (empty step, list, index and sci)
 
 
 class GatedSpectrometerPipeline(EDDPipeline):
-    """@brief gated spectrometer pipeline class."""
+    """@brief gated spectrometer pipeline 
+    """
     VERSION_INFO = ("mpikat-edd-api", 0, 1)
     BUILD_INFO = ("mpikat-edd-implementation", 0, 1, "rc1")
-
 
     def __init__(self, ip, port):
         """@brief initialize the pipeline."""
@@ -280,6 +280,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
 
     def add_input_stream_sensor(self, streamid):
+        """
+        @brief add sensors for i/o buffers for an input stream with given streamid.
+        """
         self._polarization_sensors[streamid] = {}
         self._polarization_sensors[streamid]["mkrecv_sensors"] = MkrecvSensors(streamid)
         for s in self._polarization_sensors[streamid]["mkrecv_sensors"].sensors.itervalues():
@@ -310,8 +313,8 @@ class GatedSpectrometerPipeline(EDDPipeline):
     @coroutine
     def _create_ring_buffer(self, bufferSize, blocks, key, numa_node):
          """
-         Create a ring buffer of given size with given key on specified numa node.
-         Adds and register an appropriate sensor to thw list
+         @brief Create a ring buffer of given size with given key on specified numa node.
+                Adds and register an appropriate sensor to thw list
          """
          # always clear buffer first. Allow fail here
          yield command_watcher("dada_db -d -k {key}".format(key=key), allow_fail=True)
@@ -327,7 +330,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
     def _buffer_status_handle(self, status):
         """
-        Process a change in the buffer status
+        @brief Process a change in the buffer status
         """
         pass
         for streamid, stream_description in self._config["input_data_streams"].iteritems():
@@ -347,15 +350,11 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
         @param   config_json    A JSON dictionary object containing configuration information
 
-        @detail  The configuration dictionary is highly flexible. An example is below:
+        @detail  The configuration dictionary is highly flexible - settings relevant for non experts are:
                  @code
                      {
-                         "nbeams": 1,
-                         "nchans": 2048,
-                         "freq_res": "something in Hz"
-                         "integration_time": 1.0,
-                         "mc_address": "255.0.0.152+8"
-                         "mc_port": 7148
+                            "fft_length": 1024 * 1024 * 2 * 8,
+                            "naccumulate": 32,
                      }
                  @endcode
         """
@@ -505,7 +504,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
     @coroutine
     def capture_start(self, config_json=""):
-        """@brief start the dspsr instance then turn on dada_junkdb instance."""
+        """
+        @brief start streaming spectrometer output
+        """
         log.info("Starting EDD backend")
         if self.state != "ready":
             raise FailReply("pipleine state is not in state = ready, but in state = {} - cannot start the pipeline".format(self.state))
@@ -567,7 +568,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
     @coroutine
     def capture_stop(self):
-        """@brief stop the dada_junkdb and dspsr instances."""
+        """
+        @brief Stop streaming of data
+        """
         log.info("Stoping EDD backend")
         if self.state != 'running':
             log.warning("pipleine state is not in state = running but in state {}".format(self.state))
@@ -589,7 +592,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
     @coroutine
     def deconfigure(self):
-        """@brief deconfigure the dspsr pipeline."""
+        """
+        @brief deconfigure the gated spectrometer pipeline.
+        """
         log.info("Deconfiguring EDD backend")
         if self.state == 'runnning':
             yield self.capture_stop()

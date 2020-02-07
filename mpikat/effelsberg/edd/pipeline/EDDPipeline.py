@@ -276,7 +276,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def configure(self, config_json=""):
-        """@brief Configure the pipeline"""
+        """@brief Default method - no effect"""
         pass
 
 
@@ -401,7 +401,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def capture_start(self):
-        """@brief start the pipeline."""
+        """@brief Default method - no effect"""
         pass
 
 
@@ -431,7 +431,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def capture_stop(self):
-        """@brief stop the pipeline."""
+        """@brief Default method - no effect"""
         pass
 
 
@@ -462,7 +462,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def measurement_prepare(self, config_json=""):
-        """@brief prepare the measurement"""
+        """@brief Default method - no effect"""
         pass
 
 
@@ -496,7 +496,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def measurement_start(self):
-        """@brief start the emasurement."""
+        """@brief Default method - no effect"""
         pass
 
 
@@ -529,7 +529,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def measurement_stop(self):
-        """@brief stop the emasurement."""
+        """@brief Default method - no effect"""
         pass
 
     @request()
@@ -558,7 +558,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @coroutine
     def deconfigure(self):
-        """@brief deconfigure the pipeline."""
+        """@brief Default method - no effect"""
         pass
 
     @request(Str(), Int())
