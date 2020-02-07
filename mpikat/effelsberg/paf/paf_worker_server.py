@@ -1,4 +1,24 @@
-import threading
+"""
+Copyright (c) 2019 Jason Wu <jwu@mpifr-bonn.mpg.de>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
 import logging
 import tornado
 import coloredlogs
@@ -8,18 +28,25 @@ import os
 from astropy.time import Time
 import astropy.units as units
 from optparse import OptionParser
-from tornado.gen import Return, coroutine
-from tornado.iostream import IOStream
+from tornado.gen import coroutine
 from katcp import AsyncDeviceServer, Message, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import request, return_reply, Int, Str, Discrete, Float
 from mpikat.effelsberg.paf.pipeline import PIPELINES
 
 
-log = logging.getLogger("mpikat.paf_worker_server")
+log = logging.getLogger("mpikat.effelsberg.paf.paf_worker_server")
 
 #PIPELINES = {"mock":mock.Mock()}
 
 # P8_IP="10.17.8.2"
+
+
+class PafPipelineKeyError(Exception):
+    pass
+
+
+class PafPipelineError(Exception):
+    pass
 
 
 class PafWorkerServer(AsyncDeviceServer):
@@ -126,7 +153,7 @@ class PafWorkerServer(AsyncDeviceServer):
         self.add_sensor(self._mac_address)
 
     @request(Str())
-    @return_reply(Str())
+    @return_reply()
     def request_configure(self, req, config_json):
         """
         @brief      Configure pipeline
@@ -134,118 +161,62 @@ class PafWorkerServer(AsyncDeviceServer):
         @param      pipeline    name of the pipeline
         """
         @coroutine
-        def configure_pipeline():
-            self._pipeline_sensor_name.set_value(pipeline_name)
-            log.info("Configuring pipeline {}".format(
-                self._pipeline_sensor_name.value()))
+        def configure_wrapper():
             try:
-                _pipeline_type = PIPELINES[self._pipeline_sensor_name.value()]
-            except KeyError as error:
-                msg = "No pipeline called '{}', available pipeline are: {}".format(
-                    self._pipeline_sensor_name.value(), " ".join(PIPELINES.keys()))
-                self._pipeline_sensor_name.set_value("")
-                log.error("{}".format(msg))
-                req.reply("fail", msg)
-            try:
-                log.debug(
-                "Trying to create pipeline instance {}".format(pipeline_name))
-                self._pipeline_instance = _pipeline_type()
-                self.add_pipeline_sensors()
-                self._pipeline_instance.callbacks.add(self.state_change)
-                log.debug(
-                    "Trying to configure pipeline {}".format(pipeline_name))
-                config = json.loads(config_json)
-                log.debug("Unpacked config: {}".format(config))
-                capture_start_time = Time.now() + 27.0 * units.s
-                frequency = config["frequency"]
-                self._pipeline_instance.configure(
-                    capture_start_time,
-                    frequency,
-                    self._ip_address.value())
+                self.configure(config_json)
             except Exception as error:
-                self._pipeline_sensor_name.set_value("")
-                msg = "Couldn't start configure pipeline instance {}".format(
-                    str(error))
-                log.error("{}".format(msg))
-                req.reply("fail", msg)
-            msg = "pipeline instance {} configured".format(
-                self._pipeline_sensor_name.value())
-            log.info("{}".format(msg))
-            req.reply("ok", msg)
-        if self._pipeline_sensor_status.value() == "idle":
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(configure_wrapper)
+        raise AsyncReply
+
+    @coroutine
+    def configure(self, config_json):
+        try:
             config_dict = json.loads(config_json)
             pipeline_name = config_dict["mode"]
-            self.ioloop.add_callback(configure_pipeline)
-            raise AsyncReply
+        except KeyError as error:
+            msg = "Error getting the pipeline name from config_json: {}".format(str(error))
+            log.error(msg)
+            raise PafPipelineKeyError(msg)
+        self._pipeline_sensor_name.set_value(pipeline_name)
+        log.info("Configuring pipeline {}".format(
+            self._pipeline_sensor_name.value()))
+        try:
+            #log.info("Configuring pipeline {}".format()
+            _pipeline_type = PIPELINES[self._pipeline_sensor_name.value()]
+        except KeyError as error:
+            msg = "No pipeline called '{}', available pipeline are: {}".format(
+                self._pipeline_sensor_name.value(), " ".join(PIPELINES.keys()))
+            self._pipeline_sensor_name.set_value("")
+            log.error(msg)
+            raise PafPipelineKeyError(msg)
+        log.info("Configuring pipeline continute")    
+        try:
+            log.debug(
+                "Trying to create pipeline instance: {}".format(pipeline_name))
+            self._pipeline_instance = _pipeline_type()
+            self.add_pipeline_sensors()
+            self._pipeline_instance.callbacks.add(self.state_change)
+            config = json.loads(config_json)
+            log.debug("Unpacked config: {}".format(config))
+            capture_start_time = Time.now() + 27.0 * units.s
+            frequency = config["frequency"]
+            self._pipeline_instance.configure(
+                capture_start_time,
+                frequency,
+                self._ip_address.value())
+        except Exception as error:
+            self._pipeline_sensor_name.set_value("")
+            msg = "Couldn't start configure pipeline instance {}".format(
+                str(error))
+            log.error(msg)
+            raise PafPipelineError(msg)
         else:
-            msg = "Can't configure pipeline, status = {}".format(
-                self._pipeline_sensor_status.value())
-            log.info("{}".format(msg))
-            return ("fail", msg)
-
-    @request(Str())
-    @return_reply(Str())
-    def request_start(self, req, config_json):
-        """
-        @brief      Start pipeline
-
-        """
-        @coroutine
-        def start_pipeline():
-            try:
-                config = json.loads(config_json)
-                utc_start_process = Time.now()
-                source_name = config["source-name"]
-                ra = config["ra"]
-                dec = config["dec"]
-                self._pipeline_instance.start(
-                    utc_start_process, source_name, ra, dec)
-            except Exception as error:
-                msg = "Couldn't start pipeline server {}".format(error)
-                log.info("{}".format(msg))
-                req.reply("fail", msg)
-            msg = "Starting pipeline {}".format(
-                self._pipeline_sensor_name.value())
-            log.info("{}".format(msg))
-            req.reply("ok", msg)
-        if self._pipeline_sensor_status.value() == "ready":
-            self.ioloop.add_callback(start_pipeline)
-            raise AsyncReply
-        else:
-            msg = "Pipeline is not in the state of configured, status = {} ".format(
-                self._pipeline_sensor_status.value())
-            log.info("{}".format(msg))
-            return ("fail", msg)
-
-    @request()
-    @return_reply(Str())
-    def request_stop(self, req):
-        """
-        @brief      Stop pipeline
-
-        """
-        @coroutine
-        def stop_pipeline():
-            self._pipeline_sensor_status.set_value("stopping")
-            try:
-                self._pipeline_instance.stop()
-            except Exception as error:
-                msg = "Couldn't stop pipeline {}".format(error)
-                log.info("{}".format(msg))
-                req.reply("fail", msg)
-            msg = "Stopping pipeline {}".format(
-                self._pipeline_sensor_name.value())
-            log.info("{}".format(msg))
-            req.reply("ok", msg)
-
-        if self._pipeline_sensor_status.value() == "running":
-            self.ioloop.add_callback(stop_pipeline)
-            raise AsyncReply
-        else:
-            msg = "Nothing to stop, status = {}".format(
-                self._pipeline_sensor_status.value())
-            log.info("{}".format(msg))
-            return ("fail", msg)
+            log.info("pipeline instance {} configured".format(
+                self._pipeline_sensor_name.value()))
 
     @request()
     @return_reply(Str())
@@ -255,30 +226,101 @@ class PafWorkerServer(AsyncDeviceServer):
 
         """
         @coroutine
-        def deconfigure():
-            log.info("Deconfiguring pipeline {}".format(
-                self._pipeline_sensor_name.value()))
+        def deconfigure_wrapper():
             try:
-                self.remove_pipeline_sensors()
-                self._pipeline_instance.deconfigure()
-                del self._pipeline_instance
+                yield self.deconfigure()
             except Exception as error:
-                msg = "Couldn't deconfigure pipeline {}".format(error)
-                log.error("{}".format(msg))
-                req.reply("fail", msg)
-            msg = "Deconfigured pipeline {}".format(
-                self._pipeline_sensor_name.value())
-            log.info("{}".format(msg))
-            req.reply("ok", msg)
-            self._pipeline_sensor_name.set_value("")
-        if self._pipeline_sensor_status.value():
-            self.ioloop.add_callback(deconfigure)
-            raise AsyncReply
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(deconfigure_wrapper)
+        raise AsyncReply
+
+    @coroutine
+    def deconfigure(self):
+        log.info("Deconfiguring pipeline {}".format(
+            self._pipeline_sensor_name.value()))
+        try:
+            self.remove_pipeline_sensors()
+            self._pipeline_instance.deconfigure()
+            del self._pipeline_instance
+        except Exception as error:
+            msg = "Couldn't deconfigure pipeline {}".format(str(error))
+            log.error(msg)
+            raise PafPipelineError(msg)
         else:
-            msg = "Nothing to deconfigure, status = {}".format(
-                self._pipeline_sensor_status.value())
-            log.info("{}".format(msg))
-            return ("fail", msg)
+            log.info("Deconfigured pipeline {}".format(
+                self._pipeline_sensor_name.value()))
+            self._pipeline_sensor_name.set_value("")
+
+    @request(Str())
+    @return_reply(Str())
+    def request_start(self, req, config_json):
+        """
+        @brief      Start pipeline
+
+        """
+        @coroutine
+        def start_wrapper():
+            try:
+                yield self.start_pipeline(config_json)
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(start_wrapper)
+        raise AsyncReply
+
+    @coroutine
+    def start_pipeline(self, config_json):
+        try:
+            config = json.loads(config_json)
+            utc_start_process = Time.now() +15 * units.second
+            source_name = config["source-name"]
+            ra = config["ra"]
+            dec = config["dec"]
+            self._pipeline_instance.start(
+                utc_start_process, source_name, ra, dec)
+        except Exception as error:
+            msg = "Couldn't start pipeline server {}".format(str(error))
+            log.error(msg)
+            raise PafPipelineError(msg)
+        else:
+            log.info("Starting pipeline {}".format(
+                self._pipeline_sensor_name.value()))
+
+    @request()
+    @return_reply(Str())
+    def request_stop(self, req):
+        """
+        @brief      Stop pipeline
+
+        """
+        @coroutine
+        def stop_wrapper():
+            try:
+                yield self.stop_pipeline()
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(stop_wrapper)
+        raise AsyncReply
+
+    @coroutine
+    def stop_pipeline(self):
+        try:
+            self._pipeline_instance.stop()
+        except Exception as error:
+            msg = "Couldn't stop pipeline {}".format(str(error))
+            log.error(msg)
+            raise PafPipelineError(msg)
+        else:
+            log.info("Stopping pipeline {}".format(
+                self._pipeline_sensor_name.value()))
 
     @request()
     @return_reply(Str())
@@ -295,6 +337,13 @@ class PafWorkerServer(AsyncDeviceServer):
 @coroutine
 def on_shutdown(ioloop, server):
     log.info('Shutting down server')
+    if server._pipeline_sensor_status.value() == "running":
+        log.info("Pipeline still running, stopping pipeline")
+        yield server.stop_pipeline()
+        time.sleep(10)
+    if server._pipeline_sensor_status.value() != "idle":
+        log.info("Pipeline still configured, deconfiguring pipeline")
+        yield server.deconfigure()
     yield server.stop()
     ioloop.stop()
 
@@ -315,7 +364,7 @@ def main():
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
         level=opts.log_level.upper(),
         logger=logger)
-    logging.getLogger('katcp').setLevel('INFO')
+    logging.getLogger('mpikat').setLevel('INFO')
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting PafWorkerServer instance")
     server = PafWorkerServer(opts.host, opts.port)

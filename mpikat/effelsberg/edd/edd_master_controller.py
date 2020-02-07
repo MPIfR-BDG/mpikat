@@ -22,77 +22,39 @@ SOFTWARE.
 import logging
 import coloredlogs
 import json
+
 import tornado
 import signal
-from optparse import OptionParser
+
 from tornado.gen import Return, coroutine
 from katcp import Sensor, AsyncReply
-from katcp.kattypes import request, return_reply, Str
-from mpikat.core.master_controller import MasterController
-from mpikat.effelsberg.edd.edd_roach2_product_controller import (
-    EddRoach2ProductController)
-from mpikat.effelsberg.edd.edd_worker_wrapper import EddWorkerPool
-from mpikat.effelsberg.edd.edd_scpi_interface import EddScpiInterface
+from katcp.kattypes import request, return_reply, Str, Int
+
+from mpikat.effelsberg.edd.edd_roach2_product_controller import ( EddRoach2ProductController)
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
-from mpikat.effelsberg.edd.edd_fi_client import EddFitsInterfaceClient
+from mpikat.effelsberg.edd.edd_server_product_controller import EddServerProductController
 
-# ?halt message means shutdown everything and power off all machines
+import mpikat.effelsberg.edd.pipeline.EDDPipeline as EDDPipeline
+import mpikat.effelsberg.edd.EDDDataStore as EDDDataStore
 
-log = logging.getLogger("mpikat.edd_master_controller")
-EDD_REQUIRED_KEYS = []
-
-
-class EddConfigurationError(Exception):
-    pass
-
-
-class UnknownControlMode(Exception):
-    pass
-
-
-class EddMasterController(MasterController):
+class EddMasterController(EDDPipeline.EDDPipeline):
     """
     The main KATCP interface for the EDD backend
     """
-    VERSION_INFO = ("mpikat-edd-api", 0, 1)
-    BUILD_INFO = ("mpikat-edd-implementation", 0, 1, "rc1")
-    DEVICE_STATUSES = ["ok", "degraded", "fail"]
+    VERSION_INFO = ("mpikat-edd-api", 0, 2)
+    BUILD_INFO = ("mpikat-edd-implementation", 0, 2, "rc1")
 
-    CONTROL_MODES = ["KATCP", "SCPI"]
-    KATCP, SCPI = CONTROL_MODES
-
-    def __init__(self, ip, port, scpi_ip, scpi_port, r2rm_host, r2rm_port):
+    def __init__(self, ip, port, redis_ip, redis_port):
         """
         @brief       Construct new EddMasterController instance
 
         @params  ip       The IP address on which the server should listen
         @params  port     The port that the server should bind to
         """
-        self._control_mode = self.KATCP
-        self._scpi_ip = scpi_ip
-        self._scpi_port = scpi_port
-        self._r2rm_host = r2rm_host
-        self._r2rm_port = r2rm_port
-        self._scpi_interface = None
-        self._packetisers = []
-        self._fits_interfaces = []
-        super(EddMasterController, self).__init__(ip, port, EddWorkerPool())
+        EDDPipeline.EDDPipeline.__init__(self, ip, port)
+        self.__controller = {}
+        self.__eddDataStore = EDDDataStore.EDDDataStore(redis_ip, redis_port)
 
-    def start(self):
-        """
-        @brief    Start the server
-        """
-        super(EddMasterController, self).start()
-        self._scpi_interface = EddScpiInterface(
-            self, self._scpi_ip, self._scpi_port, self.ioloop)
-
-    def stop(self):
-        """
-        @brief    Stop the server
-        """
-        self._scpi_interface.stop()
-        self._scpi_interface = None
-        super(EddMasterController, self).stop()
 
     def setup_sensors(self):
         """
@@ -101,131 +63,34 @@ class EddMasterController(MasterController):
         @note     This is an internal method and is invoked by
                   the constructor of the base class.
         """
-        super(EddMasterController, self).setup_sensors()
-        self._control_mode_sensor = Sensor.string(
-            "control-mode",
-            description="The control mode for the EDD",
-            default=self._control_mode,
-            initial_status=Sensor.NOMINAL)
-        self.add_sensor(self._control_mode_sensor)
+        EDDPipeline.EDDPipeline.setup_sensors(self)
         self._edd_config_sensor = Sensor.string(
-            "current-config",
-            description="The current configuration for the EDD backend",
-            default="",
-            initial_status=Sensor.UNKNOWN)
+        "current-config",
+        description="The current configuration for the EDD backend",
+        default="",
+        initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._edd_config_sensor)
-        self._edd_scpi_interface_addr_sensor = Sensor.string(
-            "scpi-interface-addr",
-            description="The SCPI interface address for this instance",
-            default="{}:{}".format(self._scpi_ip, self._scpi_port),
-            initial_status=Sensor.NOMINAL)
-        self.add_sensor(self._edd_scpi_interface_addr_sensor)
 
-    @property
-    def katcp_control_mode(self):
-        return self._control_mode == self.KATCP
 
-    @property
-    def scpi_control_mode(self):
-        return self._control_mode == self.SCPI
-
-    @request(Str())
-    @return_reply()
-    def request_set_control_mode(self, req, mode):
+    @request()
+    @return_reply(Int())
+    def request_reset_edd_layout(self, req):
         """
-        @brief     Set the external control mode for the master controller
+        @brief   Reset the edd layout - after a change of the edd layout via ansible, the iformation about the available products is updated
 
-        @param     mode   The external control mode to be used by the server
-                          (options: KATCP, SCPI)
-
-        @detail    The EddMasterController supports two methods of external control:
-                   KATCP and SCPI. The server will always respond to a subset of KATCP
-                   commands, however when set to SCPI mode the following commands are
-                   disabled to the KATCP interface:
-                       - configure
-                       - capture_start
-                       - capture_stop
-                       - deconfigure
-                   In SCPI control mode the EddScpiInterface is activated and the server
-                   will respond to SCPI requests.
-
-        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
+        @detail  Reread the layout of the edd setup from the ansible data set.
+        @return  katcp reply object [[[ !product-list ok | (fail [error description]) <number of configured producers> ]]
         """
-        try:
-            self.set_control_mode(mode)
-        except Exception as error:
-            return ("fail", str(error))
-        else:
-            return ("ok",)
+        self.__eddDataStore.updateProducts()
+        # add a control handle for each product
+        #for productid in self.__eddDataStore.products:
+        #    product = self.__eddDataStore.getProduct(productid)
+        #    # should query the product tog et the right type of controller
 
-    def set_control_mode(self, mode):
-        """
-        @brief     Set the external control mode for the master controller
+        #    self.__controller[productid] = EddServerProductController(self, productid, (product["address"], product["port"]) )
 
-        @param     mode   The external control mode to be used by the server
-                          (options: KATCP, SCPI)
-        """
-        mode = mode.upper()
-        if not mode in self.CONTROL_MODES:
-            raise UnknownControlMode("Unknown mode '{}', valid modes are '{}' ".format(
-                mode, ", ".join(self.CONTROL_MODES)))
-        else:
-            self._control_mode = mode
-        if self._control_mode == self.SCPI:
-            self._scpi_interface.start()
-        else:
-            self._scpi_interface.stop()
-        self._control_mode_sensor.set_value(self._control_mode)
+        return ("ok", len(self.__eddDataStore.products))
 
-    @request(Str())
-    @return_reply()
-    def request_configure(self, req, config_json):
-        """
-        @brief      Configure EDD to receive and process data
-
-        @note       This is the KATCP wrapper for the configure command
-
-        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
-        """
-        if not self.katcp_control_mode:
-            return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
-
-        @coroutine
-        def configure_wrapper():
-            try:
-                yield self.configure(config_json)
-            except Exception as error:
-                log.exception(str(error))
-                req.reply("fail", str(error))
-            else:
-                req.reply("ok")
-        self.ioloop.add_callback(configure_wrapper)
-        raise AsyncReply
-
-    @coroutine
-    def _packetiser_config_helper(self, config):
-        try:
-            client = DigitiserPacketiserClient(*config["address"])
-        except Exception as error:
-            log.error(
-                "Error while connecting to packetiser: {}".format(str(error)))
-            raise error
-        try:
-            yield client.set_sampling_rate(config["sampling_rate"])
-            yield client.set_bit_width(config["bit_width"])
-            yield client.set_destinations(config["v_destinations"], config["h_destinations"])
-            for interface, ip_address in config["interface_addresses"].items():
-                yield client.set_interface_address(interface, ip_address)
-            yield client.synchronize()
-            yield client.capture_start()
-        except Exception as error:
-            log.error(
-                "Error during packetiser configuration: {}".format(str(error)))
-            raise error
-        else:
-            raise Return(client)
-        finally:
-            client.stop()
 
     @coroutine
     def configure(self, config_json):
@@ -240,7 +105,7 @@ class EddMasterController(MasterController):
                          "packetisers":
                          [
                              {
-                                 "id": "digitiser_packetiser_01",
+                                 "id": "faraday_room_digitizer",
                                  "address": ["134.104.73.132", 7147],
                                  "sampling_rate": 2600000000.0,
                                  "bit_width": 12,
@@ -250,6 +115,42 @@ class EddMasterController(MasterController):
                          ],
                          "products":
                          [
+                             {
+                              "id": "GatedSpectrometer",
+                               "type": "GatedSpectrometer",
+                               "supported_input_formats": {"MPIFR_EDD_Packetizer": [1]},
+                               "input_data_streams":
+                               {
+                                   "polarization_0" :
+                                   {
+                                       "source": "focus_cabin_digitizer:v_polarization",
+                                       "format": "MPIFR_EDD_Packetizer",
+                                   },
+                                    "polarization_1" :
+                                   {
+                                       "source": "focus_cabin_digitizer:h_polarization",
+                                       "format": "MPIFR_EDD_Packetizer",
+                                   }
+                               },
+                               "output_data_streams":
+                               {
+                                   "polarization_0" :
+                                   {
+                                       "format": "MPIFR_EDD_GatedSpectrometer",
+                                       "ip": "225.0.0.172 225.0.0.173",
+                                       "port": "7152"
+                                   },
+                                    "polarization_1" :
+                                   {
+                                       "format": "MPIFR_EDD_GatedSpectrometer",
+                                       "ip": "225.0.0.184 225.0.0.185",
+                                       "port": "7152"
+                                   }
+                               },
+
+                               "fft_length": 256,
+                               "naccumulate": 32
+                             },
                              {
                                  "id": "roach2_spectrometer",
                                  "type": "roach2",
@@ -280,127 +181,140 @@ class EddMasterController(MasterController):
                  @endcode
         """
         log.info("Configuring EDD backend for processing")
-        log.debug("Configuration string: '{}'".format(config_json))
-        if self._products:
-            log.warning(
-                "EDD already has configured data products, attempting deconfigure")
-            try:
-                yield self.deconfigure()
-            except Exception as error:
-                log.warning(
-                    "Unable to deconfigure EDD before configuration: {}".format(str(error)))
-        self._packetisers = []
-        self._fits_interfaces = []
+        #for i, k in self.__controller.items():
+        #    log.debug("Deconfigure existing controller {}".format(i))
+        #    k.deconfigure()
+
+        self.__eddDataStore.updateProducts()
+        log.info("Resetting data streams")
+        #TODo: INterface? Decide if this is always done
+        self.__eddDataStore._dataStreams.flushdb()
+
+        log.debug("Received configuration string: '{}'".format(config_json))
         log.debug("Parsing JSON configuration")
         try:
-            config_dict = json.loads(config_json)
+            config = json.loads(config_json)
         except Exception as error:
             log.error("Unable to parse configuration dictionary")
             raise error
 
-        log.info("Configuring digitisers/packetisers")
-        dp_configure_futures = []
-        for dp_config in config_dict["packetisers"]:
-            dp_configure_futures.append(
-                self._packetiser_config_helper(dp_config))
-        for future in dp_configure_futures:
-            dp_client = yield future
-            self._packetisers.append(dp_client)
+        if 'packetisers' in config:
+            config['packetizers'] = config.pop('packetisers')
+        elif "packetizers" not in config:
+            log.warning("No packetizers in config!")
+            config["packetizers"] = []
+        if not 'products' in config:
+            config["products"] = []
 
+        # Get output streams from packetizer and configure packetizer
+        log.info("Configuring digitisers/packetisers")
+        for packetizer in config['packetizers']:
+            if packetizer["id"] in self.__controller:
+                log.debug("Controller for {} already there".format(packetizer["id"]))
+            else:
+                log.debug("Adding new controller for {}".format(packetizer["id"]))
+                self.__controller[packetizer["id"]] = DigitiserPacketiserClient(*packetizer["address"])
+                self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
+            yield self.__controller[packetizer["id"]].configure(packetizer)
+
+            ofs = dict(format="MPIFR_EDD_Packetizer",
+                        sample_rate=packetizer["sampling_rate"] / packetizer["predecimation_factor"],
+                        bit_depth=packetizer["bit_width"])
+            ofs["sync_time"] = yield self.__controller[packetizer["id"]].get_sync_time()
+            log.info("Sync Time for {}: {}".format(packetizer["id"], ofs["sync_time"]))
+
+            key = packetizer["id"] + ":" + "v_polarization"
+            ofs["ip"] = packetizer["v_destinations"].split(':')[0]
+            ofs["port"] = packetizer["v_destinations"].split(':')[1]
+            self.__eddDataStore.addDataStream(key, ofs)
+
+            key = packetizer["id"] + ":" + "h_polarization"
+            ofs["ip"] = packetizer["h_destinations"].split(':')[0]
+            ofs["port"] = packetizer["h_destinations"].split(':')[1]
+            self.__eddDataStore.addDataStream(key, ofs)
+            yield self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
+
+        log.debug("Identify additional output streams")
+        # Get output streams from products
+        for product in config['products']:
+            if not "output_data_streams" in product:
+                continue
+
+            for k, i in product["output_data_streams"].iteritems():
+                # look up data stream in storage
+                dataStream = self.__eddDataStore.getDataFormatDefinition(i['format'])
+                dataStream.update(i)
+                key = "{}:{}".format(product['id'], k)
+                if 'ip' in i:
+                    pass
+                # ToDo: mark multicast adress as used xyz.mark_used(i['ip'])
+                else:
+                # ToDo: get MC address automatically if not set
+                    raise NotImplementedError("Missing ip statement! Automatic assignment of IPs not implemented yet!")
+                self.__eddDataStore.addDataStream(key, i)
+
+        log.debug("Connect data streams with high level description")
+        for product in config['products']:
+            counter = 0
+            for k in product["input_data_streams"]:
+                if isinstance(product["input_data_streams"], dict):
+                    inputStream = product["input_data_streams"][k]
+                elif isinstance(product["input_data_streams"], list):
+                    inputStream = k
+                    k = counter
+                    counter += 1
+                else:
+                    raise RuntimeError("Input streams has to be dict ofr list, got: {}!".format(type(product["input_data_streams"])))
+
+                datastream = self.__eddDataStore.getDataFormatDefinition(inputStream['format'])
+                datastream.update(inputStream)
+                if not "source" in inputStream:
+                    log.debug("Source not definied for input stream {} of {} - no lookup but assuming manual definition!".format(k, product['id']))
+                    continue
+                s = inputStream["source"]
+
+                if not self.__eddDataStore.hasDataStream(s):
+                        raise RuntimeError("Unknown data stream {} !".format(s))
+
+                log.debug("Updating {} of {} - with {}".format(k, product['id'], s))
+                datastream.update(self.__eddDataStore.getDataStream(s))
+                product["input_data_streams"][k] = datastream
+
+        log.debug("Updated configuration:\n '{}'".format(json.dumps(config, indent=2)))
         log.info("Configuring products")
-        product_configure_futures = []
-        for product_config in config_dict["products"]:
+        for product_config in config["products"]:
             product_id = product_config["id"]
-            if product_config["type"] == "roach2":
+            #ToDo : Unify roach2 to bring under ansible control + ServerproductController
+            if "type" in product_config and product_config["type"] == "roach2":
                 self._products[product_id] = EddRoach2ProductController(self, product_id,
                                                                         (self._r2rm_host, self._r2rm_port))
-            else:
-                raise NotImplementedError(
-                    "Only roach2 products are currently supported")
-            future = self._products[product_id].configure(product_config)
-            product_configure_futures.append(future)
-        for future in product_configure_futures:
-            yield future
+            elif product_id not in self.__controller:
+                log.warning("Config received for {}, but no controller exists yet.".format(product_id))
+                if product_id in self.__eddDataStore.products:
+                    product = self.__eddDataStore.getProduct(product_id)
+                    self.__controller[product_id] = EddServerProductController(product_id, product["address"], product["port"])
+                else:
+                    log.warning("Manual config of product {}")
+                    self.__controller[product_id] = EddServerProductController(product_id, product_config["address"], product_config["port"])
 
-        log.info("Configuring FITS interfaces")
-        for fi_config in config_dict["fits_interfaces"]:
-            fi = EddFitsInterfaceClient(fi_config["id"], fi_config["address"])
-            yield fi.configure(fi_config)
-            self._fits_interfaces.append(fi)
-        self._edd_config_sensor.set_value(config_json)
-        self._update_products_sensor()
+            yield self.__controller[product_id].configure(product_config)
+
+        self._edd_config_sensor.set_value(json.dumps(config))
         log.info("Successfully configured EDD")
+        raise Return("Successfully configured EDD") 
 
-    @request()
-    @return_reply()
-    def request_deconfigure(self, req):
-        """
-        @brief      Deconfigure the EDD backend.
-
-        @note       This is the KATCP wrapper for the deconfigure command
-
-        @return     katcp reply object [[[ !deconfigure ok | (fail [error description]) ]]]
-        """
-        if not self.katcp_control_mode:
-            return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
-
-        @coroutine
-        def deconfigure_wrapper():
-            try:
-                yield self.deconfigure()
-            except Exception as error:
-                log.exception(str(error))
-                req.reply("fail", str(error))
-            else:
-                req.reply("ok")
-        self.ioloop.add_callback(deconfigure_wrapper)
-        raise AsyncReply
 
     @coroutine
     def deconfigure(self):
         """
         @brief      Deconfigure the EDD backend.
         """
-        log.info("Deconfiguring all products")
-        for product in self._products.values():
-            yield product.deconfigure()
-        log.info("Stopping packetiser data transmission")
-        for packetiser in self._packetisers:
-            yield packetiser.capture_stop()
-        log.info("Stopping FITS interfaces")
-        for fi in self._fits_interfaces:
-            fi.capture_stop()
-        self._products = {}
-        self._update_products_sensor()
+        log.info("Deconfiguring all products:")
+        for cid, controller in self.__controller.iteritems():
+            logging.debug("  - Deconfigure: {}".format(cid))
+            yield controller.deconfigure()
+        #self._update_products_sensor()
 
-    @request()
-    @return_reply()
-    def request_capture_start(self, req):
-        """
-        @brief      Start the EDD backend processing
-
-        @note       This method may be updated in future to pass a 'scan configuration' containing
-                    source and position information necessary for the population of output file
-                    headers.
-
-        @note       This is the KATCP wrapper for the capture_start command
-
-        @return     katcp reply object [[[ !capture_start ok | (fail [error description]) ]]]
-        """
-        if not self.katcp_control_mode:
-            return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
-
-        @coroutine
-        def start_wrapper():
-            try:
-                yield self.capture_start()
-            except Exception as error:
-                log.exception(str(error))
-                req.reply("fail", str(error))
-            else:
-                req.reply("ok")
-        self.ioloop.add_callback(start_wrapper)
-        raise AsyncReply
 
     @coroutine
     def capture_start(self):
@@ -416,35 +330,10 @@ class EddMasterController(MasterController):
                     source and position information necessary for the population of output file
                     headers.
         """
-        for fi in self._fits_interfaces:
-            yield fi.capture_start()
-        for product in self._products.values():
-            yield product.capture_start()
+        for cid, controller in self.__controller.iteritems():
+            logging.debug("  - Capture start: {}".format(cid))
+            yield controller.capture_start()
 
-    @request()
-    @return_reply()
-    def request_capture_stop(self, req):
-        """
-        @brief      Stop the EDD backend processing
-
-        @note       This is the KATCP wrapper for the capture_stop command
-
-        @return     katcp reply object [[[ !capture_stop ok | (fail [error description]) ]]]
-        """
-        if not self.katcp_control_mode:
-            return ("fail", "Master controller is in control mode: {}".format(self._control_mode))
-
-        @coroutine
-        def stop_wrapper():
-            try:
-                yield self.capture_stop()
-            except Exception as error:
-                log.exception(str(error))
-                req.reply("fail", str(error))
-            else:
-                req.reply("ok")
-        self.ioloop.add_callback(stop_wrapper)
-        raise AsyncReply
 
     @coroutine
     def capture_stop(self):
@@ -456,68 +345,51 @@ class EddMasterController(MasterController):
                     stream once configured. Processing components (such as the FITS interfaces)
                     which must be cognisant of scan boundaries should respond to this request.
         """
-        for fi in self._fits_interfaces:
-            yield fi.capture_stop()
-        for product in self._products.values():
-            yield product.capture_stop()
+        for cid, controller in self.__controller.iteritems():
+            logging.debug("  - Capture stop: {}".format(cid))
+            yield controller.capture_stop()
 
 
-@coroutine
-def on_shutdown(ioloop, server):
-    log.info("Shutting down server")
-    yield server.stop()
-    ioloop.stop()
+    @coroutine
+    def measurement_start(self):
+        """
+        """
+        for cid, controller in self.__controller.iteritems():
+            logging.debug("  - Measurement start: {}".format(cid))
+            yield controller.measurement_start()
 
 
-def main():
-    usage = "usage: %prog [options]"
-    parser = OptionParser(usage=usage)
-    parser.add_option('-H', '--host', dest='host', type=str,
-                      help='Host interface to bind to')
-    parser.add_option('-p', '--port', dest='port', type=int,
-                      help='Port number to bind to')
-    parser.add_option('', '--scpi-interface', dest='scpi_interface', type=str,
-                      help='The interface to listen on for SCPI requests',
-                      default="")
-    parser.add_option('', '--scpi-port', dest='scpi_port', type=int,
-                      help='The port number to listen on for SCPI requests')
-    parser.add_option('', '--r2rm-host', dest='r2rm_host', type=str,
-                      help='The IP or host name of the R2RM server to use')
-    parser.add_option('', '--r2rm-port', dest='r2rm_port', type=int,
-                      help='The port number on which R2RM is serving')
-    parser.add_option('', '--scpi-mode', dest='scpi_mode', action="store_true",
-                      help='Activate the SCPI interface on startup')
-    parser.add_option('', '--log-level', dest='log_level', type=str,
-                      help='Port number of status server instance', default="INFO")
-    (opts, args) = parser.parse_args()
-    logging.getLogger().addHandler(logging.NullHandler())
-    logger = logging.getLogger('mpikat')
-    logging.getLogger('katcp').setLevel(logging.DEBUG)
-    coloredlogs.install(
-        fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
-             "- %(filename)s:%(lineno)s] %(message)s"),
-        level=opts.log_level.upper(),
-        logger=logger)
-    ioloop = tornado.ioloop.IOLoop.current()
-    log.info("Starting EddMasterController instance")
-    server = EddMasterController(
-        opts.host, opts.port,
-        opts.scpi_interface, opts.scpi_port,
-        opts.r2rm_host, opts.r2rm_port)
-    signal.signal(
-        signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
-            on_shutdown, ioloop, server))
+    @coroutine
+    def measurement_stop(self):
+        """
+        """
+        for cid, controller in self.__controller.iteritems():
+            logging.debug("  - Measurement stop: {}".format(cid))
+            yield controller.measurement_stop()
 
-    def start_and_display():
-        server.start()
-        if opts.scpi_mode:
-            server.set_control_mode(server.SCPI)
-        log.info(
-            "Listening at {0}, Ctrl-C to terminate server".format(
-                server.bind_address))
-    ioloop.add_callback(start_and_display)
-    ioloop.start()
+
+    @coroutine
+    def set(self, config):
+        """
+        Distribute the settings among the connected components
+        """
+
+        for cid, item in config:
+            logging.debug("  - Aplying setting: {}:{}".format(cid, item))
+            yield self.__controller[cid].set(item)
+
+
 
 
 if __name__ == "__main__":
-    main()
+    parser = EDDPipeline.getArgumentParser()
+    parser.add_argument('--redis-ip', dest='redis_ip', type=str, default="localhost",
+                      help='The ip for the redis server')
+    parser.add_argument('--redis-port', dest='redis_port', type=int, default=6379,
+                      help='The port number for the redis server')
+    args = parser.parse_args()
+
+    server = EddMasterController(
+        args.host, args.port,
+        args.redis_ip, args.redis_port)
+    EDDPipeline.launchPipelineServer(server, args)

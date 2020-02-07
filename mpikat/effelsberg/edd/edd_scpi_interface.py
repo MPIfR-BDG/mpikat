@@ -1,48 +1,36 @@
 import json
 import logging
-from urllib2 import urlopen
-from tornado.gen import coroutine
-from mpikat.core.scpi import ScpiAsyncDeviceServer, scpi_request, raise_or_ok
+from mpikat.core.scpi import ScpiAsyncDeviceServer, scpi_request, raise_or_ok, launch_server
+import mpikat.effelsberg.edd.pipeline.EDDPipeline as EDDPipeline
+from mpikat.effelsberg.edd.edd_server_product_controller import EddServerProductController
+import coloredlogs
+from tornado.gen import Return, coroutine, sleep
+import tornado
+import signal
 
 log = logging.getLogger('mpikat.edd_scpi_interface')
 
-class EddScpiInterfaceError(Exception):
-    pass
+
 
 class EddScpiInterface(ScpiAsyncDeviceServer):
-    def __init__(self, master_controller, interface, port, ioloop=None):
+    def __init__(self, interface, port, master_ip, master_port, ioloop=None):
         """
         @brief      A SCPI interface for a EddMasterController instance
 
-        @param      master_controller   A EddMasterController instance
+        @param      master_controller_ip    IP of a master controll to send commands to
+        @param      master_controller_port  Port of a master controll to send commands to
         @param      interface    The interface to listen on for SCPI commands
-        @param      interface    The port to listen on for SCPI commands
-        @param      ioloop       The ioloop to use for async functions
+        @param      port        The port to listen on for SCPI commands
+        @param      ioloop       The ioloop to use for async functionsnsible apply roles round robin
 
         @note If no IOLoop instance is specified the current instance is used.
         """
+
+        log.info("Master ast {}:{}".format(master_ip, master_port))
         super(EddScpiInterface, self).__init__(interface, port, ioloop)
-        self._mc = master_controller
-        self._config = None
+        self.address = (master_ip, master_port)
+        self.__controller = EddServerProductController("MASTER", master_ip, master_port)
 
-    @scpi_request(str)
-    @raise_or_ok
-    def request_edd_cmdconfigfile(self, req, gitpath):
-        """
-        @brief      Set the configuration file for the EDD
-
-        @param      req       An ScpiRequest object
-        @param      gitpath   A git link to a config file as raw user content.
-                              For example:
-                              https://raw.githubusercontent.com/ewanbarr/mpikat/edd_control/
-                              mpikat/effelsberg/edd/config/ubb_spectrometer.json
-
-        @note       Suports SCPI request: 'EDD:CMDCONFIGFILE'
-        """
-        page = urlopen(gitpath)
-        self._config = page.read()
-        log.info("Received configuration through SCPI interface:\n{}".format(self._config))
-        page.close()
 
     @scpi_request()
     def request_edd_configure(self, req):
@@ -53,23 +41,18 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:CONFIGURE'
         """
-        if not self._config:
-            raise EddScpiInterfaceError("No configuration set for EDD")
-        else:
-            self._ioloop.add_callback(self._make_coroutine_wrapper(req,
-                self._mc.configure, self._config))
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.configure))
 
     @scpi_request()
-    def request_edd_abort(self, req):
+    def request_edd_deconfigure(self, req):
         """
-        @brief      Abort EDD backend processing
+        @brief      Deconfigure the EDD backend
 
         @param      req   An ScpiRequst object
 
-        @note       Suports SCPI request: 'EDD:ABORT'
+        @note       Suports SCPI request: 'EDD:DECONFIGURE'
         """
-        self._ioloop.add_callback(self._make_coroutine_wrapper(req,
-            self._mc.capture_stop))
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.deconfigure))
 
     @scpi_request()
     def request_edd_start(self, req):
@@ -80,8 +63,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:START'
         """
-        self._ioloop.add_callback(self._make_coroutine_wrapper(req,
-                self._mc.capture_start))
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_start))
 
     @scpi_request()
     def request_edd_stop(self, req):
@@ -92,5 +74,44 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:STOP'
         """
-        self._ioloop.add_callback(self._make_coroutine_wrapper(req,
-                self._mc.capture_stop))
+        self.__controller.measurement_stop()
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_stop))
+
+    @scpi_request(str)
+    def request_edd_set(self, req, message):
+        """
+        @brief     Set an option for an edd backend component.
+
+        @param      req   An ScpiRequst object
+
+        @note       Suports SCPI request: 'EDD:SET ID:OPTION VALUE'
+        """
+        # json from message with unravvelled colons
+        d = {}
+        g = d
+        p, o  = message.split()
+        for i in p.split(':')[:-1]:
+            d[i] = {}
+            d = d[i]
+        d[p[-1]] = o
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.set, g))
+
+    @scpi_request(str)
+    def request_edd_construct(self, req, message):
+        req.error("NOT IMPLEMENTED YET")
+
+    @scpi_request()
+    def request_edd_teardown(self, req, message):
+        req.error("NOT IMPLEMENTED YET")
+
+
+if __name__ == "__main__":
+
+    parser = EDDPipeline.getArgumentParser()
+    parser.add_argument('--master-controller-ip', dest='master_ip', type=str, default="edd01",
+                      help='The ip for the master controller')
+    parser.add_argument('--master-controller-port', dest='master_port', type=int, default=7147,
+                      help='The port number for the master controller')
+    args = parser.parse_args()
+    server = EddScpiInterface(args.host, args.port, args.master_ip, args.master_port)
+    EDDPipeline.launchPipelineServer(server, args)
