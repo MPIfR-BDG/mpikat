@@ -741,9 +741,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
     def _handle_execution_stderr(self, stderr, callback):
         if bool(stderr[:8] == "Finished") & bool("." not in stderr):
             self._time_processed.set_value(stderr)
-            log.info(stderr)
+            log.debug(stderr)
         if bool(stderr[:8] != "Finished"):
-            log.info(stderr)
+            log.debug(stderr)
 
     def _handle_eddpolnmerge_stderr(self, stderr, callback):
         log.debug(stderr)
@@ -918,7 +918,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         if not self.ready:
             log.info("pipeline is not int ready state")
             if self.capturing:
-                log.info("pipeline is still captureing, issuing stop now, please send the start command again")
+                log.info("pipeline is still captureing, issuing stop now and will start shortly")
                 yield self.stop_pipeline()
             if self.starting:
                 log.info("pipeline is starting, do not send multiple start")
