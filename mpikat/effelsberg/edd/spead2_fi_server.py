@@ -379,7 +379,7 @@ class HeapPacket(object):
             log.debug(" Storing iname: {}, Ivalue: {} w. type {}".format(item.name, getattr(self, item.name), type(getattr(self, item.name))))
 
         self.integration_time = (self.naccumulate * self.fft_length) / float(self.sampling_rate)
-        self.data /= self.number_of_input_samples
+        self.data /= (self.number_of_input_samples + 1E-30)
 
         t = self.sync_time + self.timestamp_count / float(self.sampling_rate) + self.integration_time / 2
         if(self.noise_diode_status == 1):
@@ -496,14 +496,11 @@ class StreamHandler(object):
     def aggregate_data(self, packet):
         sec_id = packet.polarization
         nphases = packet.noise_diode_status
-        #ToDo: Remove this hack for dropping one gate
-        if packet.noise_diode_status == 1:
-            return
         # Constantas two polarizations
         key = packet.timestamp
         if key not in self._data_to_fw:
             # DROP DC CHANNEL
-            # ToDo: nphase naming and blank_phase 
+            # ToDo: nphase naming and blank_phase
             fw_pkt = build_fw_object(self._nsections, int(packet.nchannels) - 1, packet.timestamp,
                                      int(packet.integration_time * 1000), 2 - int(nphases))
             # Direct numpy copy behaves weired as memory alignment is expected
@@ -550,11 +547,11 @@ class StreamHandler(object):
                           self._nheaps, self._complete_heaps, self._incomplete_heaps))
                 self._transmit_socket.send(bytearray(fw_packet))
 
-                fn = "/tmp/fw_packet_{}.dat".format(timestamp)
-                if self._dump_tcp_packages:
-                    with open(fn, 'wb') as ofile:
-                        log.debug("Wrote package to disk: {}".format(fn))
-                        ofile.write(bytearray(fw_packet))
+                #fn = "/tmp/fw_packet_{}.dat".format(timestamp)
+                #if self._dump_tcp_packages:
+                #    with open(fn, 'wb') as ofile:
+                #        log.debug("Wrote package to disk: {}".format(fn))
+                #        ofile.write(bytearray(fw_packet))
 
                 self._last_package_send_time = timestamp
                 log.debug("Len of bytearray: {}".format(len(bytearray(fw_packet))))
