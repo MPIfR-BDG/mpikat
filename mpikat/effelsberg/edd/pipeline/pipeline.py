@@ -1334,7 +1334,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
 
             log.info("Deleting DADA buffer for EDDPolnMerge")
-            cmd = "dada_db -d {key}".format(numa=self.numa_number, key=self._dadc_key)
+            cmd = "dada_db -d -k {key}".format(numa=self.numa_number, key=self._dadc_key)
             # cmd = "dada_db -k {key} {args}".format(**
             #                                       self._config["dada_db_params"])
             log.debug("Running command: {0}".format(cmd))
