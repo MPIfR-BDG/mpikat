@@ -911,6 +911,21 @@ class EddPulsarPipeline(AsyncDeviceServer):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
         # if self.state == "ready":
         #    self.state = "starting"
+        try:
+            log.info("Creating DADA buffer for EDDPolnMerge")
+            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dadc_key,
+                                                                     args=self._config["dadc_db_params"]["args"])
+            # cmd = "dada_db -k {key} {args}".format(**
+            #                                       self._config["dada_db_params"])
+            log.debug("Running command: {0}".format(cmd))
+            self._create_transpose_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_transpose_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_transpose_ring_buffer._process.wait()
+        except Exception as error:
+            raise EddPulsarPipelineError(str(error))
+
         self._fscrunch.set_value(BLANK_IMAGE)
         self._tscrunch.set_value(BLANK_IMAGE)
         self._profile.set_value(BLANK_IMAGE)
@@ -1154,7 +1169,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 keyfile=dada_key_file.name)
 
         elif parse_tag(self.source_name) == "FB":
-            cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 4 -F {nchan} -b8 -d 1 -I 0 -t {nbin} {keyfile}".format(
+            cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 4 -F {nchan} -b8 -d 1 -I 0 -t {nbins} {keyfile}".format(
                 numa=self.numa_number,
                 nchan="{}".format(self.nchannels),
                 nbin="{}".format(self.nbins),
@@ -1316,6 +1331,19 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     proc._process.kill()
             if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
                 os.remove("/tmp/t2pred.dat")
+
+
+            log.info("Deleting DADA buffer for EDDPolnMerge")
+            cmd = "dada_db -d {key}".format(numa=self.numa_number, key=self._dadc_key)
+            # cmd = "dada_db -k {key} {args}".format(**
+            #                                       self._config["dada_db_params"])
+            log.debug("Running command: {0}".format(cmd))
+            self._create_transpose_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_transpose_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_transpose_ring_buffer._process.wait()
+
 
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
