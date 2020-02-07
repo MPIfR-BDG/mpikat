@@ -30,7 +30,11 @@ class PipeMonitor(Thread):
         Starts the monitor thread. Will stop on pipe error or pipe close.
         """
         while not self._stop_event.is_set():
-            pev = self._poll.poll(self._timeout)[0]
+            pev = self._poll.poll(self._timeout)
+            if not pev:
+                continue
+            else:
+                pev = pev[0]
             if pev[1] in [select.POLLIN, select.POLLPRI]:
                 for line in iter(self._pipe.readline, self._sentinel):
                     try:

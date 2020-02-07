@@ -391,6 +391,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
         if len(self._config['input_data_streams']) > len(self.__numa_node_pool):
             raise FailReply("Not enough numa nodes to process {} polarizations!".format(len(self._config['input_data_streams'])))
 
+        self._subprocessMonitor = SubprocessMonitor()
         #ToDo: Check that all input data streams have the same format, or allow different formats
         for i, streamid in enumerate(self._config['input_data_streams']):
             # calculate input buffer parameters
@@ -426,7 +427,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
                     integrationTime :   {} s \n\
                     heap size:          {} byte\n\
                     rate ({:.0f}%):        {} Gbps'.format(nSlices, nChannels, output_bufferSize, integrationTime, output_heapSize, self._config["output_rate_factor"]*100, rate / 1E9))
-            self._subprocessMonitor = SubprocessMonitor()
 
             numa_node = self.__numa_node_pool[i]
             log.debug("Associating {} with numa node {}".format(streamid, numa_node))
