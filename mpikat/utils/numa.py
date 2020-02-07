@@ -9,7 +9,7 @@ __numaInfo = None
 
 def updateInfo():
     """
-    Updates the info dictionary.
+    @brief Updates the info dictionary.
     """
     logging.debug("Update numa dictionary")
     global __numaInfo
@@ -71,7 +71,7 @@ def updateInfo():
 
 def getInfo():
     """
-    Returns dict with info on numa configuration. For every numa node the dict
+    @brief Returns dict with info on numa configuration. For every numa node the dict
     contains a dict with the associated ressources.
     """
     global __numaInfo
@@ -82,7 +82,7 @@ def getInfo():
 
 def getFastestNic(numa_node=None):
     """
-    Returns (name, description) of the fastest nic (on given numa_node)
+    @brief Returns (name, description) of the fastest nic (on given numa_node)
     """
     if numa_node is not None:
         nics = getInfo()[numa_node]["net_devices"]

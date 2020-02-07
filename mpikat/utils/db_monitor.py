@@ -6,13 +6,27 @@ from mpikat.utils.pipe_monitor import PipeMonitor
 log = logging.getLogger('mpikat.db_monitor')
 
 class DbMonitor(object):
+    """
+    @brief Monitor a dada buffer using dada_dbmonitor
+    """
     def __init__(self, key, callback = None):
+        """
+        @ brief Constructor
+
+        @param key       key of dadabuffer to monitor
+        @param callback  Function to pass monitor info to.
+
+        @detail Callback receives dict containing parsed output of dada_dbmonitor
+        """
         self._key = key
         self._dbmon_proc = None
         self._mon_thread = None
         self._callback = callback
 
     def _stdout_parser(self, line):
+        """
+        @brief Parse a line of output of the subprocess.
+        """
         line = line.strip()
         try:
             values = map(int, line.split())
@@ -31,6 +45,9 @@ class DbMonitor(object):
             self._callback(params)
 
     def start(self):
+        """
+        @brief Start the monitor subprocess
+        """
         self._dbmon_proc = Popen(
             ["dada_dbmonitor", "-k", self._key],
             stdout=PIPE, stderr=PIPE, shell=False,
@@ -41,6 +58,9 @@ class DbMonitor(object):
         self._mon_thread.start()
 
     def stop(self):
+        """
+        @brief Stop the monitor subprocess
+        """
         log.debug("Stopping monitor thread for dada buffer: {}".format(self._key))
         self._dbmon_proc.terminate()
         self._mon_thread.stop()
