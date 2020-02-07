@@ -389,32 +389,7 @@ if __name__ == "__main__":
                       help='The port number for the redis server')
     args = parser.parse_args()
 
-    logging.getLogger().addHandler(logging.NullHandler())
-    log = logging.getLogger('mpikat')
-    log.setLevel(args.log_level.upper())
-    coloredlogs.install(
-        fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
-             "- %(filename)s:%(lineno)s] %(message)s"),
-        level=args.log_level.upper(),
-        logger=log)
-
-    ioloop = tornado.ioloop.IOLoop.current()
-    log.info("Starting Pipeline instance")
     server = EddMasterController(
         args.host, args.port,
         args.redis_ip, args.redis_port)
-    log.info("Created Pipeline instance")
-    signal.signal(
-        signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
-            EDDPipeline.on_shutdown, ioloop, server))
-
-    def start_and_display():
-        log.info("Starting Pipeline server")
-        server.start()
-        log.debug("Started Pipeline server")
-        log.info(
-            "Listening at {0}, Ctrl-C to terminate server".format(
-                server.bind_address))
-
-    ioloop.add_callback(start_and_display)
-    ioloop.start()
+    EDDPipeline.launchPipelineServer(server, args)

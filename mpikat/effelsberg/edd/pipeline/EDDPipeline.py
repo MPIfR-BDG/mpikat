@@ -41,6 +41,7 @@ import coloredlogs
 import json
 import tempfile
 import threading
+import types
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.EDDPipeline")
 log.setLevel('DEBUG')
@@ -618,29 +619,37 @@ def getArgumentParser():
     return parser
 
 
-def launchPipelineServer(Pipeline):
+def launchPipelineServer(Pipeline, args=None):
     """
-    Launch a 
+    @brief Launch a Pipeline server.
+
+    @param Pipeline Instance or ServerClass to launch.
+    @param ArgumentParser args to use for launch.
     """
-    parser = getArgumentParser()
-    args = parser.parse_args()
+    if not args:
+        parser = getArgumentParser()
+        args = parser.parse_args()
 
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
     logger.setLevel(args.log_level.upper())
-
     log.setLevel(args.log_level.upper())
     coloredlogs.install(
         fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
              "- %(filename)s:%(lineno)s] %(message)s"),
         level=args.log_level.upper(),
         logger=logger)
+
+    if (type(Pipeline) == types.ClassType) or isinstance(Pipeline, type):
+        log.info("Created Pipeline instance")
+        server = Pipeline(
+            args.host, args.port
+            )
+    else:
+        server = Pipeline
+
     ioloop = tornado.ioloop.IOLoop.current()
     log.info("Starting Pipeline instance")
-    server = Pipeline(
-        args.host, args.port
-        )
-    log.info("Created Pipeline instance")
     signal.signal(
         signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
             on_shutdown, ioloop, server))
