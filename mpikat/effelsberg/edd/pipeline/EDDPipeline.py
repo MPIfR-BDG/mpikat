@@ -46,8 +46,10 @@ log = logging.getLogger("mpikat.effelsberg.edd.pipeline.EDDPipeline")
 log.setLevel('DEBUG')
 
 
-# Merge retrieved config into default via recursive dict merge
 def updateConfig(oldo, new):
+    """
+    @breif Merge retrieved config [new] into [old] via recursive dict merge
+    """
     old = oldo.copy()
     for k in new:
         if isinstance(old[k], dict):
@@ -60,22 +62,44 @@ def updateConfig(oldo, new):
     return old
 
 
-
-
-
 class EDDPipeline(AsyncDeviceServer):
-    """@brief Abstract interface for EDD Pipelines
+    """
+    @brief Abstract interface for EDD Pipelines
 
-    Pipelines are required to implement:
-            * configure
-            * capture_start
-            * capture_stop
-            * deconfigure
-    The currentconfig configuration is stored in self._config for set command to work. 
+    @detail Pipelines can implement functions to act within the following sequence of commands:
 
-    Pipelines can implement:
-            * populate_data_store
-            The receive the address and port for a data store along the request.
+            * ?set "partial config"
+            * ?set "partial config"
+            * ?set "partial config"
+            * ?configure "partial config"
+            * ?capture_start
+            * ?measurement_prepare "data"
+            * ?measurement_start
+            * ?measurement_stop
+            * ?measurement_prepare "data"
+            * ?measurement_start
+            * ?measurement_stop
+            * ?measurement_prepare "data"
+            * ?measurement_start
+            * ?measurement_stop
+            * ?capture_stop
+            * ?deconfigure
+
+    * set - updates the curent configuration with the provided partial config. This
+            is handeld enterily within the parent class which updates the member
+            attribute _config.
+    * configure - optionally does a final update of the curernt config and
+                  prepares the pipeline. Configuring the pipeline may take time, so all
+                  lengthy preparations should be done here.
+    * capture start - The pipeline should send data (into the EDD) after this command.
+    * measurement prepare - receive optional configuration before each measurement. The pipeline must not stop streaming on update.
+    * measurement start - Start of an individual measuerment. Should be quasi
+                          isntantaneous. E.g. a recorder should be already connected to the dat
+                          stream and just start writing to disk.
+    * measurement stop -  Stop the measurement
+
+    Pipelines can also implement:
+        * populate_data_store to send data to the store. The address and port for a data store is received along the request.
 
     """
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
@@ -86,7 +110,9 @@ class EDDPipeline(AsyncDeviceServer):
                    "deconfiguring", "error"]
 
     def __init__(self, ip, port, default_config={}):
-        """@brief initialize the pipeline."""
+        """
+        @brief Initialize the pipeline. Subclasses are required to provide their default config dict.
+        """
         self.callbacks = set()
         self._state = "idle"
         self._sensors = []
@@ -94,11 +120,17 @@ class EDDPipeline(AsyncDeviceServer):
         self._default_config = default_config
         self._subprocesses = []
         self._subprocessMonitor = None
-        AsyncDeviceServer.__init__(self, ip, port) 
+        AsyncDeviceServer.__init__(self, ip, port)
 
     @property
     def _config(self):
+        """
+        @brief The current configuration of the pipeline, i.e. the default
+        after all updates received via set and configure commands. This value
+        should then be used in the _configure method.
+        """
         return self.__config
+
     @_config.setter
     def _config(self, value):
         if not isinstance(value, dict):
@@ -109,7 +141,10 @@ class EDDPipeline(AsyncDeviceServer):
 
     def setup_sensors(self):
         """
-        @brief Setup monitoring sensors
+        @brief Setup monitoring sensors.
+
+        @detail The EDDPipeline base provides default sensors. Should be called by a subclass.
+
         """
         self._pipeline_sensor_status = Sensor.discrete(
             "pipeline-status",
@@ -182,10 +217,16 @@ class EDDPipeline(AsyncDeviceServer):
 
 
     def _decode_capture_stdout(self, stdout, callback):
+        """
+        @ToDo: Potentially obsolete ??
+        """
         log.debug('{}'.format(str(stdout)))
 
 
     def _handle_execution_stderr(self, stderr, callback):
+        """
+        @ToDo: Potentially obsolete ??
+        """
         log.info(stderr)
 
 
@@ -204,7 +245,7 @@ class EDDPipeline(AsyncDeviceServer):
         """
         @brief      Configure EDD to receive and process data
 
-       @note        ToDo:  Device a method to add the sublcass doc string here! 
+        @note       ToDo:  Device a method to add the sublcass doc string here!
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
@@ -252,7 +293,7 @@ class EDDPipeline(AsyncDeviceServer):
         """
         @brief      Add the config_json to the current config
 
-       @note        ToDo:  Device a method to add the sublcass doc string here! 
+        @note       ToDo:  Device a method to add the sublcass doc string here!
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
@@ -271,12 +312,13 @@ class EDDPipeline(AsyncDeviceServer):
 
 
 
+
     @coroutine
     def set(self, config_json):
         """
         @brief      Add the config_json to the current config
 
-       @note        ToDo:  Device a method to add the sublcass doc string here! 
+        @note       ToDo:  Device a method to add the sublcass doc string here!
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
@@ -391,6 +433,41 @@ class EDDPipeline(AsyncDeviceServer):
         """@brief stop the pipeline."""
         pass
 
+
+    @request(Str())
+    @return_reply()
+    def request_measurement_prepare(self, req, config_json):
+        """
+        @brief      Prepare measurement request
+
+        @note        ToDo:  Device a method to add the sublcass doc string here!
+
+        @return     katcp reply object [[[ !measurement_prepare ok | (fail [error description]) ]]]
+        """
+
+        @coroutine
+        def wrapper():
+            try:
+                yield self.measurement_prepare(config_json)
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(wrapper)
+        raise AsyncReply
+
+
+    @coroutine
+    def measurement_prepare(self, config_json=""):
+        """@brief prepare the measurement"""
+        pass
+
+
+
     @request()
     @return_reply()
     def request_measurement_start(self, req):
@@ -416,7 +493,6 @@ class EDDPipeline(AsyncDeviceServer):
                 req.reply("ok")
         self.ioloop.add_callback(wrapper)
         raise AsyncReply
-
 
 
     @coroutine
@@ -528,6 +604,9 @@ def on_shutdown(ioloop, server):
 
 
 def getArgumentParser():
+    """
+    @brief Provide a arguemnt parser with standard arguments for all pipelines.
+    """
     parser = ArgumentParser()
     parser.add_argument('-H', '--host', dest='host', type=str, default='localhost',
                       help='Host interface to bind to')
@@ -540,6 +619,9 @@ def getArgumentParser():
 
 
 def launchPipelineServer(Pipeline):
+    """
+    Launch a 
+    """
     parser = getArgumentParser()
     args = parser.parse_args()
 

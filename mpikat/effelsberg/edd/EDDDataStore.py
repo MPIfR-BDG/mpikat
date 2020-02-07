@@ -7,7 +7,7 @@ log = logging.getLogger("mpikat.edd_data_store")
 
 class EDDDataStore:
     """
-    Interface to the data store for the current EDD configuration
+    @brief Interface to the data store for the current EDD configuration
     """
     def __init__(self, host, port=6379):
         log.debug("Init data store connection: {}:{}".format(host, port))
@@ -16,7 +16,7 @@ class EDDDataStore:
 
         # The data colelcted by the ansible configuration
         self._ansible = redis.StrictRedis(host=host, port=port, db=0)
-        # The currently configured data producers 
+        # The currently configured data producers
         self._products = redis.StrictRedis(host=host, port=port, db=1)
         # The currently configured data streams (json objects)
         self._dataStreams = redis.StrictRedis(host=host, port=port, db=2)
@@ -33,7 +33,7 @@ class EDDDataStore:
 
     def updateProducts(self):
         """
-        Fill the producers database bsaed on the information in the ansible database
+        @brief Fill the producers database bsaed on the information in the ansible database
         """
         self._products.flushdb()
         for k in self._ansible.keys():
@@ -57,25 +57,37 @@ class EDDDataStore:
 
 
     def addDataStream(self, streamid, streamdescription):
+        """
+        @brief Add a new data stream to the store. Description as dict.
+        """
         if streamid in self._dataStreams:
             nd = json.dumps(streamdescription)
             if nd == self._dataStreams[streamid]:
                 log.warning("Duplicate output streams: {} defined but with same description".format(streamid))
-                return
+                returnmpikat/effelsberg/edd/EDDDataStore.py 
             else:
-                log.warning("Duplicate output stream {} defined with conflicting description!\n EXisting description: {}\n New description: {}".format(streamid, self._dataStreams[streamid], nd))
+                log.warning("Duplicate output stream {} defined with conflicting description!\n Existing description: {}\n New description: {}".format(streamid, self._dataStreams[streamid], nd))
                 raise RuntimeError("Invalid configuration")
         self._dataStreams[streamid] = json.dumps(streamdescription)
 
 
     def getDataStream(self, streamid):
+        """
+        @brief Return data stream with stramid as dict.
+        """
         return json.loads(self._dataStreams[streamid])
 
     def hasDataFormatDefinition(self, format_name):
+        """
+        @brief Check if data format description already exists.
+        """
         key = "DataFormats:{}".format(format_name)
         return key in self._edd_static_data
 
     def getDataFormatDefinition(self, format_name):
+        """
+        @brief Returns data format description as dict.
+        """
         key = "DataFormats:{}".format(format_name)
         if key in self._edd_static_data:
             return json.loads(self._edd_static_data[key])
@@ -85,19 +97,29 @@ class EDDDataStore:
 
 
     def getProduct(self, productid):
+        """
+        @brief Returns product description as dict.
+        """
         return json.loads(self._products[productid])
 
 
     @property
     def products(self):
+        """
+        @brief List of all product ids.
+        """
         return self._products.keys()
 
 
     def hasDataStream(self, streamid):
+        """
+        @brief True if data stream with given id exists.
+        """
         return streamid in self._dataStreams
 
     def addDataFormatDefinition(self, format_name, params):
         """
+        @brief Adds a new data format description dict to store.
         """
         key = "DataFormats:{}".format(format_name)
         if isinstance(params, dict):

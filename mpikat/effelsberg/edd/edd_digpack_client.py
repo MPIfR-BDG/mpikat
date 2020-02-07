@@ -37,6 +37,9 @@ class DigitiserPacketiserClient(object):
 
     @coroutine
     def _safe_request(self, request_name, *args):
+        """
+        @brief Send a request to client and prints response ok /  error message.
+        """
         log.info("Sending packetiser request '{}' with arguments {}".format(request_name, args))
         yield self._client.until_synced()
         response = yield self._client.req[request_name](*args)
@@ -49,6 +52,9 @@ class DigitiserPacketiserClient(object):
 
     @coroutine
     def _check_interfaces(self):
+        """
+        @brief Check if interface of digitizer is in error state.
+        """
         log.debug("Checking status of 40 GbE interfaces")
         yield self._client.until_synced()
         @coroutine
@@ -66,10 +72,16 @@ class DigitiserPacketiserClient(object):
 
     @coroutine
     def set_predecimation(self, factor):
+        """
+        @brief Set a predecimation factor for the paketizer - for e.g. factor=2 only every second sample is used.
+        """
         yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
 
     @coroutine
     def flip_spectrum(self, on):
+        """
+        @brief Reverts the spectrum of the data.
+        """
         if on == True:
             yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "on")
         else:
@@ -288,7 +300,12 @@ class DigitiserPacketiserClient(object):
 
     @coroutine
     def populate_data_store(self, host, port):
-        """@brief Populate the data store"""
+        """
+        @brief Populate the data store
+
+        @param host     ip of the data store to use
+        @param port     port of the data store
+        """
         log.debug("Populate data store @ {}:{}".format(host, port))
         dataStore =  EDDDataStore(host, port)
         log.debug("Adding output formats to known data formats")
