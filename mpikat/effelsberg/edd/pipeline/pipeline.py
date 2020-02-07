@@ -911,21 +911,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
         """@brief start the dspsr instance then turn on dada_junkdb instance."""
         # if self.state == "ready":
         #    self.state = "starting"
-        try:
-            log.info("Creating DADA buffer for EDDPolnMerge")
-            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dadc_key,
-                                                                     args=self._config["dadc_db_params"]["args"])
-            # cmd = "dada_db -k {key} {args}".format(**
-            #                                       self._config["dada_db_params"])
-            log.debug("Running command: {0}".format(cmd))
-            self._create_transpose_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._create_transpose_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._create_transpose_ring_buffer._process.wait()
-        except Exception as error:
-            raise EddPulsarPipelineError(str(error))
-
         self._fscrunch.set_value(BLANK_IMAGE)
         self._tscrunch.set_value(BLANK_IMAGE)
         self._profile.set_value(BLANK_IMAGE)
@@ -1343,6 +1328,22 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._create_transpose_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._create_transpose_ring_buffer._process.wait()
+
+        
+            log.info("Creating DADA buffer for EDDPolnMerge")
+            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dadc_key,
+                                                                     args=self._config["dadc_db_params"]["args"])
+            # cmd = "dada_db -k {key} {args}".format(**
+            #                                       self._config["dada_db_params"])
+            log.debug("Running command: {0}".format(cmd))
+            self._create_transpose_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_transpose_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_transpose_ring_buffer._process.wait()
+            
+        except Exception as error:
+            raise EddPulsarPipelineError(str(error))
 
 
         except Exception as error:
