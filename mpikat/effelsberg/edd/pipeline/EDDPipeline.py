@@ -123,6 +123,15 @@ class EDDPipeline(AsyncDeviceServer):
         self._subprocessMonitor = None
         AsyncDeviceServer.__init__(self, ip, port)
 
+        #update the docstrings for the requests by their subclass implementation
+        for r,s in [(self.request_configure, self.configure),
+                (self.request_set, self.set),
+                (self.request_capture_start, self.capture_start),
+                (self.request_capture_stop, self.capture_stop),
+                (self.request_measurement_start, self.measurement_start),
+                (self.request_measurement_stop, self.measurement_stop)]:
+            r.__func__.__doc__ = s.__doc__
+
     @property
     def _config(self):
         """
@@ -246,8 +255,6 @@ class EDDPipeline(AsyncDeviceServer):
         """
         @brief      Configure EDD to receive and process data
 
-        @note       ToDo:  Device a method to add the sublcass doc string here!
-
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
 
@@ -294,8 +301,6 @@ class EDDPipeline(AsyncDeviceServer):
         """
         @brief      Add the config_json to the current config
 
-        @note       ToDo:  Device a method to add the sublcass doc string here!
-
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
 
@@ -312,14 +317,10 @@ class EDDPipeline(AsyncDeviceServer):
         raise AsyncReply
 
 
-
-
     @coroutine
     def set(self, config_json):
         """
         @brief      Add the config_json to the current config
-
-        @note       ToDo:  Device a method to add the sublcass doc string here!
 
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
@@ -344,7 +345,6 @@ class EDDPipeline(AsyncDeviceServer):
             raise FailReply("Unknown configuration option: {}".format(str(error)))
         except Exception as error:
             raise FailReply("Unknown ERROR: {}".format(str(error)))
-
 
 
     @request()
@@ -440,8 +440,6 @@ class EDDPipeline(AsyncDeviceServer):
     def request_measurement_prepare(self, req, config_json):
         """
         @brief      Prepare measurement request
-
-        @note        ToDo:  Device a method to add the sublcass doc string here!
 
         @return     katcp reply object [[[ !measurement_prepare ok | (fail [error description]) ]]]
         """

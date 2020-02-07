@@ -342,7 +342,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
 
     @coroutine
     def configure(self, config_json):
-        """@brief destroy any ring buffer and create new ring buffer."""
         """
         @brief   Configure the EDD gated spectrometer
 
