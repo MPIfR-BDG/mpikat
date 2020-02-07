@@ -1,6 +1,7 @@
 import logging
 import select
 from threading import Thread, Event
+import time
 
 log = logging.getLogger('mpikat.pipe_monitor')
 
@@ -11,7 +12,8 @@ class PipeMonitor(Thread):
         """
         @brief   Class for parsing output of subprocess pipes
 
-        @param   pipe   An OS pipe
+        @param   pipe    An OS pipe
+        @param   handler handler to be called on the line.
         """
         Thread.__init__(self)
         self.setDaemon(True)
@@ -24,16 +26,48 @@ class PipeMonitor(Thread):
         self._stop_event = Event()
 
     def run(self):
-        for line in iter(self._pipe.readline, self._sentinel):
-            try:
-                self._handler(line)
-            except Exception as error:
-                log.warning("Exception raised in pipe handler: '{}' with line '{}'".format(
-                    str(error), line))
-
+        """
+        Starts the monitor thread. Will stop on pipe error or pipe close.
+        """
+        while not self._stop_event.is_set():
+            pev = self._poll.poll(self._timeout)[0]
+            if pev[1] in [select.POLLIN, select.POLLPRI]:
+                for line in iter(self._pipe.readline, self._sentinel):
+                    try:
+                        self._handler(line)
+                    except Exception as error:
+                        log.warning("Exception raised in pipe handler: '{}' with line '{}'".format(
+                            str(error), line))
+            elif pev[1] in [select.POLLHUP]:
+                self.stop()
+            elif pev[1] == select.POLLOUT:
+                pass
+            elif pev[1] == select.POLLNVAL:
+                log.error("Invalid request descriptor not open")
+                self.stop()
+            elif pev[1] == select.POLLERR:
+                log.error("Error reading data from pipe!")
+                self.stop()
+            else:
+                log.error("Unknown error code")
+                self.stop()
 
     def stop(self):
         """
-        @brief      Stop the thread
+        @brief   Stop the thread
         """
         self._stop_event.set()
+
+
+if __name__ == "__main__":
+    import subprocess
+
+    def handler(line):
+        print line
+
+    proc = subprocess.Popen("echo Foo && sleep 2 && echo bar", stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, close_fds=True)
+    pm = PipeMonitor(proc.stdout, handler)
+    pm.start()
+    pm.join()
+
+
