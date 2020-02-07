@@ -1319,8 +1319,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
 
             log.info("reset DADA buffer")
-            #cmd = "dada_db -d -k {key}".format(numa=self.numa_number, key=self._dadc_key)
-            cmd = "dada_dbscrubber -k {key}".format(numa=self.numa_number, key=self._dadc_key)
+            cmd = "dada_db -d -k {key}".format(numa=self.numa_number, key=self._dadc_key)
+            #cmd = "dada_dbscrubber -k {key}".format(numa=self.numa_number, key=self._dadc_key)
             # cmd = "dada_db -k {key} {args}".format(**
             #                                       self._config["dada_db_params"])
             log.debug("Running command: {0}".format(cmd))
@@ -1330,7 +1330,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._decode_capture_stdout)
             self._create_transpose_ring_buffer._process.wait()
 
-            """
+            
             log.info("Creating DADA buffer for EDDPolnMerge")
             cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dadc_key,
                                                                      args=self._config["dadc_db_params"]["args"])
@@ -1342,7 +1342,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._create_transpose_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._create_transpose_ring_buffer._process.wait()
-            """
+            
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
 
