@@ -916,12 +916,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._profile.set_value(BLANK_IMAGE)
         log.info("checking status")
         if not self.ready:
-            log.info("pipeline is not int ready state")
+            log.debug("pipeline is not int ready state")
             if self.capturing:
-                log.info("pipeline is still captureing, issuing stop now and will start shortly")
+                log.debug("pipeline is still captureing, issuing stop now and will start shortly")
                 yield self.stop_pipeline()
             if self.starting:
-                log.info("pipeline is starting, do not send multiple start")
+                log.debug("pipeline is starting, do not send multiple start")
                 return
                 #raise Exception("fail pipeline is not in READY state")
         log.info("starting pipeline")
@@ -1250,7 +1250,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._timer = Time.now() - self._timer
         log.info("Took {} s to start".format(self._timer * 86400))
         self._state_sensor.set_value(self.CAPTURING)
-        log.info("Starting pipeline {}".format(
+        log.info("Starting capture {}".format(
             self._pipeline_sensor_name.value()))
 
     @request()
