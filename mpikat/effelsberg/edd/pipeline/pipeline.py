@@ -974,8 +974,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
             pass
         self.pulsar_flag = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))
         if ((parse_tag(self.source_name) == "default") or (parse_tag(self.source_name) != "R")) and (not self.pulsar_flag):
-            error = "source is not pulsar or calibrator"
-            raise EddPulsarPipelineError(error)
+            if (parse_tag(self.source_name) != "FB"):
+                error = "source is not pulsar or calibrator"
+                raise EddPulsarPipelineError(error)
 
         ########NEED TO PUT IN THE LOGIC FOR _R here#############
         # try:
@@ -1150,6 +1151,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 name=self.source_name,
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
+                keyfile=dada_key_file.name)
+
+        elif parse_tag(self.source_name) == "FB":
+            cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 4 -F 512 -b8 -d 1 -I 0 -t 50 {keyfile}".format(
+                numa=self.numa_number,
+                cpus=cpu_numbers,
                 keyfile=dada_key_file.name)
         else:
             error = "source is unknown"
