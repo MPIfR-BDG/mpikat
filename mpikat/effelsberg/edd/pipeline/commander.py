@@ -248,7 +248,7 @@ class EddCommander(AsyncDeviceServer):
         #log.debug("object: {}".format(self._source))
         #log.debug("object: {}".format(self._observing))
         if sensor_value[0].replace("-", "_") == "observing":
-            log.debug("observing  = {}".format((self._observing.value() == 'True')))
+            #log.debug("observing  = {}".format((self._observing.value() == 'True')))
             #log.debug("source_name = {}".format(self._source.value()))
             if bool(self.last_value == False) & bool(self.first_true == True) & bool(self._observing.value() == 'True'):
                 log.debug("observing  = {}".format(
