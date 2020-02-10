@@ -98,11 +98,11 @@ DEFAULT_CONFIG = {
                 "source": "",                               # name of the source for automatic setting of paramters
                 "description": "",
                 "format": "MPIFR_EDD_Packetizer:1",         # Format has version seperated via colon
-                "ip": "225.0.0.162+3",
+                "ip": "225.0.0.152+3",
                 "port": "7148",
                 "bit_depth" : 8,
                 "sample_rate" : 3200000000,
-                "sync_time" : 1562662573.0,
+                "sync_time" : 1581164788.0,
                 "samples_per_heap": 4096,                     # this needs to be consistent with the mkrecv configuration
             },
              "polarization_1" :
@@ -110,11 +110,11 @@ DEFAULT_CONFIG = {
                 "source": "",                               # name of the source for automatic setting of paramters, e.g.: "packetizer1:h_polarization
                 "description": "",
                 "format": "MPIFR_EDD_Packetizer:1",
-                "ip": "225.0.0.166+3",
+                "ip": "225.0.0.156+3",
                 "port": "7148",
                 "bit_depth" : 8,
                 "sample_rate" : 3200000000,
-                "sync_time" : 1562662573.0,
+                "sync_time" : 1581164788.0,
                 "samples_per_heap": 4096,                           # this needs to be consistent with the mkrecv configuration
             }
         },
@@ -178,9 +178,9 @@ IBV_VECTOR          -1          # IBV forced into polling mode
 IBV_MAX_POLL        10
 BUFFER_SIZE         128000000
 
-DADA_MODE           4    # The mode, 4=full dada functionality
-
 SAMPLE_CLOCK_START  0 # This is updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock
+
+DADA_NSLOTS         3
 
 NTHREADS            32
 NHEAPS              64
@@ -537,9 +537,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
                     fastest_nic, nic_params = numa.getFastestNic(numa_node)
                     log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nic_params['ip'], nic_params['speed']))
                     physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
-                    cmd = "taskset -c {physcpu} mkrecv_nt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --idx1-modulo {sample_rate} \
+                    cmd = "taskset -c {physcpu} mkrecv_rnt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --heap-size {input_heap_size} --idx1-modulo {sample_rate} \
                     --dada-key {dada_key} --sync-epoch {sync_time} --sample-clock {sample_rate} \
-                    --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nic_params['ip'],
+                    --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nic_params['ip'], input_heap_size=self.input_heapSize,
                             **cfg )
                     mk = ManagedProcess(cmd, stdout_handler=self._polarization_sensors[streamid]["mkrecv_sensors"].stdout_handler)
                 else:
