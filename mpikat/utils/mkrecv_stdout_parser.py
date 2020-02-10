@@ -13,6 +13,9 @@ MKRECV_STDOUT_KEYS = { "STAT": [("slot-size", int), ("heaps-completed", int),
 
 def mkrecv_stdout_parser(line):
     log.debug(line)
+    line = line.replace('slot', '')
+    line = line.replace('total', '')
+
     tokens = line.split()
     params = {}
     if tokens[0] in MKRECV_STDOUT_KEYS:
@@ -38,10 +41,6 @@ class MkrecvSensors:
 
     def stdout_handler(self, line):
         data = mkrecv_stdout_parser(line)
-        self.sensors["global_payload_frac"].set_value(float(data["global-payload-received"]) / float(data["global-payload-expected"]))
-
-
-
-
-
+        if "global-payload-received" in data:
+            self.sensors["global_payload_frac"].set_value(float(data["global-payload-received"]) / float(data["global-payload-expected"]))
 
