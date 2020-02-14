@@ -601,11 +601,11 @@ class EddPulsarPipeline(EDDPipeline):
         header["mc_source"] = self._config['pipeline_config']["mc_source"]
         header["frequency_mhz"] = self._config['pipeline_config']["central_freq"]
         header["bandwidth"] = self._config['pipeline_config']["bandwidth"]
-        header["mc_streaming_port"] = self.config_dict["mc_streaming_port"]
+        header["mc_streaming_port"] = self._config['pipeline_config']["mc_streaming_port"]
         header["interface"] = INTERFACE[self._config['pipeline_config']["interface"]]
         header["sync_time"] = self._config['pipeline_config']["sync_epoch"]
         header["sample_clock"] = float(
-            self.config_dict["sampling_rate"]) / float(self._config['pipeline_config']["predecimation_factor"])
+            self._config['pipeline_config']["sampling_rate"]) / float(self._config['pipeline_config']["predecimation_factor"])
         header["tsamp"] = 1 / (2.0 * self._config['pipeline_config']["bandwidth"])
         header["source_name"] = self._config['source_config']["source-name"]
         header["obs_id"] = "{0}_{1}".format(
