@@ -515,6 +515,13 @@ class EddPulsarPipeline(EDDPipeline):
          M.start()
          self._dada_buffers.append({'key': key, 'monitor': M})
 
+    def _buffer_status_handle(self, status):
+        """
+        @brief Process a change in the buffer status
+        """
+        pass
+
+
     @coroutine
     def configure(self, config_json):
         log.info("Configuring EDD backend for processing")
