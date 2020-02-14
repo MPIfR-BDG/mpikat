@@ -621,7 +621,6 @@ class EddPulsarPipeline(EDDPipeline):
                                    str(self._config['pipeline_config']["central_freq"]), tstr, "raw_data")
             self.out_path = os.path.join(
                 "/media/scratch/jason/dspsr_output/", tdate, self._config['source_config']["source-name"], str(self._config['pipeline_config']["central_freq"]), tstr, "combined_data")
-            self.self.out_path = self.out_path
             log.debug("Creating directories")
             log.debug("in path {}".format(self.in_path))
             log.debug("in path {}".format(self.out_path))
