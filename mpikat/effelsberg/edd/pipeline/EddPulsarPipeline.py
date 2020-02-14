@@ -406,7 +406,7 @@ class EddPulsarPipeline(EDDPipeline):
         """
         @brief Setup monitoring sensors
         """
-
+	EDDPipeline.setup_sensors(self)
         self._tscrunch = Sensor.string(
             "tscrunch_PNG",
             description="tscrunch png",
@@ -502,11 +502,11 @@ class EddPulsarPipeline(EDDPipeline):
         if self.state != "idle":
             log.warning(
                 "Configure received while in state: {} - deconfigureing first ...".format(self.state))
-                try:
-                    log.debug("Deconfiguring pipeline before configuring")
-                    self.deconfigure()
-                    except Exception as error:
-                raise EddPulsarPipelineError(str(error))
+            try:
+                log.debug("Deconfiguring pipeline before configuring")
+                self.deconfigure()
+            except Exception as error:
+            	raise EddPulsarPipelineError(str(error))
 
         self.state = "configuring"
         yield self.set(config_json)
@@ -549,7 +549,7 @@ class EddPulsarPipeline(EDDPipeline):
     @coroutine
     def measurement_prepare(self, config_json):
         log.info("checking status")
-        if self.state != "ready"
+        if self.state != "ready":
             log.debug("pipeline is not in ready state")
             if self.state == "capturing":
                 log.debug(
@@ -933,7 +933,7 @@ class EddPulsarPipeline(EDDPipeline):
             raise EddPulsarPipelineError(str(error))
 
         else:
-        	self._state = "ready"
+            self._state = "ready"
             log.info("Pipeline Stopped")
 
     @coroutine
