@@ -623,6 +623,8 @@ class EddPulsarPipeline(EDDPipeline):
                 "/media/scratch/jason/dspsr_output/", tdate, self._config['source_config']["source-name"], str(self._config['pipeline_config']["central_freq"]), tstr, "combined_data")
             self.out_path = out_path
             log.debug("Creating directories")
+            log.debug("in path {}".format(in_path))
+            log.debug("in path {}".format(out_path))
             if not os.path.isdir(in_path):
                 os.mkdir(in_path)
             if not os.path.isdir(out_path):
@@ -631,8 +633,7 @@ class EddPulsarPipeline(EDDPipeline):
             log.debug("Change to workdir: {}".format(os.getcwd()))
             log.debug("Current working directory: {}".format(os.getcwd()))
         except Exception as error:
-            yield self.stop_pipeline()
-            raise EddPulsarPipelineError(str(error))
+        	raise EddPulsarPipelineError(str(error))
 
         os.chdir("/tmp/")
 
