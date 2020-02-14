@@ -879,7 +879,7 @@ class EddPulsarPipeline(EDDPipeline):
                 os.remove("/tmp/t2pred.dat")
 
             log.info("reset DADA buffer")
-            self._dada_buffers[1].stop()
+            self._dada_buffers[1]['monitor'].stop()
             yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
 
 
@@ -909,8 +909,8 @@ class EddPulsarPipeline(EDDPipeline):
             os.remove("/tmp/t2pred.dat")
 
         log.debug("deleting buffers")
-        self._dada_buffers[0].stop()
-        self._dada_buffers[1].stop()
+        self._dada_buffers[0]['monitor'].stop()
+        self._dada_buffers[1]['monitor'].stop()
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
         self._state = "ready"
