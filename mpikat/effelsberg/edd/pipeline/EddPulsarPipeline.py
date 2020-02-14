@@ -645,10 +645,10 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("{}".format(
             (parse_tag(self._config['source_config']["source-name"]) == "default") & self.pulsar_flag))
         if (parse_tag(self._config['source_config']["source-name"]) == "default") & is_accessible('/tmp/epta/{}.par'.format(self._config['source_config']["source-name"][1:])):
-            cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 24 2 3599.999999999"'.format(
-                self.numa_number, NUMA_MODE[self.numa_number][1], self._config['source_config']["source-name"][1:], Time.now().mjd - 1, Time.now().mjd + 1, float(self._config["pipeline_config"]["central_freq"]) - 200, float(self._config["pipeline_config"]["central_freq"]) + 200)
+            cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred'.format(self.numa_number, NUMA_MODE[self.numa_number][1], self._config['source_config']["source-name"][1:]).split()
+            cmd.append("Effelsberg {} {} {} {} 24 2 3599.999999999".format(Time.now().mjd - 1, Time.now().mjd + 1, float(self._config["pipeline_config"]["central_freq"]) - 200, float(self._config["pipeline_config"]["central_freq"]) + 200))
             log.debug("Command to run: {}".format(cmd))
-            yield command_watcher(cmd)
+            yield command_watcher(cmd, )
             while True:
                 try:
                     os.kill(self.tempo2_pid, 0)
