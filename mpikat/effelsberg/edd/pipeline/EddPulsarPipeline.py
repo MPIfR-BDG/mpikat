@@ -617,19 +617,19 @@ class EddPulsarPipeline(EDDPipeline):
         #SETTING UP THE INPUT AND SCRUNCH DATA DIRECTORIES #
         ####################################################
         try:
-            in_path = os.path.join("/media/scratch/jason/dspsr_output/", tdate, self._config['source_config']["source-name"],
+            self.in_path = os.path.join("/media/scratch/jason/dspsr_output/", tdate, self._config['source_config']["source-name"],
                                    str(self._config['pipeline_config']["central_freq"]), tstr, "raw_data")
-            out_path = os.path.join(
+            self.out_path = os.path.join(
                 "/media/scratch/jason/dspsr_output/", tdate, self._config['source_config']["source-name"], str(self._config['pipeline_config']["central_freq"]), tstr, "combined_data")
-            self.out_path = out_path
+            self.self.out_path = self.out_path
             log.debug("Creating directories")
-            log.debug("in path {}".format(in_path))
-            log.debug("in path {}".format(out_path))
-            if not os.path.isdir(in_path):
-                os.makedirs(in_path)
-            if not os.path.isdir(out_path):
-                os.makedirs(out_path)
-            os.chdir(in_path)
+            log.debug("in path {}".format(self.in_path))
+            log.debug("in path {}".format(self.out_path))
+            if not os.path.isdir(self.in_path):
+                os.makedirs(self.in_path)
+            if not os.path.isdir(self.out_path):
+                os.makedirs(self.out_path)
+            os.chdir(self.in_path)
             log.debug("Change to workdir: {}".format(os.getcwd()))
             log.debug("Current working directory: {}".format(os.getcwd()))
         except Exception as error:
@@ -718,7 +718,7 @@ class EddPulsarPipeline(EDDPipeline):
         ####################################################
         #STARTING DSPSR                                    #
         ####################################################
-        os.chdir(in_path)
+        os.chdir(self.in_path)
         log.debug("pulsar_flag = {}".format(self.pulsar_flag))
         log.debug("source_name = {}".format(self._config['source_config']["source-name"]))
 
@@ -809,11 +809,11 @@ class EddPulsarPipeline(EDDPipeline):
         ####################################################
         """
         cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
-            in_path, out_path)
+            self.in_path, self.out_path)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring archive monitor")
         self._archive_directory_monitor = ExecuteCommand(
-            cmd, outpath=out_path, resident=True)
+            cmd, outpath=self.out_path, resident=True)
         self._archive_directory_monitor.stdout_callbacks.add(
             self._decode_capture_stdout)
         self._archive_directory_monitor.fscrunch_callbacks.add(
