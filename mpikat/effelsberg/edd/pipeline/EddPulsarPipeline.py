@@ -626,9 +626,9 @@ class EddPulsarPipeline(EDDPipeline):
             log.debug("in path {}".format(in_path))
             log.debug("in path {}".format(out_path))
             if not os.path.isdir(in_path):
-                os.mkdir(in_path)
+                os.makedirs(in_path)
             if not os.path.isdir(out_path):
-                os.mkdir(out_path)
+                os.makedirs(out_path)
             os.chdir(in_path)
             log.debug("Change to workdir: {}".format(os.getcwd()))
             log.debug("Current working directory: {}".format(os.getcwd()))
