@@ -830,6 +830,7 @@ class EddPulsarPipeline(EDDPipeline):
         #    log.error(msg)
         #    raise EddPulsarPipelineError(msg)
         # else:
+        self._subprocessMonitor.start()
         self._timer = Time.now() - self._timer
         log.info("Took {} s to start".format(self._timer * 86400))
         self._state = "running"
@@ -878,7 +879,9 @@ class EddPulsarPipeline(EDDPipeline):
                 os.remove("/tmp/t2pred.dat")
 
             log.info("reset DADA buffer")
+            self._dada_buffers[1].stop()
             yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
+
 
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
@@ -906,6 +909,8 @@ class EddPulsarPipeline(EDDPipeline):
             os.remove("/tmp/t2pred.dat")
 
         log.debug("deleting buffers")
+        self._dada_buffers[0].stop()
+        self._dada_buffers[1].stop()
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
         self._state = "ready"
