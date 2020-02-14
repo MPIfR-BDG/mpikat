@@ -649,14 +649,6 @@ class EddPulsarPipeline(EDDPipeline):
             cmd.append("Effelsberg {} {} {} {} 24 2 3599.999999999".format(Time.now().mjd - 1, Time.now().mjd + 1, float(self._config["pipeline_config"]["central_freq"]) - 200, float(self._config["pipeline_config"]["central_freq"]) + 200))
             log.debug("Command to run: {}".format(cmd))
             yield command_watcher(cmd, )
-            while True:
-                try:
-                    os.kill(self.tempo2_pid, 0)
-                    log.debug("Tempo2 still running")
-                    time.sleep(1)
-                except OSError:
-                    break
-
             attempts = 0
             retries = 5
             while True:
