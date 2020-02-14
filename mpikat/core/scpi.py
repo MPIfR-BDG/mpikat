@@ -9,6 +9,7 @@ from tornado.gen import Return, coroutine, sleep
 from threading import Thread, Event
 from Queue import Queue
 from datetime import datetime
+import time
 
 log = logging.getLogger("mpikat.scpi")
 
@@ -90,6 +91,7 @@ class ScpiAsyncDeviceServer(object):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._socket.bind(self._address)
+        log.debug('binding to socket: {}:{}'.format(*self._address))
         self._socket.setblocking(False)
 
     def _flush(self):
@@ -98,7 +100,7 @@ class ScpiAsyncDeviceServer(object):
             try:
                 message, addr = self._socket.recvfrom(self._buffer_size)
                 log.debug("Flushing message '{}' from {}:{}".format(message, addr[0], addr[1]))
-            except:
+            except Exception as E:
                 break
 
     def _make_coroutine_wrapper(self, req, cr, *args, **kwargs):
@@ -217,7 +219,9 @@ class Example(ScpiAsyncDeviceServer):
     @raise_or_ok
     @coroutine
     def request_dummy_test(self, req, message):
-        print message
+        print('received message {}, sleeping (5s) ...'.format(message))
+        time.sleep(5)
+
 
 @coroutine
 def on_shutdown(ioloop, server):
@@ -225,17 +229,23 @@ def on_shutdown(ioloop, server):
     yield server.stop()
     ioloop.stop()
 
-if __name__ == "__main__":
+def launch_server(server):
     # This line is required to bypass tornado error when no handler is
     # is set on the root logger
     logging.getLogger().addHandler(logging.NullHandler())
+
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
         level=logging.DEBUG,
         logger=log)
     ioloop = IOLoop.current()
-    server = Example("", 5000, ioloop)
     signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
         on_shutdown, ioloop, server))
     ioloop.add_callback(server.start)
     ioloop.start()
+
+if __name__ == "__main__":
+    server = Example("0.0.0.0", 5000)
+    launch_server(server)
+
+

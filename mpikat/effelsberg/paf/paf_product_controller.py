@@ -47,7 +47,7 @@ class PafProductError(Exception):
 
 class PafProductController(ProductController):
     """
-    Wrapper class for an PAF product.
+    Wrapper class for a PAF product.
     """
     def __init__(self, parent, product_id):
         """

@@ -1,4 +1,7 @@
 import jinja2
+import logging
+
+log = logging.getLogger('mpikat.fbfuse_mksend_config')
 
 HEADER_TEMPLATE = """
 HEADER       DADA                # Distributed aquisition and data analysis
@@ -12,25 +15,20 @@ PRIMARY      unset               # primary node host name
 SECONDARY    unset               # secondary node host name
 FILE_NAME    unset               # full path of the data file
 
-
 FILE_SIZE    10000000000         # requested size of data files
 FILE_NUMBER  0                   # number of data file
-
 
 # time of the rising edge of the first time sample
 UTC_START    unset               # yyyy-mm-dd-hh:mm:ss.fs (set by MKRECV)
 MJD_START    unset               # MJD equivalent to the start UTC (set by MKRECV)
 
-
 OBS_OFFSET   0                   # bytes offset from the start MJD/UTC
 OBS_OVERLAP  0                   # bytes by which neighbouring files overlap
-
 
 # description of the source
 SOURCE                      # name of the astronomical source
 RA           unset               # Right Ascension of the source
 DEC          unset               # Declination of the source
-
 
 # description of the instrument
 TELESCOPE    MeerKAT           # telescope name
@@ -62,8 +60,11 @@ IBV_VECTOR   -1
 IBV_MAX_POLL 10
 PACKET_SIZE  1500
 SAMPLE_CLOCK_START 13
-NTHREADS     16
-NHEAPS       32
+NTHREADS      16
+NHEAPS        {{nheaps}}
+NGROUPS_DATA  {{ngroups_data}}
+NGROUPS_TEMP  {{ngroups_temp}}
+NHEAPS_SWITCH 50
 
 #MeerKat F-Engine
 NINDICES    3
@@ -82,8 +83,20 @@ IDX3_MASK   0xffffffffffff   # Mask used to extract the frequency
 IDX3_LIST   {{frequency_partition_ids_csv}}
 """
 
+
+class MkrecvHeaderException(Exception):
+    pass
+
+
 def make_mkrecv_header(params, outfile=None):
-    rendered = jinja2.Template(HEADER_TEMPLATE).render(params)
+    template = jinja2.Template(HEADER_TEMPLATE)
+    template.environment.undefined = jinja2.runtime.StrictUndefined
+    try:
+        rendered = template.render(params)
+    except jinja2.exceptions.UndefinedError as error:
+        raise MkrecvHeaderException(
+            "Error while rendering MKRECV configuration: {}".format(
+                error.message))
     if outfile:
         with open(outfile) as f:
             f.write(rendered)

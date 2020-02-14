@@ -1,8 +1,11 @@
+from __future__ import print_function
 import logging
 import time
 from tornado.gen import coroutine, sleep, Return
 from tornado.ioloop import IOLoop
 from katcp import KATCPClientResource
+
+from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 
 log = logging.getLogger("mpikat.edd_digpack_client")
 
@@ -31,14 +34,17 @@ class DigitiserPacketiserClient(object):
             address=(self._host, self._port),
             controlled=True))
         self._client.start()
+        self._capture_started = False
 
     def stop(self):
         self._client.stop()
 
     @coroutine
     def _safe_request(self, request_name, *args):
-        log.info("Sending packetiser request '{}' with arguments {}".format(
-            request_name, args))
+        """
+        @brief Send a request to client and prints response ok /  error message.
+        """
+        log.info("Sending packetiser request '{}' with arguments {}".format(request_name, args))
         yield self._client.until_synced()
         response = yield self._client.req[request_name](*args)
         if not response.reply.reply_ok():
@@ -51,6 +57,9 @@ class DigitiserPacketiserClient(object):
 
     @coroutine
     def _check_interfaces(self):
+        """
+        @brief Check if interface of digitizer is in error state.
+        """
         log.debug("Checking status of 40 GbE interfaces")
         yield self._client.until_synced()
 
@@ -70,7 +79,25 @@ class DigitiserPacketiserClient(object):
         yield _check_interface('iface01')
 
     @coroutine
-    def set_sampling_rate(self, rate, retries=10):
+    def set_predecimation(self, factor):
+        """
+        @brief Set a predecimation factor for the paketizer - for e.g. factor=2 only every second sample is used.
+        """
+        yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
+
+    @coroutine
+    def flip_spectrum(self, on):
+        """
+        @brief Reverts the spectrum of the data.
+        """
+        if on == True:
+            yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "on")
+        else:
+            yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "off")
+
+
+    @coroutine
+    def set_sampling_rate(self, rate, retries=3):
         """
         @brief      Sets the sampling rate.
 
@@ -81,8 +108,10 @@ class DigitiserPacketiserClient(object):
         """
         valid_modes = {
             4000000000: ("virtex7_dk769b", "4.0GHz", 5),
+            3600000000: ("virtex7_dk769b", "3.6GHz", 7),
+            3200000000: ("virtex7_dk769b", "3.2GHz", 9),
             2600000000: ("virtex7_dk769b", "2.6GHz", 3),
-            3200000000: ("virtex7_dk769b", "3.2GHz", 9)
+            2560000000: ("virtex7_dk769b", "2.56GHz", 2)
         }
         try:
             args = valid_modes[rate]
@@ -127,6 +156,19 @@ class DigitiserPacketiserClient(object):
             log.error(msg)
             raise DigitiserPacketiserError(msg)
         yield self._safe_request("rxs_packetizer_edd_switchmode", mode)
+
+
+    @coroutine
+    def flip_spectrum(self, flip):
+        """
+        @brief Flip spectrum flip = True/False to adjust for even/odd nyquist zone
+        """
+        if flip:
+            yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "on")
+        else:
+            yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "off")
+
+
 
     @coroutine
     def set_destinations(self, v_dest, h_dest):
@@ -196,14 +238,69 @@ class DigitiserPacketiserClient(object):
                     flags on the packetiser and set for data transmission.
                     This includes the 1PPS flag required by the ROACH2 boards.
         """
-        yield self._safe_request("capture_start", "vh")
+        if not self._capture_started:
+            """
+            Only start capture once and not twice if received configure
+            """
+            self._capture_started = True
+            yield self._safe_request("capture_start", "vh")
+
+    @coroutine
+    def configure(self, config):
+        """
+        @brief Applying configuration recieved in dictionary
+        """
+        self._capture_started = False
+        yield self._safe_request("capture_stop", "vh")
+        yield self.set_sampling_rate(config["sampling_rate"])
+        yield self.set_predecimation(config["predecimation_factor"])
+        yield self.flip_spectrum(config["flip_spectrum"])
+        yield self.set_bit_width(config["bit_width"])
+        yield self.set_destinations(config["v_destinations"], config["h_destinations"])
+        for interface, ip_address in config["interface_addresses"].items():
+            yield self.set_interface_address(interface, ip_address)
+        if "sync_time" in config:
+            yield self.synchronize(config["sync_time"])
+        else:
+            yield self.synchronize()
+        yield self.capture_start()
+
+    @coroutine
+    def deconfigure(self):
+        """
+        @brief Deconfigure. Not doing anythin
+        """
+        raise Return()
+
+    @coroutine
+    def measurement_start(self):
+        """
+        """
+        raise Return()
+
+    @coroutine
+    def measurement_stop(self):
+        """
+        """
+        raise Return()
+
 
     @coroutine
     def capture_stop(self):
         """
         @brief      Stop data transmission for both polarisation channels
         """
-        yield self._safe_request("capture_stop", "vh")
+        log.warning("Not stopping data transmission")
+        raise Return()
+        #yield self._safe_request("capture_stop", "vh")
+
+    @coroutine
+    def set_predecimation(self, factor):
+        """
+        @brief      Set predcimation factor
+        """
+        yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
+
 
     @coroutine
     def get_sync_time(self):
@@ -243,48 +340,76 @@ class DigitiserPacketiserClient(object):
             log.warning("Requested sync time {} not equal to actual sync time {}".format(
                 unix_time, sync_epoch))
 
+    @coroutine
+    def populate_data_store(self, host, port):
+        """
+        @brief Populate the data store
+
+        @param host     ip of the data store to use
+        @param port     port of the data store
+        """
+        log.debug("Populate data store @ {}:{}".format(host, port))
+        dataStore =  EDDDataStore(host, port)
+        log.debug("Adding output formats to known data formats")
+
+        descr = {"description": "Digitizer/Packetizer spead. One heap per packet.",
+                "ip": None,
+                "port": None,
+                "bit_depth" : None,                 # Dynamic Parameter
+                "sample_rate" : None,
+                "sync_time" : None,
+                "samples_per_heap": 4096}
+
+        dataStore.addDataFormatDefinition("MPIFR_EDD_Packetizer:1", descr)
+        raise Return()
+
+
+
 
 if __name__ == "__main__":
     import coloredlogs
-    from optparse import OptionParser
-    usage = "usage: %prog [options]"
-    parser = OptionParser(usage=usage)
-    parser.add_option('-H', '--host', dest='host', type=str,
-                      help='Host interface to bind to', default="134.104.73.132")
-    parser.add_option('-p', '--port', dest='port', type=long,
-                      help='Port number to bind to', default=7147)
-    parser.add_option('', '--nbits', dest='nbits', type=long,
-                      help='The number of bits per output sample', default=12)
-    parser.add_option('', '--sampling_rate', dest='sampling_rate', type=float,
-                      help='The digitiser sampling rate (Hz)', default=2600000000.0)
-    parser.add_option('', '--v-destinations', dest='v_destinations', type=str,
-                      help='V polarisation destinations', default="225.0.0.152+3:7148")
-    parser.add_option('', '--h-destinations', dest='h_destinations', type=str,
-                      help='H polarisation destinations', default="225.0.0.156+3:7148")
-    parser.add_option('', '--pre', dest='predecimation_factor', type=int,
-                      help='The number predecimation_factor', default=1)
-    parser.add_option('', '--flip', dest='flip_band', type=int,
-                      help='Flip band or not 0 or 1', default=0)
-    parser.add_option('', '--log-level', dest='log_level', type=str,
-                      help='Logging level', default="INFO")
-    (opts, args) = parser.parse_args()
+    from argparse import ArgumentParser
+    parser = ArgumentParser(description="Configures edd digitiezer.")
+    parser.add_argument('host', type=str, 
+        help='Digitizer interface to bind to.')
+    parser.add_argument('-p', '--port', dest='port', type=long,
+        help='Port number to bind to', default=7147)
+    parser.add_argument('--nbits', dest='nbits', type=long,
+        help='The number of bits per output sample', default=12)
+    parser.add_argument('--sampling_rate', dest='sampling_rate', type=float,
+        help='The digitiser sampling rate (Hz)', default=2600000000.0)
+    parser.add_argument('--v-destinations', dest='v_destinations', type=str,
+        help='V polarisation destinations', default="225.0.0.152+3:7148")
+    parser.add_argument('--h-destinations', dest='h_destinations', type=str,
+        help='H polarisation destinations', default="225.0.0.156+3:7148")
+    parser.add_argument('--log-level',dest='log_level',type=str,
+        help='Logging level',default="INFO")
+    parser.add_argument('--predecimation-factor', dest='predecimation_factor', type=int,
+        help='predecimation factor', default=1)
+
+    parser.add_argument('--flip_spectrum', action="store_true", default=False)
+    args = parser.parse_args()
+    print("Configuring paketizer {}:{}".format(args.host, args.port))
+    for v in vars(args):
+        print("  - {}: {}".format(v, getattr(args, v)))
+
+
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
     coloredlogs.install(
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
-        level=opts.log_level.upper(),
+        level=args.log_level.upper(),
         logger=logger)
     ioloop = IOLoop.current()
-    client = DigitiserPacketiserClient(opts.host, port=opts.port)
-
+    client = DigitiserPacketiserClient(args.host, port=args.port)
     @coroutine
     def configure():
         try:
-            yield client.set_sampling_rate(opts.sampling_rate)
-            yield client.set_bit_width(opts.nbits)
-            yield client.set_destinations(opts.v_destinations, opts.h_destinations)
-            yield client.set_predecimation_factor(opts.predecimation_factor)
-            yield client.set_flipsignalspectrum(opts.flip_band)
+            yield client.set_sampling_rate(args.sampling_rate)
+            yield client.set_bit_width(args.nbits)
+            yield client.set_destinations(args.v_destinations, args.h_destinations)
+            yield client.set_predecimation(args.predecimation_factor)
+            yield client.flip_spectrum(args.flip_spectrum)
             yield client.synchronize()
             yield client.capture_start()
             client.stop()
