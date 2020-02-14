@@ -672,19 +672,19 @@ class EddPulsarPipeline(EDDPipeline):
                 dada_header_file.name))
         header_string = render_dada_header(header)
         dada_header_file.write(header_string)
-        dada_key_file = tempfile.NamedTemporaryFile(
+        self.dada_key_file = tempfile.NamedTemporaryFile(
             mode="w",
             prefix="dada_keyfile_",
             suffix=".key",
             dir="/tmp/",
             delete=False)
         log.debug("Writing dada key file to {0}".format(
-            dada_key_file.name))
+            self.dada_key_file.name))
         key_string = make_dada_key_string(self._dada_buffers[1]["key"])
-        dada_key_file.write(make_dada_key_string(self._dada_buffers[1]["key"]))
+        self.dada_key_file.write(make_dada_key_string(self._dada_buffers[1]["key"]))
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
-        dada_key_file.close()
+        self.dada_key_file.close()
 
         attempts = 0
         retries = 5
@@ -694,8 +694,8 @@ class EddPulsarPipeline(EDDPipeline):
                 raise EddPulsarPipelineError(error)
             else:
                 time.sleep(1)
-                if is_accessible('{}'.format(dada_key_file.name)):
-                    log.debug('found {}'.format(dada_key_file.name))
+                if is_accessible('{}'.format(self.dada_key_file.name)):
+                    log.debug('found {}'.format(self.dada_key_file.name))
                     break
                 else:
                     attempts += 1
@@ -732,7 +732,7 @@ class EddPulsarPipeline(EDDPipeline):
                 parfile="/tmp/epta/{}.par".format(self._config['source_config']["source-name"][1:]),
                 cpus=self.cpu_numbers,
                 cuda_number=self.cuda_number,
-                keyfile=dada_key_file.name)
+                keyfile=self.dada_key_file.name)
 
         elif parse_tag(self._config['source_config']["source-name"]) == "R":
             cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
@@ -742,7 +742,7 @@ class EddPulsarPipeline(EDDPipeline):
                 name=self._config['source_config']["source-name"],
                 cpus=self.cpu_numbers,
                 cuda_number=self.cuda_number,
-                keyfile=dada_key_file.name)
+                keyfile=self.dada_key_file.name)
 
         elif parse_tag(self._config['source_config']["source-name"]) == "FB":
             cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 4 -F {nchan} -b8 -d 1 -I 0 -t {nbins} {keyfile}".format(
@@ -750,7 +750,7 @@ class EddPulsarPipeline(EDDPipeline):
                 nchan="{}".format(self._config['source_config']["nchannels"]),
                 nbin="{}".format(self._config['source_config']["nbins"]),
                 cpus=self.cpu_numbers,
-                keyfile=dada_key_file.name)
+                keyfile=self.dada_key_file.name)
         else:
             error = "source is unknown"
             raise EddPulsarPipelineError(error)
