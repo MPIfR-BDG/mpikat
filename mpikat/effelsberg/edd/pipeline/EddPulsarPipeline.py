@@ -588,8 +588,8 @@ class EddPulsarPipeline(EDDPipeline):
         self._source_name_sensor.set_value(self._config['source_config']["source-name"])
         self._nchannels.set_value(self._config['source_config']["nchannels"])
         self._nbins.set_value(self._config['source_config']["nbins"])
-        cpu_numbers = NUMA_MODE[self.numa_number][2]
-        cuda_number = self.numa_number
+        self.cpu_numbers = NUMA_MODE[self.numa_number][2]
+        self.cuda_number = self.numa_number
         c = SkyCoord("{} {}".format(self._config['source_config'][
                      "ra"], self._config['source_config']["dec"]), unit=(u.deg, u.deg))
         header = self._config["dada_header_params"]
@@ -722,7 +722,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("source_name = {}".format(self._config['source_config']["source-name"]))
 
         if (parse_tag(self._config['source_config']["source-name"]) == "default") and self.pulsar_flag:
-            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
+            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {self.cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
                 nchan="-F {}:D".format(self._config['source_config']["nchannels"]),
@@ -730,18 +730,18 @@ class EddPulsarPipeline(EDDPipeline):
                 name=self._config['source_config']["source-name"],
                 predictor="/tmp/t2pred.dat",
                 parfile="/tmp/epta/{}.par".format(self._config['source_config']["source-name"][1:]),
-                cpus=cpu_numbers,
-                cuda_number=cuda_number,
+                cpus=self.cpu_numbers,
+                self.cuda_number=self.cuda_number,
                 keyfile=dada_key_file.name)
 
         elif parse_tag(self._config['source_config']["source-name"]) == "R":
-            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
+            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {self.cuda_number}  {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
                 nchan="-F {}:D".format(self._config['source_config']["nchannels"]),
                 name=self._config['source_config']["source-name"],
-                cpus=cpu_numbers,
-                cuda_number=cuda_number,
+                cpus=self.cpu_numbers,
+                self.cuda_number=self.cuda_number,
                 keyfile=dada_key_file.name)
 
         elif parse_tag(self._config['source_config']["source-name"]) == "FB":
@@ -749,7 +749,7 @@ class EddPulsarPipeline(EDDPipeline):
                 numa=self.numa_number,
                 nchan="{}".format(self._config['source_config']["nchannels"]),
                 nbin="{}".format(self._config['source_config']["nbins"]),
-                cpus=cpu_numbers,
+                cpus=self.cpu_numbers,
                 keyfile=dada_key_file.name)
         else:
             error = "source is unknown"
@@ -757,22 +757,22 @@ class EddPulsarPipeline(EDDPipeline):
         """
         elif (parse_tag(self._config['source_config']["source-name"]) == "R") and (not self.pulsar_flag) and (not self.pulsar_flag_with_R):
             if (self._config['source_config']["source-name"][:2] == "3C" and self._config['source_config']["source-name"][-3:] == "O_R") or (self._config['source_config']["source-name"][:3] == "NGC" and self._config['source_config']["source-name"][-4:]=="ON_R"):
-                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-On -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
+                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-On -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {self.cuda_number}  {keyfile}".format(
                     numa=self.numa_number,
                     args=self._config["dspsr_params"]["args"],
                     nchan="-F {}:D".format(self._config['source_config']["nchannels"]),
                     name=self._config['source_config']["source-name"],
-                    cpus=cpu_numbers,
-                    cuda_number=cuda_number,
+                    cpus=self.cpu_numbers,
+                    self.cuda_number=self.cuda_number,
                     keyfile=dada_key_file.name)
             elif (self._config['source_config']["source-name"][:3] == "NGC" and self._config['source_config']["source-name"][-5:] == "OFF_R") or (self._config['source_config']["source-name"][:2] == "3C" and self._config['source_config']["source-name"][-3:] == "N_R") or (self._config['source_config']["source-name"][:2] == "3C" and self._config['source_config']["source-name"][-3:] == "S_R"):
-                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-Off -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
+                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-Off -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {self.cuda_number}  {keyfile}".format(
                     numa=self.numa_number,
                     args=self._config["dspsr_params"]["args"],
                     nchan="-F {}:D".format(self._config['source_config']["nchannels"]),
                     name=self._config['source_config']["source-name"],
-                    cpus=cpu_numbers,
-                    cuda_number=cuda_number,
+                    cpus=self.cpu_numbers,
+                    self.cuda_number=self.cuda_number,
                     keyfile=dada_key_file.name)
         """
 
