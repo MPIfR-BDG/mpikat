@@ -405,6 +405,7 @@ class EddPulsarPipeline(EDDPipeline):
         self._dspsr = None
         self._mkrecv_ingest_proc = None
 
+
     def setup_sensors(self):
         """
         @brief Setup monitoring sensors
@@ -549,7 +550,7 @@ class EddPulsarPipeline(EDDPipeline):
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
 
-
+        self._subprocessMonitor = SubprocessMonitor()
 
         self.state = "ready"
         log.info("Pipeline configured")
@@ -596,7 +597,7 @@ class EddPulsarPipeline(EDDPipeline):
             "h", ":").replace("m", ":").replace("s", "")
         header["dec"] = c.to_string("hmsdms").split(" ")[1].replace(
             "d", ":").replace("m", ":").replace("s", "")
-        header["key"] = self._dada_buffers[0]
+        header["key"] = self._dada_buffers[0]['key']
         header["mc_source"] = self._config['pipeline_config']["mc_source"]
         header["frequency_mhz"] = self._config['pipeline_config']["central_freq"]
         header["bandwidth"] = self._config['pipeline_config']["bandwidth"]
@@ -622,22 +623,10 @@ class EddPulsarPipeline(EDDPipeline):
                 "/media/scratch/jason/dspsr_output/", tdate, self._config['source_config']["source-name"], str(self._config['pipeline_config']["central_freq"]), tstr, "combined_data")
             self.out_path = out_path
             log.debug("Creating directories")
-            cmd = "mkdir -p {}".format(in_path)
-            log.debug("Command to run: {}".format(cmd))
-            log.debug("Current working directory: {}".format(os.getcwd()))
-            self._create_workdir_in_path = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._create_workdir_in_path.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._create_workdir_in_path._process.wait()
-            cmd = "mkdir -p {}".format(out_path)
-            log.debug("Command to run: {}".format(cmd))
-            log.info("Createing data directory {}".format(self.out_path))
-            self._create_workdir_out_path = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._create_workdir_out_path.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._create_workdir_out_path._process.wait()
+            if not os.path.isdir(in_path):
+                os.mkdir(in_path)
+            if not os.path.isdir(out_path):
+                os.mkdir(out_path)
             os.chdir(in_path)
             log.debug("Change to workdir: {}".format(os.getcwd()))
             log.debug("Current working directory: {}".format(os.getcwd()))
@@ -658,12 +647,7 @@ class EddPulsarPipeline(EDDPipeline):
             cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 24 2 3599.999999999"'.format(
                 self.numa_number, NUMA_MODE[self.numa_number][1], self._config['source_config']["source-name"][1:], Time.now().mjd - 1, Time.now().mjd + 1, float(self._config["central_freq"]) - 200, float(self._config["central_freq"]) + 200)
             log.debug("Command to run: {}".format(cmd))
-            self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
-            self.tempo2_pid = self.tempo2.pid
-            self.tempo2.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self.tempo2.stderr_callbacks.add(
-                self._handle_execution_stderr)
+            yield command_watcher(cmd)
             while True:
                 try:
                     os.kill(self.tempo2_pid, 0)
@@ -803,13 +787,9 @@ class EddPulsarPipeline(EDDPipeline):
         #cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring DSPSR")
-        self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
-        self._dspsr_pid = self._dspsr.pid
-        log.debug("_dspsr PID is {}".format(self._dspsr_pid))
-        self._dspsr.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._dspsr.stderr_callbacks.add(
-            self._handle_execution_stderr)
+        self._dspsr = ManagedProcess(cmd)
+        self._subprocessMonitor.add(self._dspsr, self._subprocess_error)
+        
         # time.sleep(5)
         ####################################################
         #STARTING EDDPolnMerge                             #
@@ -818,14 +798,8 @@ class EddPulsarPipeline(EDDPipeline):
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][1])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDPolnMerge")
-        self._polnmerge_proc = ExecuteCommand(
-            cmd, outpath=None, resident=True)
-        self._polnmerge_proc.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._polnmerge_proc.stderr_callbacks.add(
-            self._handle_eddpolnmerge_stderr)
-        self._polnmerge_proc_pid = self._polnmerge_proc.pid
-        log.debug("_polnmerge_proc PID is {}".format(self._polnmerge_proc_pid))
+        self._polnmerge_proc = ManagedProcess(cmd)
+        self._subprocessMonitor.add(self._polnmerge_proc, self._subprocess_error)
         # time.sleep(5)
         ####################################################
         #STARTING MKRECV                                   #
@@ -834,19 +808,13 @@ class EddPulsarPipeline(EDDPipeline):
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
-        self._mkrecv_ingest_proc = ExecuteCommand(
-            cmd, outpath=None, resident=True)
-        self._mkrecv_ingest_proc.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._mkrecv_ingest_proc.error_callbacks.add(
-            self._error_treatment)
-        self._mkrecv_ingest_proc_pid = self._mkrecv_ingest_proc.pid
-        log.debug("_mkrecv_ingest_proc PID is {}".format(
-            self._mkrecv_ingest_proc_pid))
+        self._mkrecv_ingest_proc = ManagedProcess(cmd)
+        self._subprocessMonitor.add(self._mkrecv_ingest_proc, self._subprocess_error)
 
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
+        """
         cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
             in_path, out_path)
         log.debug("Running command: {0}".format(cmd))
@@ -864,7 +832,7 @@ class EddPulsarPipeline(EDDPipeline):
         self._archive_directory_monitor_pid = self._archive_directory_monitor.pid
         log.debug("_archive_directory_monitor PID is {}".format(
             self._archive_directory_monitor_pid))
-
+		"""
         # except Exception as error:
         #    msg = "Couldn't start pipeline server {}".format(str(error))
         #    log.error(msg)
@@ -887,8 +855,10 @@ class EddPulsarPipeline(EDDPipeline):
         try:
             log.debug("Stopping")
             self._timeout = 10
+            #process = [self._mkrecv_ingest_proc,
+            #           self._polnmerge_proc, self._archive_directory_monitor]
             process = [self._mkrecv_ingest_proc,
-                       self._polnmerge_proc, self._archive_directory_monitor]
+                       self._polnmerge_proc]
             for proc in process:
                 time.sleep(2)
                 proc.set_finish_event()
@@ -913,29 +883,7 @@ class EddPulsarPipeline(EDDPipeline):
                 os.remove("/tmp/t2pred.dat")
 
             log.info("reset DADA buffer")
-            cmd = "dada_db -d -k {key}".format(
-                numa=self.numa_number, key=self._dada_buffers[1])
-            #cmd = "dada_dbscrubber -k {key}".format(numa=self.numa_number, key=self._dadc_key)
-            # cmd = "dada_db -k {key} {args}".format(**
-            #                                       self._config["dada_db_params"])
-            log.debug("Running command: {0}".format(cmd))
-            self._create_transpose_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._create_transpose_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._create_transpose_ring_buffer._process.wait()
-
-            log.info("Creating DADA buffer for EDDPolnMerge")
-            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dada_buffers[1],
-                                                                     args=self._config["dadc_db_params"]["args"])
-            # cmd = "dada_db -k {key} {args}".format(**
-            #                                       self._config["dada_db_params"])
-            log.debug("Running command: {0}".format(cmd))
-            self._create_transpose_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._create_transpose_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._create_transpose_ring_buffer._process.wait()
+            yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
 
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
@@ -948,104 +896,41 @@ class EddPulsarPipeline(EDDPipeline):
     def stop_pipeline_with_mkrecv_crashed(self):
         """@brief stop the dada_junkdb and dspsr instances."""
         try:
-            os.kill(self._polnmerge_proc_pid, signal.SIGTERM)
+            os.kill(self._polnmerge_proc.pid, signal.SIGTERM)
         except Exception as error:
             log.error("cannot kill _polnmerge_proc_pid, {}".format(error))
+        #try:
+        #    os.kill(self._archive_directory_monitor_pid, signal.SIGTERM)
+        #except Exception as error:
+        #    log.error("cannot kill _archive_directory_monitor, {}".format(error))
         try:
-            os.kill(self._archive_directory_monitor_pid, signal.SIGTERM)
-        except Exception as error:
-            log.error("cannot kill _archive_directory_monitor, {}".format(error))
-        try:
-            os.kill(self._dspsr_pid, signal.SIGTERM)
+            os.kill(self._dspsr.pid, signal.SIGTERM)
         except Exception as error:
             log.error("cannot kill _dspsr, {}".format(error))
         if (parse_tag(self._config['source_config']["source-name"]) == "default") & self.pulsar_flag:
             os.remove("/tmp/t2pred.dat")
 
-        try:
-            log.debug("deleting buffers")
-            cmd = "dada_db -d -k {0}".format(self._dada_buffers[0])
-            log.debug("Running command: {0}".format(cmd))
-            self._destory_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._destory_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._destory_ring_buffer._process.wait()
-
-            cmd = "dada_db -d -k {0}".format(self._dada_buffers[1])
-            log.debug("Running command: {0}".format(cmd))
-            self._destory_merge_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._destory_merge_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._destory_merge_buffer._process.wait()
-
-        except Exception as error:
-            msg = "Couldn't deleting buffers {}".format(str(error))
-            log.error(msg)
-            raise EddPulsarPipelineError(msg)
-
-        try:
-            # self._pipeline_sensor_name.set_value(pipeline_name)
-            log.info("Creating DADA buffer for mkrecv")
-            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dada_buffers[0],
-                                                                     args=self._config["dada_db_params"]["args"])
-            log.debug("Running command: {0}".format(cmd))
-            self._create_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._create_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._create_ring_buffer._process.wait()
-        except Exception as error:
-            raise EddPulsarPipelineError(str(error))
-        try:
-            log.info("Creating DADA buffer for EDDPolnMerge")
-            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dada_buffers[1],
-                                                                     args=self._config["dadc_db_params"]["args"])
-            log.debug("Running command: {0}".format(cmd))
-            self._create_transpose_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._create_transpose_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._create_transpose_ring_buffer._process.wait()
-        except Exception as error:
-            raise EddPulsarPipelineError(str(error))
-        else:
-            log.info("Pipeline Stopped with mkrecv crashed, buffers recreated")
-            self._state = "ready"
+        log.debug("deleting buffers")
+        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
+        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
+        self._state = "ready"
 
     @coroutine
     def deconfigure(self):
         """@brief deconfigure the dspsr pipeline."""
         log.info("Deconfiguring pipeline")
         log.debug("Destroying dada buffers")
-        try:
-            cmd = "dada_db -d -k {0}".format(self._dada_buffers[0])
-            log.debug("Running command: {0}".format(cmd))
-            self._destory_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._destory_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._destory_ring_buffer._process.wait()
 
-            cmd = "dada_db -d -k {0}".format(self._dada_buffers[1])
+        for k in self._dada_buffers:
+            k['monitor'].stop()
+            cmd = "dada_db -d -k {0}".format(k['key'])
             log.debug("Running command: {0}".format(cmd))
-            self._destory_merge_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._destory_merge_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._destory_merge_buffer._process.wait()
-            self._fscrunch.set_value(BLANK_IMAGE)
-            self._tscrunch.set_value(BLANK_IMAGE)
-            self._profile.set_value(BLANK_IMAGE)
-
-        except Exception as error:
-            msg = "Couldn't deconfigure pipeline {}".format(str(error))
-            log.error(msg)
-            #raise EddPulsarPipelineError(msg)
-        else:
-            log.info("Deconfigured pipeline")
-            self._state = "idle"
+            yield command_watcher(cmd)
+        self._fscrunch.set_value(BLANK_IMAGE)
+        self._tscrunch.set_value(BLANK_IMAGE)
+        self._profile.set_value(BLANK_IMAGE)
+        log.info("Deconfigured pipeline")
+        self._state = "idle"
 
 
 if __name__ == "__main__":
