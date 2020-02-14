@@ -62,15 +62,10 @@ DEFAULT_CONFIG = {
     {
         "args": "-L 10 -r -minram 1024"
     },
-    "dada_db_params":
+    "db_params":
     {
-        "args": "-n 32 -b 409600000 -p -l",
-        "key": "dada"
-    },
-    "dadc_db_params":
-    {
-        "args": "-n 32 -b 409600000 -p -l",
-        "key": "dadc"
+        "size" : 409600000,
+        "number": 32
     },
     "dada_header_params":
     {
@@ -111,11 +106,11 @@ DEFAULT_CONFIG = {
     },
     "source_config":
     {
-		"source-name" : "J1939+2134",
-		"nchannels" : 1024,
-		"nbins" : 1024,
-		"ra" : "294.910416667",
-		"dec" : "21.10725"
+        "source-name" : "J1939+2134",
+        "nchannels" : 1024,
+        "nbins" : 1024,
+        "ra" : "294.910416667",
+        "dec" : "21.10725"
     }
 }
 
@@ -398,7 +393,7 @@ class EddPulsarPipeline(EDDPipeline):
         EDDPipeline.__init__(self, ip, port, DEFAULT_CONFIG)
         self.__numa_node_pool = []
         self.mkrec_cmd = []
-        self._dada_buffers = ["dada", "dadc"]
+        self._dada_buffers = []
         self._dspsr = None
         self._mkrecv_ingest_proc = None
 
@@ -406,7 +401,7 @@ class EddPulsarPipeline(EDDPipeline):
         """
         @brief Setup monitoring sensors
         """
-	EDDPipeline.setup_sensors(self)
+    	EDDPipeline.setup_sensors(self)
         self._tscrunch = Sensor.string(
             "tscrunch_PNG",
             description="tscrunch png",
@@ -496,6 +491,23 @@ class EddPulsarPipeline(EDDPipeline):
         self._profile.set_value(png_blob)
 
     @coroutine
+    def _create_ring_buffer(self, bufferSize, blocks, key, numa_node):
+         """
+         @brief Create a ring buffer of given size with given key on specified numa node.
+                Adds and register an appropriate sensor to thw list
+         """
+         # always clear buffer first. Allow fail here
+         yield command_watcher("dada_db -d -k {key}".format(key=key), allow_fail=True)
+
+         cmd = "numactl --cpubind={numa_node} --membind={numa_node} dada_db -k {key} -n {blocks} -b {bufferSize} -p -l".format(key=key, blocks=blocks, bufferSize=bufferSize, numa_node=numa_node)
+         log.debug("Running command: {0}".format(cmd))
+         yield command_watcher(cmd)
+
+         M = DbMonitor(key, self._buffer_status_handle)
+         M.start()
+         self._dada_buffers.append({'key': key, 'monitor': M})
+
+    @coroutine
     def configure(self, config_json):
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
@@ -506,7 +518,7 @@ class EddPulsarPipeline(EDDPipeline):
                 log.debug("Deconfiguring pipeline before configuring")
                 self.deconfigure()
             except Exception as error:
-            	raise EddPulsarPipelineError(str(error))
+                raise EddPulsarPipelineError(str(error))
 
         self.state = "configuring"
         yield self.set(config_json)
@@ -518,33 +530,14 @@ class EddPulsarPipeline(EDDPipeline):
         pipeline_name = self._config["pipeline_config"]["mode"]
         log.debug("Pipeline name = {}".format(pipeline_name))
 
-        try:
-            log.info("Creating DADA buffer for mkrecv")
-            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dada_buffers[0],
-                                                                     args=self._config["dada_db_params"]["args"])
-            log.debug("Running command: {0}".format(cmd))
-            self._create_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._create_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._create_ring_buffer._process.wait()
-        except Exception as error:
-            raise EddPulsarPipelineError(str(error))
-        try:
-            log.info("Creating DADA buffer for EDDPolnMerge")
-            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dada_buffers[1],
-                                                                     args=self._config["dadc_db_params"]["args"])
-            log.debug("Running command: {0}".format(cmd))
-            self._create_transpose_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._create_transpose_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._create_transpose_ring_buffer._process.wait()
-        except Exception as error:
-            raise EddPulsarPipelineError(str(error))
-        else:
-            self.state = "ready"
-            log.info("Pipeline configured")
+
+        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
+        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
+
+
+
+        self.state = "ready"
+        log.info("Pipeline configured")
 
     @coroutine
     def measurement_prepare(self, config_json):
