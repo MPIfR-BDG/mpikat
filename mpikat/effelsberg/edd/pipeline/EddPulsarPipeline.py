@@ -661,7 +661,7 @@ class EddPulsarPipeline(EDDPipeline):
                         break
                     else:
                         attempts += 1
-        dada_header_file = tempfile.NamedTemporaryFile(
+        self.dada_header_file = tempfile.NamedTemporaryFile(
             mode="w",
             prefix="edd_dada_header_",
             suffix=".txt",
@@ -669,9 +669,9 @@ class EddPulsarPipeline(EDDPipeline):
             delete=False)
         log.debug(
             "Writing dada header file to {0}".format(
-                dada_header_file.name))
+                self.dada_header_file.name))
         header_string = render_dada_header(header)
-        dada_header_file.write(header_string)
+        self.dada_header_file.write(header_string)
         self.dada_key_file = tempfile.NamedTemporaryFile(
             mode="w",
             prefix="dada_keyfile_",
@@ -683,7 +683,7 @@ class EddPulsarPipeline(EDDPipeline):
         key_string = make_dada_key_string(self._dada_buffers[1]["key"])
         self.dada_key_file.write(make_dada_key_string(self._dada_buffers[1]["key"]))
         log.debug("Dada key file contains:\n{0}".format(key_string))
-        dada_header_file.close()
+        self.dada_header_file.close()
         self.dada_key_file.close()
 
         attempts = 0
@@ -797,7 +797,7 @@ class EddPulsarPipeline(EDDPipeline):
         #STARTING MKRECV                                   #
         ####################################################
         cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_nt --header {dada_header} --dada-mode 4 --quiet".format(
-            numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
+            numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=self.dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
         self._mkrecv_ingest_proc = ManagedProcess(cmd)
