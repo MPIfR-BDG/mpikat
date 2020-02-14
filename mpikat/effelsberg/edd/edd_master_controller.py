@@ -27,15 +27,18 @@ import tornado
 import signal
 
 from tornado.gen import Return, coroutine
-from katcp import Sensor, AsyncReply
+from katcp import Sensor, AsyncDeviceServer, AsyncReply, FailReply
 from katcp.kattypes import request, return_reply, Str, Int
 
 from mpikat.effelsberg.edd.edd_roach2_product_controller import ( EddRoach2ProductController)
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
 from mpikat.effelsberg.edd.edd_server_product_controller import EddServerProductController
 
+from mpikat.utils.process_tools import ManagedProcess, command_watcher
 import mpikat.effelsberg.edd.pipeline.EDDPipeline as EDDPipeline
 import mpikat.effelsberg.edd.EDDDataStore as EDDDataStore
+
+log = logging.getLogger("mpikat.effelsberg.edd.EddMAsterController")
 
 class EddMasterController(EDDPipeline.EDDPipeline):
     """
@@ -93,97 +96,28 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
 
     @coroutine
+    def set(self, config_json):
+        try:
+            cfg = json.loads(config_json)
+        except:
+            log.error("Error parsing json")
+            raise FailReply("Cannot handle config string {} - Not valid json!".format(config_json))
+        if 'packetisers' in cfg:
+            cfg['packetizers'] = cfg.pop('packetisers')
+
+        EDDPipeline.set(self, cfg)
+
+
+
+    @coroutine
     def configure(self, config_json):
         """
         @brief   Configure the EDD backend
 
         @param   config_json    A JSON dictionary object containing configuration information
 
-        @detail  The configuration dictionary is highly flexible. An example is below:
-                 @code
-                     {
-                         "packetisers":
-                         [
-                             {
-                                 "id": "faraday_room_digitizer",
-                                 "address": ["134.104.73.132", 7147],
-                                 "sampling_rate": 2600000000.0,
-                                 "bit_width": 12,
-                                 "v_destinations": "225.0.0.152+3:7148",
-                                 "h_destinations": "225.0.0.156+3:7148"
-                             }
-                         ],
-                         "products":
-                         [
-                             {
-                              "id": "GatedSpectrometer",
-                               "type": "GatedSpectrometer",
-                               "supported_input_formats": {"MPIFR_EDD_Packetizer": [1]},
-                               "input_data_streams":
-                               {
-                                   "polarization_0" :
-                                   {
-                                       "source": "focus_cabin_digitizer:v_polarization",
-                                       "format": "MPIFR_EDD_Packetizer",
-                                   },
-                                    "polarization_1" :
-                                   {
-                                       "source": "focus_cabin_digitizer:h_polarization",
-                                       "format": "MPIFR_EDD_Packetizer",
-                                   }
-                               },
-                               "output_data_streams":
-                               {
-                                   "polarization_0" :
-                                   {
-                                       "format": "MPIFR_EDD_GatedSpectrometer",
-                                       "ip": "225.0.0.172 225.0.0.173",
-                                       "port": "7152"
-                                   },
-                                    "polarization_1" :
-                                   {
-                                       "format": "MPIFR_EDD_GatedSpectrometer",
-                                       "ip": "225.0.0.184 225.0.0.185",
-                                       "port": "7152"
-                                   }
-                               },
-
-                               "fft_length": 256,
-                               "naccumulate": 32
-                             },
-                             {
-                                 "id": "roach2_spectrometer",
-                                 "type": "roach2",
-                                 "icom_id": "R2-E01",
-                                 "firmware": "EDDFirmware",
-                                 "commands":
-                                 [
-                                     ["program", []],
-                                     ["start", []],
-                                     ["set_integration_period", [1000.0]],
-                                     ["set_destination_address", ["10.10.1.12", 60001]]
-                                 ]
-                             }
-                         ],
-                         "fits_interfaces":
-                         [
-                             {
-                                 "id": "fits_interface_01",
-                                 "name": "FitsInterface",
-                                 "address": ["134.104.73.132", 6000],
-                                 "nbeams": 1,
-                                 "nchans": 2048,
-                                 "integration_time": 1.0,
-                                 "blank_phases": 1
-                             }
-                         ]
-                     }
-                 @endcode
         """
         log.info("Configuring EDD backend for processing")
-        #for i, k in self.__controller.items():
-        #    log.debug("Deconfigure existing controller {}".format(i))
-        #    k.deconfigure()
 
         self.__eddDataStore.updateProducts()
         log.info("Resetting data streams")
@@ -191,30 +125,31 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         self.__eddDataStore._dataStreams.flushdb()
 
         log.debug("Received configuration string: '{}'".format(config_json))
-        log.debug("Parsing JSON configuration")
-        try:
-            config = json.loads(config_json)
-        except Exception as error:
-            log.error("Unable to parse configuration dictionary")
-            raise error
 
-        if 'packetisers' in config:
-            config['packetizers'] = config.pop('packetisers')
-        elif "packetizers" not in config:
+        yield self.set(config_json)
+        cfs = json.dumps(self._config, indent=4)
+        log.info("Final configuration:\n" + cfs)
+
+        if "packetizers" not in self._config:
             log.warning("No packetizers in config!")
-            config["packetizers"] = []
-        if not 'products' in config:
-            config["products"] = []
+            self._config["packetizers"] = []
+
+        if not 'products' in self._config:
+            log.warning("No products in config!")
+            self._config["products"] = []
+
+        # ToDo: Check if provisioned
+        if not self.__provisoned:
+            self._installController(self._config)
+
+
+        # Data streams are only filled in on final configure as they may
+        # require data from the configure command. As example,t he packetizer
+        # dat atream has a sync time that is propagated to other components
 
         # Get output streams from packetizer and configure packetizer
         log.info("Configuring digitisers/packetisers")
-        for packetizer in config['packetizers']:
-            if packetizer["id"] in self.__controller:
-                log.debug("Controller for {} already there".format(packetizer["id"]))
-            else:
-                log.debug("Adding new controller for {}".format(packetizer["id"]))
-                self.__controller[packetizer["id"]] = DigitiserPacketiserClient(*packetizer["address"])
-                self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
+        for packetizer in self._config['packetizers']:
             yield self.__controller[packetizer["id"]].configure(packetizer)
 
             ofs = dict(format="MPIFR_EDD_Packetizer",
@@ -236,7 +171,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         log.debug("Identify additional output streams")
         # Get output streams from products
-        for product in config['products']:
+        for product in self._config['products']:
             if not "output_data_streams" in product:
                 continue
 
@@ -254,7 +189,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 self.__eddDataStore.addDataStream(key, i)
 
         log.debug("Connect data streams with high level description")
-        for product in config['products']:
+        for product in self._config['products']:
             counter = 0
             for k in product["input_data_streams"]:
                 if isinstance(product["input_data_streams"], dict):
@@ -280,28 +215,14 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 datastream.update(self.__eddDataStore.getDataStream(s))
                 product["input_data_streams"][k] = datastream
 
-        log.debug("Updated configuration:\n '{}'".format(json.dumps(config, indent=2)))
+        log.debug("Updated configuration:\n '{}'".format(json.dumps(self._config, indent=2)))
         log.info("Configuring products")
-        for product_config in config["products"]:
-            product_id = product_config["id"]
-            #ToDo : Unify roach2 to bring under ansible control + ServerproductController
-            if "type" in product_config and product_config["type"] == "roach2":
-                self._products[product_id] = EddRoach2ProductController(self, product_id,
-                                                                        (self._r2rm_host, self._r2rm_port))
-            elif product_id not in self.__controller:
-                log.warning("Config received for {}, but no controller exists yet.".format(product_id))
-                if product_id in self.__eddDataStore.products:
-                    product = self.__eddDataStore.getProduct(product_id)
-                    self.__controller[product_id] = EddServerProductController(product_id, product["address"], product["port"])
-                else:
-                    log.warning("Manual config of product {}")
-                    self.__controller[product_id] = EddServerProductController(product_id, product_config["address"], product_config["port"])
-
+        for product_config in self._config["products"]:
             yield self.__controller[product_id].configure(product_config)
 
-        self._edd_config_sensor.set_value(json.dumps(config))
+        self._edd_config_sensor.set_value(json.dumps(self._config))
         log.info("Successfully configured EDD")
-        raise Return("Successfully configured EDD") 
+        raise Return("Successfully configured EDD")
 
 
     @coroutine
@@ -311,7 +232,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         """
         log.info("Deconfiguring all products:")
         for cid, controller in self.__controller.iteritems():
-            logging.debug("  - Deconfigure: {}".format(cid))
+            log.debug("  - Deconfigure: {}".format(cid))
             yield controller.deconfigure()
         #self._update_products_sensor()
 
@@ -331,7 +252,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                     headers.
         """
         for cid, controller in self.__controller.iteritems():
-            logging.debug("  - Capture start: {}".format(cid))
+            log.debug("  - Capture start: {}".format(cid))
             yield controller.capture_start()
 
 
@@ -346,7 +267,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                     which must be cognisant of scan boundaries should respond to this request.
         """
         for cid, controller in self.__controller.iteritems():
-            logging.debug("  - Capture stop: {}".format(cid))
+            log.debug("  - Capture stop: {}".format(cid))
             yield controller.capture_stop()
 
 
@@ -355,7 +276,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         """
         """
         for cid, controller in self.__controller.iteritems():
-            logging.debug("  - Measurement start: {}".format(cid))
+            log.debug("  - Measurement start: {}".format(cid))
             yield controller.measurement_start()
 
 
@@ -364,19 +285,234 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         """
         """
         for cid, controller in self.__controller.iteritems():
-            logging.debug("  - Measurement stop: {}".format(cid))
+            log.debug("  - Measurement stop: {}".format(cid))
             yield controller.measurement_stop()
 
 
-    @coroutine
-    def set(self, config):
+    def reset(self):
         """
-        Distribute the settings among the connected components
+        Resets the EDD, i.e. flusing all data bases. Note that runing containers are not stopped.
         """
+        self.__eddDataStore._dataStreams.flushdb()
 
-        for cid, item in config:
-            logging.debug("  - Aplying setting: {}:{}".format(cid, item))
-            yield self.__controller[cid].set(item)
+
+    @request(Str())
+    @return_reply()
+    def request_provision(self, req, name):
+        """
+        @brief   Loads a provision configuration and dispatch it to ansible and sets the data streams for all products
+
+        """
+        @coroutine
+        def wrapper():
+            try:
+                yield self.provision(name)
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(wrapper)
+        raise AsyncReply
+
+
+    @coroutine
+    def provision(self, name):
+        #if not self.__eddDataStore.hasProvisioningDescription(name):
+        #    raise FailReply('Unknown provision: {}'.format(name))
+        #playbook, basic_config = self.__eddDataStore.getProvisioningDescription(name)
+
+        log.warning(" CODE DRAFT USING HARD CODED PLAYBOOK AND BASIC CONFIG!!!")
+        log.warning(" PARAMETER {} IGNORED".format(name))
+        playbook = """
+---
+- hosts: gpu_server[1]
+  roles:
+    - gated_spectrometer
+
+- hosts: gpu_server[0]
+  roles:
+    - fits_interface
+        """
+        basic_config = """
+{
+    "packetisers":
+    [
+      {
+            "id": "focus_cabin_digitizer",
+            "address": ["134.104.70.65", 7147],
+            "sampling_rate": 2600000000.0,
+            "bit_width": 12,
+            "v_destinations": "225.0.0.152+3:7148",
+            "h_destinations": "225.0.0.156+3:7148",
+						"predecimation_factor": 1,
+						"flip_spectrum": true,
+            "interface_addresses": {
+                "0":"10.10.1.32",
+                "1":"10.10.1.33"
+            }
+      }
+
+    ],
+    "products":
+    [
+			{
+       "id": "gated_spectrometer",
+        "input_data_streams":
+        {
+            "polarization_0":
+            {
+                "source": "focus_cabin_digitizer:v_polarization",
+                "format": "MPIFR_EDD_Packetizer:1"
+            },
+             "polarization_1":
+            {
+                "source": "focus_cabin_digitizer:h_polarization",
+                "format": "MPIFR_EDD_Packetizer:1"
+            }
+        },
+        "output_data_streams":
+        {
+            "polarization_0_0":
+            {
+                "format": "GatedSpectrometer:1",
+                "ip": "225.0.0.172",
+                "port": "7152"
+            },
+            "polarization_0_1":
+            {
+                "format": "GatedSpectrometer:1",
+                "ip": "225.0.0.173",
+                "port": "7152"
+            },
+             "polarization_1_0":
+            {
+                "format": "GatedSpectrometer:1",
+                "ip": "225.0.0.174",
+                "port": "7152"
+            },
+             "polarization_1_1":
+            {
+                "format": "GatedSpectrometer:1",
+                "ip": "225.0.0.175",
+                "port": "7152"
+            }
+        },
+        "naccumulate": 16384,
+        "fft_length": 262144
+      },
+      {
+       "id": "fits_interface",
+        "input_data_streams":
+        [
+          {
+            "source": "gated_spectrometer:polarization_0_0",
+            "format": "GatedSpectrometer:1"
+          },
+          {
+            "source": "gated_spectrometer:polarization_0_1",
+            "format": "GatedSpectrometer:1"
+          },
+          {
+            "source": "gated_spectrometer:polarization_1_0",
+            "format": "GatedSpectrometer:1"
+          },
+          {
+            "source": "gated_spectrometer:polarization_1_1",
+            "format": "GatedSpectrometer:1"
+          }
+        ]
+      }
+    ]
+}
+        """
+        with open('playbook.yml', 'w') as ofile:
+            ofile.write(playbook)
+
+        # launch playbook
+        yield command_watcher("ansible-playbook playbook.yml", allow_fail=True)
+
+
+        try:
+            basic_config = json.loads(basic_config)
+        except:
+            log.error("Error parsing json")
+            raise FailReply("Cannot handle config string {} - Not valid json!".format(config_json))
+
+        self.__eddDataStore.updateProducts()
+        self._installController(basic_config)
+
+        # Retrieve default configs from products and merge with basic config to
+        # have full config locally.
+        self._config = {}
+        for product in basic_config['products']:
+            log.debug("Retrieve basic config for {}".format(product["id"]))
+            controller = self.__controller[product["id"]]
+            if not isinstance(controller, EddServerProductController):
+                # ToDo: unfify interface of DigitiserPacketiserClient and EDD Pipeline,
+                # they should be identical. Here the DigitiserPacketiserClient
+                # should mimick the getConfig and translate it as the actual
+                # request is not there
+                continue
+
+            cfg = yield controller.getConfig()
+            cfg = EDDPipeline.updateConfig(cfg, product)
+            self._config[product["id"]] = cfg
+        self._configUpdated()
+
+
+    def _installController(self, config):
+        """
+        Ensure a controller exists for all components in a configuration
+        """
+        log.debug("Installing controller for products.")
+        # Install controllers
+        if 'packetisers' in config:
+            config['packetizers'] = config.pop('packetisers')
+        elif "packetizers" not in config:
+            log.warning("No packetizers in config!")
+            config["packetizers"] = []
+        if not 'products' in config:
+            config["products"] = []
+
+        for packetizer in config['packetizers']:
+            if packetizer["id"] in self.__controller:
+                log.debug("Controller for {} already there".format(packetizer["id"]))
+            else:
+                log.debug("Adding new controller for {}".format(packetizer["id"]))
+                self.__controller[packetizer["id"]] = DigitiserPacketiserClient(*packetizer["address"])
+                self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
+
+        for product_config in config["products"]:
+            product_id = product_config["id"]
+            if product_id in self.__controller:
+                log.debug("Controller for {} already there".format(product_id))
+            elif "type" in product_config and product_config["type"] == "roach2":
+                    self._products[product_id] = EddRoach2ProductController(self, product_id,
+                                                                            (self._r2rm_host, self._r2rm_port))
+            elif product_id not in self.__controller:
+                if product_id in self.__eddDataStore.products:
+                    product = self.__eddDataStore.getProduct(product_id)
+                    self.__controller[product_id] = EddServerProductController(product_id, product["address"], product["port"])
+                else:
+                    log.warning("Manual setup of product {} - require address and port properties")
+                    self.__controller[product_id] = EddServerProductController(product_id, product_config["address"], product_config["port"])
+
+
+
+
+    @request()
+    @return_reply()
+    def request_deprovision(self, req):
+        """
+        @brief   Deprovision EDD - stop all ansible containers launched in recent provision cycle.
+        """
+        raise NotImplementedError
+
+        return ("ok", len(self.__eddDataStore.products))
 
 
 

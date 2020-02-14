@@ -146,6 +146,12 @@ class EDDPipeline(AsyncDeviceServer):
         if not isinstance(value, dict):
             raise RuntimeError("_config has to be a dict!")
         self.__config = value
+        self._configUpdated()
+
+    def _configUpdated(self):
+        """
+        Actions to take after config has been updated
+        """
         self._edd_config_sensor.set_value(json.dumps(self._config, indent=4))
 
 
@@ -340,6 +346,7 @@ class EDDPipeline(AsyncDeviceServer):
             raise FailReply("Cannot handle config type {}. Config has to bei either json formatted string or dict!".format(type(config_json)))
         try:
             self._config = updateConfig(self.__config, cfg)
+            self._configUpdated()
             log.debug("Updated config: '{}'".format(self._config))
         except KeyError as error:
             raise FailReply("Unknown configuration option: {}".format(str(error)))

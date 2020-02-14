@@ -97,11 +97,11 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.set, g))
 
     @scpi_request(str)
-    def request_edd_construct(self, req, message):
+    def request_edd_provision(self, req, message):
         req.error("NOT IMPLEMENTED YET")
 
     @scpi_request()
-    def request_edd_teardown(self, req, message):
+    def request_edd_deprovision(self, req, message):
         req.error("NOT IMPLEMENTED YET")
 
 
