@@ -853,8 +853,10 @@ class EddPulsarPipeline(EDDPipeline):
                        self._polnmerge_proc]
             for proc in process:
                 time.sleep(2)
-                proc.set_finish_event()
-                proc.finish()
+                proc.terminate()
+                #proc.set_finish_event()
+                #proc.finish()
+                """
                 log.debug(
                     "Waiting {} seconds for proc to terminate...".format(self._timeout))
                 now = time.time()
@@ -871,6 +873,7 @@ class EddPulsarPipeline(EDDPipeline):
                         "Failed to terminate proc in alloted time")
                     log.info("Killing process")
                     proc._process.kill()
+                """    
             if (parse_tag(self._config['source_config']["source-name"]) == "default") & self.pulsar_flag:
                 os.remove("/tmp/t2pred.dat")
 
