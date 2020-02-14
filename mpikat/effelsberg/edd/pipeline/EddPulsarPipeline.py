@@ -681,8 +681,8 @@ class EddPulsarPipeline(EDDPipeline):
             delete=False)
         log.debug("Writing dada key file to {0}".format(
             dada_key_file.name))
-        key_string = make_dada_key_string(self._dadc_key)
-        dada_key_file.write(make_dada_key_string(self._dadc_key))
+        key_string = make_dada_key_string(self._dada_buffers[1]["key"])
+        dada_key_file.write(make_dada_key_string(self._dada_buffers[1]["key"]))
         log.debug("Dada key file contains:\n{0}".format(key_string))
         dada_header_file.close()
         dada_key_file.close()
