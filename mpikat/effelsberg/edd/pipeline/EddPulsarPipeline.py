@@ -705,13 +705,13 @@ class EddPulsarPipeline(EDDPipeline):
     @coroutine
     def measurement_start(self):
         log.info("checking status")
-        if not self.ready:
+        if self._state != "ready":
             log.debug("pipeline is not int ready state")
-            if self.capturing:
+            if self._state == "running":
                 log.debug(
-                    "pipeline is still captureing, issuing stop now and will start shortly")
+                    "pipeline is still running, issuing stop now and will start shortly")
                 yield self.stop_pipeline()
-            if self.starting:
+            if self._state == "starting":
                 log.debug("pipeline is starting, do not send multiple start")
                 return
 
