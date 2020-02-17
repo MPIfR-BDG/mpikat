@@ -487,7 +487,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 ofpath = os.path.join(cfg["output_directory"], ofname)
                 log.debug("Writing output to {}".format(ofpath))
                 if not os.path.isdir(ofpath):
-                    os.mkdir(ofpath)
+                    os.makedirs(ofpath)
                 cmd = "dada_dbdisk -k {ofname} -D {ofpath} -W".format(ofname=ofname, ofpath=ofpath, **cfg)
             else:
                 log.warning("Selected null output. Not sending data!")
