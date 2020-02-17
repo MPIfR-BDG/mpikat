@@ -141,10 +141,10 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mode", type=str,
                         help="Processing mode to operate in",
                         default="ArchiveAdder")
-    parser.add_option('-H', '--host', dest='host', type=str,
+    parser.add_argument('-H', '--host', dest='host', type=str,
                       help='KATCP png server interface', default="0.0.0.0")
-    parser.add_option('-p', '--port', dest='port', type=long,
-                      help='Port number for the KATCP png server', default=9000)
+    parser.add_argument('-p', '--port', dest='port', type=long,
+                      help='Port number for the KATCP png server', default=10000)
 
     args = parser.parse_args()
 
