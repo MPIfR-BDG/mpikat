@@ -66,33 +66,33 @@ class ArchiveAdder(FileSystemEventHandler):
                 "pav -DFTp sum.fscrunch -g ../combined_data/profile.png/png")
             self._syscall(
                 "pav -FY sum.fscrunch -g ../combined_data/fscrunch.png/png")
-        os.remove(fscrunch_fname)
-        #shutil.copy2("sum.fscrunch", self.output_dir)
-        #shutil.copy2("sum.tscrunch", self.output_dir)
-        log.info("Accessing archive PNG files")
-        
-        try:
-            with open("{}/fscrunch.png".format(self.output_dir), "rb") as imageFile:
-                log.info("reading fscrunch.png")
-                fscrunch = base64.b64encode(imageFile.read())
-                yield self._png_server.until_synced()
-                self._png_server.req.fscrunch(fscrunch)
-        except Exception as error:
-            log.debug(error)
-        try:
-            with open("{}/tscrunch.png".format(self.output_dir), "rb") as imageFile:
-                log.info("reading tscrunch.png")
-                yield self._png_server.until_synced()
-                self._png_server.req.tscrunch(base64.b64encode(imageFile.read()))
-        except Exception as error:
-            log.debug(error)
-        try:
-            with open("{}/profile.png".format(self.output_dir), "rb") as imageFile:
-                log.info("reading profile.png")
-                yield self._png_server.until_synced()
-                self._png_server.req.profile(base64.b64encode(imageFile.read()))
-        except Exception as error:
-            log.debug(error)
+            os.remove(fscrunch_fname)
+            #shutil.copy2("sum.fscrunch", self.output_dir)
+            #shutil.copy2("sum.tscrunch", self.output_dir)
+            log.info("Accessing archive PNG files")
+            
+            try:
+                with open("{}/fscrunch.png".format(self.output_dir), "rb") as imageFile:
+                    log.info("reading fscrunch.png")
+                    fscrunch = base64.b64encode(imageFile.read())
+                    yield self._png_server.until_synced()
+                    self._png_server.req.fscrunch(fscrunch)
+            except Exception as error:
+                log.debug(error)
+            try:
+                with open("{}/tscrunch.png".format(self.output_dir), "rb") as imageFile:
+                    log.info("reading tscrunch.png")
+                    yield self._png_server.until_synced()
+                    self._png_server.req.tscrunch(base64.b64encode(imageFile.read()))
+            except Exception as error:
+                log.debug(error)
+            try:
+                with open("{}/profile.png".format(self.output_dir), "rb") as imageFile:
+                    log.info("reading profile.png")
+                    yield self._png_server.until_synced()
+                    self._png_server.req.profile(base64.b64encode(imageFile.read()))
+            except Exception as error:
+                log.debug(error)
         
     def on_created(self, event):
         log.info("New file created: {}".format(event.src_path))
