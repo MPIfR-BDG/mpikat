@@ -1,6 +1,7 @@
 import tornado
 import logging
 import signal
+import coloredlogs
 from optparse import OptionParser
 from katcp import AsyncDeviceServer, Message, DeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import (Str, Float, Timestamp,
