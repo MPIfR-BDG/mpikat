@@ -66,6 +66,7 @@ class ArchiveAdder(FileSystemEventHandler):
                 "pav -DFTp sum.fscrunch -g ../combined_data/profile.png/png")
             self._syscall(
                 "pav -FY sum.fscrunch -g ../combined_data/fscrunch.png/png")
+            log.info("removing {}".format(fscrunch_fname))
             os.remove(fscrunch_fname)
             #shutil.copy2("sum.fscrunch", self.output_dir)
             #shutil.copy2("sum.tscrunch", self.output_dir)
