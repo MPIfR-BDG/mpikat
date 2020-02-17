@@ -52,6 +52,7 @@ class PngKatcpServer(AsyncDeviceServer):
         """
         @brief Setting pulsar profile png
         """
+        log.info("request_profile called")
         self._profile.set_value(png_blob)
         req.reply("ok",)
         raise AsyncReply
@@ -62,6 +63,7 @@ class PngKatcpServer(AsyncDeviceServer):
         """
         @brief Setting pulsar fscrunch png
         """
+        log.info("request_fscrunch called")
         self._fscrunch.set_value(png_blob)
         req.reply("ok",)
         raise AsyncReply
@@ -72,6 +74,7 @@ class PngKatcpServer(AsyncDeviceServer):
         """
         @brief Setting pulsar tscrunch png
         """
+        log.info("request_tscrunch called")
         self._tscrunch.set_value(png_blob)
         req.reply("ok",)
         raise AsyncReply
