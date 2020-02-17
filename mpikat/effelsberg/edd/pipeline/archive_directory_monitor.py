@@ -4,9 +4,11 @@ import sys
 import shlex
 import shutil
 import os
+import base64
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from subprocess import Popen, PIPE
+from katcp import AsyncDeviceServer, Message, Sensor, AsyncReply, KATCPClientResource
 
 log = logging.getLogger(
     "mpikat.effelsberg.edd.pipeline.pipeline")
@@ -14,10 +16,15 @@ log = logging.getLogger(
 
 class ArchiveAdder(FileSystemEventHandler):
 
-    def __init__(self, output_dir):
+    def __init__(self, output_dir, host, port):
         super(ArchiveAdder, self).__init__()
         self.output_dir = output_dir
         self.first_file = True
+        self._png_server = KATCPClientResource(dict(
+            name='_png_server-client',
+            address=(host, port),
+            controlled=True))
+        self._png_server.start()
 
     def _syscall(self, cmd):
         log.info("Calling: {}".format(cmd))
@@ -48,13 +55,35 @@ class ArchiveAdder(FileSystemEventHandler):
             #self._syscall("psrplot -p time -D ../combined_data/fscrunch.png/png sum.fscrunch".format(self.output_dir))
             #self._syscall("psrplot -p freq -D ../combined_data/tscrunch.png/png sum.tscrunch".format(self.output_dir))
             #self._syscall("psrplot -p flux -D ../combined_data/profile.png/png sum.fscrunch".format(self.output_dir))
-            self._syscall("psrplot -p freq+ -j dedisperse -D ../combined_data/tscrunch.png/png sum.tscrunch")
+            self._syscall(
+                "psrplot -p freq+ -j dedisperse -D ../combined_data/tscrunch.png/png sum.tscrunch")
             #self._syscall("pav -TGpd sum.tscrunch -g ../combined_data/tscrunch.png/png")
-            self._syscall("pav -DFTp sum.fscrunch -g ../combined_data/profile.png/png")
-            self._syscall("pav -FY sum.fscrunch -g ../combined_data/fscrunch.png/png")
+            self._syscall(
+                "pav -DFTp sum.fscrunch -g ../combined_data/profile.png/png")
+            self._syscall(
+                "pav -FY sum.fscrunch -g ../combined_data/fscrunch.png/png")
         os.remove(fscrunch_fname)
-        shutil.copy2("sum.fscrunch", self.output_dir)
-        shutil.copy2("sum.tscrunch", self.output_dir)
+        #shutil.copy2("sum.fscrunch", self.output_dir)
+        #shutil.copy2("sum.tscrunch", self.output_dir)
+        log.info("Accessing archive PNG files")
+        try:
+            with open("{}/fscrunch.png".format(self.output_dir), "rb") as imageFile:
+                self.fscrunch = base64.b64encode(imageFile.read())
+                self._png_server.req.fscrunch(self.fscrunch)
+        except Exception as error:
+            log.debug(error)
+        try:
+            with open("{}/tscrunch.png".format(self.output_dir), "rb") as imageFile:
+                self.tscrunch = base64.b64encode(imageFile.read())
+                self._png_server.req.tscrunch(self.tscrunch)
+        except Exception as error:
+            log.debug(error)
+        try:
+            with open("{}/profile.png".format(self.output_dir), "rb") as imageFile:
+                self.profile = base64.b64encode(imageFile.read())
+                self._png_server.req.profile(self.profile)
+        except Exception as error:
+            log.debug(error)
 
     def on_created(self, event):
         log.info("New file created: {}".format(event.src_path))
@@ -112,10 +141,15 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mode", type=str,
                         help="Processing mode to operate in",
                         default="ArchiveAdder")
+    parser.add_option('-H', '--host', dest='host', type=str,
+                      help='KATCP png server interface', default="0.0.0.0")
+    parser.add_option('-p', '--port', dest='port', type=long,
+                      help='Port number for the KATCP png server', default=9000)
+
     args = parser.parse_args()
 
     if args.mode == "ArchiveAdder":
-        handler = ArchiveAdder(args.output_dir)
+        handler = ArchiveAdder(args.output_dir, args.host, args.port)
     else:
         log.error("Processing mode {} is not supported.".format(args.mode))
         sys.exit(-1)
