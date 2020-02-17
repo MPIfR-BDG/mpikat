@@ -72,19 +72,20 @@ class ArchiveAdder(FileSystemEventHandler):
         
         try:
             with open("{}/fscrunch.png".format(self.output_dir), "rb") as imageFile:
-                self._png_server.req.fscrunch(base64.b64encode(imageFile.read()))
+                fscrunch = base64.b64encode(imageFile.read())
+                self._png_server.req.fscrunch(fscrunch)
         except Exception as error:
             log.debug(error)
-        try:
-            with open("{}/tscrunch.png".format(self.output_dir), "rb") as imageFile:
-                self._png_server.req.tscrunch(base64.b64encode(imageFile.read()))
-        except Exception as error:
-            log.debug(error)
-        try:
-            with open("{}/profile.png".format(self.output_dir), "rb") as imageFile:
-                self._png_server.req.profile(base64.b64encode(imageFile.read()))
-        except Exception as error:
-            log.debug(error)
+        #try:
+        #    with open("{}/tscrunch.png".format(self.output_dir), "rb") as imageFile:
+        #        self._png_server.req.tscrunch(base64.b64encode(imageFile.read()))
+        #except Exception as error:
+        #    log.debug(error)
+        #try:
+        #    with open("{}/profile.png".format(self.output_dir), "rb") as imageFile:
+        #        self._png_server.req.profile(base64.b64encode(imageFile.read()))
+        #except Exception as error:
+        #    log.debug(error)
         
     def on_created(self, event):
         log.info("New file created: {}".format(event.src_path))
