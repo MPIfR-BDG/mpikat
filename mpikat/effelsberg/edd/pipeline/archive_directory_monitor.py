@@ -9,6 +9,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from subprocess import Popen, PIPE
 from katcp import AsyncDeviceServer, Message, Sensor, AsyncReply, KATCPClientResource
+from katcp.kattypes import request, return_reply, Str
 
 log = logging.getLogger(
     "mpikat.effelsberg.edd.pipeline.pipeline")
@@ -21,10 +22,16 @@ class ArchiveAdder(FileSystemEventHandler):
         self.output_dir = output_dir
         self.first_file = True
         self._png_server = KATCPClientResource(dict(
-            name='_png_server-client',
+            name="_png_server-client",
             address=(host, port),
             controlled=True))
-        self._png_server.start()
+        log.debug("staring katcp connection")
+        try:
+            self._png_server.start()
+            log.debug("katcp connection done")
+        except Exception as error:
+            log.error(error)
+            
         #self.fscrunch = None
         #self.tscrunch = None
         #self.profile = None
