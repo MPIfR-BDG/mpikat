@@ -57,9 +57,9 @@ class PngKatcpServer(AsyncDeviceServer):
     @request(Str())
     @return_reply()
     def request_fscrunch(self, req, png_blob):
-    """
-    @brief Setting pulsar fscrunch png
-    """
+        """
+        @brief Setting pulsar fscrunch png
+        """
         self._fscrunch.set_value(png_blob)
         req.reply("ok",)
         raise AsyncReply
@@ -67,9 +67,9 @@ class PngKatcpServer(AsyncDeviceServer):
     @request(Str())
     @return_reply()
     def request_tscrunch(self, req, png_blob):
-    """
-    @brief Setting pulsar tscrunch png
-    """
+        """
+        @brief Setting pulsar tscrunch png
+        """
         self._tscrunch.set_value(png_blob)
         req.reply("ok",)
         raise AsyncReply
