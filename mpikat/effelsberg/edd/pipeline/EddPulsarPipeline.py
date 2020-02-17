@@ -401,7 +401,7 @@ class EddPulsarPipeline(EDDPipeline):
         EDDPipeline.__init__(self, ip, port, DEFAULT_CONFIG)
         self.__numa_node_pool = []
         self.mkrec_cmd = []
-        self._dada_buffers = []
+        self._dada_buffers = ["dada","dadc"]
         self._dspsr = None
         self._mkrecv_ingest_proc = None
         self._archive_directory_monitor = None
@@ -598,7 +598,7 @@ class EddPulsarPipeline(EDDPipeline):
             "h", ":").replace("m", ":").replace("s", "")
         header["dec"] = c.to_string("hmsdms").split(" ")[1].replace(
             "d", ":").replace("m", ":").replace("s", "")
-        header["key"] = self._dada_buffers[0]['key']
+        header["key"] = self._dada_buffers[0]
         header["mc_source"] = self._config['pipeline_config']["mc_source"]
         header["frequency_mhz"] = self._config['pipeline_config']["central_freq"]
         header["bandwidth"] = self._config['pipeline_config']["bandwidth"]
@@ -681,8 +681,8 @@ class EddPulsarPipeline(EDDPipeline):
             delete=False)
         log.debug("Writing dada key file to {0}".format(
             self.dada_key_file.name))
-        key_string = make_dada_key_string(self._dada_buffers[1]["key"])
-        self.dada_key_file.write(make_dada_key_string(self._dada_buffers[1]["key"]))
+        key_string = make_dada_key_string(self._dada_buffers[1])
+        self.dada_key_file.write(make_dada_key_string(self._dada_buffers[1]))
         log.debug("Dada key file contains:\n{0}".format(key_string))
         self.dada_header_file.close()
         self.dada_key_file.close()
@@ -879,7 +879,7 @@ class EddPulsarPipeline(EDDPipeline):
                 os.remove("/tmp/t2pred.dat")
 
             log.info("reset DADA buffer")
-            self._dada_buffers[1]['monitor'].stop()
+            #self._dada_buffers[1]['monitor'].stop()
             yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
 
 
@@ -923,7 +923,7 @@ class EddPulsarPipeline(EDDPipeline):
 
         for k in self._dada_buffers:
             #k['monitor'].stop()
-            cmd = "dada_db -d -k {0}".format(k['key'])
+            cmd = "dada_db -d -k {0}".format(k)
             log.debug("Running command: {0}".format(cmd))
             yield command_watcher(cmd)
         #self._fscrunch.set_value(BLANK_IMAGE)
