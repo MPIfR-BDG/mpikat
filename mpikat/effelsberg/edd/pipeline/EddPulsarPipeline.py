@@ -404,6 +404,7 @@ class EddPulsarPipeline(EDDPipeline):
         self._dada_buffers = []
         self._dspsr = None
         self._mkrecv_ingest_proc = None
+        self._archive_directory_monitor = None
 
 
     def setup_sensors(self):
@@ -512,9 +513,9 @@ class EddPulsarPipeline(EDDPipeline):
          log.debug("Running command: {0}".format(cmd))
          yield command_watcher(cmd)
 
-         M = DbMonitor(key, self._buffer_status_handle)
-         M.start()
-         self._dada_buffers.append({'key': key, 'monitor': M})
+         #M = DbMonitor(key, self._buffer_status_handle)
+         #M.start()
+         #self._dada_buffers.append({'key': key, 'monitor': M})
 
     def _buffer_status_handle(self, status):
         """
@@ -781,8 +782,6 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("Staring DSPSR")
         self._dspsr = ManagedProcess(cmd)
         self._subprocessMonitor.add(self._dspsr, self._subprocess_error)
-        
-        # time.sleep(5)
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
@@ -792,7 +791,6 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("Staring EDDPolnMerge")
         self._polnmerge_proc = ManagedProcess(cmd)
         self._subprocessMonitor.add(self._polnmerge_proc, self._subprocess_error)
-        # time.sleep(5)
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
@@ -802,15 +800,14 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("Staring MKRECV")
         self._mkrecv_ingest_proc = ManagedProcess(cmd)
         self._subprocessMonitor.add(self._mkrecv_ingest_proc, self._subprocess_error)
-
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
-        """
         cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
             self.in_path, self.out_path)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring archive monitor")
+        """
         self._archive_directory_monitor = ExecuteCommand(
             cmd, outpath=self.out_path, resident=True)
         self._archive_directory_monitor.stdout_callbacks.add(
@@ -825,6 +822,8 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("_archive_directory_monitor PID is {}".format(
             self._archive_directory_monitor_pid))
 		"""
+        self._archive_directory_monitor = ManagedProcess(cmd)
+        self._subprocessMonitor.add(self._archive_directory_monitor, self._subprocess_error)
         # except Exception as error:
         #    msg = "Couldn't start pipeline server {}".format(str(error))
         #    log.error(msg)
@@ -839,7 +838,7 @@ class EddPulsarPipeline(EDDPipeline):
     @coroutine
     def measurement_stop(self):
         """@brief stop the dada_junkdb and dspsr instances."""
-        if self._state != "running" :
+        if self._state != "running":
             log.info("pipeline is not captureing, can't stop now, current state = {}".format(
                 self._state))
             raise Exception(
@@ -851,13 +850,14 @@ class EddPulsarPipeline(EDDPipeline):
             #process = [self._mkrecv_ingest_proc,
             #           self._polnmerge_proc, self._archive_directory_monitor]
             process = [self._mkrecv_ingest_proc,
-                       self._polnmerge_proc]
+                       self._polnmerge_proc,
+                       self._archive_directory_monitor]
             for proc in process:
-                time.sleep(2)
-                proc.terminate()
-                #proc.set_finish_event()
-                #proc.finish()
-                """
+                #time.sleep(2)
+                #proc.terminate()
+                proc.set_finish_event()
+                proc.finish()
+                
                 log.debug(
                     "Waiting {} seconds for proc to terminate...".format(self._timeout))
                 now = time.time()
@@ -874,7 +874,7 @@ class EddPulsarPipeline(EDDPipeline):
                         "Failed to terminate proc in alloted time")
                     log.info("Killing process")
                     proc._process.kill()
-                """    
+                
             if (parse_tag(self._config['source_config']["source-name"]) == "default") & self.pulsar_flag:
                 os.remove("/tmp/t2pred.dat")
 
@@ -897,10 +897,10 @@ class EddPulsarPipeline(EDDPipeline):
             os.kill(self._polnmerge_proc.pid, signal.SIGTERM)
         except Exception as error:
             log.error("cannot kill _polnmerge_proc_pid, {}".format(error))
-        #try:
-        #    os.kill(self._archive_directory_monitor_pid, signal.SIGTERM)
-        #except Exception as error:
-        #    log.error("cannot kill _archive_directory_monitor, {}".format(error))
+        try:
+            os.kill(self._archive_directory_monitor.pid, signal.SIGTERM)
+        except Exception as error:
+            log.error("cannot kill _archive_directory_monitor, {}".format(error))
         try:
             os.kill(self._dspsr.pid, signal.SIGTERM)
         except Exception as error:
@@ -909,8 +909,8 @@ class EddPulsarPipeline(EDDPipeline):
             os.remove("/tmp/t2pred.dat")
 
         log.debug("deleting buffers")
-        self._dada_buffers[0]['monitor'].stop()
-        self._dada_buffers[1]['monitor'].stop()
+        #self._dada_buffers[0]['monitor'].stop()
+        #self._dada_buffers[1]['monitor'].stop()
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
         self._state = "ready"
@@ -922,13 +922,13 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("Destroying dada buffers")
 
         for k in self._dada_buffers:
-            k['monitor'].stop()
+            #k['monitor'].stop()
             cmd = "dada_db -d -k {0}".format(k['key'])
             log.debug("Running command: {0}".format(cmd))
             yield command_watcher(cmd)
-        self._fscrunch.set_value(BLANK_IMAGE)
-        self._tscrunch.set_value(BLANK_IMAGE)
-        self._profile.set_value(BLANK_IMAGE)
+        #self._fscrunch.set_value(BLANK_IMAGE)
+        #self._tscrunch.set_value(BLANK_IMAGE)
+        #self._profile.set_value(BLANK_IMAGE)
         log.info("Deconfigured pipeline")
         self._state = "idle"
 
