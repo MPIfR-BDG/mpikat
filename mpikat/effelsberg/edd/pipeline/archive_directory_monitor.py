@@ -69,6 +69,7 @@ class ArchiveAdder(FileSystemEventHandler):
         #shutil.copy2("sum.fscrunch", self.output_dir)
         #shutil.copy2("sum.tscrunch", self.output_dir)
         log.info("Accessing archive PNG files")
+        """
         try:
             with open("{}/fscrunch.png".format(self.output_dir), "rb") as imageFile:
                 self.fscrunch = base64.b64encode(imageFile.read())
@@ -87,7 +88,7 @@ class ArchiveAdder(FileSystemEventHandler):
                 self._png_server.req.profile(self.profile)
         except Exception as error:
             log.debug(error)
-
+        """
     def on_created(self, event):
         log.info("New file created: {}".format(event.src_path))
         try:
