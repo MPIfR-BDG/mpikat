@@ -29,12 +29,10 @@ class ArchiveAdder(FileSystemEventHandler):
         try:
             self._png_server.start()
             log.debug("katcp connection done")
+            yield self._png_server.until_synced()
         except Exception as error:
             log.error(error)
-            
-        #self.fscrunch = None
-        #self.tscrunch = None
-        #self.profile = None
+        
 
     def _syscall(self, cmd):
         log.info("Calling: {}".format(cmd))
@@ -83,16 +81,16 @@ class ArchiveAdder(FileSystemEventHandler):
                 self._png_server.req.fscrunch(fscrunch)
         except Exception as error:
             log.debug(error)
-        #try:
-        #    with open("{}/tscrunch.png".format(self.output_dir), "rb") as imageFile:
-        #        self._png_server.req.tscrunch(base64.b64encode(imageFile.read()))
-        #except Exception as error:
-        #    log.debug(error)
-        #try:
-        #    with open("{}/profile.png".format(self.output_dir), "rb") as imageFile:
-        #        self._png_server.req.profile(base64.b64encode(imageFile.read()))
-        #except Exception as error:
-        #    log.debug(error)
+        try:
+            with open("{}/tscrunch.png".format(self.output_dir), "rb") as imageFile:
+                self._png_server.req.tscrunch(base64.b64encode(imageFile.read()))
+        except Exception as error:
+            log.debug(error)
+        try:
+            with open("{}/profile.png".format(self.output_dir), "rb") as imageFile:
+                self._png_server.req.profile(base64.b64encode(imageFile.read()))
+        except Exception as error:
+            log.debug(error)
         
     def on_created(self, event):
         log.info("New file created: {}".format(event.src_path))
