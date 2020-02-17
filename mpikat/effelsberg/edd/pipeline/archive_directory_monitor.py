@@ -73,6 +73,7 @@ class ArchiveAdder(FileSystemEventHandler):
         
         try:
             with open("{}/fscrunch.png".format(self.output_dir), "rb") as imageFile:
+                log.debug("reading fscrunch.png")
                 fscrunch = base64.b64encode(imageFile.read())
                 yield self._png_server.until_synced()
                 self._png_server.req.fscrunch(fscrunch)
@@ -80,12 +81,14 @@ class ArchiveAdder(FileSystemEventHandler):
             log.debug(error)
         try:
             with open("{}/tscrunch.png".format(self.output_dir), "rb") as imageFile:
+                log.debug("reading tscrunch.png")
                 yield self._png_server.until_synced()
                 self._png_server.req.tscrunch(base64.b64encode(imageFile.read()))
         except Exception as error:
             log.debug(error)
         try:
             with open("{}/profile.png".format(self.output_dir), "rb") as imageFile:
+                log.debug("reading profile.png")
                 yield self._png_server.until_synced()
                 self._png_server.req.profile(base64.b64encode(imageFile.read()))
         except Exception as error:
