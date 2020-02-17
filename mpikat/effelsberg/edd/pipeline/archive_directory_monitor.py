@@ -25,9 +25,9 @@ class ArchiveAdder(FileSystemEventHandler):
             address=(host, port),
             controlled=True))
         self._png_server.start()
-        self.fscrunch = None
-        self.tscrunch = None
-        self.profile = None
+        #self.fscrunch = None
+        #self.tscrunch = None
+        #self.profile = None
 
     def _syscall(self, cmd):
         log.info("Calling: {}".format(cmd))
@@ -69,26 +69,23 @@ class ArchiveAdder(FileSystemEventHandler):
         #shutil.copy2("sum.fscrunch", self.output_dir)
         #shutil.copy2("sum.tscrunch", self.output_dir)
         log.info("Accessing archive PNG files")
-        """
+        
         try:
             with open("{}/fscrunch.png".format(self.output_dir), "rb") as imageFile:
-                self.fscrunch = base64.b64encode(imageFile.read())
-                self._png_server.req.fscrunch(self.fscrunch)
+                self._png_server.req.fscrunch(base64.b64encode(imageFile.read()))
         except Exception as error:
             log.debug(error)
         try:
             with open("{}/tscrunch.png".format(self.output_dir), "rb") as imageFile:
-                self.tscrunch = base64.b64encode(imageFile.read())
-                self._png_server.req.tscrunch(self.tscrunch)
+                self._png_server.req.tscrunch(base64.b64encode(imageFile.read()))
         except Exception as error:
             log.debug(error)
         try:
             with open("{}/profile.png".format(self.output_dir), "rb") as imageFile:
-                self.profile = base64.b64encode(imageFile.read())
-                self._png_server.req.profile(self.profile)
+                self._png_server.req.profile(base64.b64encode(imageFile.read()))
         except Exception as error:
             log.debug(error)
-        """
+        
     def on_created(self, event):
         log.info("New file created: {}".format(event.src_path))
         try:
