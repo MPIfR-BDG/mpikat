@@ -25,6 +25,9 @@ class ArchiveAdder(FileSystemEventHandler):
             address=(host, port),
             controlled=True))
         self._png_server.start()
+        self.fscrunch = None
+        self.tscrunch = None
+        self.profile = None
 
     def _syscall(self, cmd):
         log.info("Calling: {}".format(cmd))
