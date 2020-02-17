@@ -67,36 +67,56 @@ class EDDPipeline(AsyncDeviceServer):
     """
     @brief Abstract interface for EDD Pipelines
 
-    @detail Pipelines can implement functions to act within the following sequence of commands:
+    @detail Pipelines can implement functions to act within the following
+    sequence of commands with associated state changes:
 
+                                               After provisioning the pipeline is in state idle.
+            * ?set "partial config"            After set, it remains in state idle as only the
+                                               config dictionary may have changed. A wrong config
+                                               is rejected without changing state as state remains
+            valid.
             * ?set "partial config"
             * ?set "partial config"
-            * ?set "partial config"
-            * ?configure "partial config"
-            * ?capture_start
+            * ?configure "partial config"      state change from idle to configuring
+                                               and configured (on success) or error (on fail)
+            * ?capture_start                   state change from configured to streaming or ready 
+                                               (on success) or error (on fail).
+                                               Streaming indicates that no
+                                               further changes to the state are
+                                               expected and data is injected
+                                               into the EDD.
+            * ?measurement_prepare "data"      state change from ready to set or error
+            * ?measurement_start               state change from set to running or error
+            * ?measurement_stop                state change from running to set or error
             * ?measurement_prepare "data"
             * ?measurement_start
             * ?measurement_stop
-            * ?measurement_prepare "data"
-            * ?measurement_start
-            * ?measurement_stop
-            * ?measurement_prepare "data"
-            * ?measurement_start
-            * ?measurement_stop
-            * ?capture_stop
-            * ?deconfigure
+            * ?measurement_prepare "data"      state change from ready to set or error
+            * ?measurement_start               state change from set to running
+            * ?measurement_stop                return to state ready
+            * ?capture_stop                    return to state configured or idle
+            * ?deconfigure                     restore state idle
 
-    * set - updates the curent configuration with the provided partial config. This
-            is handeld enterily within the parent class which updates the member
+                                               starting and stopping
+                                               may be used as
+                                               intermediate states for
+                                               capture_start /
+                                               capture_stop /
+                                               measurement_start,
+                                               measurement_stop
+
+    * set - updates the current configuration with the provided partial config. This
+            is handled entirely within the parent class which updates the member
             attribute _config.
-    * configure - optionally does a final update of the curernt config and
-                  prepares the pipeline. Configuring the pipeline may take time, so all
-                  lengthy preparations should be done here.
+    * configure - optionally does a final update of the current config and
+                  prepares the pipeline. Configuring the pipeline may take time,
+                  so all lengthy preparations should be done here.
     * capture start - The pipeline should send data (into the EDD) after this command.
-    * measurement prepare - receive optional configuration before each measurement. The pipeline must not stop streaming on update.
-    * measurement start - Start of an individual measuerment. Should be quasi
-                          isntantaneous. E.g. a recorder should be already connected to the dat
-                          stream and just start writing to disk.
+    * measurement prepare - receive optional configuration before each measurement.
+                            The pipeline must not stop streaming on update.
+    * measurement start - Start of an individual measurement. Should be quasi
+                          instantaneous. E.g. a recorder should be already connected
+                          to the data stream and just start writing to disk.
     * measurement stop -  Stop the measurement
 
     Pipelines can also implement:
@@ -106,9 +126,8 @@ class EDDPipeline(AsyncDeviceServer):
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
 
 
-    PIPELINE_STATES = ["idle", "configuring", "ready",
-                   "starting", "running", "stopping",
-                   "deconfiguring", "error"]
+    PIPELINE_STATES = ["idle", "configuring", "configured", "streaming", "ready", "set",
+                   "starting", "running", "stopping", "deconfiguring", "error"]
 
     def __init__(self, ip, port, default_config={}):
         """
