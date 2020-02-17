@@ -26,12 +26,8 @@ class ArchiveAdder(FileSystemEventHandler):
             address=(host, port),
             controlled=True))
         log.debug("staring katcp connection")
-        try:
-            self._png_server.start()
-            log.debug("katcp connection done")
-            yield self._png_server.until_synced()
-        except Exception as error:
-            log.error(error)
+        self._png_server.start()
+            
         
 
     def _syscall(self, cmd):
@@ -78,16 +74,19 @@ class ArchiveAdder(FileSystemEventHandler):
         try:
             with open("{}/fscrunch.png".format(self.output_dir), "rb") as imageFile:
                 fscrunch = base64.b64encode(imageFile.read())
+                yield self._png_server.until_synced()
                 self._png_server.req.fscrunch(fscrunch)
         except Exception as error:
             log.debug(error)
         try:
             with open("{}/tscrunch.png".format(self.output_dir), "rb") as imageFile:
+                yield self._png_server.until_synced()
                 self._png_server.req.tscrunch(base64.b64encode(imageFile.read()))
         except Exception as error:
             log.debug(error)
         try:
             with open("{}/profile.png".format(self.output_dir), "rb") as imageFile:
+                yield self._png_server.until_synced()
                 self._png_server.req.profile(base64.b64encode(imageFile.read()))
         except Exception as error:
             log.debug(error)
