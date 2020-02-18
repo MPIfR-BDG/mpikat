@@ -850,6 +850,10 @@ class EddPulsarPipeline(EDDPipeline):
             raise Exception(
                 "pipeline is not in CAPTURTING state, current state = {}".format(self._state))
         self._state = "stopping"
+        if self._subprocessMonitor is not None:
+            self._subprocessMonitor.stop()
+
+            
         try:
             log.debug("Stopping")
             self._timeout = 10
