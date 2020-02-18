@@ -56,7 +56,7 @@ class PngKatcpServer(AsyncDeviceServer):
         self.add_sensor(self._state)
 
     def _png_monitor(self, outpath):
-        log.info("in _png_monitor now RUN = {}".format(RUN))
+        log.info("in _png_monitor now RUN = {}".format(self._state.value()))
         while self._state.value():
             # while not self._finish_event.isSet():
             log.info("Accessing archive PNG files")
