@@ -82,11 +82,21 @@ class PngKatcpServer(AsyncDeviceServer):
         return
                 #log.debug("profile.png is not ready")
 
-@tornado.gen.coroutine
+    @tornado.gen.coroutine
+    def stop(self):
+        """Stop PafWorkerServer server"""
+        # if self._pipeline_sensor_status.value() == "ready":
+        #    log.info("Pipeline still running, stopping pipeline")
+        # yield self.deconfigure()
+        yield super(PngKatcpServer, self).stop()
+        #yield self._edd_pipeline.stop()
+        #yield self._status_server.stop()
+
+
 def on_shutdown(self, ioloop, server):
     print('Shutting down')
     #self._state.set_value(False)
-    yield self._png_monitor_callback.stop()
+    #yield self._png_monitor_callback.stop()
     yield server.stop()
     ioloop.stop()
 
