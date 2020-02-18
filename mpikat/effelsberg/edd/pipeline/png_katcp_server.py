@@ -93,7 +93,7 @@ class PngKatcpServer(AsyncDeviceServer):
             try:
                 log.info("grabbing png images from {}".format(output_dir))
                 yield self._state.set_value(True)
-                yield self._png_monitor(output_dir)
+                self.running_loop = yield self._png_monitor(output_dir)
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
@@ -113,6 +113,7 @@ class PngKatcpServer(AsyncDeviceServer):
             try:
                 log.info("stop grabbing png images")
                 yield self._state.set_value(False)
+                del self.running_loop
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
