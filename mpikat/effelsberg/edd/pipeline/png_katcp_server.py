@@ -55,7 +55,7 @@ class PngKatcpServer(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._state)
 
-    #@tornado.gen.coroutine    
+    @tornado.gen.coroutine    
     def _png_monitor(self, outpath):
         log.info("in _png_monitor now RUN = {}".format(self._state.value()))
         while self._state.value():
