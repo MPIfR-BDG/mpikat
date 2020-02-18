@@ -875,7 +875,7 @@ class EddPulsarPipeline(EDDPipeline):
         #self._dada_buffers[1]['monitor'].stop()
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
 
-
+        del self._subprocessMonitor
         #except Exception as error:
         #    raise EddPulsarPipelineError(str(error))
 
