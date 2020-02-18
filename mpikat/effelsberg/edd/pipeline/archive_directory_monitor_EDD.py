@@ -143,8 +143,8 @@ def main(input_dir, output_dir, handler):
     log.info("Starting directory monitor")
     observer.start()
     log.info("Parent thread entering 1 second polling loop")
-    while not observer.stopped_event.wait(1):
-        pass
+    #while not observer.stopped_event.wait(1):
+    #    pass
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
@@ -188,9 +188,7 @@ if __name__ == "__main__":
         log.info(
             "Listening at {0}, Ctrl-C to terminate server".format(args.host))
 
-    ioloop.add_callback(start_and_display)
-    ioloop.start()
-    log.info("ioloop starting")
+
 
     if args.mode == "ArchiveAdder":
         handler = ArchiveAdder(args.output_dir, png_server)
@@ -199,3 +197,6 @@ if __name__ == "__main__":
         sys.exit(-1)
 
     main(args.input_dir, args.output_dir, handler)
+    ioloop.add_callback(start_and_display)
+    ioloop.start()
+    log.info("ioloop starting")
