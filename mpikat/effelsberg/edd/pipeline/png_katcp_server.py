@@ -112,7 +112,7 @@ class PngKatcpServer(AsyncDeviceServer):
         def stop_grab_wrapper():
             try:
                 log.info("stop grabbing png images")
-                self._state.set_value(False)
+                yield self._state.set_value(False)
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
