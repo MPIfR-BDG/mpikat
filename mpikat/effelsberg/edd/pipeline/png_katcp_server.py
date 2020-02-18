@@ -88,7 +88,8 @@ class PngKatcpServer(AsyncDeviceServer):
         # if self._pipeline_sensor_status.value() == "ready":
         #    log.info("Pipeline still running, stopping pipeline")
         # yield self.deconfigure()
-        yield super(PngKatcpServer, self).stop()
+        self._png_monitor_callback.stop()
+        super(PngKatcpServer, self).stop()
         #yield self._edd_pipeline.stop()
         #yield self._status_server.stop()
 
