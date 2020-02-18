@@ -100,7 +100,7 @@ class PngKatcpServer(AsyncDeviceServer):
             else:
                 req.reply("ok")
         self.ioloop.add_callback(grab_wrapper)
-        raise AsyncReply
+        return ("ok",)
 
     @request()
     @return_reply()
@@ -119,7 +119,7 @@ class PngKatcpServer(AsyncDeviceServer):
             else:
                 req.reply("ok")
         self.ioloop.add_callback(stop_grab_wrapper)
-        raise AsyncReply
+        return ("ok",)
 
 
 
