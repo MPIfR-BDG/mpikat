@@ -53,7 +53,7 @@ class ArchiveAdder(FileSystemEventHandler):
     def fscrunch(self, fname):
         self._syscall("pam -F -e fscrunch {}".format(fname))
         return fname.replace(".ar", ".fscrunch")
-        
+
     @coroutine    
     def process(self, fname):
         fscrunch_fname = self.fscrunch(fname)
@@ -199,3 +199,4 @@ if __name__ == "__main__":
 
     main(args.input_dir, args.output_dir, handler)
     ioloop.start()
+    log.info("ioloop starting")
