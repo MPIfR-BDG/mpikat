@@ -73,11 +73,12 @@ class ArchiveAdder(FileSystemEventHandler):
             log.info("Accessing archive PNG files")
             
 
-#            with open("{}/fscrunch.png".format(self.output_dir), "rb") as imageFile:
-#                log.info("reading fscrunch.png")
-#                fscrunch = base64.b64encode(imageFile.read())
-#                yield self._png_server.until_synced()
-#                self._png_server.req.fscrunch(fscrunch)
+            imageFile = open("{}/fscrunch.png".format(self.output_dir), "rb")
+            log.info("reading fscrunch.png")
+            fscrunch = base64.b64encode(imageFile.read())
+
+            yield self._png_server.until_synced()
+            self._png_server.req.fscrunch(fscrunch)
 
             """
             try:
