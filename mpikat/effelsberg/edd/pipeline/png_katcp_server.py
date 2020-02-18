@@ -59,7 +59,7 @@ class PngKatcpServer(AsyncDeviceServer):
         log.info("in _png_monitor now RUN = {}".format(self._state.value()))
         while self._state.value():
             # while not self._finish_event.isSet():
-            log.info("Accessing archive PNG files RUN = ".format(self._state.value()))
+            log.info("Accessing archive PNG files RUN = {} ".format(self._state.value()))
 
             try:
                 with open("{}/fscrunch.png".format(outpath), "rb") as imageFile:
