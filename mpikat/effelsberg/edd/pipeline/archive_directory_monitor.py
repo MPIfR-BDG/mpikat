@@ -71,15 +71,15 @@ class ArchiveAdder(FileSystemEventHandler):
             #shutil.copy2("sum.fscrunch", self.output_dir)
             #shutil.copy2("sum.tscrunch", self.output_dir)
             log.info("Accessing archive PNG files")
+            
+
+            with open("{}/fscrunch.png".format(self.output_dir), "rb") as imageFile:
+                log.info("reading fscrunch.png")
+                fscrunch = base64.b64encode(imageFile.read())
+                yield self._png_server.until_synced()
+                self._png_server.req.fscrunch(fscrunch)
+
             """
-            try:
-                with open("{}/fscrunch.png".format(self.output_dir), "rb") as imageFile:
-                    log.info("reading fscrunch.png")
-                    fscrunch = base64.b64encode(imageFile.read())
-                    yield self._png_server.until_synced()
-                    self._png_server.req.fscrunch(fscrunch)
-            except Exception as error:
-                log.debug(error)
             try:
                 with open("{}/tscrunch.png".format(self.output_dir), "rb") as imageFile:
                     log.info("reading tscrunch.png")
