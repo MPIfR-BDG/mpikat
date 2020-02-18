@@ -107,7 +107,7 @@ class PngKatcpServer(AsyncDeviceServer):
         #yield self._status_server.stop()
 
 @coroutine
-def on_shutdown(self, ioloop, server):
+def on_shutdown(ioloop, server):
     print('Shutting down')
     #self._state.set_value(False)
     #yield self._png_monitor_callback.stop()
