@@ -830,6 +830,11 @@ class EddPulsarPipeline(EDDPipeline):
         #    log.error(msg)
         #    raise EddPulsarPipelineError(msg)
         # else:
+        cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/png_katcp_server.py -H 134.104.70.66 -p 10000 --path {}".format(self.out_path)
+        log.debug("Running command: {0}".format(cmd))
+        log.info("Staring archive monitor")
+        self._archive_sensor = ManagedProcess(cmd)
+        self._subprocessMonitor.add(self._archive_sensor, self._subprocess_error)
         self._subprocessMonitor.start()
 
         self._png_server = KATCPClientResource(dict(
@@ -862,13 +867,14 @@ class EddPulsarPipeline(EDDPipeline):
             #           self._polnmerge_proc, self._archive_directory_monitor]
             process = [self._mkrecv_ingest_proc,
                        self._polnmerge_proc,
-                       self._archive_directory_monitor]
+                       self._archive_directory_monitor,
+                       self._archive_sensor]
             for proc in process:
                 #time.sleep(2)
-                #proc.terminate()
-                proc.set_finish_event()
-                proc.finish()
-                
+                proc.terminate()
+                #proc.set_finish_event()
+                #proc.finish()
+                """
                 log.debug(
                     "Waiting {} seconds for proc to terminate...".format(self._timeout))
                 now = time.time()
@@ -885,6 +891,7 @@ class EddPulsarPipeline(EDDPipeline):
                         "Failed to terminate proc in alloted time")
                     log.info("Killing process")
                     proc._process.kill()
+               	"""
                 
             if (parse_tag(self._config['source_config']["source-name"]) == "default") & self.pulsar_flag:
                 os.remove("/tmp/t2pred.dat")
