@@ -21,7 +21,7 @@ class SensorServerError(Exception):
 
 class ArchiveAdder(FileSystemEventHandler):
 
-    def __init__(self, output_dir, host, port):
+    def __init__(self, output_dir):
         super(ArchiveAdder, self).__init__()
         self.output_dir = output_dir
         self.first_file = True
