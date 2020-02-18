@@ -808,32 +808,14 @@ class EddPulsarPipeline(EDDPipeline):
             self.in_path, self.out_path)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring archive monitor")
-        """
-        self._archive_directory_monitor = ExecuteCommand(
-            cmd, outpath=self.out_path, resident=True)
-        self._archive_directory_monitor.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._archive_directory_monitor.fscrunch_callbacks.add(
-            self._add_fscrunch_to_sensor)
-        self._archive_directory_monitor.tscrunch_callbacks.add(
-            self._add_tscrunch_to_sensor)
-        self._archive_directory_monitor.profile_callbacks.add(
-            self._add_profile_to_sensor)
-        self._archive_directory_monitor_pid = self._archive_directory_monitor.pid
-        log.debug("_archive_directory_monitor PID is {}".format(
-            self._archive_directory_monitor_pid))
-		"""
         self._archive_directory_monitor = ManagedProcess(cmd)
         self._subprocessMonitor.add(self._archive_directory_monitor, self._subprocess_error)
-        # except Exception as error:
-        #    msg = "Couldn't start pipeline server {}".format(str(error))
-        #    log.error(msg)
-        #    raise EddPulsarPipelineError(msg)
-        # else:
+        
         cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/png_katcp_server.py -H 134.104.70.66 -p 10000 --path {}".format(self.out_path)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring archive monitor")
         self._archive_sensor = ManagedProcess(cmd)
+
         self._subprocessMonitor.add(self._archive_sensor, self._subprocess_error)
         self._subprocessMonitor.start()
         self._timer = Time.now() - self._timer
@@ -853,7 +835,7 @@ class EddPulsarPipeline(EDDPipeline):
         if self._subprocessMonitor is not None:
             self._subprocessMonitor.stop()
 
-            
+
         try:
             log.debug("Stopping")
             self._timeout = 10
@@ -863,6 +845,8 @@ class EddPulsarPipeline(EDDPipeline):
                        self._polnmerge_proc,
                        self._archive_directory_monitor,
                        self._archive_sensor]
+
+
             for proc in process:
                 #time.sleep(2)
                 proc.terminate()

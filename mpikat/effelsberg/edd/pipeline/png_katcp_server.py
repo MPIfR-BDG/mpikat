@@ -25,8 +25,9 @@ class PngKatcpServer(AsyncDeviceServer):
         ProtocolFlags.MESSAGE_IDS,
     ]))
     def __init__(self, ip, port, outpath):
-        super(PngKatcpServer, self).__init__(ip, port)
         self.outpath = outpath
+        super(PngKatcpServer, self).__init__(ip, port)
+
 
     def setup_sensors(self):
         """Setup some server sensors."""
@@ -57,8 +58,7 @@ class PngKatcpServer(AsyncDeviceServer):
             default=False,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._state)
-        self._png_monitor_callback = tornado.ioloop.PeriodicCallback(self._png_monitor, 1000)
-        self._png_monitor_callback.start()
+
 
     @coroutine
     def _png_monitor(self):
@@ -88,6 +88,12 @@ class PngKatcpServer(AsyncDeviceServer):
             log.debug(error)
         return
                 #log.debug("profile.png is not ready")
+
+    @coroutine
+    def start(self):
+        super(PngKatcpServer, self).start()
+        self._png_monitor_callback = tornado.ioloop.PeriodicCallback(self._png_monitor, 1000)
+        self._png_monitor_callback.start()
 
     @coroutine
     def stop(self):
