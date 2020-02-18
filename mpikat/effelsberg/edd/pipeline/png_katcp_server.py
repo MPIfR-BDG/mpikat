@@ -56,7 +56,7 @@ class PngKatcpServer(AsyncDeviceServer):
             default=False,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._state)
-        self._png_monitor_callback = tornado.ioloop.PeriodicCallback(self._png_monitor, 10000)
+        self._png_monitor_callback = tornado.ioloop.PeriodicCallback(self._png_monitor, 1000)
         self._png_monitor_callback.start()
 
     #@tornado.gen.coroutine
@@ -86,6 +86,7 @@ class PngKatcpServer(AsyncDeviceServer):
 def on_shutdown(self, ioloop, server):
     print('Shutting down')
     #self._state.set_value(False)
+    yield self._png_monitor_callback.stop()
     yield server.stop()
     ioloop.stop()
 
