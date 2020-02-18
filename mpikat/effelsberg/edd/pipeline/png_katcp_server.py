@@ -59,7 +59,8 @@ class PngKatcpServer(AsyncDeviceServer):
         log.info("in _png_monitor now RUN = {}".format(self._state.value()))
         while self._state.value():
             # while not self._finish_event.isSet():
-            log.info("Accessing archive PNG files")
+            log.info("Accessing archive PNG files RUN = ".format(self._state.value()))
+
             try:
                 with open("{}/fscrunch.png".format(outpath), "rb") as imageFile:
                     self.fscrunch.set_value(base64.b64encode(imageFile.read()))
@@ -110,7 +111,7 @@ class PngKatcpServer(AsyncDeviceServer):
         def stop_grab_wrapper():
             try:
                 log.info("stop grabbing png images")
-                RUN = False
+                self._state.set_value(False)
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
@@ -156,8 +157,9 @@ class PngKatcpServer(AsyncDeviceServer):
 
 
 @tornado.gen.coroutine
-def on_shutdown(ioloop, server):
+def on_shutdown(self, ioloop, server):
     print('Shutting down')
+    self._state.set_value(False)
     yield server.stop()
     ioloop.stop()
 
