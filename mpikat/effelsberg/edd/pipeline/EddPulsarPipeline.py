@@ -810,7 +810,6 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("Staring archive monitor")
         self._archive_directory_monitor = ManagedProcess(cmd)
         self._subprocessMonitor.add(self._archive_directory_monitor, self._subprocess_error)
-        
         cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/png_katcp_server.py -H 134.104.70.66 -p 10000 --path {}".format(self.out_path)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring archive monitor")
@@ -827,64 +826,62 @@ class EddPulsarPipeline(EDDPipeline):
     def measurement_stop(self):
         """@brief stop the dada_junkdb and dspsr instances."""
         if self._state != "running":
-            log.info("pipeline is not captureing, can't stop now, current state = {}".format(
+            log.warning("pipeline is not captureing, can't stop now, current state = {}".format(
                 self._state))
-            raise Exception(
-                "pipeline is not in CAPTURTING state, current state = {}".format(self._state))
         self._state = "stopping"
         if self._subprocessMonitor is not None:
             self._subprocessMonitor.stop()
 
 
-        try:
-            log.debug("Stopping")
-            self._timeout = 10
-            #process = [self._mkrecv_ingest_proc,
-            #           self._polnmerge_proc, self._archive_directory_monitor]
-            process = [self._mkrecv_ingest_proc,
-                       self._polnmerge_proc,
-                       self._archive_directory_monitor,
-                       self._archive_sensor]
+#        try:
+        log.debug("Stopping")
+        self._timeout = 10
+        #process = [self._mkrecv_ingest_proc,
+        #           self._polnmerge_proc, self._archive_directory_monitor]
+        process = [self._mkrecv_ingest_proc,
+                   self._polnmerge_proc,
+                   self._archive_directory_monitor,
+                   self._archive_sensor]
 
 
-            for proc in process:
-                #time.sleep(2)
-                proc.terminate()
-                #proc.set_finish_event()
-                #proc.finish()
-                """
-                log.debug(
-                    "Waiting {} seconds for proc to terminate...".format(self._timeout))
-                now = time.time()
-                while time.time() - now < self._timeout:
-                    retval = proc._process.poll()
-                    if retval is not None:
-                        log.debug(
-                            "Returned a return value of {}".format(retval))
-                        break
-                    else:
-                        time.sleep(0.5)
+        for proc in process:
+            #time.sleep(2)
+            proc.terminate(timeout=1)
+            #proc.set_finish_event()
+            #proc.finish()
+            """
+            log.debug(
+                "Waiting {} seconds for proc to terminate...".format(self._timeout))
+            now = time.time()
+            while time.time() - now < self._timeout:
+                retval = proc._process.poll()
+                if retval is not None:
+                    log.debug(
+                        "Returned a return value of {}".format(retval))
+                    break
                 else:
-                    log.warning(
-                        "Failed to terminate proc in alloted time")
-                    log.info("Killing process")
-                    proc._process.kill()
-               	"""
-                
-            if (parse_tag(self._config['source_config']["source-name"]) == "default") & self.pulsar_flag:
-                os.remove("/tmp/t2pred.dat")
+                    time.sleep(0.5)
+            else:
+                log.warning(
+                    "Failed to terminate proc in alloted time")
+                log.info("Killing process")
+                proc._process.kill()
+           	"""
+            
+        if (parse_tag(self._config['source_config']["source-name"]) == "default") & self.pulsar_flag:
+            os.remove("/tmp/t2pred.dat")
 
-            log.info("reset DADA buffer")
-            #self._dada_buffers[1]['monitor'].stop()
-            yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
+        log.info("reset DADA buffer")
+        #self._dada_buffers[1]['monitor'].stop()
+        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
 
 
-        except Exception as error:
-            raise EddPulsarPipelineError(str(error))
+        #except Exception as error:
+        #    raise EddPulsarPipelineError(str(error))
 
-        else:
-            self._state = "ready"
-            log.info("Pipeline Stopped")
+        
+        self._state = "ready"
+        log.info("Pipeline Stopped")
 
     @coroutine
     def stop_pipeline_with_mkrecv_crashed(self):

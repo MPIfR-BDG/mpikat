@@ -62,32 +62,29 @@ class PngKatcpServer(AsyncDeviceServer):
 
     @coroutine
     def _png_monitor(self):
-        log.info("reading from : {}".format(self.outpath))
+        #log.info("reading from : {}".format(self.outpath))
         try:
-            log.info("reading {}/fscrunch.png".format(self.outpath))
+            #log.info("reading {}/fscrunch.png".format(self.outpath))
             with open("{}/fscrunch.png".format(self.outpath), "rb") as imageFile:
                 image_fscrunch = base64.b64encode(imageFile.read())
                 self._fscrunch.set_value(image_fscrunch)
         except Exception as error:
             log.debug(error)
-            #log.debug("fscrunch.png is not ready")
         try:
-            log.info("reading {}/tscrunch.png".format(self.outpath))
+            #log.info("reading {}/tscrunch.png".format(self.outpath))
             with open("{}/tscrunch.png".format(self.outpath), "rb") as imageFile:
                 image_tscrunch = base64.b64encode(imageFile.read())
                 self._tscrunch.set_value(image_tscrunch)
         except Exception as error:
             log.debug(error)
-            #log.debug("tscrunch.png is not ready")
         try:
-            log.info("reading {}/profile.png".format(self.outpath))
+            #log.info("reading {}/profile.png".format(self.outpath))
             with open("{}/profile.png".format(self.outpath), "rb") as imageFile:
                 image_profile = base64.b64encode(imageFile.read())
                 self._profile.set_value(image_profile)
         except Exception as error:
             log.debug(error)
         return
-                #log.debug("profile.png is not ready")
 
     @coroutine
     def start(self):
@@ -97,20 +94,12 @@ class PngKatcpServer(AsyncDeviceServer):
 
     @coroutine
     def stop(self):
-        """Stop PafWorkerServer server"""
-        # if self._pipeline_sensor_status.value() == "ready":
-        #    log.info("Pipeline still running, stopping pipeline")
-        # yield self.deconfigure()
         self._png_monitor_callback.stop()
         super(PngKatcpServer, self).stop()
-        #yield self._edd_pipeline.stop()
-        #yield self._status_server.stop()
 
 @coroutine
 def on_shutdown(ioloop, server):
     print('Shutting down')
-    #self._state.set_value(False)
-    #yield self._png_monitor_callback.stop()
     yield server.stop()
     ioloop.stop()
 
