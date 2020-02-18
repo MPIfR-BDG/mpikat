@@ -83,7 +83,7 @@ class PngKatcpServer(AsyncDeviceServer):
             try:
                 log.info("grabbing png images from {}".format(output_dir))
                 RUN = True
-                yield self._png_monitor(output_dir)
+                self._png_monitor(output_dir)
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
