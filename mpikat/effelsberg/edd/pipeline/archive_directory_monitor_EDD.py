@@ -155,7 +155,7 @@ def main(input_dir, output_dir, handler):
     def start_and_display():
         png_server.start()
         log.info(
-            "Listening at {0}, Ctrl-C to terminate server".format(png_server.bind_address))
+            "Listening at {0}, Ctrl-C to terminate server".format(args.host))
 
     ioloop.add_callback(start_and_display)
     ioloop.start()
