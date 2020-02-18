@@ -23,7 +23,7 @@ class PngKatcpServer(AsyncDeviceServer):
         ProtocolFlags.MULTI_CLIENT,
         ProtocolFlags.MESSAGE_IDS,
     ]))
-    def __init__(self, ip, host, outpath):
+    def __init__(self, ip, port, outpath):
         super(PngKatcpServer, self).__init__(ip, port)
         self.outpath = outpath
 
