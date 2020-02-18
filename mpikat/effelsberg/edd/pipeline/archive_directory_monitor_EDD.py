@@ -21,10 +21,11 @@ class SensorServerError(Exception):
 
 class ArchiveAdder(FileSystemEventHandler):
 
-    def __init__(self, output_dir):
+    def __init__(self, output_dir, png_server):
         super(ArchiveAdder, self).__init__()
         self.output_dir = output_dir
         self.first_file = True
+        self.png_server = png_server
 
     @coroutine
     def _safe_request(self, request_name, *args):
@@ -140,25 +141,6 @@ def main(input_dir, output_dir, handler):
     log.info("Starting directory monitor")
     observer.start()
     log.info("Parent thread entering 1 second polling loop")
-    log.info("Starting connection to KATCP server")
-    ioloop = tornado.ioloop.IOLoop.current()
-    png_server = KATCPClientResource(dict(
-            name="_png_server_client",
-            address=(args.host, args.port),
-            controlled=True))
-    #png_server.start()
-
-    signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
-        shutdown, ioloop, png_server))
-
-    def start_and_display():
-        png_server.start()
-        log.info(
-            "Listening at {0}, Ctrl-C to terminate server".format(args.host))
-
-    ioloop.add_callback(start_and_display)
-    ioloop.start()
-
     while not observer.stopped_event.wait(1):
         pass
 
@@ -188,8 +170,27 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    log.info("Starting connection to KATCP server")
+    ioloop = tornado.ioloop.IOLoop.current()
+    png_server = KATCPClientResource(dict(
+            name="_png_server_client",
+            address=(args.host, args.port),
+            controlled=True))
+    #png_server.start()
+
+    signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
+        shutdown, ioloop, png_server))
+
+    def start_and_display():
+        png_server.start()
+        log.info(
+            "Listening at {0}, Ctrl-C to terminate server".format(args.host))
+
+    ioloop.add_callback(start_and_display)
+    ioloop.start()
+
     if args.mode == "ArchiveAdder":
-        handler = ArchiveAdder(args.output_dir)
+        handler = ArchiveAdder(args.output_dir, png_server)
     else:
         log.error("Processing mode {} is not supported.".format(args.mode))
         sys.exit(-1)
