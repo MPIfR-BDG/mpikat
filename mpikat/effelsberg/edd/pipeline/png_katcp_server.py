@@ -82,7 +82,7 @@ class PngKatcpServer(AsyncDeviceServer):
         return
                 #log.debug("profile.png is not ready")
 
-    @tornado.gen.coroutine
+    #@tornado.gen.coroutine
     def stop(self):
         """Stop PafWorkerServer server"""
         # if self._pipeline_sensor_status.value() == "ready":
