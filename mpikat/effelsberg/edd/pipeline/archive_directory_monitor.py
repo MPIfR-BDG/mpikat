@@ -21,12 +21,12 @@ class ArchiveAdder(FileSystemEventHandler):
         super(ArchiveAdder, self).__init__()
         self.output_dir = output_dir
         self.first_file = True
-        #self._png_server = KATCPClientResource(dict(
-        #    name="_png_server-client",
-        #    address=(host, port),
-        #    controlled=True))
-        #log.debug("staring katcp connection")
-        #self._png_server.start()
+        self._png_server = KATCPClientResource(dict(
+            name="_png_server-client",
+            address=(host, port),
+            controlled=True))
+        log.debug("staring katcp connection")
+        self._png_server.start()
             
         
 
