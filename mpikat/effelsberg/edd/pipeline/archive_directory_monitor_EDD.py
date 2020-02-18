@@ -53,7 +53,8 @@ class ArchiveAdder(FileSystemEventHandler):
     def fscrunch(self, fname):
         self._syscall("pam -F -e fscrunch {}".format(fname))
         return fname.replace(".ar", ".fscrunch")
-
+        
+    @coroutine    
     def process(self, fname):
         fscrunch_fname = self.fscrunch(fname)
         if self.first_file:
