@@ -78,7 +78,7 @@ class PngKatcpServer(AsyncDeviceServer):
         """
         @brief grabbing pulsar png plots from output_dir
         """
-        @coroutine
+        @tornado.gen.coroutine
         def grab_wrapper():
             try:
                 log.info("grabbing png images from {}".format(output_dir))
@@ -98,7 +98,7 @@ class PngKatcpServer(AsyncDeviceServer):
         """
         @brief grabbing pulsar png plots from output_dir
         """
-        @coroutine
+        @tornado.gen.coroutine
         def stop_grab_wrapper():
             try:
                 log.info("stop grabbing png images")
