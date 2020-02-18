@@ -55,6 +55,7 @@ class PngKatcpServer(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._state)
 
+    #@tornado.gen.coroutine    
     def _png_monitor(self, outpath):
         log.info("in _png_monitor now RUN = {}".format(self._state.value()))
         while self._state.value():
@@ -91,8 +92,8 @@ class PngKatcpServer(AsyncDeviceServer):
         def grab_wrapper():
             try:
                 log.info("grabbing png images from {}".format(output_dir))
-                self._state.set_value(True)
-                self._png_monitor(output_dir)
+                yield self._state.set_value(True)
+                yield self._png_monitor(output_dir)
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
