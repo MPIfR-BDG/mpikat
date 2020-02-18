@@ -166,6 +166,7 @@ def parse_tag(source_name):
         return split[-1]
 
 
+
 class ExecuteCommand(object):
 
     def __init__(self, command, outpath=None, resident=False):
@@ -830,6 +831,13 @@ class EddPulsarPipeline(EDDPipeline):
         #    raise EddPulsarPipelineError(msg)
         # else:
         self._subprocessMonitor.start()
+
+        self._png_server = KATCPClientResource("134.104.70.66", 10000)
+        self._png_server.start()
+        yield self._png_server.until_synced()
+    	yield self._client.until_synced()
+    	response = yield self._png_server.req.grab_png(self.out_path)
+    	log.info("response = {}".format(response))
         self._timer = Time.now() - self._timer
         log.info("Took {} s to start".format(self._timer * 86400))
         self._state = "running"
