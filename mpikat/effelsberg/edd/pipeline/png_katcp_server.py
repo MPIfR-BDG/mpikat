@@ -61,22 +61,28 @@ class PngKatcpServer(AsyncDeviceServer):
 
     #@tornado.gen.coroutine
     def _png_monitor(self):
-        log.info("in _png_monitor now RUN = {}".format(self._state.value()))
+        log.info("reading from : {}".format(self.outpath))
         try:
+            log.info("reading {}/fscrunch.png".format(self.outpath))
             with open("{}/fscrunch.png".format(self.outpath), "rb") as imageFile:
-                self._fscrunch.set_value(base64.b64encode(imageFile.read()))
+                image_fscrunch = base64.b64encode(imageFile.read())                
+                self._fscrunch.set_value(image_fscrunch)
         except Exception as error:
             log.debug(error)
             #log.debug("fscrunch.png is not ready")
         try:
+            log.info("reading {}/tscrunch.png".format(self.outpath))
             with open("{}/tscrunch.png".format(self.outpath), "rb") as imageFile:
-                self._tscrunch.set_value(base64.b64encode(imageFile.read()))
+                image_tscrunch = base64.b64encode(imageFile.read())
+                self._tscrunch.set_value(image_tscrunch)
         except Exception as error:
             log.debug(error)
             #log.debug("tscrunch.png is not ready")
         try:
+            log.info("reading {}/profile.png".format(self.outpath))
             with open("{}/profile.png".format(self.outpath), "rb") as imageFile:
-                self._profile.set_value(base64.b64encode(imageFile.read()))
+                image_profile = base64.b64encode(imageFile.read())
+                self._profile.set_value(image_profile)
         except Exception as error:
             log.debug(error)
         return
