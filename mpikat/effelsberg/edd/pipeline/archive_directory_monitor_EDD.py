@@ -15,31 +15,12 @@ import tornado
 
 log = logging.getLogger(
     "mpikat.effelsberg.edd.pipeline.pipeline")
-
-class SensorServerError(Exception):
-    pass
-
 class ArchiveAdder(FileSystemEventHandler):
 
     def __init__(self, output_dir, png_server):
         super(ArchiveAdder, self).__init__()
         self.output_dir = output_dir
         self.first_file = True
-        self.png_server = png_server
-
-    @coroutine
-    def _safe_request(self, request_name, *args):
-        log.info("Sending packetiser request '{}' with arguments {}".format(
-            request_name, args))
-        yield self._png_server.until_synced()
-        response = yield self._png_server.req[request_name](*args)
-        if not response.reply.reply_ok():
-            log.error("'{}' request failed with error: {}".format(
-                request_name, response.reply.arguments[1]))
-            raise SensorServerError(response.reply.arguments[1])
-        else:
-            log.debug("'{}' request successful".format(request_name))
-            raise Return(response)
 
     def _syscall(self, cmd):
         log.info("Calling: {}".format(cmd))
@@ -83,32 +64,7 @@ class ArchiveAdder(FileSystemEventHandler):
             #shutil.copy2("sum.fscrunch", self.output_dir)
             #shutil.copy2("sum.tscrunch", self.output_dir)
             log.info("Accessing archive PNG files")
-            
-            #imageFile = open("{}/fscrunch.png".format(self.output_dir), "rb")
-            #log.info("reading fscrunch.png")
-            #fscrunch = base64.b64encode(imageFile.read())
-            #yield png_server.until_synced()
-            #png_server.req.fscrunch(fscrunch)
-            #yield self.png_server.until_synced()
-            IMAGE = "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
-            self._safe_request("fscrunch", IMAGE)
-            #self.png_server.req.fscrunch("iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==")
-            """
-            try:
-                with open("{}/tscrunch.png".format(self.output_dir), "rb") as imageFile:
-                    log.info("reading tscrunch.png")
-                    yield self._png_server.until_synced()
-                    self._png_server.req.tscrunch(base64.b64encode(imageFile.read()))
-            except Exception as error:
-                log.debug(error)
-            try:
-                with open("{}/profile.png".format(self.output_dir), "rb") as imageFile:
-                    log.info("reading profile.png")
-                    yield self._png_server.until_synced()
-                    self._png_server.req.profile(base64.b64encode(imageFile.read()))
-            except Exception as error:
-                log.debug(error)
-            """
+
     def on_created(self, event):
         log.info("New file created: {}".format(event.src_path))
         try:
@@ -143,8 +99,8 @@ def main(input_dir, output_dir, handler):
     log.info("Starting directory monitor")
     observer.start()
     log.info("Parent thread entering 1 second polling loop")
-    #while not observer.stopped_event.wait(1):
-    #    pass
+    while not observer.stopped_event.wait(1):
+        pass
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
@@ -165,38 +121,14 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mode", type=str,
                         help="Processing mode to operate in",
                         default="ArchiveAdder")
-    parser.add_argument('-H', '--host', dest='host', type=str,
-                      help='KATCP png server interface', default="0.0.0.0")
-    parser.add_argument('-p', '--port', dest='port', type=long,
-                      help='Port number for the KATCP png server', default=10000)
 
     args = parser.parse_args()
 
-    log.info("Starting connection to KATCP server")
-    ioloop = tornado.ioloop.IOLoop.current()
-    png_server = KATCPClientResource(dict(
-            name="_png_server_client",
-            address=(args.host, args.port),
-            controlled=True))
-    #png_server.start()
-
-#    signal.signal(signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
-#        shutdown, ioloop, png_server))
-
-    def start_and_display():
-        png_server.start()
-        log.info(
-            "Listening at {0}, Ctrl-C to terminate server".format(args.host))
-
-
-
     if args.mode == "ArchiveAdder":
-        handler = ArchiveAdder(args.output_dir, png_server)
+        handler = ArchiveAdder(args.output_dir)
     else:
         log.error("Processing mode {} is not supported.".format(args.mode))
         sys.exit(-1)
 
     main(args.input_dir, args.output_dir, handler)
-    ioloop.add_callback(start_and_display)
-    ioloop.start()
-    log.info("ioloop starting")
+
