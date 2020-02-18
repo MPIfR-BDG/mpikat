@@ -64,13 +64,13 @@ class PngKatcpServer(AsyncDeviceServer):
         log.info("in _png_monitor now RUN = {}".format(self._state.value()))
         try:
             with open("{}/fscrunch.png".format(self.outpath), "rb") as imageFile:
-                self.fscrunch.set_value(base64.b64encode(imageFile.read()))
+                self._fscrunch.set_value(base64.b64encode(imageFile.read()))
         except Exception as error:
             log.debug(error)
             #log.debug("fscrunch.png is not ready")
         try:
             with open("{}/tscrunch.png".format(self.outpath), "rb") as imageFile:
-                self.tscrunch.set_value(base64.b64encode(imageFile.read()))
+                self._tscrunch.set_value(base64.b64encode(imageFile.read()))
         except Exception as error:
             log.debug(error)
             #log.debug("tscrunch.png is not ready")
@@ -85,7 +85,7 @@ class PngKatcpServer(AsyncDeviceServer):
 @tornado.gen.coroutine
 def on_shutdown(self, ioloop, server):
     print('Shutting down')
-    self._state.set_value(False)
+    #self._state.set_value(False)
     yield server.stop()
     ioloop.stop()
 
