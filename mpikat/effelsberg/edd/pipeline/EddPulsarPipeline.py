@@ -552,7 +552,7 @@ class EddPulsarPipeline(EDDPipeline):
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
 
-        self._subprocessMonitor = SubprocessMonitor()
+
 
         self.state = "ready"
         log.info("Pipeline configured")
@@ -569,7 +569,7 @@ class EddPulsarPipeline(EDDPipeline):
             if self.state == "starting":
                 log.debug("pipeline is starting, do not send multiple start")
                 return
-
+        self._subprocessMonitor = SubprocessMonitor()
         self.state = "configuring"
         yield self.set(config_json)
         cfs = json.dumps(self._config, indent=4)
