@@ -30,28 +30,28 @@ class PngKatcpServer(AsyncDeviceServer):
         self._tscrunch = Sensor.string(
             "tscrunch_PNG",
             description="tscrunch png",
-            default=BLANK_IMAGE,
+            default=None,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._tscrunch)
 
         self._fscrunch = Sensor.string(
             "fscrunch_PNG",
             description="fscrunch png",
-            default=BLANK_IMAGE,
+            default=None,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._fscrunch)
 
         self._profile = Sensor.string(
             "profile_PNG",
             description="pulse profile png",
-            default=BLANK_IMAGE,
+            default=None,
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._profile)
 
     def _png_monitor(self, outpath):
         while RUN:
             # while not self._finish_event.isSet():
-            log.debug("Accessing archive PNG files")
+            log.info("Accessing archive PNG files")
             try:
                 with open("{}/fscrunch.png".format(outpath), "rb") as imageFile:
                     self.fscrunch.set_value(base64.b64encode(imageFile.read()))
