@@ -110,9 +110,9 @@ class ArchiveAdder(FileSystemEventHandler):
                 log.info(
                     "Passing archive file {} for processing".format(fname[0:-9]))
                 self.process(fname[0:-9])
-            imageFile = open("{}/fscrunch.png".format(self.output_dir), "rb")
-            log.info("reading fscrunch.png")
-            fscrunch = base64.b64encode(imageFile.read())
+            #imageFile = open("{}/fscrunch.png".format(self.output_dir), "rb")
+            #log.info("reading fscrunch.png")
+            #fscrunch = base64.b64encode(imageFile.read())
 
             yield self._png_server.until_synced()
             self._png_server.req.fscrunch(fscrunch)
@@ -190,7 +190,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.mode == "ArchiveAdder":
-        handler = ArchiveAdder(args.output_dir, )
+        handler = ArchiveAdder(args.output_dir)
     else:
         log.error("Processing mode {} is not supported.".format(args.mode))
         sys.exit(-1)
