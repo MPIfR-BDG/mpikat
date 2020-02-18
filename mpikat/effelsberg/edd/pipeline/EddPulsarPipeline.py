@@ -832,7 +832,10 @@ class EddPulsarPipeline(EDDPipeline):
         # else:
         self._subprocessMonitor.start()
 
-        self._png_server = KATCPClientResource("134.104.70.66", "10000")
+        self._png_server = KATCPClientResource(dict(
+            name='_edd00_numa0-client',
+            address=("134.104.70.66", 10000),
+            controlled=True))
         self._png_server.start()
         yield self._png_server.until_synced()
     	#yield self._client.until_synced()
