@@ -804,7 +804,7 @@ class EddPulsarPipeline(EDDPipeline):
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
-        cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor_EDD.py -i {} -o {}".format(
+        cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
             self.in_path, self.out_path)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring archive monitor")
@@ -836,16 +836,6 @@ class EddPulsarPipeline(EDDPipeline):
         self._archive_sensor = ManagedProcess(cmd)
         self._subprocessMonitor.add(self._archive_sensor, self._subprocess_error)
         self._subprocessMonitor.start()
-
-        self._png_server = KATCPClientResource(dict(
-            name='_edd00_numa0-client',
-            address=("134.104.70.66", 10000),
-            controlled=True))
-        self._png_server.start()
-        yield self._png_server.until_synced()
-    	#yield self._client.until_synced()
-    	response = yield self._png_server.req.grab_png(self.out_path)
-    	log.info("response = {}".format(response))
         self._timer = Time.now() - self._timer
         log.info("Took {} s to start".format(self._timer * 86400))
         self._state = "running"
