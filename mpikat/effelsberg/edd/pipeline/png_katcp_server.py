@@ -4,6 +4,7 @@ import signal
 import coloredlogs
 import time
 import base64
+from tornado.gen import coroutine
 from optparse import OptionParser
 from katcp import AsyncDeviceServer, Message, DeviceServer, Sensor, ProtocolFlags, AsyncReply
 from katcp.kattypes import (Str, Float, Timestamp, Discrete, request, return_reply)
@@ -59,13 +60,13 @@ class PngKatcpServer(AsyncDeviceServer):
         self._png_monitor_callback = tornado.ioloop.PeriodicCallback(self._png_monitor, 1000)
         self._png_monitor_callback.start()
 
-    #@tornado.gen.coroutine
+    @coroutine
     def _png_monitor(self):
         log.info("reading from : {}".format(self.outpath))
         try:
             log.info("reading {}/fscrunch.png".format(self.outpath))
             with open("{}/fscrunch.png".format(self.outpath), "rb") as imageFile:
-                image_fscrunch = base64.b64encode(imageFile.read())                
+                image_fscrunch = base64.b64encode(imageFile.read())
                 self._fscrunch.set_value(image_fscrunch)
         except Exception as error:
             log.debug(error)
@@ -88,7 +89,7 @@ class PngKatcpServer(AsyncDeviceServer):
         return
                 #log.debug("profile.png is not ready")
 
-    #@tornado.gen.coroutine
+    @coroutine
     def stop(self):
         """Stop PafWorkerServer server"""
         # if self._pipeline_sensor_status.value() == "ready":
@@ -99,7 +100,7 @@ class PngKatcpServer(AsyncDeviceServer):
         #yield self._edd_pipeline.stop()
         #yield self._status_server.stop()
 
-
+@coroutine
 def on_shutdown(self, ioloop, server):
     print('Shutting down')
     #self._state.set_value(False)
