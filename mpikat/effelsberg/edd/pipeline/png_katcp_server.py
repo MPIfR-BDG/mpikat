@@ -48,9 +48,16 @@ class PngKatcpServer(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._profile)
 
+        self._state = Sensor.string(
+            "capture-state",
+            description="capture-state",
+            default=False,
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._state)
+
     def _png_monitor(self, outpath):
         log.info("in _png_monitor now RUN = {}".format(RUN))
-        while RUN:
+        while self._state.value():
             # while not self._finish_event.isSet():
             log.info("Accessing archive PNG files")
             try:
@@ -83,7 +90,7 @@ class PngKatcpServer(AsyncDeviceServer):
         def grab_wrapper():
             try:
                 log.info("grabbing png images from {}".format(output_dir))
-                RUN = True
+                self._state.set_value(True)
                 self._png_monitor(output_dir)
             except Exception as error:
                 log.exception(str(error))
