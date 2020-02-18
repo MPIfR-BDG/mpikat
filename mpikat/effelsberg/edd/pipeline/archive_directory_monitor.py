@@ -14,21 +14,12 @@ from katcp.kattypes import request, return_reply, Str
 log = logging.getLogger(
     "mpikat.effelsberg.edd.pipeline.pipeline")
 
-
 class ArchiveAdder(FileSystemEventHandler):
 
-    def __init__(self, output_dir, host, port):
+    def __init__(self, output_dir):
         super(ArchiveAdder, self).__init__()
         self.output_dir = output_dir
         self.first_file = True
-        self._png_server = KATCPClientResource(dict(
-            name="_png_server-client",
-            address=(host, port),
-            controlled=True))
-        log.debug("staring katcp connection")
-        self._png_server.start()
-            
-        
 
     def _syscall(self, cmd):
         log.info("Calling: {}".format(cmd))
@@ -72,25 +63,6 @@ class ArchiveAdder(FileSystemEventHandler):
             #shutil.copy2("sum.tscrunch", self.output_dir)
             log.info("Accessing archive PNG files")
             
-
-
-
-            """
-            try:
-                with open("{}/tscrunch.png".format(self.output_dir), "rb") as imageFile:
-                    log.info("reading tscrunch.png")
-                    yield self._png_server.until_synced()
-                    self._png_server.req.tscrunch(base64.b64encode(imageFile.read()))
-            except Exception as error:
-                log.debug(error)
-            try:
-                with open("{}/profile.png".format(self.output_dir), "rb") as imageFile:
-                    log.info("reading profile.png")
-                    yield self._png_server.until_synced()
-                    self._png_server.req.profile(base64.b64encode(imageFile.read()))
-            except Exception as error:
-                log.debug(error)
-            """
     def on_created(self, event):
         log.info("New file created: {}".format(event.src_path))
         try:
@@ -100,12 +72,6 @@ class ArchiveAdder(FileSystemEventHandler):
                 log.info(
                     "Passing archive file {} for processing".format(fname[0:-9]))
                 self.process(fname[0:-9])
-            imageFile = open("{}/fscrunch.png".format(self.output_dir), "rb")
-            log.info("reading fscrunch.png")
-            fscrunch = base64.b64encode(imageFile.read())
-
-            yield self._png_server.until_synced()
-            self._png_server.req.fscrunch(fscrunch)
         except Exception as error:
             log.error(error)
 
@@ -153,15 +119,11 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mode", type=str,
                         help="Processing mode to operate in",
                         default="ArchiveAdder")
-    parser.add_argument('-H', '--host', dest='host', type=str,
-                      help='KATCP png server interface', default="0.0.0.0")
-    parser.add_argument('-p', '--port', dest='port', type=long,
-                      help='Port number for the KATCP png server', default=10000)
 
     args = parser.parse_args()
 
     if args.mode == "ArchiveAdder":
-        handler = ArchiveAdder(args.output_dir, args.host, args.port)
+        handler = ArchiveAdder(args.output_dir)
     else:
         log.error("Processing mode {} is not supported.".format(args.mode))
         sys.exit(-1)

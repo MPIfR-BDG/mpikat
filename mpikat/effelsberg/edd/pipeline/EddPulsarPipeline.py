@@ -803,7 +803,7 @@ class EddPulsarPipeline(EDDPipeline):
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
-        cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
+        cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor_EDD.py -i {} -o {}".format(
             self.in_path, self.out_path)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring archive monitor")
