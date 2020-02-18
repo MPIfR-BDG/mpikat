@@ -88,8 +88,10 @@ class ArchiveAdder(FileSystemEventHandler):
             #fscrunch = base64.b64encode(imageFile.read())
             #yield png_server.until_synced()
             #png_server.req.fscrunch(fscrunch)
-
-            self.png_server.req.fscrunch("iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==")
+            #yield self.png_server.until_synced()
+            IMAGE = "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+            self._safe_request("fscrunch", IMAGE)
+            #self.png_server.req.fscrunch("iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg==")
             """
             try:
                 with open("{}/tscrunch.png".format(self.output_dir), "rb") as imageFile:
