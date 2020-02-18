@@ -79,6 +79,7 @@ class PngKatcpServer(AsyncDeviceServer):
                 self._profile.set_value(base64.b64encode(imageFile.read()))
         except Exception as error:
             log.debug(error)
+        return
                 #log.debug("profile.png is not ready")
 
 @tornado.gen.coroutine
