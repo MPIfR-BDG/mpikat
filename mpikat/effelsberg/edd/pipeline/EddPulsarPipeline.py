@@ -35,6 +35,7 @@ from astropy.coordinates import SkyCoord
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
 from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig
+from katcp import Sensor
 import base64
 import tornado
 import signal
