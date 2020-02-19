@@ -650,7 +650,10 @@ class EddPulsarPipeline(EDDPipeline):
             os.remove("/tmp/t2pred.dat")
         log.info("reset DADA buffer")
         log.info("Resetting dadc buffer")
-        yield self._reset_ring_buffer("dadc", self.numa_number)
+        #yield self._reset_ring_buffer("dadc", self.numa_number)
+        cmd = "dbreset -k {0} --log_level debug".format("dadc")
+        log.debug("Running command: {0}".format(cmd))
+        yield command_watcher(cmd)
         del self._subprocessMonitor
         self._state = "ready"
         log.info("Pipeline Stopped")
