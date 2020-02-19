@@ -348,6 +348,13 @@ class EddPulsarPipeline(EDDPipeline):
         yield self.set(config_json)
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
+        self._digpack_ip = self._config["pipeline_config"]["digpack_ip"]
+        self._digpack_port = self._config["pipeline_config"]["digpack_port"]
+        self._digpack_client = DigitiserPacketiserClient(
+        	self._digpack_ip, self._digpack_port)
+        self.sync_epoch = yield self._digpack_client.get_sync_time()
+        log.info("sync_epoch = {}".format(self.sync_epoch))
+        yield self._digpack_client.stop()
         self.numa_number = self._config["pipeline_config"]["numa"]
         pipeline_name = self._config["pipeline_config"]["mode"]
         log.debug("Pipeline name = {}".format(pipeline_name))
@@ -404,14 +411,13 @@ class EddPulsarPipeline(EDDPipeline):
         header["bandwidth"] = self._config['pipeline_config']["bandwidth"]
         header["mc_streaming_port"] = self._config['pipeline_config']["mc_streaming_port"]
         header["interface"] = INTERFACE[self._config['pipeline_config']["interface"]]
-        header["sync_time"] = self._config['pipeline_config']["sync_epoch"]
+        header["sync_time"] = self.sync_epoch
         header["sample_clock"] = float(
             self._config['pipeline_config']["sampling_rate"]) / float(self._config['pipeline_config']["predecimation_factor"])
         header["tsamp"] = 1 / (2.0 * self._config['pipeline_config']["bandwidth"])
         header["source_name"] = self._config['source_config']["source-name"]
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
-
         tstr = Time.now().isot.replace(":", "-")
         tdate = tstr.split("T")[0]
         ####################################################
