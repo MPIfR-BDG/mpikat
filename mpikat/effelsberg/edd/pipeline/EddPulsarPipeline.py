@@ -359,11 +359,11 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("checking status")
         if self.state != "ready":
             log.debug("pipeline is not in ready state")
-            if self.state == "capturing":
+            if self.state == "uuuuuuuuuuu":
                 log.debug(
-                    "pipeline is still captureing, issuing stop now and will start shortly")
+                    "pipeline is still configuring, issuing stop now and will start shortly")
                 yield self.measurement_stop()
-            if self.state == "starting":
+            if self.state == "configuring":
                 log.debug("pipeline is starting, do not send multiple start")
                 return
         self._subprocessMonitor = SubprocessMonitor()
@@ -658,31 +658,6 @@ class EddPulsarPipeline(EDDPipeline):
         del self._subprocessMonitor
         self._state = "ready"
         log.info("Pipeline Stopped")
-
-    @coroutine
-    def stop_pipeline_with_mkrecv_crashed(self):
-        """@brief stop the dada_junkdb and dspsr instances."""
-        try:
-            os.kill(self._polnmerge_proc.pid, signal.SIGTERM)
-        except Exception as error:
-            log.error("cannot kill _polnmerge_proc_pid, {}".format(error))
-        try:
-            os.kill(self._archive_directory_monitor.pid, signal.SIGTERM)
-        except Exception as error:
-            log.error("cannot kill _archive_directory_monitor, {}".format(error))
-        try:
-            os.kill(self._dspsr.pid, signal.SIGTERM)
-        except Exception as error:
-            log.error("cannot kill _dspsr, {}".format(error))
-        if (parse_tag(self._config['source_config']["source-name"]) == "default") & self.pulsar_flag:
-            os.remove("/tmp/t2pred.dat")
-
-        log.debug("deleting buffers")
-        # self._dada_buffers[0]['monitor'].stop()
-        # self._dada_buffers[1]['monitor'].stop()
-        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
-        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
-        self._state = "ready"
 
     @coroutine
     def deconfigure(self):
