@@ -341,7 +341,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         os.chdir(self.__edd_ansible_git_repository_folder)
         log.debug("Provision description {} from directory {}".format(description, os.getcwd()))
-        if description.startswith '"':
+        if description.startswith('"'):
             description = description.lstrip('"')
             description = description.rstrip('"')
 
@@ -365,7 +365,9 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         log.debug("Loading provision description files: {} and {}".format(playbook_file, basic_config_file))
         try:
-            yield command_watcher("ansible-playbook {}".format(playbook_file))
+            yield command_watcher("ansible-playbook {}".format(playbook_file),
+                    env={"ANSIBLE_ROLES_PATH":os.path.join(self.__edd_ansible_git_repository_folder,
+                        "roles")})
         except Exception as E:
             raise FailReply("Error in provisioning {}".format(E))
         self.__provisioned = playbook_file
@@ -462,9 +464,12 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
     @coroutine
     def deprovision(self):
-        log.debug("Loading provision description files: {} and {}".format(playbook_file, basic_config_file))
+        log.debug("Deprovision {}".format(self.__provisioned))
         try:
-            yield command_watcher("ansible-playbook {} --tags=stop".format(self.__provisoned))
+            yield command_watcher("ansible-playbook {} --tags=stop".format(self.__provisioned),
+                    env={"ANSIBLE_ROLES_PATH":os.path.join(self.__edd_ansible_git_repository_folder,
+                        "roles")})
+
         except Exception as E:
             raise FailReply("Error in provisioning {}".format(E))
         self.__provisioned = None
