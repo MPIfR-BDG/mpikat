@@ -49,7 +49,7 @@ BLANK_IMAGE = "iVBORw0KGgoAAAANSUhEUgAAAMgAAAB3CAYAAABGxA8+AAAIB2lDQ1BJQ0MgUHJvZ
 PIPELINE_STATES = ["idle", "configuring", "ready",
                    "starting", "running", "stopping",
                    "deconfiguring", "error"]
-#        "args": "-n 64 -b 67108864 -p -l",
+
 DEFAULT_CONFIG = {
     "base_output_dir": os.getcwd(),
     "dspsr_params":
@@ -359,7 +359,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("checking status")
         if self.state != "ready":
             log.debug("pipeline is not in ready state")
-            if self.state == "uuuuuuuuuuu":
+            if self.state == "running":
                 log.debug(
                     "pipeline is still configuring, issuing stop now and will start shortly")
                 yield self.measurement_stop()
@@ -367,7 +367,7 @@ class EddPulsarPipeline(EDDPipeline):
                 log.debug("pipeline is starting, do not send multiple start")
                 return
         self._subprocessMonitor = SubprocessMonitor()
-        self.state = "configuring"
+        self.state = "setting"
         yield self.set(config_json)
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
@@ -505,12 +505,12 @@ class EddPulsarPipeline(EDDPipeline):
                     break
                 else:
                     attempts += 1
-        self._state = "ready"
+        self._state = "set"
 
     @coroutine
     def measurement_start(self):
         log.info("checking status")
-        if self._state != "ready":
+        if self._state != "set":
             log.debug("pipeline is not int ready state")
             if self._state == "running":
                 log.debug(
@@ -519,7 +519,6 @@ class EddPulsarPipeline(EDDPipeline):
             if self._state == "starting":
                 log.debug("pipeline is starting, do not send multiple start")
                 return
-
         ####################################################
         #STARTING DSPSR                                    #
         ####################################################
