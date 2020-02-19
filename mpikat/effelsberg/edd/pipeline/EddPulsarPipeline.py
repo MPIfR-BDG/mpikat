@@ -285,24 +285,24 @@ class EddPulsarPipeline(EDDPipeline):
 
     @coroutine
     def _png_monitor(self):
-        log.info("reading png from : {}".format(self.outpath))
+        log.info("reading png from : {}".format(self.out_path))
         try:
-            #log.info("reading {}/fscrunch.png".format(self.outpath))
-            with open("{}/fscrunch.png".format(self.outpath), "rb") as imageFile:
+            log.info("reading {}/fscrunch.png".format(self.out_path))
+            with open("{}/fscrunch.png".format(self.out_path), "rb") as imageFile:
                 image_fscrunch = base64.b64encode(imageFile.read())
                 self._fscrunch.set_value(image_fscrunch)
         except Exception as error:
             log.debug(error)
         try:
-            #log.info("reading {}/tscrunch.png".format(self.outpath))
-            with open("{}/tscrunch.png".format(self.outpath), "rb") as imageFile:
+            log.info("reading {}/tscrunch.png".format(self.out_path))
+            with open("{}/tscrunch.png".format(self.out_path), "rb") as imageFile:
                 image_tscrunch = base64.b64encode(imageFile.read())
                 self._tscrunch.set_value(image_tscrunch)
         except Exception as error:
             log.debug(error)
         try:
-            #log.info("reading {}/profile.png".format(self.outpath))
-            with open("{}/profile.png".format(self.outpath), "rb") as imageFile:
+            log.info("reading {}/profile.png".format(self.out_path))
+            with open("{}/profile.png".format(self.out_path), "rb") as imageFile:
                 image_profile = base64.b64encode(imageFile.read())
                 self._profile.set_value(image_profile)
         except Exception as error:
@@ -646,8 +646,7 @@ class EddPulsarPipeline(EDDPipeline):
         #           self._polnmerge_proc, self._archive_directory_monitor]
         process = [self._mkrecv_ingest_proc,
                    self._polnmerge_proc,
-                   self._archive_directory_monitor,
-                   self._archive_sensor]
+                   self._archive_directory_monitor]
         for proc in process:
             #time.sleep(2)
             proc.terminate(timeout=1)
