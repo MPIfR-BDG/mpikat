@@ -72,7 +72,7 @@ DEFAULT_CONFIG = {
     },
     "db_params":
     {
-        "size" : 409600000,
+        "size": 409600000,
         "number": 32
     },
     "dada_header_params":
@@ -110,15 +110,15 @@ DEFAULT_CONFIG = {
         "central_freq": 1200,
         "interface": 0,
         "bandwidth": 800,
-        "sync_epoch" : 0
+        "sync_epoch": 0
     },
     "source_config":
     {
-        "source-name" : "J1939+2134",
-        "nchannels" : 1024,
-        "nbins" : 1024,
-        "ra" : "294.910416667",
-        "dec" : "21.10725"
+        "source-name": "J1939+2134",
+        "nchannels": 1024,
+        "nbins": 1024,
+        "ra": "294.910416667",
+        "dec": "21.10725"
     }
 }
 
@@ -165,11 +165,14 @@ def parse_tag(source_name):
     else:
         return split[-1]
 
+
 class EddPulsarPipelineKeyError(Exception):
     pass
 
+
 class EddPulsarPipelineError(Exception):
     pass
+
 
 class EddPulsarPipeline(EDDPipeline):
     """
@@ -184,17 +187,16 @@ class EddPulsarPipeline(EDDPipeline):
         EDDPipeline.__init__(self, ip, port, DEFAULT_CONFIG)
         self.__numa_node_pool = []
         self.mkrec_cmd = []
-        self._dada_buffers = ["dada","dadc"]
+        self._dada_buffers = ["dada", "dadc"]
         self._dspsr = None
         self._mkrecv_ingest_proc = None
         self._archive_directory_monitor = None
-
 
     def setup_sensors(self):
         """
         @brief Setup monitoring sensors
         """
-    	EDDPipeline.setup_sensors(self)
+        EDDPipeline.setup_sensors(self)
         self._tscrunch = Sensor.string(
             "tscrunch_PNG",
             description="tscrunch png",
@@ -274,15 +276,6 @@ class EddPulsarPipeline(EDDPipeline):
     def _handle_eddpolnmerge_stderr(self, stderr, callback):
         log.debug(stderr)
 
-    def _add_tscrunch_to_sensor(self, png_blob, callback):
-        self._tscrunch.set_value(png_blob)
-
-    def _add_fscrunch_to_sensor(self, png_blob, callback):
-        self._fscrunch.set_value(png_blob)
-
-    def _add_profile_to_sensor(self, png_blob, callback):
-        self._profile.set_value(png_blob)
-
     @coroutine
     def _png_monitor(self):
         log.info("reading png from : {}".format(self.out_path))
@@ -311,20 +304,21 @@ class EddPulsarPipeline(EDDPipeline):
 
     @coroutine
     def _create_ring_buffer(self, bufferSize, blocks, key, numa_node):
-         """
-         @brief Create a ring buffer of given size with given key on specified numa node.
-                Adds and register an appropriate sensor to thw list
-         """
-         # always clear buffer first. Allow fail here
-         yield command_watcher("dada_db -d -k {key}".format(key=key), allow_fail=True)
+        """
+        @brief Create a ring buffer of given size with given key on specified numa node.
+               Adds and register an appropriate sensor to thw list
+        """
+        # always clear buffer first. Allow fail here
+        yield command_watcher("dada_db -d -k {key}".format(key=key), allow_fail=True)
 
-         cmd = "numactl --cpubind={numa_node} --membind={numa_node} dada_db -k {key} -n {blocks} -b {bufferSize} -p -l".format(key=key, blocks=blocks, bufferSize=bufferSize, numa_node=numa_node)
-         log.debug("Running command: {0}".format(cmd))
-         yield command_watcher(cmd)
+        cmd = "numactl --cpubind={numa_node} --membind={numa_node} dada_db -k {key} -n {blocks} -b {bufferSize} -p -l".format(
+            key=key, blocks=blocks, bufferSize=bufferSize, numa_node=numa_node)
+        log.debug("Running command: {0}".format(cmd))
+        yield command_watcher(cmd)
 
-         #M = DbMonitor(key, self._buffer_status_handle)
-         #M.start()
-         #self._dada_buffers.append({'key': key, 'monitor': M})
+        #M = DbMonitor(key, self._buffer_status_handle)
+        # M.start()
+        #self._dada_buffers.append({'key': key, 'monitor': M})
 
     def _buffer_status_handle(self, status):
         """
@@ -351,7 +345,7 @@ class EddPulsarPipeline(EDDPipeline):
         self._digpack_ip = self._config["pipeline_config"]["digpack_ip"]
         self._digpack_port = self._config["pipeline_config"]["digpack_port"]
         self._digpack_client = DigitiserPacketiserClient(
-        	self._digpack_ip, self._digpack_port)
+            self._digpack_ip, self._digpack_port)
         self.sync_epoch = yield self._digpack_client.get_sync_time()
         log.info("sync_epoch = {}".format(self.sync_epoch))
         yield self._digpack_client.stop()
@@ -392,8 +386,10 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("starting pipeline")
         self._state = "starting"
         self._timer = Time.now()
-        self._central_freq.set_value(str(self._config['pipeline_config']["central_freq"]))
-        self._source_name_sensor.set_value(self._config['source_config']["source-name"])
+        self._central_freq.set_value(
+            str(self._config['pipeline_config']["central_freq"]))
+        self._source_name_sensor.set_value(
+            self._config['source_config']["source-name"])
         self._nchannels.set_value(self._config['source_config']["nchannels"])
         self._nbins.set_value(self._config['source_config']["nbins"])
         self.cpu_numbers = NUMA_MODE[self.numa_number][2]
@@ -407,14 +403,18 @@ class EddPulsarPipeline(EDDPipeline):
             "d", ":").replace("m", ":").replace("s", "")
         header["key"] = self._dada_buffers[0]
         header["mc_source"] = self._config['pipeline_config']["mc_source"]
-        header["frequency_mhz"] = self._config['pipeline_config']["central_freq"]
+        header["frequency_mhz"] = self._config[
+            'pipeline_config']["central_freq"]
         header["bandwidth"] = self._config['pipeline_config']["bandwidth"]
-        header["mc_streaming_port"] = self._config['pipeline_config']["mc_streaming_port"]
-        header["interface"] = INTERFACE[self._config['pipeline_config']["interface"]]
+        header["mc_streaming_port"] = self._config[
+            'pipeline_config']["mc_streaming_port"]
+        header["interface"] = INTERFACE[
+            self._config['pipeline_config']["interface"]]
         header["sync_time"] = self.sync_epoch
         header["sample_clock"] = float(
             self._config['pipeline_config']["sampling_rate"]) / float(self._config['pipeline_config']["predecimation_factor"])
-        header["tsamp"] = 1 / (2.0 * self._config['pipeline_config']["bandwidth"])
+        header["tsamp"] = 1 / \
+            (2.0 * self._config['pipeline_config']["bandwidth"])
         header["source_name"] = self._config['source_config']["source-name"]
         header["obs_id"] = "{0}_{1}".format(
             sensors["scannum"], sensors["subscannum"])
@@ -425,7 +425,7 @@ class EddPulsarPipeline(EDDPipeline):
         ####################################################
         try:
             self.in_path = os.path.join("/media/scratch/jason/dspsr_output/", tdate, self._config['source_config']["source-name"],
-                                   str(self._config['pipeline_config']["central_freq"]), tstr, "raw_data")
+                                        str(self._config['pipeline_config']["central_freq"]), tstr, "raw_data")
             self.out_path = os.path.join(
                 "/media/scratch/jason/dspsr_output/", tdate, self._config['source_config']["source-name"], str(self._config['pipeline_config']["central_freq"]), tstr, "combined_data")
             log.debug("Creating directories")
@@ -439,7 +439,7 @@ class EddPulsarPipeline(EDDPipeline):
             log.debug("Change to workdir: {}".format(os.getcwd()))
             log.debug("Current working directory: {}".format(os.getcwd()))
         except Exception as error:
-        	raise EddPulsarPipelineError(str(error))
+            raise EddPulsarPipelineError(str(error))
 
         os.chdir("/tmp/")
 
@@ -451,8 +451,10 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("{}".format(
             (parse_tag(self._config['source_config']["source-name"]) == "default") & self.pulsar_flag))
         if (parse_tag(self._config['source_config']["source-name"]) == "default") & is_accessible('/tmp/epta/{}.par'.format(self._config['source_config']["source-name"][1:])):
-            cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred'.format(self.numa_number, NUMA_MODE[self.numa_number][1], self._config['source_config']["source-name"][1:]).split()
-            cmd.append("Effelsberg {} {} {} {} 24 2 3599.999999999".format(Time.now().mjd - 1, Time.now().mjd + 1, float(self._config["pipeline_config"]["central_freq"]) - 200, float(self._config["pipeline_config"]["central_freq"]) + 200))
+            cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred'.format(
+                self.numa_number, NUMA_MODE[self.numa_number][1], self._config['source_config']["source-name"][1:]).split()
+            cmd.append("Effelsberg {} {} {} {} 24 2 3599.999999999".format(Time.now().mjd - 1, Time.now().mjd + 1, float(
+                self._config["pipeline_config"]["central_freq"]) - 200, float(self._config["pipeline_config"]["central_freq"]) + 200))
             log.debug("Command to run: {}".format(cmd))
             yield command_watcher(cmd, )
             attempts = 0
@@ -526,17 +528,20 @@ class EddPulsarPipeline(EDDPipeline):
         ####################################################
         os.chdir(self.in_path)
         log.debug("pulsar_flag = {}".format(self.pulsar_flag))
-        log.debug("source_name = {}".format(self._config['source_config']["source-name"]))
+        log.debug("source_name = {}".format(
+            self._config['source_config']["source-name"]))
 
         if (parse_tag(self._config['source_config']["source-name"]) == "default") and self.pulsar_flag:
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
-                nchan="-F {}:D".format(self._config['source_config']["nchannels"]),
+                nchan="-F {}:D".format(
+                    self._config['source_config']["nchannels"]),
                 nbin="-b {}".format(self._config['source_config']["nbins"]),
                 name=self._config['source_config']["source-name"],
                 predictor="/tmp/t2pred.dat",
-                parfile="/tmp/epta/{}.par".format(self._config['source_config']["source-name"][1:]),
+                parfile="/tmp/epta/{}.par".format(
+                    self._config['source_config']["source-name"][1:]),
                 cpus=self.cpu_numbers,
                 cuda_number=self.cuda_number,
                 keyfile=self.dada_key_file.name)
@@ -545,7 +550,8 @@ class EddPulsarPipeline(EDDPipeline):
             cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
-                nchan="-F {}:D".format(self._config['source_config']["nchannels"]),
+                nchan="-F {}:D".format(
+                    self._config['source_config']["nchannels"]),
                 name=self._config['source_config']["source-name"],
                 cpus=self.cpu_numbers,
                 cuda_number=self.cuda_number,
@@ -596,7 +602,8 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDPolnMerge")
         self._polnmerge_proc = ManagedProcess(cmd)
-        self._subprocessMonitor.add(self._polnmerge_proc, self._subprocess_error)
+        self._subprocessMonitor.add(
+            self._polnmerge_proc, self._subprocess_error)
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
@@ -605,7 +612,8 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
         self._mkrecv_ingest_proc = ManagedProcess(cmd)
-        self._subprocessMonitor.add(self._mkrecv_ingest_proc, self._subprocess_error)
+        self._subprocessMonitor.add(
+            self._mkrecv_ingest_proc, self._subprocess_error)
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
@@ -614,16 +622,11 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring archive monitor")
         self._archive_directory_monitor = ManagedProcess(cmd)
-        self._subprocessMonitor.add(self._archive_directory_monitor, self._subprocess_error)
-        #cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/png_katcp_server.py -H 134.104.70.66 -p 10000 --path {}".format(self.out_path)
-        #log.debug("Running command: {0}".format(cmd))
-        #log.info("Staring archive monitor")
-        #self._archive_sensor = ManagedProcess(cmd)
-
-        #self._subprocessMonitor.add(self._archive_sensor, self._subprocess_error)
-        self._png_monitor_callback = tornado.ioloop.PeriodicCallback(self._png_monitor, 1000)
+        self._subprocessMonitor.add(
+            self._archive_directory_monitor, self._subprocess_error)
+        self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
+            self._png_monitor, 1000)
         self._png_monitor_callback.start()
-
         self._subprocessMonitor.start()
         self._timer = Time.now() - self._timer
         log.info("Took {} s to start".format(self._timer * 86400))
@@ -641,48 +644,18 @@ class EddPulsarPipeline(EDDPipeline):
             self._subprocessMonitor.stop()
         log.debug("Stopping")
         self._png_monitor_callback.stop()
-        self._timeout = 10
-        #process = [self._mkrecv_ingest_proc,
-        #           self._polnmerge_proc, self._archive_directory_monitor]
         process = [self._mkrecv_ingest_proc,
                    self._polnmerge_proc,
                    self._archive_directory_monitor]
         for proc in process:
-            #time.sleep(2)
             proc.terminate(timeout=1)
-            #proc.set_finish_event()
-            #proc.finish()
-            """
-            log.debug(
-                "Waiting {} seconds for proc to terminate...".format(self._timeout))
-            now = time.time()
-            while time.time() - now < self._timeout:
-                retval = proc._process.poll()
-                if retval is not None:
-                    log.debug(
-                        "Returned a return value of {}".format(retval))
-                    break
-                else:
-                    time.sleep(0.5)
-            else:
-                log.warning(
-                    "Failed to terminate proc in alloted time")
-                log.info("Killing process")
-                proc._process.kill()
-           	"""
-            
         if (parse_tag(self._config['source_config']["source-name"]) == "default") & self.pulsar_flag:
             os.remove("/tmp/t2pred.dat")
-
         log.info("reset DADA buffer")
-        #self._dada_buffers[1]['monitor'].stop()
+        # self._dada_buffers[1]['monitor'].stop()
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
 
         del self._subprocessMonitor
-        #except Exception as error:
-        #    raise EddPulsarPipelineError(str(error))
-
-        
         self._state = "ready"
         log.info("Pipeline Stopped")
 
@@ -705,8 +678,8 @@ class EddPulsarPipeline(EDDPipeline):
             os.remove("/tmp/t2pred.dat")
 
         log.debug("deleting buffers")
-        #self._dada_buffers[0]['monitor'].stop()
-        #self._dada_buffers[1]['monitor'].stop()
+        # self._dada_buffers[0]['monitor'].stop()
+        # self._dada_buffers[1]['monitor'].stop()
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
         self._state = "ready"
@@ -718,13 +691,13 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("Destroying dada buffers")
 
         for k in self._dada_buffers:
-            #k['monitor'].stop()
+            # k['monitor'].stop()
             cmd = "dada_db -d -k {0}".format(k)
             log.debug("Running command: {0}".format(cmd))
             yield command_watcher(cmd)
-        #self._fscrunch.set_value(BLANK_IMAGE)
-        #self._tscrunch.set_value(BLANK_IMAGE)
-        #self._profile.set_value(BLANK_IMAGE)
+        # self._fscrunch.set_value(BLANK_IMAGE)
+        # self._tscrunch.set_value(BLANK_IMAGE)
+        # self._profile.set_value(BLANK_IMAGE)
         log.info("Deconfigured pipeline")
         self._state = "idle"
 
