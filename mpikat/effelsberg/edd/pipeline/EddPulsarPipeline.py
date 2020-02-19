@@ -315,7 +315,7 @@ class EddPulsarPipeline(EDDPipeline):
         # always clear buffer first. Allow fail here
         cmd = "numactl --cpubind={numa_node} --membind={numa_node} dbreset -k {key} --log_level debug".format(numa_node=numa_node, key=key)
         log.debug("Running command: {0}".format(cmd))
-        yield command_watcher(cmd)
+        yield command_watcher(cmd, allow_fail=True)
 
     def _buffer_status_handle(self, status):
         """
