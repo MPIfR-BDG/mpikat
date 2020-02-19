@@ -22,6 +22,7 @@ SOFTWARE.
 import logging
 import coloredlogs
 import json
+import os
 
 import tornado
 import signal
@@ -47,16 +48,24 @@ class EddMasterController(EDDPipeline.EDDPipeline):
     VERSION_INFO = ("mpikat-edd-api", 0, 2)
     BUILD_INFO = ("mpikat-edd-implementation", 0, 2, "rc1")
 
-    def __init__(self, ip, port, redis_ip, redis_port):
+    def __init__(self, ip, port, redis_ip, redis_port, edd_ansible_git_repository_folder):
         """
         @brief       Construct new EddMasterController instance
 
-        @params  ip       The IP address on which the server should listen
-        @params  port     The port that the server should bind to
+        @params  ip           The IP address on which the server should listen
+        @params  port         The port that the server should bind to
+        @params  redis_ip     IP for conenction to the EDD Datastore
+        @params  redis_port   Port for the comnenctioon to the edd data store
+        @params  edd_ansible_git_repository_folder
+                              Directory of a (checked out) edd_ansible git
+                              repository to be used for provisioning
         """
         EDDPipeline.EDDPipeline.__init__(self, ip, port)
         self.__controller = {}
         self.__eddDataStore = EDDDataStore.EDDDataStore(redis_ip, redis_port)
+        self.__edd_ansible_git_repository_folder = edd_ansible_git_repository_folder
+        if not os.path.isdir(self.__edd_ansible_git_repository_folder):
+            log.warning("{} is not a readable directory".format(self.__edd_ansible_git_repository_folder))
 
 
     def setup_sensors(self):
@@ -320,127 +329,54 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
 
     @coroutine
-    def provision(self, name):
-        #if not self.__eddDataStore.hasProvisioningDescription(name):
-        #    raise FailReply('Unknown provision: {}'.format(name))
-        #playbook, basic_config = self.__eddDataStore.getProvisioningDescription(name)
-
-        log.warning(" CODE DRAFT USING HARD CODED PLAYBOOK AND BASIC CONFIG!!!")
-        log.warning(" PARAMETER {} IGNORED".format(name))
-        playbook = """
----
-- hosts: gpu_server[1]
-  roles:
-    - gated_spectrometer
-
-- hosts: gpu_server[0]
-  roles:
-    - fits_interface
+    def provision(self, description):
         """
-        basic_config = """
-{
-    "packetisers":
-    [
-      {
-            "id": "focus_cabin_digitizer",
-            "address": ["134.104.70.65", 7147],
-            "sampling_rate": 2600000000.0,
-            "bit_width": 12,
-            "v_destinations": "225.0.0.152+3:7148",
-            "h_destinations": "225.0.0.156+3:7148",
-						"predecimation_factor": 1,
-						"flip_spectrum": true,
-            "interface_addresses": {
-                "0":"10.10.1.32",
-                "1":"10.10.1.33"
-            }
-      }
+        @brief provision the edd with provided provision description.
 
-    ],
-    "products":
-    [
-			{
-       "id": "gated_spectrometer",
-        "input_data_streams":
-        {
-            "polarization_0":
-            {
-                "source": "focus_cabin_digitizer:v_polarization",
-                "format": "MPIFR_EDD_Packetizer:1"
-            },
-             "polarization_1":
-            {
-                "source": "focus_cabin_digitizer:h_polarization",
-                "format": "MPIFR_EDD_Packetizer:1"
-            }
-        },
-        "output_data_streams":
-        {
-            "polarization_0_0":
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.0.172",
-                "port": "7152"
-            },
-            "polarization_0_1":
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.0.173",
-                "port": "7152"
-            },
-             "polarization_1_0":
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.0.174",
-                "port": "7152"
-            },
-             "polarization_1_1":
-            {
-                "format": "GatedSpectrometer:1",
-                "ip": "225.0.0.175",
-                "port": "7152"
-            }
-        },
-        "naccumulate": 16384,
-        "fft_length": 262144
-      },
-      {
-       "id": "fits_interface",
-        "input_data_streams":
-        [
-          {
-            "source": "gated_spectrometer:polarization_0_0",
-            "format": "GatedSpectrometer:1"
-          },
-          {
-            "source": "gated_spectrometer:polarization_0_1",
-            "format": "GatedSpectrometer:1"
-          },
-          {
-            "source": "gated_spectrometer:polarization_1_0",
-            "format": "GatedSpectrometer:1"
-          },
-          {
-            "source": "gated_spectrometer:polarization_1_1",
-            "format": "GatedSpectrometer:1"
-          }
-        ]
-      }
-    ]
-}
+        @params description fo the provision. This has to be a string of format
+                NAME                 to load NAME.json and NAME.yml
+                NAME1.yml;NAME2.json to load different yml / json configs
         """
-        with open('playbook.yml', 'w') as ofile:
-            ofile.write(playbook)
 
-        # launch playbook
-        yield command_watcher("ansible-playbook playbook.yml", allow_fail=True)
+        os.chdir(self.__edd_ansible_git_repository_folder)
+        log.debug("Provision description {} from directory {}".format(description, os.getcwd()))
+        if description.startswith '"':
+            description = description.lstrip('"')
+            description = description.rstrip('"')
+
+        descr_subfolder = "provison_descriptions"
+        if ";" in description:
+            description = description.split(';')
+            if description[0].endswith(yml):
+                playbook_file = os.path.join(descr_subfolder, description[0])
+                basic_config_file = os.path.join(descr_subfolder, description[1])
+            else:
+                playbook_file = os.path.join(descr_subfolder, description[1])
+                basic_config_file = os.path.join(descr_subfolder, description[0])
+        else:
+            playbook_file = os.path.join(descr_subfolder, description + ".yml")
+            basic_config_file = os.path.join(descr_subfolder, description + ".json")
+
+        if not os.path.isfile(playbook_file):
+            raise FailReply("cannot find playbook file {}".format(playbook_file))
+        if not os.path.isfile(basic_config_file):
+            raise FailReply("cannot find config file {}".format(basic_config_file))
+
+        log.debug("Loading provision description files: {} and {}".format(playbook_file, basic_config_file))
+
 
 
         try:
-            basic_config = json.loads(basic_config)
-        except:
-            log.error("Error parsing json")
-            raise FailReply("Cannot handle config string {} - Not valid json!".format(config_json))
+            # launch playbook
+            yield command_watcher("ansible-playbook {}".format(playbook_file))
+        except Exception as E:
+            raise FailReply("Error in provisioning {}".format(E))
+
+        try:
+            with open(basic_config_file) as cfg:
+                basic_config = json.load(cfg)
+        except Exception as E:
+            raise FailReply("Error reading config {}".format(E))
 
         self.__eddDataStore.updateProducts()
         self._installController(basic_config)
@@ -523,9 +459,11 @@ if __name__ == "__main__":
                       help='The ip for the redis server')
     parser.add_argument('--redis-port', dest='redis_port', type=int, default=6379,
                       help='The port number for the redis server')
+
+    parser.add_argument('--edd_ansible_repository', dest='edd_ansible_git_repository_folder', type=str, default=os.path.join(os.getenv("HOME"), "edd_ansible"), help='The path to a git repository for the provisioning data')
     args = parser.parse_args()
 
     server = EddMasterController(
         args.host, args.port,
-        args.redis_ip, args.redis_port)
+        args.redis_ip, args.redis_port, args.edd_ansible_git_repository_folder)
     EDDPipeline.launchPipelineServer(server, args)
