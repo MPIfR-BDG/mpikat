@@ -115,7 +115,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         if 'packetisers' in cfg:
             cfg['packetizers'] = cfg.pop('packetisers')
 
-        EDDPipeline.set(self, cfg)
+        EDDPipeline.EDDPipeline.set(self, cfg)
 
 
 
@@ -149,7 +149,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             self._config["products"] = []
 
         # ToDo: Check if provisioned
-        if not self.__provisoned:
+        if not self.__provisioned:
             self._installController(self._config)
 
 
@@ -181,7 +181,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         log.debug("Identify additional output streams")
         # Get output streams from products
-        for product in self._config['products']:
+        for product_id, product in self._config['products'].iteritems():
             if not "output_data_streams" in product:
                 continue
 
@@ -199,7 +199,11 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 self.__eddDataStore.addDataStream(key, i)
 
         log.debug("Connect data streams with high level description")
-        for product in self._config['products']:
+        for product_id, product in self._config['products'].iteritems():
+            log.error(" {} -- {}".format(type(product), product))
+            if not "input_data_streams" in product:
+                log.warning("Product: {} without input data streams".format(product_id))
+                continue
             counter = 0
             for k in product["input_data_streams"]:
                 if isinstance(product["input_data_streams"], dict):
@@ -227,7 +231,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         log.debug("Updated configuration:\n '{}'".format(json.dumps(self._config, indent=2)))
         log.info("Configuring products")
-        for product_config in self._config["products"]:
+        for product_id, product_config in self._config["products"].iteritems():
             yield self.__controller[product_id].configure(product_config)
 
         self._edd_config_sensor.set_value(json.dumps(self._config))
@@ -383,7 +387,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         # Retrieve default configs from products and merge with basic config to
         # have full config locally.
-        self._config = {}
+        self._config = {"products":{}, "packetizers":basic_config['packetizers']}
         for product in basic_config['products']:
             log.debug("Retrieve basic config for {}".format(product["id"]))
             controller = self.__controller[product["id"]]
@@ -396,7 +400,8 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
             cfg = yield controller.getConfig()
             cfg = EDDPipeline.updateConfig(cfg, product)
-            self._config[product["id"]] = cfg
+            self._config["products"][product["id"]] = cfg
+
         self._configUpdated()
 
 
@@ -436,8 +441,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 else:
                     log.warning("Manual setup of product {} - require address and port properties")
                     self.__controller[product_id] = EddServerProductController(product_id, product_config["address"], product_config["port"])
-
-
 
 
     @request()
