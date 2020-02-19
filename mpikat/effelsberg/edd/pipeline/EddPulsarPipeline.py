@@ -313,7 +313,7 @@ class EddPulsarPipeline(EDDPipeline):
                Adds and register an appropriate sensor to thw list
         """
         # always clear buffer first. Allow fail here
-        cmd = "numactl --cpubind={numa_node} --membind={numa_node} dada_db -k {key}".format(key=key)
+        cmd = "numactl --cpubind={numa_node} --membind={numa_node} dbreset -k {key}".format(key=key)
         log.debug("Running command: {0}".format(cmd))
         yield command_watcher(cmd)
 
