@@ -165,224 +165,6 @@ def parse_tag(source_name):
     else:
         return split[-1]
 
-
-
-class ExecuteCommand(object):
-
-    def __init__(self, command, outpath=None, resident=False):
-        self._command = command
-        self._resident = resident
-        self._outpath = outpath
-        self.stdout_callbacks = set()
-        self.stderr_callbacks = set()
-        self.error_callbacks = set()
-        self.fscrunch_callbacks = set()
-        self.tscrunch_callbacks = set()
-        self.profile_callbacks = set()
-        self._monitor_threads = []
-        self._process = None
-        self._executable_command = None
-        self._monitor_thread = None
-        self._stdout = None
-        self._stderr = None
-        self._error = False
-        self._finish_event = threading.Event()
-
-        if not self._resident:
-            self._finish_event.set()
-
-        self._executable_command = shlex.split(self._command)
-
-        if RUN:
-            try:
-                self._process = Popen(self._executable_command,
-                                      stdout=PIPE,
-                                      stderr=PIPE,
-                                      bufsize=1,
-                                      # shell=True,
-                                      universal_newlines=True)
-            except Exception as error:
-                log.exception("Error while launching command: {}".format(
-                    self._executable_command))
-                self.error = True
-            if self._process == None:
-                self._error = True
-            self.pid = self._process.pid
-            # log.debug("PID of {} is {}".format(
-            #    self._executable_command, self.pid))
-            self._monitor_thread = threading.Thread(
-                target=self._execution_monitor)
-            self._stderr_monitor_thread = threading.Thread(
-                target=self._stderr_monitor)
-            self._monitor_thread.start()
-            self._stderr_monitor_thread.start()
-            if self._outpath is not None:
-                self._png_monitor_thread = threading.Thread(
-                    target=self._png_monitor)
-                self._png_monitor_thread.start()
-
-    def __del__(self):
-        class_name = self.__class__.__name__
-
-    def set_finish_event(self):
-        if not self._finish_event.isSet():
-            self._finish_event.set()
-
-    def finish(self):
-        if RUN:
-            self._process.send_signal(signal.SIGINT)
-            # self._process.terminate()
-            self._monitor_thread.join()
-            self._stderr_monitor_thread.join()
-            if self._outpath is not None:
-                self._png_monitor_thread.join()
-
-    def stdout_notify(self):
-        for callback in self.stdout_callbacks:
-            callback(self._stdout, self)
-
-    @property
-    def stdout(self):
-        return self._stdout
-
-    @stdout.setter
-    def stdout(self, value):
-        self._stdout = value
-        self.stdout_notify()
-
-    def stderr_notify(self):
-        for callback in self.stderr_callbacks:
-            callback(self._stderr, self)
-
-    @property
-    def stderr(self):
-        return self._stderr
-
-    @stderr.setter
-    def stderr(self, value):
-        self._stderr = value
-        self.stderr_notify()
-
-    def fscrunch_notify(self):
-        for callback in self.fscrunch_callbacks:
-            callback(self._fscrunch, self)
-
-    @property
-    def fscrunch(self):
-        return self._fscrunch
-
-    @fscrunch.setter
-    def fscrunch(self, value):
-        self._fscrunch = value
-        self.fscrunch_notify()
-
-    def tscrunch_notify(self):
-        for callback in self.tscrunch_callbacks:
-            callback(self._tscrunch, self)
-
-    @property
-    def tscrunch(self):
-        return self._tscrunch
-
-    @tscrunch.setter
-    def tscrunch(self, value):
-        self._tscrunch = value
-        self.tscrunch_notify()
-
-    def profile_notify(self):
-        for callback in self.profile_callbacks:
-            callback(self._profile, self)
-
-    @property
-    def profile(self):
-        return self._profile
-
-    @profile.setter
-    def profile(self, value):
-        self._profile = value
-        self.profile_notify()
-
-    def error_notify(self):
-        for callback in self.error_callbacks:
-            callback(self)
-
-    @property
-    def error(self):
-        return self._error
-
-    @error.setter
-    def error(self, value):
-        self._error = value
-        self.error_notify()
-
-    def _execution_monitor(self):
-        # Monitor the execution and also the stdout
-        if RUN:
-            while self._process.poll() == None:
-                stdout = self._process.stdout.readline().rstrip("\n\r")
-                if stdout != b"":
-                    if (not stdout.startswith("heap")) & (not stdout.startswith("mark")) & (not stdout.startswith("[")) & (not stdout.startswith("-> parallel")) & (not stdout.startswith("-> sequential")):
-                        self.stdout = stdout
-                    # print self.stdout, self._command
-
-            if not self._finish_event.isSet():
-                # For the command which runs for a while, if it stops before
-                # the event is set, that means that command does not
-                # successfully finished
-                stdout = self._process.stdout.read()
-                stderr = self._process.stderr.read()
-                log.error(
-                    "Process exited unexpectedly with return code: {}".format(self._process.returncode))
-                log.error("exited unexpectedly, stdout = {}".format(stdout))
-                log.error("exited unexpectedly, stderr = {}".format(stderr))
-                log.error("exited unexpectedly, cmd = {}".format(self._command))
-                #self.error = True
-
-    def _stderr_monitor(self):
-        if RUN:
-            while self._process.poll() == None:
-                stderr = self._process.stderr.readline().rstrip("\n\r")
-                if stderr != b"":
-                    self.stderr = stderr
-            if not self._finish_event.isSet():
-                # For the command which runs for a while, if it stops before
-                # the event is set, that means that command does not
-                # successfully finished
-                stdout = self._process.stdout.read()
-                stderr = self._process.stderr.read()
-                log.error(
-                    "Process exited unexpectedly with return code: {}".format(self._process.returncode))
-                log.error("exited unexpectedly, stdout = {}".format(stdout))
-                log.error("exited unexpectedly, stderr = {}".format(stderr))
-                log.error("exited unexpectedly, cmd = {}".format(self._command))
-                self.error = True
-
-    def _png_monitor(self):
-        if RUN:
-            while self._process.poll() == None:
-                # while not self._finish_event.isSet():
-                log.debug("Accessing archive PNG files")
-                try:
-                    with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
-                        self.fscrunch = base64.b64encode(imageFile.read())
-                except Exception as error:
-                    log.debug(error)
-                    #log.debug("fscrunch.png is not ready")
-                try:
-                    with open("{}/tscrunch.png".format(self._outpath), "rb") as imageFile:
-                        self.tscrunch = base64.b64encode(imageFile.read())
-                except Exception as error:
-                    log.debug(error)
-                    #log.debug("tscrunch.png is not ready")
-                try:
-                    with open("{}/profile.png".format(self._outpath), "rb") as imageFile:
-                        self.profile = base64.b64encode(imageFile.read())
-                except Exception as error:
-                    log.debug(error)
-                    #log.debug("profile.png is not ready")
-                time.sleep(7)
-
-
 class EddPulsarPipelineKeyError(Exception):
     pass
 
@@ -502,6 +284,32 @@ class EddPulsarPipeline(EDDPipeline):
         self._profile.set_value(png_blob)
 
     @coroutine
+    def _png_monitor(self):
+        log.info("reading png from : {}".format(self.outpath))
+        try:
+            #log.info("reading {}/fscrunch.png".format(self.outpath))
+            with open("{}/fscrunch.png".format(self.outpath), "rb") as imageFile:
+                image_fscrunch = base64.b64encode(imageFile.read())
+                self._fscrunch.set_value(image_fscrunch)
+        except Exception as error:
+            log.debug(error)
+        try:
+            #log.info("reading {}/tscrunch.png".format(self.outpath))
+            with open("{}/tscrunch.png".format(self.outpath), "rb") as imageFile:
+                image_tscrunch = base64.b64encode(imageFile.read())
+                self._tscrunch.set_value(image_tscrunch)
+        except Exception as error:
+            log.debug(error)
+        try:
+            #log.info("reading {}/profile.png".format(self.outpath))
+            with open("{}/profile.png".format(self.outpath), "rb") as imageFile:
+                image_profile = base64.b64encode(imageFile.read())
+                self._profile.set_value(image_profile)
+        except Exception as error:
+            log.debug(error)
+        return
+
+    @coroutine
     def _create_ring_buffer(self, bufferSize, blocks, key, numa_node):
          """
          @brief Create a ring buffer of given size with given key on specified numa node.
@@ -524,7 +332,6 @@ class EddPulsarPipeline(EDDPipeline):
         """
         pass
 
-
     @coroutine
     def configure(self, config_json):
         log.info("Configuring EDD backend for processing")
@@ -537,23 +344,15 @@ class EddPulsarPipeline(EDDPipeline):
                 self.deconfigure()
             except Exception as error:
                 raise EddPulsarPipelineError(str(error))
-
         self.state = "configuring"
         yield self.set(config_json)
-
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
-
         self.numa_number = self._config["pipeline_config"]["numa"]
         pipeline_name = self._config["pipeline_config"]["mode"]
         log.debug("Pipeline name = {}".format(pipeline_name))
-
-
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
-
-
-
         self.state = "ready"
         log.info("Pipeline configured")
 
@@ -810,12 +609,15 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("Staring archive monitor")
         self._archive_directory_monitor = ManagedProcess(cmd)
         self._subprocessMonitor.add(self._archive_directory_monitor, self._subprocess_error)
-        cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/png_katcp_server.py -H 134.104.70.66 -p 10000 --path {}".format(self.out_path)
-        log.debug("Running command: {0}".format(cmd))
-        log.info("Staring archive monitor")
-        self._archive_sensor = ManagedProcess(cmd)
+        #cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/png_katcp_server.py -H 134.104.70.66 -p 10000 --path {}".format(self.out_path)
+        #log.debug("Running command: {0}".format(cmd))
+        #log.info("Staring archive monitor")
+        #self._archive_sensor = ManagedProcess(cmd)
 
-        self._subprocessMonitor.add(self._archive_sensor, self._subprocess_error)
+        #self._subprocessMonitor.add(self._archive_sensor, self._subprocess_error)
+        self._png_monitor_callback = tornado.ioloop.PeriodicCallback(self._png_monitor, 1000)
+        self._png_monitor_callback.start()
+
         self._subprocessMonitor.start()
         self._timer = Time.now() - self._timer
         log.info("Took {} s to start".format(self._timer * 86400))
@@ -831,10 +633,8 @@ class EddPulsarPipeline(EDDPipeline):
         self._state = "stopping"
         if self._subprocessMonitor is not None:
             self._subprocessMonitor.stop()
-
-
-#        try:
         log.debug("Stopping")
+        self._png_monitor_callback.stop()
         self._timeout = 10
         #process = [self._mkrecv_ingest_proc,
         #           self._polnmerge_proc, self._archive_directory_monitor]
@@ -842,8 +642,6 @@ class EddPulsarPipeline(EDDPipeline):
                    self._polnmerge_proc,
                    self._archive_directory_monitor,
                    self._archive_sensor]
-
-
         for proc in process:
             #time.sleep(2)
             proc.terminate(timeout=1)
