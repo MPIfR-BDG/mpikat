@@ -651,9 +651,10 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("reset DADA buffer")
         log.info("Resetting dadc buffer")
         #yield self._reset_ring_buffer("dadc", self.numa_number)
-        cmd = "dbreset -k {0} --log_level debug".format("dadc")
-        log.debug("Running command: {0}".format(cmd))
-        yield command_watcher(cmd)
+        #cmd = "dbreset -k {0} --log_level debug".format("dadc")
+        #log.debug("Running command: {0}".format(cmd))
+        #yield command_watcher(cmd)
+        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
         del self._subprocessMonitor
         self._state = "ready"
         log.info("Pipeline Stopped")
