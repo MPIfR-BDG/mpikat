@@ -26,31 +26,20 @@ import os
 import time
 from mpikat.utils.process_tools import ManagedProcess, command_watcher
 from mpikat.utils.process_monitor import SubprocessMonitor
-from mpikat.utils.sensor_watchdog import SensorWatchdog
-from mpikat.utils.db_monitor import DbMonitor
-from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
 from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig
 from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 import mpikat.utils.numa as numa
 from astropy.time import Time
 import astropy.units as u
 from astropy.coordinates import SkyCoord
-from subprocess import PIPE, Popen
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
 from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
 from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig
-import shlex
-import threading
 import base64
 import tornado
-import coloredlogs
 import signal
 import astropy.units as units
-from optparse import OptionParser
 from tornado.gen import coroutine
-#from katcp import AsyncDeviceServer, Message, AsyncReply
-from katcp import AsyncDeviceServer, Message, Sensor, AsyncReply, KATCPClientResource
-from katcp.kattypes import request, return_reply, Str
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.pipeline")
 log.setLevel('DEBUG')
