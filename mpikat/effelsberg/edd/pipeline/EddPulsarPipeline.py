@@ -642,9 +642,11 @@ class EddPulsarPipeline(EDDPipeline):
         if (parse_tag(self._config['source_config']["source-name"]) == "default") & self.pulsar_flag:
             os.remove("/tmp/t2pred.dat")
         log.info("reset DADA buffer")
-        # self._dada_buffers[1]['monitor'].stop()
-        yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
-
+        cmd = "dareset -k {}".format(self._dada_buffers[0])
+        log.debug("Running command: {0}".format(cmd))
+        log.info("Resetting dadc buffer")
+        self._dadc_reset = ManagedProcess(cmd)
+        self._subprocessMonitor.add(self._dadc_reset, self._subprocess_error)
         del self._subprocessMonitor
         self._state = "ready"
         log.info("Pipeline Stopped")
