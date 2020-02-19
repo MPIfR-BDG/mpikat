@@ -79,7 +79,7 @@ class EDDPipeline(AsyncDeviceServer):
             * ?set "partial config"
             * ?configure "partial config"      state change from idle to configuring
                                                and configured (on success) or error (on fail)
-            * ?capture_start                   state change from configured to streaming or ready 
+            * ?capture_start                   state change from configured to streaming or ready
                                                (on success) or error (on fail).
                                                Streaming indicates that no
                                                further changes to the state are
@@ -126,8 +126,12 @@ class EDDPipeline(AsyncDeviceServer):
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
 
 
-    PIPELINE_STATES = ["idle", "configuring", "configured", "streaming", "ready", "set",
-                   "starting", "running", "stopping", "deconfiguring", "error"]
+    PIPELINE_STATES = ["idle", "configuring", "configured",
+            "capture_starting", "streaming", "ready",
+            "measurement_preparing", "set",
+            "measurement_starting", "measuring", "running",
+            "measurement_stopping",
+            "capture_stopping", "deconfiguring", "error", "panic"]
 
     def __init__(self, ip, port, default_config={}):
         """

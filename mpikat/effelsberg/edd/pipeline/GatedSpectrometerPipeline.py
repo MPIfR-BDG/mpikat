@@ -512,7 +512,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
             raise FailReply("pipleine state is not in state = ready, but in state = {} - cannot start the pipeline".format(self.state))
             #return
 
-        self.state = "starting"
+        self.state = "capture_starting"
         try:
             for i, streamid in enumerate(self._config['input_data_streams']):
                 stream_description = self._config['input_data_streams'][streamid]
@@ -556,7 +556,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
             log.error("Error starting pipeline: {}".format(e))
             self.state = "error"
         else:
-            self.state = "running"
+            self.state = "streaming"
             self.__watchdogs = []
             for i, k in enumerate(self._config['input_data_streams']):
                 wd = SensorWatchdog(self._polarization_sensors[streamid]["input-buffer-total-write"],
@@ -572,8 +572,8 @@ class GatedSpectrometerPipeline(EDDPipeline):
         @brief Stop streaming of data
         """
         log.info("Stoping EDD backend")
-        if self.state != 'running':
-            log.warning("pipleine state is not in state = running but in state {}".format(self.state))
+        if self.state != 'streaming':
+            log.warning("pipleine state is not in state = streaming but in state {}".format(self.state))
             # return
         log.debug("Stopping")
         for wd in self.__watchdogs:
@@ -596,7 +596,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
         @brief deconfigure the gated spectrometer pipeline.
         """
         log.info("Deconfiguring EDD backend")
-        if self.state == 'runnning':
+        if self.state == 'streaming':
             yield self.capture_stop()
 
         self.state = "deconfiguring"
