@@ -48,10 +48,22 @@ def process_watcher(process, name=None, timeout=120, allow_fail=False):
 
 
 @coroutine
-def command_watcher(cmd, **kwargs):
+def command_watcher(cmd, env={}, **kwargs):
+    """
+    Executes a command and watches the process result. Raises an error on non
+    zero returncode (except allow_fail is given). And logs command output to
+    debug, respectively eror output. 
+    """
+    log.debug("Executing command: {}".format(cmd))
     if isinstance(cmd, str):
         cmd = cmd.split()
-    proc = Popen(map(str, cmd), stdout=PIPE, stderr=PIPE, shell=False, close_fds=True)
+
+    environ = os.environ.copy()
+    environ.update(env)
+    if env.keys():
+        log.debug("Additional environment variabels set: {}".format(env))
+
+    proc = Popen(map(str, cmd), stdout=PIPE, stderr=PIPE, shell=False, env=environ, close_fds=True)
     yield process_watcher(proc, name=" ".join(cmd), **kwargs)
 
 
