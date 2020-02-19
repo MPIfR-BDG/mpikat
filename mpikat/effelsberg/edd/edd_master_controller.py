@@ -67,6 +67,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         if not os.path.isdir(self.__edd_ansible_git_repository_folder):
             log.warning("{} is not a readable directory".format(self.__edd_ansible_git_repository_folder))
 
+        self.__provisioned = None
 
     def setup_sensors(self):
         """
@@ -363,14 +364,11 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             raise FailReply("cannot find config file {}".format(basic_config_file))
 
         log.debug("Loading provision description files: {} and {}".format(playbook_file, basic_config_file))
-
-
-
         try:
-            # launch playbook
             yield command_watcher("ansible-playbook {}".format(playbook_file))
         except Exception as E:
             raise FailReply("Error in provisioning {}".format(E))
+        self.__provisioned = playbook_file
 
         try:
             with open(basic_config_file) as cfg:
@@ -446,10 +444,32 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         """
         @brief   Deprovision EDD - stop all ansible containers launched in recent provision cycle.
         """
-        raise NotImplementedError
+        @coroutine
+        def wrapper():
+            try:
+                yield self.deprovision()
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(wrapper)
+        raise AsyncReply
 
-        return ("ok", len(self.__eddDataStore.products))
 
+    @coroutine
+    def deprovision(self):
+        log.debug("Loading provision description files: {} and {}".format(playbook_file, basic_config_file))
+        try:
+            yield command_watcher("ansible-playbook {} --tags=stop".format(self.__provisoned))
+        except Exception as E:
+            raise FailReply("Error in provisioning {}".format(E))
+        self.__provisioned = None
+        self.__eddDataStore.updateProducts()
+        self.__eddDataStore._dataStreams.flushdb()
 
 
 
