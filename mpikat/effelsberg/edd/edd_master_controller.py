@@ -149,7 +149,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             self._config["products"] = []
 
         # ToDo: Check if provisioned
-        if not self.__provisoned:
+        if not self.__provisioned:
             self._installController(self._config)
 
 
@@ -383,7 +383,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         # Retrieve default configs from products and merge with basic config to
         # have full config locally.
-        self._config = {}
+        self._config = {"products":{}, "packetizers":basic_config['packetizers']}
         for product in basic_config['products']:
             log.debug("Retrieve basic config for {}".format(product["id"]))
             controller = self.__controller[product["id"]]
@@ -396,7 +396,8 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
             cfg = yield controller.getConfig()
             cfg = EDDPipeline.updateConfig(cfg, product)
-            self._config[product["id"]] = cfg
+            self._config["products"][product["id"]] = cfg
+    
         self._configUpdated()
 
 
