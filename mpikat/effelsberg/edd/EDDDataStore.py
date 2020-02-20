@@ -1,6 +1,7 @@
 import redis
 import json
 import logging
+from collections.abc import Iterable
 
 log = logging.getLogger("mpikat.edd_data_store")
 
@@ -57,7 +58,7 @@ class EDDDataStore:
 
             ip = facts["ansible_default_ipv4"]
 
-            if 'edd_container'  not in facts:
+            if 'edd_container' not in facts or not isinstance(facts['edd_container'], Iterable):
                 log.debug("No products found for: {}".format(k))
                 continue
 
