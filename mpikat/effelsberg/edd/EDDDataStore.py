@@ -7,7 +7,10 @@ log = logging.getLogger("mpikat.edd_data_store")
 
 class EDDDataStore:
     """
-    @brief Interface to the data store for the current EDD configuration
+    @brief Interface to the data store for the EDD.
+
+    @#detail The data store contains the current state of the EDD, augmented
+    with additional data of the current state of telescope needed by products.
     """
     def __init__(self, host, port=6379):
         log.debug("Init data store connection: {}:{}".format(host, port))
@@ -25,15 +28,23 @@ class EDDDataStore:
         # Telescope meta data
         self._telescopeMetaData = redis.StrictRedis(host=host, port=port, db=4)
 
-        self._ansible.ping()
-        self._products.ping()
-        self._dataStreams.ping()
-        self._telescopeMetaData.ping()
+        self.__dataBases = [self._ansible, self._products, self._dataStreams, self._edd_static_data, self._telescopeMetaData]
+        for d in self.__dataBases:
+            d.ping()
+
+
+    def flush(self):
+        """
+        @brief Flush content of all databases.
+        """
+        log.debug("Flushing all databses")
+        for d in self.__dataBases:
+            d.flushdb()
 
 
     def updateProducts(self):
         """
-        @brief Fill the producers database bsaed on the information in the ansible database
+        @brief Fill the producers database based on the information in the ansible database
         """
         self._products.flushdb()
         for k in self._ansible.keys():
@@ -77,23 +88,6 @@ class EDDDataStore:
         """
         return json.loads(self._dataStreams[streamid])
 
-    def hasDataFormatDefinition(self, format_name):
-        """
-        @brief Check if data format description already exists.
-        """
-        key = "DataFormats:{}".format(format_name)
-        return key in self._edd_static_data
-
-    def getDataFormatDefinition(self, format_name):
-        """
-        @brief Returns data format description as dict.
-        """
-        key = "DataFormats:{}".format(format_name)
-        if key in self._edd_static_data:
-            return json.loads(self._edd_static_data[key])
-        else:
-            log.warning("Unknown data format: - {}".format(key))
-            return {}
 
 
     def getProduct(self, productid):
@@ -126,3 +120,21 @@ class EDDDataStore:
             params = json.dumps(params)
         log.debug("Add data format definition {} - {}".format(key, params))
         self._edd_static_data[key] = params
+
+    def hasDataFormatDefinition(self, format_name):
+        """
+        @brief Check if data format description already exists.
+        """
+        key = "DataFormats:{}".format(format_name)
+        return key in self._edd_static_data
+
+    def getDataFormatDefinition(self, format_name):
+        """
+        @brief Returns data format description as dict.
+        """
+        key = "DataFormats:{}".format(format_name)
+        if key in self._edd_static_data:
+            return json.loads(self._edd_static_data[key])
+        else:
+            log.warning("Unknown data format: - {}".format(key))
+            return {}

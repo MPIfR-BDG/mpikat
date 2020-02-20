@@ -24,14 +24,19 @@ class EddServerProductController(object):
             name="server-client_{}".format(product_id),
             address=(address, int(port)),
             controlled=True))
+
         self.__product_id = product_id
         self._client.start()
 
     @coroutine
     def _safe_request(self, request_name, *args, **kwargs):
         log.info("Sending request '{}' with arguments {}".format(request_name, args))
-        yield self._client.until_synced()
-        response = yield self._client.req[request_name](*args, **kwargs)
+        try:
+            yield self._client.until_synced()
+            response = yield self._client.req[request_name](*args, **kwargs)
+        except Exception as E:
+            log.error("Error processing request: {}".format(E))
+            raise E
         if not response.reply.reply_ok():
             log.error("'{}' request failed with error: {}".format(request_name, response.reply.arguments[1]))
             raise RuntimeError(response.reply.arguments[1])
@@ -93,5 +98,18 @@ class EddServerProductController(object):
         """
         logging.debug("Send set to {}".format(self.__product_id))
         yield self._safe_request("set", json.dumps(config), timeout=120.0)
+
+
+    @coroutine
+    def getConfig(self):
+        """
+        @brief      A no-op method for supporting the product controller interface.
+        """
+        logging.debug("Send get config to {}".format(self.__product_id))
+        f = self._client.list_sensors()
+        R = yield self._safe_request("sensor_value", "current-config")
+        raise Return(json.loads(R.informs[0].arguments[-1]))
+
+
 
 
