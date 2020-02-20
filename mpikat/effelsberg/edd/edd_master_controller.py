@@ -115,7 +115,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         if 'packetisers' in cfg:
             cfg['packetizers'] = cfg.pop('packetisers')
 
-        EDDPipeline.set(self, cfg)
+        EDDPipeline.EDDPipeline.set(self, cfg)
 
 
 
@@ -436,8 +436,6 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 else:
                     log.warning("Manual setup of product {} - require address and port properties")
                     self.__controller[product_id] = EddServerProductController(product_id, product_config["address"], product_config["port"])
-
-
 
 
     @request()
