@@ -181,7 +181,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         log.debug("Identify additional output streams")
         # Get output streams from products
-        for product in self._config['products']:
+        for product_id, product in self._config['products'].iteritems():
             if not "output_data_streams" in product:
                 continue
 
@@ -199,7 +199,11 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 self.__eddDataStore.addDataStream(key, i)
 
         log.debug("Connect data streams with high level description")
-        for product in self._config['products']:
+        for product_id, product in self._config['products'].iteritems():
+            log.error(" {} -- {}".format(type(product), product))
+            if not "input_data_streams" in product:
+                log.warning("Product: {} without input data streams".format(product_id))
+                continue
             counter = 0
             for k in product["input_data_streams"]:
                 if isinstance(product["input_data_streams"], dict):
@@ -227,7 +231,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         log.debug("Updated configuration:\n '{}'".format(json.dumps(self._config, indent=2)))
         log.info("Configuring products")
-        for product_config in self._config["products"]:
+        for product_id, product_config in self._config["products"].iteritems():
             yield self.__controller[product_id].configure(product_config)
 
         self._edd_config_sensor.set_value(json.dumps(self._config))
@@ -397,7 +401,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             cfg = yield controller.getConfig()
             cfg = EDDPipeline.updateConfig(cfg, product)
             self._config["products"][product["id"]] = cfg
-    
+
         self._configUpdated()
 
 
