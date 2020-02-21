@@ -101,6 +101,24 @@ class EddServerProductController(object):
 
 
     @coroutine
+    def provision(self, config):
+        """
+        @brief      A no-op method for supporting the product controller interface.
+        """
+        logging.debug("Send provision to {}".format(self.__product_id))
+        yield self._safe_request("provision", config, timeout=120.0)
+
+
+    @coroutine
+    def deprovision(self):
+        """
+        @brief      A no-op method for supporting the product controller interface.
+        """
+        logging.debug("Send deprovision to {}".format(self.__product_id))
+        yield self._safe_request("deprovision", timeout=120.0)
+
+
+    @coroutine
     def getConfig(self):
         """
         @brief      A no-op method for supporting the product controller interface.
