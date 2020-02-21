@@ -51,7 +51,7 @@ class EddServerProductController(object):
 
         @detail
         """
-        yield self._safe_request('deconfigure')
+        yield self._safe_request('deconfigure', timeout=120.0)
 
     @coroutine
     def configure(self, config={}):
@@ -66,14 +66,14 @@ class EddServerProductController(object):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        yield self._safe_request("capture_start")
+        yield self._safe_request("capture_start", timeout=120.0)
 
     @coroutine
     def capture_stop(self):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        yield self._safe_request("capture_stop")
+        yield self._safe_request("capture_stop", timeout=120.0)
 
 
     @coroutine
@@ -98,6 +98,24 @@ class EddServerProductController(object):
         """
         logging.debug("Send set to {}".format(self.__product_id))
         yield self._safe_request("set", json.dumps(config), timeout=120.0)
+
+
+    @coroutine
+    def provision(self, config):
+        """
+        @brief      A no-op method for supporting the product controller interface.
+        """
+        logging.debug("Send provision to {}".format(self.__product_id))
+        yield self._safe_request("provision", config, timeout=120.0)
+
+
+    @coroutine
+    def deprovision(self):
+        """
+        @brief      A no-op method for supporting the product controller interface.
+        """
+        logging.debug("Send deprovision to {}".format(self.__product_id))
+        yield self._safe_request("deprovision", timeout=120.0)
 
 
     @coroutine

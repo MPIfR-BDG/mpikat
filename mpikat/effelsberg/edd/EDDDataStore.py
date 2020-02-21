@@ -57,7 +57,7 @@ class EDDDataStore:
 
             ip = facts["ansible_default_ipv4"]
 
-            if 'edd_container'  not in facts:
+            if 'edd_container' not in facts or not isinstance(facts['edd_container'], dict):
                 log.debug("No products found for: {}".format(k))
                 continue
 
