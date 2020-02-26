@@ -87,6 +87,19 @@ class DigitiserPacketiserClient(object):
         else:
             yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "off")
 
+    @coroutine
+    def set_noise_diode_frequency(self, frequency):
+        """
+        @brief Set noise diode frequency to given value.
+        """
+        yield self.set_noise_diode_fireing_pattern(0.5, 1./frequency, "now")
+
+    @coroutine
+    def set_noise_diode_fireing_pattern(self, percentage, period, start="now"):
+        """
+        @brief Set noise diode frequency to given value.
+        """
+        yield self._safe_request("noise_source", start, percentage, period)
 
     @coroutine
     def set_sampling_rate(self, rate, retries=3):
