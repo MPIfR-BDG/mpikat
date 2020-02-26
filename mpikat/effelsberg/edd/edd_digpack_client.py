@@ -341,29 +341,33 @@ if __name__ == "__main__":
     import coloredlogs
     from argparse import ArgumentParser
     parser = ArgumentParser(description="Configures edd digitiezer.")
-    parser.add_argument('host', type=str, 
+    parser.add_argument('host', type=str,
         help='Digitizer interface to bind to.')
     parser.add_argument('-p', '--port', dest='port', type=long,
         help='Port number to bind to', default=7147)
     parser.add_argument('--nbits', dest='nbits', type=long,
-        help='The number of bits per output sample', default=12)
+        help='The number of bits per output sample')
     parser.add_argument('--sampling_rate', dest='sampling_rate', type=float,
-        help='The digitiser sampling rate (Hz)', default=2600000000.0)
+        help='The digitiser sampling rate (Hz)')
     parser.add_argument('--v-destinations', dest='v_destinations', type=str,
-        help='V polarisation destinations', default="225.0.0.152+3:7148")
+        help='V polarisation destinations')
     parser.add_argument('--h-destinations', dest='h_destinations', type=str,
-        help='H polarisation destinations', default="225.0.0.156+3:7148")
+        help='H polarisation destinations')
     parser.add_argument('--log-level',dest='log_level',type=str,
         help='Logging level',default="INFO")
     parser.add_argument('--predecimation-factor', dest='predecimation_factor', type=int,
-        help='predecimation factor', default=1)
+        help='predecimation factor')
+    parser.add_argument('--synchronize', dest='synchronize', action='store_true',
+        help='')
+    parser.add_argument('--sync-time', dest='sync_time', type=int, 
+        help='')
+    parser.add_argument('--capture-start', dest='capture_start', action='store_true',
+        help='')
 
     parser.add_argument('--flip_spectrum', action="store_true", default=False)
     args = parser.parse_args()
     print("Configuring paketizer {}:{}".format(args.host, args.port))
-    for v in vars(args):
-        print("  - {}: {}".format(v, getattr(args, v)))
-
+    client = DigitiserPacketiserClient(args.host, port=args.port)
 
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
@@ -371,43 +375,30 @@ if __name__ == "__main__":
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
         level=args.log_level.upper(),
         logger=logger)
-    ioloop = IOLoop.current()
-    client = DigitiserPacketiserClient(args.host, port=args.port)
+
+    actions = []
+    if args.nbits:
+        actions.append(client.set_bit_width(args.nbits))
+    if args.sampling_rate:
+        actions.append(client.set_sampling_rate(args.sampling_rate))
+    if args.v_destinations:
+        actions.append(client.set_destinations(args.v_destinations, args.h_destinations))
+    if args.predecimation_factor:
+        actions.append(client.set_predecimation(args.predecimation_factor))
+    if args.flip_spectrum:
+        actions.append(client.flip_spectrum(args.flip_spectrum))
+    if args.synchronize:
+        if args.sync_time:
+            actions.append(client.synchronize(args.sync_time))
+        else:
+            actions.append(client.synchronize())
+    if args.capture_start:
+        actions.append(client.capture_start())
+
     @coroutine
-    def configure():
-        try:
-            yield client.set_sampling_rate(args.sampling_rate)
-            yield client.set_bit_width(args.nbits)
-            yield client.set_destinations(args.v_destinations, args.h_destinations)
-            yield client.set_predecimation(args.predecimation_factor)
-            yield client.flip_spectrum(args.flip_spectrum)
-            yield client.synchronize()
-            yield client.capture_start()
-        except Exception as error:
-            log.exception("Error during packetiser configuration: {}".format(str(error)))
-            raise error
-    ioloop.run_sync(configure)
+    def perform_actions():
+        for a in actions:
+            yield a
+    ioloop = IOLoop.current()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    ioloop.run_sync(perform_actions)
