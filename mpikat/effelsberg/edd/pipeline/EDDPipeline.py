@@ -42,6 +42,7 @@ import json
 import tempfile
 import threading
 import types
+import functools
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.EDDPipeline")
 log.setLevel('DEBUG')
@@ -61,6 +62,10 @@ def updateConfig(oldo, new):
                 log.warning("Update option {} with different type! Old value(type) {}({}), new {}({}) ".format(k, old[k], type(old[k]), new[k], type(new[k])))
             old[k] = new[k]
     return old
+
+
+
+
 
 
 class EDDPipeline(AsyncDeviceServer):
@@ -139,6 +144,7 @@ class EDDPipeline(AsyncDeviceServer):
         """
         self.callbacks = set()
         self._state = "idle"
+        self.previous_state = "unprovisioned"
         self._sensors = []
         self.__config = default_config.copy()
         self._default_config = default_config
@@ -235,6 +241,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @state.setter
     def state(self, value):
+        self.previous_state = self._state
         self._state = value
         self._pipeline_sensor_status.set_value(self._state)
         self._status_change_time.set_value(datetime.datetime.now().replace(microsecond=0).isoformat())
@@ -621,6 +628,37 @@ class EDDPipeline(AsyncDeviceServer):
         """@brief Populate the data store"""
         log.debug("Populate data store @ {}:{}".format(host, port))
         pass
+
+
+def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, intermediate=None, error='error'):
+    """
+    @brief decorator to perform a state change in a method
+
+    @param        target: target state
+    @param       allowed: Allowed source states
+    @param  intermediate: Intermediate state to assume while executing
+    @param         error: State to go assume on error
+    """
+    def decorator_state_change(func):
+        @functools.wraps(func)
+        @coroutine
+        def wrapper(self, *args, **kwargs):
+            if self.state not in allowed:
+                log.warning("State change to {} requested, but state {} not in allowed states! Doing nothing.".format(target, self.state))
+                return
+            if intermediate:
+                self.state = intermediate
+            try:
+                yield func(self, *args, **kwargs)
+            except Exception as E:
+                self.state = error
+                raise E
+            else:
+                self.state = target
+        return wrapper
+    return decorator_state_change
+
+
 
 
 
