@@ -363,6 +363,8 @@ if __name__ == "__main__":
         help='')
     parser.add_argument('--capture-start', dest='capture_start', action='store_true',
         help='')
+    parser.add_argument('--noise-diode-frequency', dest='noise_diode_frequency', type=float,
+        help='set the noise diode frequency')
 
     parser.add_argument('--flip_spectrum', action="store_true", default=False)
     args = parser.parse_args()
@@ -387,6 +389,9 @@ if __name__ == "__main__":
         actions.append(client.set_predecimation(args.predecimation_factor))
     if args.flip_spectrum:
         actions.append(client.flip_spectrum(args.flip_spectrum))
+    if args.noise_diode_frequency:
+        actions.append(client.set_noise_diode_frequency(args.noise_diode_frequency))
+    # Sync + capture start should probably come last
     if args.synchronize:
         if args.sync_time:
             actions.append(client.synchronize(args.sync_time))
