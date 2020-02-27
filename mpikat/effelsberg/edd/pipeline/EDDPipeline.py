@@ -299,7 +299,6 @@ class EDDPipeline(AsyncDeviceServer):
             try:
                 yield self.configure(config_json)
             except FailReply as fr:
-                log.error(str(fr))
                 req.reply("fail", str(fr))
             except Exception as error:
                 log.exception(str(error))
@@ -343,7 +342,6 @@ class EDDPipeline(AsyncDeviceServer):
         try:
             self.set(config_json)
         except FailReply as fr:
-            log.error(str(fr))
             req.reply("fail", str(fr))
         except Exception as error:
             log.exception(str(error))
@@ -457,6 +455,9 @@ class EDDPipeline(AsyncDeviceServer):
         def stop_wrapper():
             try:
                 yield self.capture_stop()
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
@@ -644,8 +645,7 @@ def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, intermediate=None,
         @coroutine
         def wrapper(self, *args, **kwargs):
             if self.state not in allowed:
-                log.warning("State change to {} requested, but state {} not in allowed states! Doing nothing.".format(target, self.state))
-                return
+                raise FailReply("State change to {} requested, but state {} not in allowed states! Doing nothing.".format(target, self.state))
             if intermediate:
                 self.state = intermediate
             try:
