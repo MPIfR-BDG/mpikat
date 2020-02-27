@@ -95,7 +95,7 @@ class DigitiserPacketiserClient(object):
         yield self.set_noise_diode_fireing_pattern(0.5, 1./frequency, "now")
 
     @coroutine
-    def set_noise_diode_fireing_pattern(self, percentage, period, start="now"):
+    def set_noise_diode_firing_pattern(self, percentage, period, start="now"):
         """
         @brief Set noise diode frequency to given value.
         """
