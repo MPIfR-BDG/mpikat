@@ -24,7 +24,7 @@ from mpikat.utils.process_monitor import SubprocessMonitor
 from mpikat.utils.sensor_watchdog import SensorWatchdog
 from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
-from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig
+from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig, state_change
 from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 import mpikat.utils.numa as numa
 
@@ -343,6 +343,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 self._polarization_sensors[streamid]["output-buffer-total-read"].set_value(status['read'])
 
 
+    @state_change(target="ready", allowed=["idle"], intermediate="configuring")
     @coroutine
     def configure(self, config_json):
         """
@@ -361,12 +362,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
 
-        if self.state != "idle":
-            log.warning("Configure received while in state: {} - deconfigureing first ...".format(self.state))
-        # alternatively we should automatically deconfigure
-        #yield self.deconfigure()
-
-        self.state = "configuring"
         yield self.set(config_json)
 
         cfs = json.dumps(self._config, indent=4)
@@ -486,7 +481,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 ofpath = os.path.join(cfg["output_directory"], ofname)
                 log.debug("Writing output to {}".format(ofpath))
                 if not os.path.isdir(ofpath):
-                    os.mkdir(ofpath)
+                    os.makedirs(ofpath)
                 cmd = "dada_dbdisk -k {ofname} -D {ofpath} -W".format(ofname=ofname, ofpath=ofpath, **cfg)
             else:
                 log.warning("Selected null output. Not sending data!")
@@ -498,20 +493,15 @@ class GatedSpectrometerPipeline(EDDPipeline):
             self._subprocesses.append(mks)
 
         self._subprocessMonitor.start()
-        self.state = "ready"
 
 
+    @state_change(target="streaming", allowed=["ready"], intermediate="capture_starting")
     @coroutine
     def capture_start(self, config_json=""):
         """
         @brief start streaming spectrometer output
         """
         log.info("Starting EDD backend")
-        if self.state != "ready":
-            raise FailReply("pipleine state is not in state = ready, but in state = {} - cannot start the pipeline".format(self.state))
-            #return
-
-        self.state = "starting"
         try:
             for i, streamid in enumerate(self._config['input_data_streams']):
                 stream_description = self._config['input_data_streams'][streamid]
@@ -552,11 +542,10 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 self.mkrec_cmd.append(mk)
                 self._subprocessMonitor.add(mk, self._subprocess_error)
 
-        except Exception as e:
-            log.error("Error starting pipeline: {}".format(e))
-            self.state = "error"
+        except Exception as E:
+            log.error("Error starting pipeline: {}".format(E))
+            raise E
         else:
-            self.state = "running"
             self.__watchdogs = []
             for i, k in enumerate(self._config['input_data_streams']):
                 wd = SensorWatchdog(self._polarization_sensors[streamid]["input-buffer-total-write"],
@@ -566,44 +555,44 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 self.__watchdogs.append(wd)
 
 
+    @state_change(target="idle", allowed=["streaming"], intermediate="capture_stopping")
     @coroutine
     def capture_stop(self):
         """
         @brief Stop streaming of data
         """
         log.info("Stoping EDD backend")
-        if self.state != 'running':
-            log.warning("pipleine state is not in state = running but in state {}".format(self.state))
-            # return
-        log.debug("Stopping")
         for wd in self.__watchdogs:
             wd.stop_event.set()
+            yield
         if self._subprocessMonitor is not None:
             self._subprocessMonitor.stop()
+            yield
 
         # stop mkrec process
         log.debug("Stopping mkrecv processes ...")
         for proc in self.mkrec_cmd:
             proc.terminate()
+            yield
         # This will terminate also the gated spectromenter automatically
 
         yield self.deconfigure()
 
 
+    @state_change(target="idle", intermediate="deconfiguring", error='panic')
     @coroutine
     def deconfigure(self):
         """
         @brief deconfigure the gated spectrometer pipeline.
         """
         log.info("Deconfiguring EDD backend")
-        if self.state == 'runnning':
+        if self.previous_state == 'streaming':
             yield self.capture_stop()
 
-        self.state = "deconfiguring"
         if self._subprocessMonitor is not None:
-            self._subprocessMonitor.stop()
+            yield self._subprocessMonitor.stop()
         for proc in self._subprocesses:
-            proc.terminate()
+            yield proc.terminate()
 
         self.mkrec_cmd = []
 
@@ -615,8 +604,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
             yield command_watcher(cmd)
 
         self._dada_buffers = []
-        self.state = "idle"
-
 
     @coroutine
     def populate_data_store(self, host, port):

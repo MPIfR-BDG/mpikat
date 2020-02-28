@@ -42,6 +42,7 @@ import json
 import tempfile
 import threading
 import types
+import functools
 
 log = logging.getLogger("mpikat.effelsberg.edd.pipeline.EDDPipeline")
 log.setLevel('DEBUG')
@@ -63,40 +64,64 @@ def updateConfig(oldo, new):
     return old
 
 
+
+
+
+
 class EDDPipeline(AsyncDeviceServer):
     """
     @brief Abstract interface for EDD Pipelines
 
-    @detail Pipelines can implement functions to act within the following sequence of commands:
+    @detail Pipelines can implement functions to act within the following
+    sequence of commands with associated state changes:
 
+                                               After provisioning the pipeline is in state idle.
+            * ?set "partial config"            After set, it remains in state idle as only the
+                                               config dictionary may have changed. A wrong config
+                                               is rejected without changing state as state remains
+            valid.
             * ?set "partial config"
             * ?set "partial config"
-            * ?set "partial config"
-            * ?configure "partial config"
-            * ?capture_start
+            * ?configure "partial config"      state change from idle to configuring
+                                               and configured (on success) or error (on fail)
+            * ?capture_start                   state change from configured to streaming or ready
+                                               (on success) or error (on fail).
+                                               Streaming indicates that no
+                                               further changes to the state are
+                                               expected and data is injected
+                                               into the EDD.
+            * ?measurement_prepare "data"      state change from ready to set or error
+            * ?measurement_start               state change from set to running or error
+            * ?measurement_stop                state change from running to set or error
             * ?measurement_prepare "data"
             * ?measurement_start
             * ?measurement_stop
-            * ?measurement_prepare "data"
-            * ?measurement_start
-            * ?measurement_stop
-            * ?measurement_prepare "data"
-            * ?measurement_start
-            * ?measurement_stop
-            * ?capture_stop
-            * ?deconfigure
+            * ?measurement_prepare "data"      state change from ready to set or error
+            * ?measurement_start               state change from set to running
+            * ?measurement_stop                return to state ready
+            * ?capture_stop                    return to state configured or idle
+            * ?deconfigure                     restore state idle
 
-    * set - updates the curent configuration with the provided partial config. This
-            is handeld enterily within the parent class which updates the member
+                                               starting and stopping
+                                               may be used as
+                                               intermediate states for
+                                               capture_start /
+                                               capture_stop /
+                                               measurement_start,
+                                               measurement_stop
+
+    * set - updates the current configuration with the provided partial config. This
+            is handled entirely within the parent class which updates the member
             attribute _config.
-    * configure - optionally does a final update of the curernt config and
-                  prepares the pipeline. Configuring the pipeline may take time, so all
-                  lengthy preparations should be done here.
+    * configure - optionally does a final update of the current config and
+                  prepares the pipeline. Configuring the pipeline may take time,
+                  so all lengthy preparations should be done here.
     * capture start - The pipeline should send data (into the EDD) after this command.
-    * measurement prepare - receive optional configuration before each measurement. The pipeline must not stop streaming on update.
-    * measurement start - Start of an individual measuerment. Should be quasi
-                          isntantaneous. E.g. a recorder should be already connected to the dat
-                          stream and just start writing to disk.
+    * measurement prepare - receive optional configuration before each measurement.
+                            The pipeline must not stop streaming on update.
+    * measurement start - Start of an individual measurement. Should be quasi
+                          instantaneous. E.g. a recorder should be already connected
+                          to the data stream and just start writing to disk.
     * measurement stop -  Stop the measurement
 
     Pipelines can also implement:
@@ -106,9 +131,12 @@ class EDDPipeline(AsyncDeviceServer):
     DEVICE_STATUSES = ["ok", "degraded", "fail"]
 
 
-    PIPELINE_STATES = ["idle", "configuring", "ready",
-                   "starting", "running", "stopping",
-                   "deconfiguring", "error"]
+    PIPELINE_STATES = ["idle", "configuring", "configured",
+            "capture_starting", "streaming", "ready",
+            "measurement_preparing", "set",
+            "measurement_starting", "measuring", "running",
+            "measurement_stopping",
+            "capture_stopping", "deconfiguring", "error", "panic"]
 
     def __init__(self, ip, port, default_config={}):
         """
@@ -116,6 +144,7 @@ class EDDPipeline(AsyncDeviceServer):
         """
         self.callbacks = set()
         self._state = "idle"
+        self.previous_state = "unprovisioned"
         self._sensors = []
         self.__config = default_config.copy()
         self._default_config = default_config
@@ -212,6 +241,7 @@ class EDDPipeline(AsyncDeviceServer):
 
     @state.setter
     def state(self, value):
+        self.previous_state = self._state
         self._state = value
         self._pipeline_sensor_status.set_value(self._state)
         self._status_change_time.set_value(datetime.datetime.now().replace(microsecond=0).isoformat())
@@ -269,7 +299,6 @@ class EDDPipeline(AsyncDeviceServer):
             try:
                 yield self.configure(config_json)
             except FailReply as fr:
-                log.error(str(fr))
                 req.reply("fail", str(fr))
             except Exception as error:
                 log.exception(str(error))
@@ -313,7 +342,6 @@ class EDDPipeline(AsyncDeviceServer):
         try:
             self.set(config_json)
         except FailReply as fr:
-            log.error(str(fr))
             req.reply("fail", str(fr))
         except Exception as error:
             log.exception(str(error))
@@ -427,6 +455,9 @@ class EDDPipeline(AsyncDeviceServer):
         def stop_wrapper():
             try:
                 yield self.capture_stop()
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
@@ -598,6 +629,36 @@ class EDDPipeline(AsyncDeviceServer):
         """@brief Populate the data store"""
         log.debug("Populate data store @ {}:{}".format(host, port))
         pass
+
+
+def state_change(target, allowed=EDDPipeline.PIPELINE_STATES, intermediate=None, error='error'):
+    """
+    @brief decorator to perform a state change in a method
+
+    @param        target: target state
+    @param       allowed: Allowed source states
+    @param  intermediate: Intermediate state to assume while executing
+    @param         error: State to go assume on error
+    """
+    def decorator_state_change(func):
+        @functools.wraps(func)
+        @coroutine
+        def wrapper(self, *args, **kwargs):
+            if self.state not in allowed:
+                raise FailReply("State change to {} requested, but state {} not in allowed states! Doing nothing.".format(target, self.state))
+            if intermediate:
+                self.state = intermediate
+            try:
+                yield func(self, *args, **kwargs)
+            except Exception as E:
+                self.state = error
+                raise E
+            else:
+                self.state = target
+        return wrapper
+    return decorator_state_change
+
+
 
 
 
