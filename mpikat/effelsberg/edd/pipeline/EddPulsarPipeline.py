@@ -603,7 +603,7 @@ class EddPulsarPipeline(EDDPipeline):
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
-        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_nt --header {dada_header} --dada-mode 4 --quiet".format(
+        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_rnt --header {dada_header} --quiet".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=self.dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
