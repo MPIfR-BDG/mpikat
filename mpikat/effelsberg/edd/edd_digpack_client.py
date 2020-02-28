@@ -92,13 +92,14 @@ class DigitiserPacketiserClient(object):
         """
         @brief Set noise diode frequency to given value.
         """
-        yield self.set_noise_diode_fireing_pattern(0.5, 1./frequency, "now")
+        yield self.set_noise_diode_firing_pattern(0.5, 1./frequency, "now")
 
     @coroutine
     def set_noise_diode_firing_pattern(self, percentage, period, start="now"):
         """
         @brief Set noise diode frequency to given value.
         """
+        log.debug("Set noise diode firing pattern")
         yield self._safe_request("noise_source", start, percentage, period)
 
     @coroutine
@@ -229,6 +230,9 @@ class DigitiserPacketiserClient(object):
         yield self.flip_spectrum(config["flip_spectrum"])
         yield self.set_bit_width(config["bit_width"])
         yield self.set_destinations(config["v_destinations"], config["h_destinations"])
+        if "noise_diode_frequency" in config:
+            self.set_noise_diode_frequency(config["noise_diode_frequency"])
+
         for interface, ip_address in config["interface_addresses"].items():
             yield self.set_interface_address(interface, ip_address)
         if "sync_time" in config:
