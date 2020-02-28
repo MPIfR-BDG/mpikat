@@ -87,6 +87,20 @@ class DigitiserPacketiserClient(object):
         else:
             yield self._safe_request("rxs_packetizer_edd_flipsignalspectrum", "off")
 
+    @coroutine
+    def set_noise_diode_frequency(self, frequency):
+        """
+        @brief Set noise diode frequency to given value.
+        """
+        yield self.set_noise_diode_firing_pattern(0.5, 1./frequency, "now")
+
+    @coroutine
+    def set_noise_diode_firing_pattern(self, percentage, period, start="now"):
+        """
+        @brief Set noise diode frequency to given value.
+        """
+        log.debug("Set noise diode firing pattern")
+        yield self._safe_request("noise_source", start, percentage, period)
 
     @coroutine
     def set_sampling_rate(self, rate, retries=3):
@@ -216,6 +230,9 @@ class DigitiserPacketiserClient(object):
         yield self.flip_spectrum(config["flip_spectrum"])
         yield self.set_bit_width(config["bit_width"])
         yield self.set_destinations(config["v_destinations"], config["h_destinations"])
+        if "noise_diode_frequency" in config:
+            self.set_noise_diode_frequency(config["noise_diode_frequency"])
+
         for interface, ip_address in config["interface_addresses"].items():
             yield self.set_interface_address(interface, ip_address)
         if "sync_time" in config:
@@ -327,30 +344,36 @@ class DigitiserPacketiserClient(object):
 if __name__ == "__main__":
     import coloredlogs
     from argparse import ArgumentParser
-    parser = ArgumentParser(description="Configures edd digitiezer.")
-    parser.add_argument('host', type=str, 
+    parser = ArgumentParser(description="Configures edd digitiezer. By default, send syncronize and capture start along with the given options.")
+    parser.add_argument('host', type=str,
         help='Digitizer interface to bind to.')
     parser.add_argument('-p', '--port', dest='port', type=long,
         help='Port number to bind to', default=7147)
     parser.add_argument('--nbits', dest='nbits', type=long,
-        help='The number of bits per output sample', default=12)
-    parser.add_argument('--sampling_rate', dest='sampling_rate', type=float,
-        help='The digitiser sampling rate (Hz)', default=2600000000.0)
+        help='The number of bits per output sample')
+    parser.add_argument('--sampling-rate', dest='sampling_rate', type=float,
+        help='The digitiser sampling rate (Hz)')
     parser.add_argument('--v-destinations', dest='v_destinations', type=str,
-        help='V polarisation destinations', default="225.0.0.152+3:7148")
+        help='V polarisation destinations')
     parser.add_argument('--h-destinations', dest='h_destinations', type=str,
-        help='H polarisation destinations', default="225.0.0.156+3:7148")
+        help='H polarisation destinations')
     parser.add_argument('--log-level',dest='log_level',type=str,
         help='Logging level',default="INFO")
     parser.add_argument('--predecimation-factor', dest='predecimation_factor', type=int,
-        help='predecimation factor', default=1)
+        help='Predecimation factor')
+    parser.add_argument('--sync', dest='synchronize', action='store_true',
+        help='Send sync command.')
+    parser.add_argument('--capture-start', dest='capture_start', action='store_true',
+        help='Send capture start command.')
+    parser.add_argument('--sync-time', dest='sync_time', type=int,
+        help='Use specified synctime, otherwise use current time')
+    parser.add_argument('--noise-diode-frequency', dest='noise_diode_frequency', type=float,
+        help='Set the noise diode frequency')
 
-    parser.add_argument('--flip_spectrum', action="store_true", default=False)
+    parser.add_argument('--flip-spectrum', action="store_true", default=False, help="Flip the spectrum")
     args = parser.parse_args()
     print("Configuring paketizer {}:{}".format(args.host, args.port))
-    for v in vars(args):
-        print("  - {}: {}".format(v, getattr(args, v)))
-
+    client = DigitiserPacketiserClient(args.host, port=args.port)
 
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
@@ -358,43 +381,33 @@ if __name__ == "__main__":
         fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
         level=args.log_level.upper(),
         logger=logger)
-    ioloop = IOLoop.current()
-    client = DigitiserPacketiserClient(args.host, port=args.port)
+
+    actions = []
+    if args.nbits:
+        actions.append(client.set_bit_width(args.nbits))
+    if args.sampling_rate:
+        actions.append(client.set_sampling_rate(args.sampling_rate))
+    if args.v_destinations:
+        actions.append(client.set_destinations(args.v_destinations, args.h_destinations))
+    if args.predecimation_factor:
+        actions.append(client.set_predecimation(args.predecimation_factor))
+    if args.flip_spectrum:
+        actions.append(client.flip_spectrum(args.flip_spectrum))
+    if args.noise_diode_frequency:
+        actions.append(client.set_noise_diode_frequency(args.noise_diode_frequency))
+    # Sync + capture start should probably come last
+    if args.synchronize:
+        if args.sync_time:
+            actions.append(client.synchronize(args.sync_time))
+        else:
+            actions.append(client.synchronize())
+    if args.capture_start:
+        actions.append(client.capture_start())
+
     @coroutine
-    def configure():
-        try:
-            yield client.set_sampling_rate(args.sampling_rate)
-            yield client.set_bit_width(args.nbits)
-            yield client.set_destinations(args.v_destinations, args.h_destinations)
-            yield client.set_predecimation(args.predecimation_factor)
-            yield client.flip_spectrum(args.flip_spectrum)
-            yield client.synchronize()
-            yield client.capture_start()
-        except Exception as error:
-            log.exception("Error during packetiser configuration: {}".format(str(error)))
-            raise error
-    ioloop.run_sync(configure)
+    def perform_actions():
+        for a in actions:
+            yield a
+    ioloop = IOLoop.current()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    ioloop.run_sync(perform_actions)

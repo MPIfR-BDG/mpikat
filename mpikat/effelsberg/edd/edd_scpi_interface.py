@@ -33,6 +33,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
 
     @scpi_request()
+    @coroutine
     def request_edd_configure(self, req):
         """
         @brief      Configure the EDD backend
@@ -41,8 +42,16 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:CONFIGURE'
         """
-        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.configure))
-        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.capture_start))
+
+        #self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.configure))
+        try:
+            yield self.__controller.configure()
+            yield self.__controller.capture_start()
+        except Exception as E:
+            log.error(E)
+            req.error(E)
+        else:
+            req.ok()
 
     @scpi_request()
     def request_edd_deconfigure(self, req):

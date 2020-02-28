@@ -112,8 +112,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         except:
             log.error("Error parsing json")
             raise FailReply("Cannot handle config string {} - Not valid json!".format(config_json))
-        if 'packetisers' in cfg:
-            cfg['packetizers'] = cfg.pop('packetisers')
+        cfg = self.__sanitizeConfig(cfg)
 
         EDDPipeline.EDDPipeline.set(self, cfg)
 
@@ -133,20 +132,21 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         log.info("Resetting data streams")
         #TODo: INterface? Decide if this is always done
         self.__eddDataStore._dataStreams.flushdb()
-
         log.debug("Received configuration string: '{}'".format(config_json))
 
-        yield self.set(config_json)
+        try:
+            cfg = json.loads(config_json)
+        except:
+            log.error("Error parsing json")
+            raise FailReply("Cannot handle config string {} - Not valid json!".format(config_json))
+        cfg = self.__sanitizeConfig(cfg)
+        # Do not use set here, as there might not be a basic config from
+        # provisioning
+        self._config = cfg
+
+
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
-
-        if "packetizers" not in self._config:
-            log.warning("No packetizers in config!")
-            self._config["packetizers"] = []
-
-        if not 'products' in self._config:
-            log.warning("No products in config!")
-            self._config["products"] = []
 
         # ToDo: Check if provisioned
         if not self.__provisioned:
@@ -181,7 +181,8 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         log.debug("Identify additional output streams")
         # Get output streams from products
-        for product_id, product in self._config['products'].iteritems():
+        for product in self._config['products']:
+
             if not "output_data_streams" in product:
                 continue
 
@@ -199,10 +200,9 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 self.__eddDataStore.addDataStream(key, i)
 
         log.debug("Connect data streams with high level description")
-        for product_id, product in self._config['products'].iteritems():
-            log.error(" {} -- {}".format(type(product), product))
+        for product in self._config['products']:
             if not "input_data_streams" in product:
-                log.warning("Product: {} without input data streams".format(product_id))
+                log.warning("Product: {} without input data streams".format(product['id']))
                 continue
             counter = 0
             for k in product["input_data_streams"]:
@@ -231,8 +231,8 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         log.debug("Updated configuration:\n '{}'".format(json.dumps(self._config, indent=2)))
         log.info("Configuring products")
-        for product_id, product_config in self._config["products"].iteritems():
-            yield self.__controller[product_id].configure(product_config)
+        for product in self._config["products"]:
+            yield self.__controller[product['id']].configure(product)
 
         self._edd_config_sensor.set_value(json.dumps(self._config))
         log.info("Successfully configured EDD")
@@ -405,12 +405,10 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         self._configUpdated()
 
 
-    def _installController(self, config):
+    def __sanitizeConfig(self, config):
         """
-        Ensure a controller exists for all components in a configuration
+        Ensures config has products and packaetizers
         """
-        log.debug("Installing controller for products.")
-        # Install controllers
         if 'packetisers' in config:
             config['packetizers'] = config.pop('packetisers')
         elif "packetizers" not in config:
@@ -418,6 +416,17 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             config["packetizers"] = []
         if not 'products' in config:
             config["products"] = []
+        return config
+
+
+    def _installController(self, config):
+        """
+        Ensure a controller exists for all components in a configuration
+        """
+        log.debug("Installing controller for products.")
+        config = self.__sanitizeConfig(config)
+
+
 
         for packetizer in config['packetizers']:
             if packetizer["id"] in self.__controller:
@@ -427,20 +436,19 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 self.__controller[packetizer["id"]] = DigitiserPacketiserClient(*packetizer["address"])
                 self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
 
-        for product_config in config["products"]:
-            product_id = product_config["id"]
-            if product_id in self.__controller:
-                log.debug("Controller for {} already there".format(product_id))
-            elif "type" in product_config and product_config["type"] == "roach2":
-                    self._products[product_id] = EddRoach2ProductController(self, product_id,
+        for product in config["products"]:
+            if product['id'] in self.__controller:
+                log.debug("Controller for {} already there".format(product['id']))
+            elif "type" in product and product["type"] == "roach2":
+                    self._products[product['id']] = EddRoach2ProductController(self, product['id'],
                                                                             (self._r2rm_host, self._r2rm_port))
-            elif product_id not in self.__controller:
-                if product_id in self.__eddDataStore.products:
-                    product = self.__eddDataStore.getProduct(product_id)
-                    self.__controller[product_id] = EddServerProductController(product_id, product["address"], product["port"])
+            elif product['id'] not in self.__controller:
+                if product['id'] in self.__eddDataStore.products:
+                    product = self.__eddDataStore.getProduct(product['id'])
+                    self.__controller[product['id']] = EddServerProductController(product['id'], product["address"], product["port"])
                 else:
                     log.warning("Manual setup of product {} - require address and port properties")
-                    self.__controller[product_id] = EddServerProductController(product_id, product_config["address"], product_config["port"])
+                    self.__controller[product['id']] = EddServerProductController(product['id'], product["address"], product["port"])
 
 
     @request()
