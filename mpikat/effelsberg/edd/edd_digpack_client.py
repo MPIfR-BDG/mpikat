@@ -344,14 +344,14 @@ class DigitiserPacketiserClient(object):
 if __name__ == "__main__":
     import coloredlogs
     from argparse import ArgumentParser
-    parser = ArgumentParser(description="Configures edd digitiezer.")
+    parser = ArgumentParser(description="Configures edd digitiezer. By default, send syncronize and capture start along with the given options.")
     parser.add_argument('host', type=str,
         help='Digitizer interface to bind to.')
     parser.add_argument('-p', '--port', dest='port', type=long,
         help='Port number to bind to', default=7147)
     parser.add_argument('--nbits', dest='nbits', type=long,
         help='The number of bits per output sample')
-    parser.add_argument('--sampling_rate', dest='sampling_rate', type=float,
+    parser.add_argument('--sampling-rate', dest='sampling_rate', type=float,
         help='The digitiser sampling rate (Hz)')
     parser.add_argument('--v-destinations', dest='v_destinations', type=str,
         help='V polarisation destinations')
@@ -360,17 +360,17 @@ if __name__ == "__main__":
     parser.add_argument('--log-level',dest='log_level',type=str,
         help='Logging level',default="INFO")
     parser.add_argument('--predecimation-factor', dest='predecimation_factor', type=int,
-        help='predecimation factor')
-    parser.add_argument('--synchronize', dest='synchronize', action='store_true',
-        help='')
-    parser.add_argument('--sync-time', dest='sync_time', type=int, 
-        help='')
+        help='Predecimation factor')
+    parser.add_argument('--sync', dest='synchronize', action='store_true',
+        help='Send sync command.')
     parser.add_argument('--capture-start', dest='capture_start', action='store_true',
-        help='')
+        help='Send capture start command.')
+    parser.add_argument('--sync-time', dest='sync_time', type=int,
+        help='Use specified synctime, otherwise use current time')
     parser.add_argument('--noise-diode-frequency', dest='noise_diode_frequency', type=float,
-        help='set the noise diode frequency')
+        help='Set the noise diode frequency')
 
-    parser.add_argument('--flip_spectrum', action="store_true", default=False)
+    parser.add_argument('--flip-spectrum', action="store_true", default=False, help="Flip the spectrum")
     args = parser.parse_args()
     print("Configuring paketizer {}:{}".format(args.host, args.port))
     client = DigitiserPacketiserClient(args.host, port=args.port)
