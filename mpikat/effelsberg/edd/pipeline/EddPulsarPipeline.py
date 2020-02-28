@@ -367,7 +367,7 @@ class EddPulsarPipeline(EDDPipeline):
                 log.debug("pipeline is starting, do not send multiple start")
                 return
         self._subprocessMonitor = SubprocessMonitor()
-        self.state = "setting"
+        self.state = "starting"
         yield self.set(config_json)
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
@@ -505,12 +505,12 @@ class EddPulsarPipeline(EDDPipeline):
                     break
                 else:
                     attempts += 1
-        self._state = "set"
+        self._state = "ready"
 
     @coroutine
     def measurement_start(self):
         log.info("checking status")
-        if self._state != "set":
+        if self._state != "ready":
             log.debug("pipeline is not int ready state")
             if self._state == "running":
                 log.debug(
