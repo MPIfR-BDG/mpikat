@@ -139,10 +139,15 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         except:
             log.error("Error parsing json")
             raise FailReply("Cannot handle config string {} - Not valid json!".format(config_json))
-        cfg = self.__sanitizeConfig(cfg)
-        # Do not use set here, as there might not be a basic config from
-        # provisioning
-        self._config = cfg
+
+        if not self.__provisioned:
+            # Do not use set here, as there might not be a basic config from
+            # provisioning
+            cfg = self.__sanitizeConfig(cfg)
+            self._config = cfg
+        else:
+            EDDPipeline.EDDPipeline.set(self, cfg)
+
 
 
         cfs = json.dumps(self._config, indent=4)
@@ -352,7 +357,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         descr_subfolder = "provison_descriptions"
         if ";" in description:
             description = description.split(';')
-            if description[0].endswith(yml):
+            if description[0].endswith("yml"):
                 playbook_file = os.path.join(descr_subfolder, description[0])
                 basic_config_file = os.path.join(descr_subfolder, description[1])
             else:
@@ -362,14 +367,14 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             playbook_file = os.path.join(descr_subfolder, description + ".yml")
             basic_config_file = os.path.join(descr_subfolder, description + ".json")
 
+        log.debug("Loading provision description files: {} and {}".format(playbook_file, basic_config_file))
         if not os.path.isfile(playbook_file):
             raise FailReply("cannot find playbook file {}".format(playbook_file))
         if not os.path.isfile(basic_config_file):
             raise FailReply("cannot find config file {}".format(basic_config_file))
 
-        log.debug("Loading provision description files: {} and {}".format(playbook_file, basic_config_file))
         try:
-            yield command_watcher("ansible-playbook {}".format(playbook_file),
+            yield command_watcher("ansible-playbook -i site.yml {}".format(playbook_file),
                     env={"ANSIBLE_ROLES_PATH":os.path.join(self.__edd_ansible_git_repository_folder,
                         "roles")})
         except Exception as E:
@@ -381,13 +386,15 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 basic_config = json.load(cfg)
         except Exception as E:
             raise FailReply("Error reading config {}".format(E))
+        log.debug("Read basic config: {}".format(json.dumps(basic_config, indent=4)))
 
         self.__eddDataStore.updateProducts()
+        basic_config = self.__sanitizeConfig(basic_config)
         self._installController(basic_config)
 
         # Retrieve default configs from products and merge with basic config to
         # have full config locally.
-        self._config = {"products":{}, "packetizers":basic_config['packetizers']}
+        self._config = {"products":[], "packetizers":basic_config['packetizers']}
         for product in basic_config['products']:
             log.debug("Retrieve basic config for {}".format(product["id"]))
             controller = self.__controller[product["id"]]
@@ -399,8 +406,10 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 continue
 
             cfg = yield controller.getConfig()
+            log.debug("Got: {}".format(json.dumps(cfg, indent=4)))
+
             cfg = EDDPipeline.updateConfig(cfg, product)
-            self._config["products"][product["id"]] = cfg
+            self._config["products"].append(cfg)
 
         self._configUpdated()
 
@@ -444,8 +453,9 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                                                                             (self._r2rm_host, self._r2rm_port))
             elif product['id'] not in self.__controller:
                 if product['id'] in self.__eddDataStore.products:
-                    product = self.__eddDataStore.getProduct(product['id'])
-                    self.__controller[product['id']] = EddServerProductController(product['id'], product["address"], product["port"])
+                    cfg = self.__eddDataStore.getProduct(product['id'])
+                    cfg.update(product)
+                    self.__controller[product['id']] = EddServerProductController(cfg['id'], cfg["address"], cfg["port"])
                 else:
                     log.warning("Manual setup of product {} - require address and port properties")
                     self.__controller[product['id']] = EddServerProductController(product['id'], product["address"], product["port"])
@@ -476,16 +486,16 @@ class EddMasterController(EDDPipeline.EDDPipeline):
     @coroutine
     def deprovision(self):
         log.debug("Deprovision {}".format(self.__provisioned))
-        try:
-            yield command_watcher("ansible-playbook {} --tags=stop".format(self.__provisioned),
-                    env={"ANSIBLE_ROLES_PATH":os.path.join(self.__edd_ansible_git_repository_folder,
-                        "roles")})
-
-        except Exception as E:
-            raise FailReply("Error in provisioning {}".format(E))
-        self.__provisioned = None
-        self.__eddDataStore.updateProducts()
-        self.__eddDataStore._dataStreams.flushdb()
+        if self.__provisioned:
+            try:
+                yield command_watcher("ansible-playbook -i site.yml {} --tags=stop".format(self.__provisioned),
+                        env={"ANSIBLE_ROLES_PATH":os.path.join(self.__edd_ansible_git_repository_folder,
+                            "roles")})
+            except Exception as E:
+                raise FailReply("Error in provisioning {}".format(E))
+            self.__provisioned = None
+            self.__eddDataStore.updateProducts()
+            self.__eddDataStore._dataStreams.flushdb()
 
 
 
