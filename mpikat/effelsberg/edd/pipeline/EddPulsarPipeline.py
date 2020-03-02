@@ -621,7 +621,7 @@ class EddPulsarPipeline(EDDPipeline):
         self._subprocessMonitor.add(
             self._archive_directory_monitor, self._subprocess_error)
         self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
-            self._png_monitor, 1000)
+            self._png_monitor, 10000)
         self._png_monitor_callback.start()
         self._subprocessMonitor.start()
         self._timer = Time.now() - self._timer
