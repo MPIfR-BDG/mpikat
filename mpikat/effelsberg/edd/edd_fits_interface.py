@@ -175,7 +175,6 @@ class FitsInterfaceServer(EDDPipeline):
             id="fits_interface", type="fits_interface",
             fits_writer_ip="0.0.0.0", fits_writer_port=5002))
         self._configured = False
-        self._capture_interface = None
         self._fw_connection_manager = None
         self._capture_thread = None
         self._shutdown = False
@@ -207,9 +206,6 @@ class FitsInterfaceServer(EDDPipeline):
         log.info("Final configuration:\n" + cfs)
 
         # find fastest nic on host
-        nic_name, nic_description = numa.getFastestNic()
-        self._capture_interface = nic_description['ip']
-        log.info("Capturing on interface {}, ip: {}, speed: {} Mbit/s".format(nic_name, nic_description['ip'], nic_description['speed']))
 
         #ToDo: allow streams with multiple multicast groups and multiple ports
 
@@ -244,13 +240,16 @@ class FitsInterfaceServer(EDDPipeline):
         #except Exception as error:
         #    raise RuntimeError("Exception in getting fits writer transmit socker: {}".format(error))
         log.info("Starting FITS interface capture")
-        #self._stop_capture()
+        nic_name, nic_description = numa.getFastestNic()
+        self._capture_interface = nic_description['ip']
+        log.info("Capturing on interface {}, ip: {}, speed: {} Mbit/s".format(nic_name, nic_description['ip'], nic_description['speed']))
+        affinity = numa.getInfo()[nic_description['node']]['cores']
 
         handler = GatedSpectrometerSpeadHandler(self._fw_connection_manager)
         self._capture_thread = SpeadCapture(self.mc_interface,
                                            self.mc_port,
                                            self._capture_interface,
-                                           handler)
+                                           handler, affinity)
         self._capture_thread.start()
 
     @coroutine
@@ -281,7 +280,7 @@ class SpeadCapture(Thread):
     @brief     Captures heaps from one or more streams that are transmitted in
                SPEAD format and call handler on completed heaps.
     """
-    def __init__(self, mc_ip, mc_port, capture_ip, speadhandler):
+    def __init__(self, mc_ip, mc_port, capture_ip, speadhandler, numa_affinity = []):
         """
         @brief Constructor
 
@@ -298,7 +297,7 @@ class SpeadCapture(Thread):
         self._handler = speadhandler 
 
         #ToDo: fix magic numbers for parameters in spead stream
-        thread_pool = spead2.ThreadPool(threads=4)
+        thread_pool = spead2.ThreadPool(threads=8, affinity=[int(k) for k in numa_affinity])
         self.stream = spead2.recv.Stream(thread_pool, spead2.BUG_COMPAT_PYSPEAD_0_5_2, max_heaps=64, ring_heaps=64, contiguous_only = False)
         pool = spead2.MemoryPool(16384, ((32*4*1024**2)+1024), max_free=64, initial=64)
         self.stream.set_memory_allocator(pool)
