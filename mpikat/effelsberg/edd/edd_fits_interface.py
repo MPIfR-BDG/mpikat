@@ -94,15 +94,18 @@ class FitsWriterConnectionManager(Thread):
 
     def put(self, ref_time, pkg):
         """
-        Put pkg on local queue
+        Put new output pkg on local queue if there is a fits server connection. Drop packages otherwise.
         """
         if self._has_connection.is_set():
             self.__output_queue.put([ref_time, pkg])
         else:
-            log.debug("No connection, dropping package.")
+            log.info("No connection, dropping package.")
 
 
     def send_data(self, delay):
+        """
+        Send all packages in queue older than delay seconds.
+        """
         now = time.time()
 
         while not self.__output_queue.empty():
@@ -120,6 +123,9 @@ class FitsWriterConnectionManager(Thread):
             self.__output_queue.task_done()
 
     def flush_queue(self):
+        """
+        Send all remaining packages.
+        """
         self.send_data(0)
         #self.__output_queue.join()
 
@@ -263,6 +269,9 @@ class FitsInterfaceServer(EDDPipeline):
 
     @coroutine
     def stop(self):
+        """
+        Stop pipeline server.
+        """
         yield self.capture_stop()
 
 
@@ -305,6 +314,9 @@ class SpeadCapture(Thread):
 
 
     def run(self):
+        """
+        Subscribe to MC groups and start processing.
+        """
         log.debug("Subscribe to multicast groups:")
         for i, mg in enumerate(self._mc_ip):
             log.debug(" - Subs {}: ip: {}, port: {}".format(i,self._mc_ip[i], self._mc_port ))
@@ -422,16 +434,23 @@ class GatedSpectrometerSpeadHandler(object):
         # Queue for aggregated objects
         self.__packages_in_preparation = {}
 
+        # Now is the latest checked package
+        self.__now = 0
+
 
     def __call__(self, heap):
+        """
+        handle heaps. Merge polarization heaps with matching timestamps and pass to output queue.
+        """
         log.debug("Unpacking heap")
         items = self.ig.update(heap)
         if 'data' not in items:
-            # Should be on first heap only
+            # On first heap only, get number of channels
             fft_length = convert48_64(items['fft_length'].value)
             self.nchannels = int((fft_length/2)+1)
             log.debug("First item - setting data length to {} channels".format(self.nchannels))
             self.ig.add_item(5640, "data", "", (self.nchannels,), dtype="<f")
+            # Reprocess heap to get data
             items = self.ig.update(heap)
 
         class SpeadPacket:
@@ -447,7 +466,7 @@ class GatedSpectrometerSpeadHandler(object):
 
         packet = SpeadPacket(items)
 
-        log.debug("Aggregating data for timestamp {}, Noise diode: {}".format(packet.timestamp_count, packet.noise_diode_status))
+        log.debug("Aggregating data for timestamp {}, Noise diode: {}, Polarization: {}".format(packet.timestamp_count, packet.noise_diode_status, packet.polarization))
 
         # Integration period does not contain efficiency of sampling as heaps may
         # be lost respectively not in this gate
@@ -455,6 +474,8 @@ class GatedSpectrometerSpeadHandler(object):
 
         # The reference time is in the center of the integration # period
         packet.reference_time = packet.sync_time + packet.timestamp_count / float(packet.sampling_rate) + packet.integration_period/ 2
+        if packet.reference_time > self.__now:
+            self.__now = packet.reference_time
 
         # packets with noise diode on are required to arrive at different time
         # than off
@@ -462,17 +483,17 @@ class GatedSpectrometerSpeadHandler(object):
             packet.reference_time += 0.0050
 
         if packet.reference_time not in self.__packages_in_preparation:
-            fw_pkt = fw_factory(2, int(nchannels) - 1)
+            fw_pkt = fw_factory(2, int(self.nchannels) - 1)
         else:
             fw_pkt = self.__packages_in_preparation[packet.reference_time]
 
         # Copy data and drop DC channel - Direct numpy copy behaves weired as memory alignment is expected
         # but ctypes may not be aligned
-        sec_id = polarization
+        sec_id = packet.polarization
         #ToDo: calculation of offsets without magic numbers
 
         log.debug("   Data (first 5 ch., including DC): {}".format(packet.data[:5]))
-        data /= (number_of_input_samples + 1E-30)
+        packet.data /= (packet.number_of_input_samples + 1E-30)
         log.debug("                After normalization: {}".format(packet.data[:5]))
         ctypes.memmove(ctypes.byref(fw_pkt.sections[int(sec_id)].data), packet.data.ctypes.data + 4,
                 packet.data.size * 4 - 4)
@@ -493,9 +514,9 @@ class GatedSpectrometerSpeadHandler(object):
             fw_pkt.timestamp = timestamp
             log.debug("   Calculated timestamp for fits: {}".format(fw_pkt.timestamp))
 
-            integration_time = number_of_input_samples / float(sampling_rate)
+            integration_time = packet.number_of_input_samples / float(sampling_rate)
             log.debug("   Integration period: {} s".format(integration_period))
-            log.debug("   Received samples in period: {}".format(number_of_input_samples))
+            log.debug("   Received samples in period: {}".format(packet.number_of_input_samples))
             log.debug("   Integration time: {} s".format(integration_time))
 
             fw_pkt.backend_name = "EDDSPEAD"
@@ -510,13 +531,18 @@ class GatedSpectrometerSpeadHandler(object):
             self.__fits_interface.put(packet.reference_time, self.__packages_in_preparation.pop(packet.reference_time))
 
         else:
-            now = time.time()
             self.__packages_in_preparation[packet.reference_time] = fw_pkt
             # Cleanup old packages
+            tooold_packages = []
+            log.debug('Checking {} packages for age restriction'.format(len(self.__packages_in_preparation)))
             for p in self.__packages_in_preparation:
-                if now - p > self.__max_age:
-                    log.warning("Age of package exceeded maximum age - Incomplete package will be dropped.")
-                    self.__packages_in_preparation.pop(p)
+                age = self.__now - p
+                #log.debug(" Package with timestamp {}: now: {} age: {}".format(p, self.__now, age) )
+                if age > self.__max_age:
+                    log.warning("Age of package {} exceeded maximum age {} - Incomplete package will be dropped.".format(age, self.__max_age))
+                    tooold_packages.append(p)
+            for p in tooold_packages:
+                self.__packages_in_preparation.pop(p)
 
 
 if __name__ == "__main__":
