@@ -99,7 +99,7 @@ class FitsWriterConnectionManager(Thread):
         if self._has_connection.is_set():
             self.__output_queue.put([ref_time, pkg])
         else:
-            log.debug("No conenction, dropping package.")
+            log.debug("No connection, dropping package.")
 
 
     def send_data(self, delay):
@@ -252,25 +252,6 @@ class FitsInterfaceServer(EDDPipeline):
         log.info("Starting FITS interface data transfer as soon as connection is established ...")
         pass
 
-    @request()
-    @return_reply()
-    def request_start(self, req):
-        """
-        @brief      Start the FITS interface server capturing data
-
-        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
-        """
-        log.info("Received start request")
-        if not self._configured:
-            msg = "FITS interface server is not configured"
-            log.error(msg)
-            return ("fail", msg)
-        try:
-            self.measurement_start()
-        except Exception as error:
-            return ("fail", str(error))
-        return ("ok",)
-
 
     @coroutine
     def measurement_stop(self):
@@ -279,22 +260,6 @@ class FitsInterfaceServer(EDDPipeline):
         self._fw_connection_manager.flush_queue()
         self._fw_connection_manager.drop_connection()
 
-
-    @request()
-    @return_reply()
-    def request_stop(self, req):
-        """
-        @brief      Stop the FITS interface server capturing data
-
-        @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
-        """
-        log.info("Received stop request")
-        if not self._configured:
-            msg = "FITS interface server is not configured"
-            log.error(msg)
-            return ("fail", msg)
-        self.measurement_stop()
-        return ("ok",)
 
     @coroutine
     def stop(self):
