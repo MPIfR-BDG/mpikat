@@ -296,6 +296,10 @@ class FitsInterfaceServer(EDDPipeline):
         self.measurement_stop()
         return ("ok",)
 
+    @coroutine
+    def stop(self):
+        yield self.capture_stop()
+
 
 
 class SpeadCapture(Thread):
