@@ -526,7 +526,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                     fastest_nic, nic_params = numa.getFastestNic(numa_node)
                     log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nic_params['ip'], nic_params['speed']))
                     physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
-                    idx1_modulo =  cfg["samples_per_block"] / stream_description["samples_per_heap"]
+                    idx1_modulo =  10*cfg["samples_per_block"] / stream_description["samples_per_heap"]
                     cmd = "taskset -c {physcpu} mkrecv_rnt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --heap-size {input_heap_size} --idx1-modulo {idx1_modulo} \
                     --dada-key {dada_key} --sync-epoch {sync_time} --sample-clock {sample_rate} \
                     --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nic_params['ip'], input_heap_size=self.input_heapSize, idx1_modulo=idx1_modulo,
