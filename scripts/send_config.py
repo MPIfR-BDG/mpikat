@@ -41,14 +41,13 @@ class ConfigClient(object):
             raise Return(response)
 
     @coroutine
-    def load_cfg(self, filename):
+    def send_cfg(self, cfg):
         """
         @brief      Set the interface address for a packetiser qsfp interface
 
         @param      intf   The interface specified as a string integer, e.g. '0' or '1'
         @param      ip     The IP address to assign to the interface
         """
-        cfg = json.load(open(filename))
         yield self._safe_request("configure", json.dumps(cfg))
 
 
@@ -60,6 +59,9 @@ if __name__ == "__main__":
         help='Host interface to bind to', default="automatic")
     parser.add_argument('-p', '--port', dest='port', type=long,
         help='Port number to bind to', default=1235)
+
+    parser.add_argument('-s', '--select-product', dest='select_product', type=str,
+        help='Select specific product', default=None)
     parser.add_argument('configfile', help="Config json to process")
 
     args = parser.parse_args()
@@ -68,15 +70,24 @@ if __name__ == "__main__":
         print("Automatic look up of host IP - found {}".format(args.host))
 
     logging.getLogger().addHandler(logging.NullHandler())
-    logger = logging.getLogger('mpikat')
     ioloop = IOLoop.current()
     client = ConfigClient(args.host, port=args.port)
+
+    cfg = json.load(open(args.configfile))
+    if 'packetisers' in cfg:
+        cfg['packetizers'] = cfg['packetisers']
+
+    if args.select_product:
+        for p in cfg['packetizers'] + cfg['products']:
+            if args.select_product == p['id']:
+                cfg = p
+                break
 
     print("Configure client ...")
     @coroutine
     def configure():
         try:
-            yield client.load_cfg(args.configfile)
+            yield client.send_cfg(cfg)
         except Exception as error:
             log.exception("Error during packetiser configuration: {}".format(str(error)))
             raise error
