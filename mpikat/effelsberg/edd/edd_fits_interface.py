@@ -86,10 +86,17 @@ class FitsWriterConnectionManager(Thread):
         """
         if not self._transmit_socket is None:
             log.debug("Dropping connection")
-            self._transmit_socket.shutdown(socket.SHUT_RDWR)
-            self._transmit_socket.close()
+            try:
+                self._transmit_socket.shutdown(socket.SHUT_RDWR)
+            except Exception as E:
+                log.debug("Error shuting down socket - just dropping ")
+            try:
+                self._transmit_socket.close()
+            except Exception as E:
+                log.error("Error closing socket.")
+                log.exception(E)
             self._transmit_socket = None
-            self._has_connection.clear()
+        self._has_connection.clear()
 
 
     def put(self, pkg):
@@ -111,7 +118,7 @@ class FitsWriterConnectionManager(Thread):
         log.debug('Send data, Queue size: {}'.format(self.__output_queue.qsize()))
 
         while not self.__output_queue.empty():
-            timestamp, pkg = self.__output_queue.get()
+            timestamp, pkg = self.__output_queue.get(timeout=1)
             if (now - timestamp) < delay:
                 # Pkg. too young, there might be others. Put back and return
                 self.__output_queue.put([timestamp, pkg])
@@ -139,14 +146,25 @@ class FitsWriterConnectionManager(Thread):
     def run(self):
         while not self._shutdown.is_set():
             if not self._has_connection.is_set():
-                self.drop_connection()  # Jsut in case
+                self.drop_connection()  # Just in case
                 try:
                     self._transmit_socket = self._accept_connection()
                 except Exception as error:
+                    self.drop_connection()
                     log.exception(str(error))
                     continue
+            try:
+                self.send_data(self.__delay)
+            except Exception as error:
+                log.error("Exception during send data. Dropping connection, emtying queue")
+                log.exception(str(error))
+                self.drop_connection()
+                while not self.__output_queue.empty():
+                    self.__output_queue.get(timeout=1)
+                    self.__output_queue.task_done()
 
-            self.send_data(self.__delay)
+                continue
+
             time.sleep(0.1)
 
         self.flush_queue()
