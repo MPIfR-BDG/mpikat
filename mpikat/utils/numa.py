@@ -98,6 +98,7 @@ def getFastestNic(numa_node=None):
                    continue
            f = fn
            d = fnd
+           d['node'] = node
         return f, d
 
 
