@@ -42,7 +42,6 @@ class FitsWriterConnectionManager(Thread):
         self._address = (ip, port)
         self._shutdown = Event()
         self._has_connection = Event()
-#        self._transmit_flag = Event()  # Potetntially redundant with has connection ?
 
         self.__output_queue = queue.PriorityQueue()
         self.__delay = 5         # Delay a packet for self.__delay seconds between its reference time before sending
@@ -92,14 +91,16 @@ class FitsWriterConnectionManager(Thread):
             self._transmit_socket = None
             self._has_connection.clear()
 
-    def put(self, ref_time, pkg):
+
+    def put(self, pkg):
         """
         Put new output pkg on local queue if there is a fits server connection. Drop packages otherwise.
         """
         if self._has_connection.is_set():
-            self.__output_queue.put([ref_time, pkg])
+            self.__output_queue.put([time.time(), pkg])
         else:
-            log.info("No connection, dropping package.")
+            log.info("No FITS write connection, dropping package.")
+
 
 
     def send_data(self, delay):
@@ -107,16 +108,16 @@ class FitsWriterConnectionManager(Thread):
         Send all packages in queue older than delay seconds.
         """
         now = time.time()
+        log.debug('Send data, Queue size: {}'.format(self.__output_queue.qsize()))
 
         while not self.__output_queue.empty():
-            timestamp, pkg = que.get()
-            if (timestamp - now) < delay:
+            timestamp, pkg = self.__output_queue.get()
+            if (now - timestamp) < delay:
                 # Pkg. too young, there might be others. Put back and return
                 self.__output_queue.put([timestamp, pkg])
                 self.__output_queue.task_done()
                 return
             log.info('Send item {} with reference time {}. Fits timestamp: {}'.format(self.__send_items, timestamp, pkg.timestamp))
-            pkg = self.__output_queue.pop(timestamp)
             self.__latestPackageTime = timestamp
             self._transmit_socket.send(bytearray(pkg))
             self.__send_items += 1
@@ -252,6 +253,7 @@ class FitsInterfaceServer(EDDPipeline):
                                            handler, affinity)
         self._capture_thread.start()
 
+
     @coroutine
     def measurement_start(self):
         log.info("Starting FITS interface data transfer as soon as connection is established ...")
@@ -261,7 +263,6 @@ class FitsInterfaceServer(EDDPipeline):
     @coroutine
     def measurement_stop(self):
         log.info("Stopping FITS interface data transfer")
-        #self._stop_capture()
         self._fw_connection_manager.flush_queue()
         self._fw_connection_manager.drop_connection()
 
@@ -302,6 +303,13 @@ class SpeadCapture(Thread):
         pool = spead2.MemoryPool(16384, ((32*4*1024**2)+1024), max_free=64, initial=64)
         self.stream.set_memory_allocator(pool)
 
+        #ToDo: fix magic numbers for parameters in spead stream
+        thread_pool = spead2.ThreadPool(threads=4)
+        self.stream = spead2.recv.Stream(thread_pool, spead2.BUG_COMPAT_PYSPEAD_0_5_2, max_heaps=64, ring_heaps=64, contiguous_only = False)
+        pool = spead2.MemoryPool(16384, ((32*4*1024**2)+1024), max_free=64, initial=64)
+        self.stream.set_memory_allocator(pool)
+        self.rb = self.stream.ringbuffer
+
 
     def stop(self):
         """
@@ -337,10 +345,6 @@ class SpeadCapture(Thread):
             else:
                 self._complete_heaps += 1
             self._handler(heap)
-
-
-
-
 
 
 
@@ -407,6 +411,7 @@ def convert48_64(A):
     return np.sum(256**np.arange(0,6, dtype=np.uint64)[::-1] * npd)
 
 
+
 class GatedSpectrometerSpeadHandler(object):
     """
     Parse heaps of gated spectrometer output and aggregate items with matching
@@ -452,6 +457,7 @@ class GatedSpectrometerSpeadHandler(object):
             # Reprocess heap to get data
             items = self.ig.update(heap)
 
+
         class SpeadPacket:
             """
             Contains the items as members with conversion
@@ -462,6 +468,7 @@ class GatedSpectrometerSpeadHandler(object):
                         setattr(self, item.name, convert48_64(item.value))
                     else:
                         setattr(self, item.name, item.value)
+
 
         packet = SpeadPacket(items)
 
@@ -513,8 +520,8 @@ class GatedSpectrometerSpeadHandler(object):
             fw_pkt.timestamp = timestamp
             log.debug("   Calculated timestamp for fits: {}".format(fw_pkt.timestamp))
 
-            integration_time = packet.number_of_input_samples / float(sampling_rate)
-            log.debug("   Integration period: {} s".format(integration_period))
+            integration_time = packet.number_of_input_samples / float(packet.sampling_rate)
+            log.debug("   Integration period: {} s".format(packet.integration_period))
             log.debug("   Received samples in period: {}".format(packet.number_of_input_samples))
             log.debug("   Integration time: {} s".format(integration_time))
 
@@ -522,12 +529,12 @@ class GatedSpectrometerSpeadHandler(object):
             # As the data is normalized to the actual nyumber of samples, the
             # integration time for the fits writer corresponds to the nominal
             # time.
-            fw_pkt.integration_time = integration_period * 1000 # in ms
+            fw_pkt.integration_time = int(packet.integration_period * 1000) # in ms
 
-            fw_pkt.blank_phases = 2 - noise_diode_status
+            fw_pkt.blank_phases = int(2 - packet.noise_diode_status)
             log.debug("   Noise diode status: {}, Blank phase: {}".format(packet.noise_diode_status, fw_pkt.blank_phases))
 
-            self.__fits_interface.put(packet.reference_time, self.__packages_in_preparation.pop(packet.reference_time))
+            self.__fits_interface.put(self.__packages_in_preparation.pop(packet.reference_time))
 
         else:
             self.__packages_in_preparation[packet.reference_time] = fw_pkt
@@ -542,6 +549,7 @@ class GatedSpectrometerSpeadHandler(object):
                     tooold_packages.append(p)
             for p in tooold_packages:
                 self.__packages_in_preparation.pop(p)
+
 
 
 if __name__ == "__main__":
