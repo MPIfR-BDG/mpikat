@@ -334,7 +334,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
         """
         @brief Process a change in the buffer status
         """
-        pass
         for streamid, stream_description in self._config["input_data_streams"].iteritems():
             if status['key'] == stream_description['dada_key']:
                 self._polarization_sensors[streamid]["input-buffer-total-write"].set_value(status['written'])
