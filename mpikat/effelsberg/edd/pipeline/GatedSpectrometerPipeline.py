@@ -159,6 +159,7 @@ DEFAULT_CONFIG = {
         "log_level": "debug",
 
         "output_rate_factor": 1.10,                         # True output date rate is multiplied by this factor for sending.
+        "idx1_modulo": "auto",
     }
 
 NON_EXPERT_KEYS = ["fft_length", "naccumulate", "output_bit_depth"]
@@ -181,6 +182,7 @@ BUFFER_SIZE         128000000
 SAMPLE_CLOCK_START  0 # This is updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock
 
 DADA_NSLOTS         3
+SLOTS_SKIP          4  # Skip the first four slots
 
 NTHREADS            32
 NHEAPS              64
@@ -527,10 +529,14 @@ class GatedSpectrometerPipeline(EDDPipeline):
                     fastest_nic, nic_params = numa.getFastestNic(numa_node)
                     log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nic_params['ip'], nic_params['speed']))
                     physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
-                    idx1_modulo =  10*cfg["samples_per_block"] / stream_description["samples_per_heap"]
-                    cmd = "taskset -c {physcpu} mkrecv_rnt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --heap-size {input_heap_size} --idx1-modulo {idx1_modulo} \
+                    if self._config['idx1_modulo'] == 'auto':
+                        idx1modulo = 10*cfg["samples_per_block"] / stream_description["samples_per_heap"]
+                    else:
+                        idx1modulo = self._config['idx1_modulo']
+
+                    cmd = "taskset -c {physcpu} mkrecv_rnt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --heap-size {input_heap_size} --idx1-modulo {idx1modulo} \
                     --dada-key {dada_key} --sync-epoch {sync_time} --sample-clock {sample_rate} \
-                    --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nic_params['ip'], input_heap_size=self.input_heapSize, idx1_modulo=idx1_modulo,
+                    --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nic_params['ip'], input_heap_size=self.input_heapSize, idx1modulo=idx1modulo,
                             **cfg )
                     mk = ManagedProcess(cmd, stdout_handler=self._polarization_sensors[streamid]["mkrecv_sensors"].stdout_handler)
                 else:
