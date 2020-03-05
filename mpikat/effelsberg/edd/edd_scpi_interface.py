@@ -97,8 +97,8 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_stop))
 
 
-    @scpi_request(str)
-    def request_edd_set(self, req, message):
+    @scpi_request(str, str)
+    def request_edd_set(self, req, product_option, value):
         """
         @brief     Set an option for an edd backend component.
 
@@ -106,15 +106,22 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:SET ID:OPTION VALUE'
         """
-        # json from message with unravvelled colons
-        d = {}
-        g = d
-        p, o  = message.split()
-        for i in p.split(':')[:-1]:
-            d[i] = {}
-            d = d[i]
-        d[p[-1]] = o
-        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.set, g))
+        log.debug(" Received {} {}".format(product_option, value))
+        # Create nested option dict from colon seperateds tring
+        try:
+            d = {}
+            g = d
+            for el in product_option.split(':')[:-1]:
+                d[el] = {}
+                d = d[el]
+            d[product_option[-1]] = value
+        except Exception as E:
+            em = "Error parsing command: {} {}\n{}".format(product_option, value, E)
+            log.error(em)
+            req.error(em)
+        else:
+            log.debug(" - {}".format(g))
+            self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.set, g))
 
 
     @scpi_request(str)
