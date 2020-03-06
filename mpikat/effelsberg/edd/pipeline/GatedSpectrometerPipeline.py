@@ -344,7 +344,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 self._polarization_sensors[streamid]["output-buffer-total-read"].set_value(status['read'])
 
 
-    @state_change(target="ready", allowed=["idle"], intermediate="configuring")
+    @state_change(target="configured", allowed=["idle"], intermediate="configuring")
     @coroutine
     def configure(self, config_json):
         """
@@ -433,9 +433,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
             # we write nSlice blocks on each go
             yield self._create_ring_buffer(output_bufferSize, 8 * nSlices, ofname, numa_node)
 
-            # Configure + launch gated spectrometer
-            # here should be a smarter system to parse the options from the
-            # controller to the program without redundant typing of options
+            # Configure + launch 
             physcpu = numa.getInfo()[numa_node]['cores'][0]
             cmd = "taskset -c {physcpu} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, physcpu=physcpu, bit_depth=stream_description['bit_depth'], **self._config)
             log.debug("Command to run: {}".format(cmd))
@@ -497,7 +495,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
         self._subprocessMonitor.start()
 
 
-    @state_change(target="streaming", allowed=["ready"], intermediate="capture_starting")
+    @state_change(target="streaming", allowed=["configured"], intermediate="capture_starting")
     @coroutine
     def capture_start(self, config_json=""):
         """
