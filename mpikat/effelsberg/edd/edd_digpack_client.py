@@ -75,6 +75,10 @@ class DigitiserPacketiserClient(object):
         """
         @brief Set a predecimation factor for the paketizer - for e.g. factor=2 only every second sample is used.
         """
+        allowedFactors = [2,4,8,16] # Eddy Nußbaum, private communication
+        if factor not in allowedFactors:
+            raise RuntimeError("predicimation factor {} not in allowed factors {}".format(factor, allowedFactors))
+
         yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
 
     @coroutine
@@ -115,6 +119,8 @@ class DigitiserPacketiserClient(object):
         valid_modes = {
             4000000000: ("virtex7_dk769b", "4.0GHz", 5),
             3600000000: ("virtex7_dk769b", "3.6GHz", 7),
+            3520000000: ("virtex7_dk769b", "3.52GHz", 7),
+            3500000000: ("virtex7_dk769b", "3.5GHz", 7),
             3200000000: ("virtex7_dk769b", "3.2GHz", 9),
             2600000000: ("virtex7_dk769b", "2.6GHz", 3),
             2560000000: ("virtex7_dk769b", "2.56GHz", 2)
@@ -151,6 +157,7 @@ class DigitiserPacketiserClient(object):
         """
         valid_modes = {
             8: "edd08",
+            10: "edd10",
             12: "edd12"
         }
         try:
