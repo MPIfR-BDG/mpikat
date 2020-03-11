@@ -241,8 +241,14 @@ class PafWorkerServer(AsyncDeviceServer):
     @coroutine
     def deconfigure(self):
         if self._pipeline_instance:
+	    try:
+		self.remove_pipeline_sensors()
+            except Exception as error:
+                msg = "Couldn't remove sensor {}".format(str(error))
+                log.error(msg)
+		pass
             try:
-                self.remove_pipeline_sensors()
+                #self.remove_pipeline_sensors()
                 self._pipeline_instance.deconfigure()
             except Exception as error:
                 msg = "Couldn't deconfigure pipeline {}".format(str(error))

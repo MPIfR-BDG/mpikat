@@ -94,7 +94,7 @@ SYSTEM_CONFIG = {"paf_nchan_per_chunk":    	     7,        # MHz
 PIPELINE_CONFIG = {"execution":                    1,
                    "root_software":                "/phased-array-feed/",
                    #"root_software":                "/home/pulsar/xinping/phased-array-feed/",
-                   "root_runtime":                 "/beegfs/DENG/",
+                   "root_runtime":                 "/beegfs/PAF/",
                    "rbuf_ndf_per_chunk_per_block": 16384,  # For all ring buffers
                    "tbuf_ndf_per_chunk_per_block": 128,  # Only need for capture
 
@@ -130,7 +130,7 @@ PIPELINE_CONFIG = {"execution":                    1,
                    "search_heimdall":     0,
                    "search_dbdisk":       1,
                    "search_monitor":      1,
-                   "search_spectrometer": 1,
+                   "search_spectrometer": 0,
                    "search_detect_thresh": 10,
                    "search_dm":           [1, 3000],
                    "search_zap_chans":    [],
