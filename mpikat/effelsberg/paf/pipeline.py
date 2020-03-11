@@ -138,7 +138,7 @@ PIPELINE_CONFIG = {"execution":                    1,
 
                    # To put independent or commensal spectral data
                    "spectrometer_keys":           ["dcda", "dcdc"],
-                   "spectrometer_nblk":           2,
+                   "spectrometer_nblk":           4,
                    "spectrometer_nreader":        1,
                    "spectrometer_cufft_nx":       1024,
                    "spectrometer_nbyte":          4,
@@ -1313,7 +1313,7 @@ class Fold(Pipeline):
                 dbdisk_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
                     (i + 1) * self._pacifix_ncpu_per_instance - 1
                 command = ("taskset -c {} dada_dbdisk -W -k {} "
-                           "-D {} -o -s -z").format(dbdisk_cpu, self._spectrometer_keys[i],
+                           "-D {} -o -s ").format(dbdisk_cpu, self._spectrometer_keys[i],
                                                     self._pipeline_runtime_directory[i])
                 self._spectrometer_dbdisk_commands.append(command)
 
@@ -2257,7 +2257,7 @@ class Search(Pipeline):
             # Command to run dbdisk for spectrometer output
             if self._search_spectrometer and self._spectrometer_dbdisk:
                 command = ("dada_dbdisk -W -k {} "
-                           "-D {} -o -s -z").format(self._spectrometer_keys[i],
+                           "-D {} -o -s ").format(self._spectrometer_keys[i],
                                                     search_spectrometer_directory)
                 self._spectrometer_dbdisk_commands.append(command)
         # UPDATE ABOVE HERE FOR INDIVIDUAL DIRECTORIES
@@ -2866,7 +2866,7 @@ class Spectrometer(Pipeline):
                 dbdisk_cpu = self._pacifix_numa * self._pacifix_ncpu_per_numa_node +\
                     (i + 1) * self._pacifix_ncpu_per_instance - 1
                 command = ("dada_dbdisk -b {} -k {} "
-                           "-D {} -o -s -z").format(
+                           "-D {} -o -s ").format(
                                dbdisk_cpu,
                                self._spectrometer_keys[i],
                                self._pipeline_runtime_directory[i])
