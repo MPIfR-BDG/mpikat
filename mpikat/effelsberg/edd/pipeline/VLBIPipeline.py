@@ -32,6 +32,7 @@ from tornado.gen import coroutine
 from katcp import Sensor, AsyncReply, FailReply
 
 from math import ceil
+import numpy as np
 import os
 import time
 import logging
@@ -93,7 +94,7 @@ DEFAULT_CONFIG = {
         "output_type": 'network',                           # ['network', 'disk', 'null']  ToDo: Should be a output data stream def.
         "output_rate_factor": 1.10,                         # True output date rate is multiplied by this factor for sending.
         "idx1_modulo": "auto",
-        "payload_size": 8320,                               # Size of the payload for one VDIF package
+        "payload_size": "auto",                               # Size of the payload for one VDIF package, or 'auto' for automatic calculation
         "vdif_header_size": 32,                             # Size of the VDIF header in bytes 
 
         "output_data_streams":
@@ -147,6 +148,31 @@ IDX1_ITEM           0      # First item of a SPEAD heap
 # Add side item to buffer
 #SCI_LIST            2
 """
+
+
+def EDD_VDIF_Frame_Size(sampling_rate):
+    """
+    payload calculator, translated from Jan Wagner's octave script
+    """
+    bw_GHz =  sampling_rate / 2E9
+
+    rate_Msps = bw_GHz*2000
+    rate_Mbps = 2*rate_Msps # % 2-bit
+    log.debug('Bandwidth {:.3f} GHz --> {:.3f} Msps --> {:.3f} Mbit/sec'.format(bw_GHz, rate_Msps, rate_Mbps))
+
+    vdifGranularity = 8 # % VDIF specs, granularity of payload size
+
+    num = np.arange(1024, 9001, vdifGranularity) * 8*1000 #   % bits per frame, various payload sizes
+    den = rate_Mbps #;                              % datarate bits per sec
+    fitting_payloads = num[num % den == 0]/(8*1000);    # % corresponding frame payloads in byte
+
+    rate_Bps = rate_Mbps*1e6/8 #;
+    final_payloads = fitting_payloads[rate_Bps % fitting_payloads == 0] #;
+    final_fpss = rate_Bps / final_payloads;
+    final_framens = final_payloads*4*1e3 / rate_Msps;
+
+    return final_payloads, final_fpss, final_framens
+
 
 
 class VLBIPipeline(EDDPipeline):
@@ -262,6 +288,8 @@ class VLBIPipeline(EDDPipeline):
         cfs = json.dumps(self._config, indent=4)
         log.info("Final configuration:\n" + cfs)
 
+
+
         self.__numa_node_pool = []
         # remove numa nodes with missing capabilities
         for node in numa.getInfo():
@@ -295,11 +323,30 @@ class VLBIPipeline(EDDPipeline):
                     heaps per block:  {}\n\
                     buffer size:      {} byte'.format(self.input_heapSize, nHeaps, input_bufferSize))
 
+
+            final_payloads, final_fpss, final_framens = EDD_VDIF_Frame_Size(stream_description['sample_rate'])
+
+            if self._config['payload_size'] == 'auto':
+                payload_size = final_payloads[-1]
+            else:
+                payload_size = int(self._config['payload_size'])
+
+            log.info('Possible frame payload sizes (add 32 for framesize):')
+            for k in range(final_payloads.size):
+                if payload_size == final_payloads[k]:
+                    M = "*"
+                else:
+                    M = " "
+                log.info(' {}{:5.0f} byte  {:8.0f} frames per sec  {:6.3f} nsec/frame'.format(M, final_payloads[k], final_fpss[k], final_framens[k]))
+
+            if payload_size not in final_payloads:
+                log.warning("Payload size {} possibly not conform with VDIF format!".format(payload_size))
+
             # calculate output buffer parameters
             size_of_samples = ceil(1. * self._config["samples_per_block"] * 2 / 8.) # byte for two bit mode
-            number_of_packages = ceil(size_of_samples / float(self._config['payload_size']))
+            number_of_packages = ceil(size_of_samples / float(payload_size))
 
-            output_buffer_size = number_of_packages * (self._config['payload_size'] + self._config['vdif_header_size'])
+            output_buffer_size = number_of_packages * (payload_size + self._config['vdif_header_size'])
 
             integration_time = self._config["samples_per_block"] / float(stream_description["sample_rate"])
             self._integration_time_status.set_value(integration_time)
@@ -331,7 +378,7 @@ class VLBIPipeline(EDDPipeline):
             physcpu = numa.getInfo()[numa_node]['cores'][0]
             thread_id = self._config['thread_id'][streamid]
             station_id = self._config['thread_id'][streamid]
-            cmd = "taskset -c {physcpu} VLBI --input_key={dada_key} --speadheap_size={heapSize} --thread_id={thread_id} --station_id={station_id} --payload_size={payload_size} --sample_rate={sample_rate} --nbits={bit_depth} -o {ofname} --log_level={log_level} --output_type=dada".format(ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, physcpu=physcpu, thread_id=thread_id, station_id=station_id, payload_size=self._config['payload_size'], log_level=self._config['log_level'], **stream_description)
+            cmd = "taskset -c {physcpu} VLBI --input_key={dada_key} --speadheap_size={heapSize} --thread_id={thread_id} --station_id={station_id} --payload_size={payload_size} --sample_rate={sample_rate} --nbits={bit_depth} -o {ofname} --log_level={log_level} --output_type=dada".format(ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, physcpu=physcpu, thread_id=thread_id, station_id=station_id, payload_size=payload_size, log_level=self._config['log_level'], **stream_description)
             log.debug("Command to run: {}".format(cmd))
 
             cudaDevice = numa.getInfo()[numa_node]['gpus'][0]
