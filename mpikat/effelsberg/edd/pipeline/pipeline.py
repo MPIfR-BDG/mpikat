@@ -923,7 +923,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             if self.starting:
                 log.debug("pipeline is starting, do not send multiple start")
                 #return
-                #self._state_sensor.set_value(self.READY)
+                self._state_sensor.set_value(self.READY)
                 raise Exception("fail pipeline is not in READY state")
         log.info("starting pipeline")
         self._state_sensor.set_value(self.STARTING)
