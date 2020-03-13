@@ -961,6 +961,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             msg = "Key error from reading config_json: {}".format(
                 str(error))
             log.error(msg)
+            self._state_sensor.set_value(self.READY)
             raise EddPulsarPipelineKeyError(msg)
 
         cpu_numbers = NUMA_MODE[self.numa_number][2]
@@ -1070,6 +1071,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             while True:
                 if attempts >= retries:
                     error = "could not read t2pred.dat"
+                    self._state_sensor.set_value(self.READY)
                     raise EddPulsarPipelineError(error)
                 else:
                     time.sleep(1)
@@ -1116,6 +1118,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         while True:
             if attempts >= retries:
                 error = "could not read dada_key_file"
+                self._state_sensor.set_value(self.READY)
                 raise EddPulsarPipelineError(error)
             else:
                 time.sleep(1)
@@ -1164,6 +1167,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 keyfile=dada_key_file.name)
         else:
             error = "source is unknown"
+            self._state_sensor.set_value(self.READY)
             raise EddPulsarPipelineError(error)
         """
         elif (parse_tag(self.source_name) == "R") and (not self.pulsar_flag) and (not self.pulsar_flag_with_R):

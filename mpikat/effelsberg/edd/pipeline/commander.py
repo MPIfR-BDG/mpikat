@@ -243,9 +243,9 @@ class EddCommander(AsyncDeviceServer):
         self._source = self.get_sensor("source_name")
         self._ra = self.get_sensor("ra")
         self._dec = self.get_sensor("dec")
-        if self._dec == "N/A":
+        if self.get_sensor("ra") == "N/A":
             self._dec = 0
-        if self._ra == "N/A":
+        if self.get_sensor("dec") == "N/A":
             self._ra = 0  
         #source_name_split = self._source.value().split("_")
         #log.debug("sensor_value[0] : {}".format(sensor_value[0]))
