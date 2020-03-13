@@ -372,6 +372,7 @@ class EddCommander(AsyncDeviceServer):
                 self.last_value = True
                 # time.sleep(5)
                 self._edd00_numa0.req.start(json_string)
+                time.sleep(5)
                 self._edd00_numa1.req.start(json_string_fr)
                 # self._edd01_numa0.req.start(json_string)
                 # self._edd01_numa1.req.start(json_string_1mc)
