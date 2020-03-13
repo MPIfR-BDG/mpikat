@@ -923,7 +923,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
             if self.starting:
                 log.debug("pipeline is starting, do not send multiple start")
                 #return
-                self._state_sensor.set_value(self.READY)
                 raise Exception("fail pipeline is not in READY state")
         log.info("starting pipeline")
         self._state_sensor.set_value(self.STARTING)
@@ -977,6 +976,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         if ((parse_tag(self.source_name) == "default") or (parse_tag(self.source_name) != "R")) and (not self.pulsar_flag):
             if (parse_tag(self.source_name) != "FB"):
                 error = "source is not pulsar or calibrator"
+                #reset state to ready
+                self._state_sensor.set_value(self.READY)
                 raise EddPulsarPipelineError(error)
 
         ########NEED TO PUT IN THE LOGIC FOR _R here#############
