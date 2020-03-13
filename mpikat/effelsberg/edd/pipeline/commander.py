@@ -211,15 +211,15 @@ class EddCommander(AsyncDeviceServer):
             self.new_sensor)
         self._edd00_numa0 = KATCPClientResource(dict(
             name='_edd00_numa0-client',
-            address=("134.104.70.66", 6000),
+            address=("134.104.70.66", 10000),
             controlled=True))
         self._edd00_numa0.start()
         log.debug("system init")
-        #self._edd00_numa1 = KATCPClientResource(dict(
-        #    name='_edd00_numa1-client',
-        #    address=("134.104.70.66", 6001),
-        #    controlled=True))
-        #self._edd00_numa1.start()
+        self._edd00_numa1 = KATCPClientResource(dict(
+            name='_edd00_numa1-client',
+            address=("134.104.70.66", 10001),
+            controlled=True))
+        self._edd00_numa1.start()
         """
         self._edd01_numa0 = KATCPClientResource(dict(
             name='_edd01_numa0-client',
@@ -364,15 +364,15 @@ class EddCommander(AsyncDeviceServer):
                     self._edd00_numa0.req.start(json_string_numa0)
                     self._edd00_numa1.req.start(json_string_numa1)
                 """
-                json_string = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":0})
-                #json_string_1mc = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band":5})
+                json_string = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                json_string_fr = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 512, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
                 log.debug(json_string)
-                # log.debug(json_string_1mc)
+                log.debug(json_string_fr)
                 self.first_true = False
                 self.last_value = True
                 # time.sleep(5)
                 self._edd00_numa0.req.start(json_string)
-                # self._edd00_numa1.req.start(json_string)
+                self._edd00_numa1.req.start(json_string_fr)
                 # self._edd01_numa0.req.start(json_string)
                 # self._edd01_numa1.req.start(json_string_1mc)
 
@@ -381,7 +381,7 @@ class EddCommander(AsyncDeviceServer):
                 self.first_true = True
                 self.last_value = False
                 self._edd00_numa0.req.stop()
-               #self._edd00_numa1.req.stop()
+                self._edd00_numa1.req.stop()
 
     def new_sensor(self, sensor_name, callback):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))
