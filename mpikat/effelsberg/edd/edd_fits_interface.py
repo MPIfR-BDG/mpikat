@@ -399,6 +399,8 @@ def fw_factory(nsections, nchannels, data_type = "EEEI", channel_data_type = "F 
 
     packet = FWPacket()
 
+    packet.packet_size = ctypes.sizeof(packet_format)
+
     if channel_data_type != "F   ":
          raise NotADirectoryError("cannot handle backend data format {}".format(channel_data_type))
     packet.channel_data_type = channel_data_type
