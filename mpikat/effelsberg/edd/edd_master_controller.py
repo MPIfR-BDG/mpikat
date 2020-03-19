@@ -107,14 +107,37 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
     @coroutine
     def set(self, config_json):
+        log.debug('Received setting:\n' + config_json)
         try:
             cfg = json.loads(config_json)
         except:
             log.error("Error parsing json")
             raise FailReply("Cannot handle config string {} - Not valid json!".format(config_json))
-        cfg = self.__sanitizeConfig(cfg)
+        try:
+            fixed_cfg = dict(packetizers={}, products={})
+            log.debug('Current config:\n' + json.dumps(self._config, indent=4))
 
-        EDDPipeline.EDDPipeline.set(self, cfg)
+            for item, value in cfg.iteritems():
+                if item in self._config['packetizers']:
+                    fixed_cfg['packetizers'][item] = value
+                elif item in self._config['products']:
+                    fixed_cfg['products'][item] = value
+                else:
+                    log.error("Item {} neither in products nor packetizers!".format(item))
+                    raise FailReply("Item {} neither in products nor packetizers!".format(item))
+
+            log.debug("Updated set:\n" + json.dumps(fixed_cfg, indent=4))
+        except Exception as E:
+            log.error("Error processing setting")
+            log.exception(E)
+            raise FailReply("Error processing setting {}".format(E))
+        try:
+            EDDPipeline.EDDPipeline.set(self, fixed_cfg)
+        except Exception as E:
+            log.error("Error processing setting in pipeline")
+            log.exception(E)
+            raise FailReply("Error processing setting in pipeline {}".format(E))
+
 
 
 
@@ -164,11 +187,11 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         # Get output streams from packetizer and configure packetizer
         log.info("Configuring digitisers/packetisers")
-        for packetizer in self._config['packetizers']:
+        for packetizer in self._config['packetizers'].itervalues():
             yield self.__controller[packetizer["id"]].configure(packetizer)
 
             ofs = dict(format="MPIFR_EDD_Packetizer",
-                        sample_rate=packetizer["sampling_rate"] / packetizer["predecimation_factor"],
+                        sample_rate=float(packetizer["sampling_rate"]) / int(packetizer["predecimation_factor"]),
                         bit_depth=packetizer["bit_width"])
             ofs["sync_time"] = yield self.__controller[packetizer["id"]].get_sync_time()
             log.info("Sync Time for {}: {}".format(packetizer["id"], ofs["sync_time"]))
@@ -186,7 +209,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         log.debug("Identify additional output streams")
         # Get output streams from products
-        for product in self._config['products']:
+        for product in self._config['products'].itervalues():
 
             if not "output_data_streams" in product:
                 continue
@@ -205,7 +228,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 self.__eddDataStore.addDataStream(key, i)
 
         log.debug("Connect data streams with high level description")
-        for product in self._config['products']:
+        for product in self._config['products'].itervalues():
             if not "input_data_streams" in product:
                 log.warning("Product: {} without input data streams".format(product['id']))
                 continue
@@ -236,7 +259,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         log.debug("Updated configuration:\n '{}'".format(json.dumps(self._config, indent=2)))
         log.info("Configuring products")
-        for product in self._config["products"]:
+        for product in self._config["products"].itervalues():
             yield self.__controller[product['id']].configure(product)
 
         self._edd_config_sensor.set_value(json.dumps(self._config))
@@ -394,8 +417,8 @@ class EddMasterController(EDDPipeline.EDDPipeline):
 
         # Retrieve default configs from products and merge with basic config to
         # have full config locally.
-        self._config = {"products":[], "packetizers":basic_config['packetizers']}
-        for product in basic_config['products']:
+        self._config = {"products":{}, "packetizers":basic_config['packetizers']}
+        for product in basic_config['products'].itervalues():
             log.debug("Retrieve basic config for {}".format(product["id"]))
             controller = self.__controller[product["id"]]
             if not isinstance(controller, EddServerProductController):
@@ -409,7 +432,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             log.debug("Got: {}".format(json.dumps(cfg, indent=4)))
 
             cfg = EDDPipeline.updateConfig(cfg, product)
-            self._config["products"].append(cfg)
+            self._config["products"][cfg['id']] = cfg
 
         self._configUpdated()
 
@@ -422,9 +445,17 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             config['packetizers'] = config.pop('packetisers')
         elif "packetizers" not in config:
             log.warning("No packetizers in config!")
-            config["packetizers"] = []
+            config["packetizers"] = {}
+
+        if isinstance(config['packetizers'], list):
+            d = {p['id']:p for p in config['packetizers']}
+            config["packetizers"] = d
+
         if not 'products' in config:
-            config["products"] = []
+            config["products"] = {}
+        elif isinstance(config['products'], list):
+            d = {p['id']:p for p in config['products']}
+            config['products'] = d
         return config
 
 
@@ -435,9 +466,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         log.debug("Installing controller for products.")
         config = self.__sanitizeConfig(config)
 
-
-
-        for packetizer in config['packetizers']:
+        for packetizer in config['packetizers'].itervalues():
             if packetizer["id"] in self.__controller:
                 log.debug("Controller for {} already there".format(packetizer["id"]))
             else:
@@ -445,11 +474,11 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                 self.__controller[packetizer["id"]] = DigitiserPacketiserClient(*packetizer["address"])
                 self.__controller[packetizer["id"]].populate_data_store(self.__eddDataStore.host, self.__eddDataStore.port)
 
-        for product in config["products"]:
+        for product in config["products"].itervalues():
             if product['id'] in self.__controller:
                 log.debug("Controller for {} already there".format(product['id']))
             elif "type" in product and product["type"] == "roach2":
-                    self._products[product['id']] = EddRoach2ProductController(self, product['id'],
+                    self.__controller[product['id']] = EddRoach2ProductController(self, product['id'],
                                                                             (self._r2rm_host, self._r2rm_port))
             elif product['id'] not in self.__controller:
                 if product['id'] in self.__eddDataStore.products:

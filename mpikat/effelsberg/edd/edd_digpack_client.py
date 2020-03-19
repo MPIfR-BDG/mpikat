@@ -75,7 +75,7 @@ class DigitiserPacketiserClient(object):
         """
         @brief Set a predecimation factor for the paketizer - for e.g. factor=2 only every second sample is used.
         """
-        allowedFactors = [2,4,8,16] # Eddy Nußbaum, private communication
+        allowedFactors = [2,4,8,16] # Eddy Nussbaum, private communication
         if factor not in allowedFactors:
             raise RuntimeError("predicimation factor {} not in allowed factors {}".format(factor, allowedFactors))
 
@@ -169,9 +169,9 @@ class DigitiserPacketiserClient(object):
             2560000000: ("virtex7_dk769b", "2.56GHz", 2)
         }
         try:
-            args = valid_modes[rate]
+            args = valid_modes[int(rate)]
         except KeyError as error:
-            msg = "Invalid sampling rate, valid sampling rates are: {}".format(valid_modes.keys())
+            msg = "Invalid sampling rate '{}, type: {}', valid sampling rates are: {}".format(rate, type(rate), valid_modes.keys())
             log.error(msg)
             raise DigitiserPacketiserError(msg)
 
@@ -204,7 +204,7 @@ class DigitiserPacketiserClient(object):
             12: "edd12"
         }
         try:
-            mode = valid_modes[nbits]
+            mode = valid_modes[int(nbits)]
         except KeyError as error:
             msg = "Invalid bit depth, valid bit depths are: {}".format(valid_modes.keys())
             log.error(msg)

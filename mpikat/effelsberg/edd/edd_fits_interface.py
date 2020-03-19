@@ -200,6 +200,7 @@ class FitsInterfaceServer(EDDPipeline):
         self._fw_connection_manager = None
         self._capture_thread = None
         self._shutdown = False
+        self.mc_interface = []
 
     @coroutine
     def capture_stop(self):
