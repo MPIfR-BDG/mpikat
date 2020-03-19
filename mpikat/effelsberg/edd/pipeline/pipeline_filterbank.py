@@ -1134,41 +1134,48 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug("pulsar_flag = {}".format(self.pulsar_flag))
         log.debug("source_name = {}".format(self.source_name))
 
-        if (parse_tag(self.source_name) == "default") and self.pulsar_flag:
-            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
-                numa=self.numa_number,
-                args=self._config["dspsr_params"]["args"],
-                #xlength = self._source_config["xlength"],
-                nchan="-F {}:D".format(self.nchannels),
-                nbin="-b {}".format(self.nbins),
-                name=self.source_name,
-                predictor="/tmp/t2pred.dat",
-                parfile="/tmp/epta/{}.par".format(self.source_name[1:]),
-                cpus=cpu_numbers,
-                cuda_number=cuda_number,
-                keyfile=dada_key_file.name)
+        cmd = "numactl -m {numa} taskset -c 19-36 digifil -threads 16 -F 512 -b-32 -d 1 -I 0 -t 50 {keyfile}".format(
+            numa=self.numa_number,
+            nchan="{}".format(self.nchannels),
+            nbins="{}".format(self.nbins),
+            cpus=cpu_numbers,
+            keyfile=dada_key_file.name)
 
-        elif parse_tag(self.source_name) == "R":
-            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
-                numa=self.numa_number,
-                args=self._config["dspsr_params"]["args"],
-                nchan="-F {}:D".format(self.nchannels),
-                name=self.source_name,
-                cpus=cpu_numbers,
-                cuda_number=cuda_number,
-                keyfile=dada_key_file.name)
+#        if (parse_tag(self.source_name) == "default") and self.pulsar_flag:
+#            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
+#                numa=self.numa_number,
+#                args=self._config["dspsr_params"]["args"],
+#                #xlength = self._source_config["xlength"],
+#                nchan="-F {}:D".format(self.nchannels),
+#                nbin="-b {}".format(self.nbins),
+#                name=self.source_name,
+#                predictor="/tmp/t2pred.dat",
+#                parfile="/tmp/epta/{}.par".format(self.source_name[1:]),
+#                cpus=cpu_numbers,
+#                cuda_number=cuda_number,
+#                keyfile=dada_key_file.name)
 
-        elif parse_tag(self.source_name) == "FB":
-            cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 4 -F {nchan} -b8 -d 1 -I 0 -t {nbin} {keyfile}".format(
-                numa=self.numa_number,
-                nchan="{}".format(self.nchannels),
-                nbin="{}".format(self.nbins),
-                cpus=cpu_numbers,
-                keyfile=dada_key_file.name)
-        else:
-            error = "source is unknown"
-            self._state_sensor.set_value(self.READY)
-            raise EddPulsarPipelineError(error)
+#        elif parse_tag(self.source_name) == "R":
+#            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
+#                numa=self.numa_number,
+#                args=self._config["dspsr_params"]["args"],
+#                nchan="-F {}:D".format(self.nchannels),
+#                name=self.source_name,
+#                cpus=cpu_numbers,
+#                cuda_number=cuda_number,
+#                keyfile=dada_key_file.name)
+
+#        elif parse_tag(self.source_name) == "FB":
+#            cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 4 -F {nchan} -b8 -d 1 -I 0 -t {nbin} {keyfile}".format(
+#                numa=self.numa_number,
+#                nchan="{}".format(self.nchannels),
+#                nbin="{}".format(self.nbins),
+#                cpus=cpu_numbers,
+#                keyfile=dada_key_file.name)
+#        else:
+#            error = "source is unknown"
+#            self._state_sensor.set_value(self.READY)
+#            raise EddPulsarPipelineError(error)
         """
         elif (parse_tag(self.source_name) == "R") and (not self.pulsar_flag) and (not self.pulsar_flag_with_R):
             if (self.source_name[:2] == "3C" and self.source_name[-3:] == "O_R") or (self.source_name[:3] == "NGC" and self.source_name[-4:]=="ON_R"):
@@ -1194,7 +1201,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
         #cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
         log.debug("Running command: {0}".format(cmd))
-        log.info("Staring DSPSR")
+        log.info("Staring DIGIFIL")
         self._dspsr = ExecuteCommand(cmd, outpath=None, resident=True)
         self._dspsr_pid = self._dspsr.pid
         log.debug("_dspsr PID is {}".format(self._dspsr_pid))
