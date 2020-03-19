@@ -92,6 +92,7 @@ class MockFitsWriterClient(object):
         self._stop_event = Event()
         self._is_stopped = Condition()
         self._socket = None
+        self.__last_package = 0
 
     def reset_connection(self):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -167,6 +168,12 @@ class MockFitsWriterClient(object):
         log.debug("Converting packet header")
         header = FWHeader.from_buffer_copy(raw_header)
         log.info("Received header: {}".format(header))
+        if header.timestamp < self.__last_package:
+            log.error("Timestamps out of order!")
+        else:
+            self.__last_package = header.timestamp
+
+
         fw_data_type = header.channel_data_type.strip().upper()
         c_data_type, np_data_type = TYPE_MAP[fw_data_type]
         sections = []

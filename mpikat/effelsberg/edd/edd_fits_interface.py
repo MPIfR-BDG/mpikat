@@ -44,7 +44,7 @@ class FitsWriterConnectionManager(Thread):
         self._has_connection = Event()
 
         self.__output_queue = queue.PriorityQueue()
-        self.__delay = 5         # Delay a packet for self.__delay seconds between its reference time before sending
+        self.__delay = 3         # keep a packet for self.__delay seconds in the queue, as there might be other packages arriving.
         self.__latestPackageTime = 0
         self.__send_items = 0
 
@@ -104,7 +104,7 @@ class FitsWriterConnectionManager(Thread):
         Put new output pkg on local queue if there is a fits server connection. Drop packages otherwise.
         """
         if self._has_connection.is_set():
-            self.__output_queue.put([time.time(), pkg])
+            self.__output_queue.put([pkg.timestamp, pkg, time.time()])
         else:
             log.info("No FITS write connection, dropping package.")
 
@@ -118,16 +118,19 @@ class FitsWriterConnectionManager(Thread):
         log.debug('Send data, Queue size: {}'.format(self.__output_queue.qsize()))
 
         while not self.__output_queue.empty():
-            timestamp, pkg = self.__output_queue.get(timeout=1)
+            ref_time, pkg, timestamp = self.__output_queue.get(timeout=1)
             if (now - timestamp) < delay:
                 # Pkg. too young, there might be others. Put back and return
-                self.__output_queue.put([timestamp, pkg])
+                self.__output_queue.put([ref_time, pkg, timestamp])
                 self.__output_queue.task_done()
                 return
-            log.info('Send item {} with reference time {}. Fits timestamp: {}'.format(self.__send_items, timestamp, pkg.timestamp))
-            self.__latestPackageTime = timestamp
-            self._transmit_socket.send(bytearray(pkg))
-            self.__send_items += 1
+            if ref_time < self.__latestPackageTime:
+                log.warning("Package with ref_time {} in queue, but previously send {}. Dropping package.".format(ref_time,  self.__latestPackageTime))
+            else:
+                log.info('Send item {} with reference time {}. Fits timestamp: {}'.format(self.__send_items, time.ctime(timestamp), pkg.timestamp))
+                self.__latestPackageTime = ref_time
+                self._transmit_socket.send(bytearray(pkg))
+                self.__send_items += 1
             self.__output_queue.task_done()
 
     def flush_queue(self):
@@ -399,7 +402,7 @@ def fw_factory(nsections, nchannels, data_type = "EEEI", channel_data_type = "F 
 
     packet = FWPacket()
 
-    packet.packet_size = ctypes.sizeof(packet_format)
+    packet.packet_size = ctypes.sizeof(packet)
 
     if channel_data_type != "F   ":
          raise NotADirectoryError("cannot handle backend data format {}".format(channel_data_type))
@@ -499,14 +502,14 @@ class GatedSpectrometerSpeadHandler(object):
         packet.integration_period = (packet.naccumulate * packet.fft_length) / float(packet.sampling_rate)
 
         # The reference time is in the center of the integration # period
-        packet.reference_time = packet.sync_time + packet.timestamp_count / float(packet.sampling_rate) + packet.integration_period/ 2
-        if packet.reference_time > self.__now:
-            self.__now = packet.reference_time
-
+        packet.reference_time = float(packet.sync_time + packet.timestamp_count / float(packet.sampling_rate) + packet.integration_period/ 2.)
         # packets with noise diode on are required to arrive at different time
         # than off
         if(packet.noise_diode_status == 1):
-            packet.reference_time += 0.0050
+            packet.reference_time += 0.1000
+
+        if packet.reference_time > self.__now:
+            self.__now = packet.reference_time
 
         if packet.reference_time not in self.__packages_in_preparation:
             fw_pkt = fw_factory(2, int(self.nchannels) - 1)
