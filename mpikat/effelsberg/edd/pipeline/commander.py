@@ -202,8 +202,8 @@ class EddCommander(AsyncDeviceServer):
         self._source_config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
-        self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
-        #self._status_server = KATCPToIGUIConverter("134.104.70.66", 7000)
+        #self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
+        self._status_server = KATCPToIGUIConverter("134.104.70.66", 7000)
         self._status_server.start()
         self._status_server.sensor_callbacks.add(
             self.sensor_update)
@@ -368,8 +368,23 @@ class EddCommander(AsyncDeviceServer):
                     self._edd00_numa0.req.start(json_string_numa0)
                     self._edd00_numa1.req.start(json_string_numa1)
                 """
-                json_string = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
-                json_string_fr = json.dumps({"source-name": "{}".format(self._source.value()), "nchannels": 512, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                source_full_name = self._source.value()
+                pulsar_name = source_full_name.split("_")[0]
+                scan_type = source_full_name[-1]
+                if scan_type == "R":
+                    if pulsar_name[:1] != "B" or pulsar_name[:1] != "J":
+                        json_string = json.dumps({"source-name": "{}{}_R".format("J", pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string_fr = json.dumps({"source-name": "{}{}_R".format("J", pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                    else:
+                        json_string = json.dumps({"source-name": "{}_R".format(pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string_fr = json.dumps({"source-name": "{}_R".format(pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                else:
+                    if pulsar_name[:1] != "B" or pulsar_name[:1] != "J":
+                        json_string = json.dumps({"source-name": "{}{}".format("J", pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string_fr = json.dumps({"source-name": "{}{}".format("J", pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                    else:
+                        json_string = json.dumps({"source-name": "{}".format(pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string_fr = json.dumps({"source-name": "{}".format(pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
                 log.debug(json_string)
                 log.debug(json_string_fr)
                 self.first_true = False
