@@ -105,16 +105,18 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         @param      req   An ScpiRequst object
 
         @note       Suports SCPI request: 'EDD:SET ID:OPTION VALUE'
+                    VALUE needs to be valid json, i.e. strings are marked with ""
         """
         log.debug(" Received {} {}".format(product_option, value))
         # Create nested option dict from colon seperateds tring
         try:
             d = {}
             g = d
-            for el in product_option.split(':')[:-1]:
+            option_list = product_option.split(':')
+            for el in option_list[:-1]:
                 d[el] = {}
                 d = d[el]
-            d[product_option[-1]] = value
+            d[option_list[-1]] = json.loads(value)
         except Exception as E:
             em = "Error parsing command: {} {}\n{}".format(product_option, value, E)
             log.error(em)
