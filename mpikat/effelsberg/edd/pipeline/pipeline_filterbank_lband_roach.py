@@ -83,7 +83,7 @@ CONFIG = {
         "tsamp": 0.08,
         "mode": "PSR",
         "nbit": 8,
-        "ndim": 1,
+        "ndim": 2,
         "npol": 2,
         "nchan": 32,
         "idx2_list": "32,40,48,56",
