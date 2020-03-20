@@ -1088,7 +1088,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #STARTING DSPSR                                    #
         ####################################################
         os.chdir(in_path)
-        log.debug("pulsar_flag = {}".format(self.pulsar_flag))
+        #log.debug("pulsar_flag = {}".format(self.pulsar_flag))
         log.debug("source_name = {}".format(self.source_name))
 
         cmd = "numactl -m {numa} taskset -c 6-18 digifil -threads 12 -F 512 -b-32 -d 1 -I 0 -t 100 {keyfile}".format(
