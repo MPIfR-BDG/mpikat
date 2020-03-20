@@ -1091,7 +1091,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #log.debug("pulsar_flag = {}".format(self.pulsar_flag))
         log.debug("source_name = {}".format(self.source_name))
 
-        cmd = "numactl -m {numa} taskset -c 6-18 digifil -threads 12 -F 512 -b-32 -d 1 -I 0 -t 100 {keyfile}".format(
+        cmd = "numactl -m {numa} taskset -c 6-18 digifil -threads 12 -F 512 -b8 -d 1 -t 50 {keyfile}".format(
             numa=self.numa_number,
             cpus=NUMA_MODE[self.numa_number][2],
             nchan="{}".format(self.nchannels),
