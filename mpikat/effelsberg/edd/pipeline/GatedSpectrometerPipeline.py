@@ -214,7 +214,6 @@ IBV_MAX_POLL 10
 
 SYNC_TIME           unset  # Default value from mksend manual
 SAMPLE_CLOCK        unset  # Default value from mksend manual
-SAMPLE_CLOCK_START  0      # Default value from mksend manual
 UTC_START           unset  # Default value from mksend manual
 
 #number of heaps with the same time stamp.
@@ -225,6 +224,7 @@ HEAP_ID_STEP    13
 NSCI            1
 NITEMS          9
 ITEM1_ID        5632    # timestamp, slowest index
+ITEM1_SERIAL
 
 ITEM2_ID        5633    # polarization
 
