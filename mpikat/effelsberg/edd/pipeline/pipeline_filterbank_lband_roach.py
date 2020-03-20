@@ -29,7 +29,7 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord
 from subprocess import PIPE, Popen
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
-from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
+from mpikat.effelsberg.edd.pipeline.dada_roach_lband import render_dada_header, make_dada_key_string
 import shlex
 import threading
 import base64
