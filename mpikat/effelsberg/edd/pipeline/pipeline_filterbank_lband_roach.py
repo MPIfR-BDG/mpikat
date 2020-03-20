@@ -985,16 +985,9 @@ class EddPulsarPipeline(AsyncDeviceServer):
             header["sync_time"] = self.sync_epoch
             header["sample_clock"] = float(
                 self.config_dict["sampling_rate"]) / float(self.config_dict["predecimation_factor"])
-            header["tsamp"] = 1 / (2.0 * self.bandwidth)
+            header["tsamp"] = 32 * 1/ (self.bandwidth)
         except:
-            pass
-        self.pulsar_flag = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))
-        if ((parse_tag(self.source_name) == "default") or (parse_tag(self.source_name) != "R")) and (not self.pulsar_flag):
-            if (parse_tag(self.source_name) != "FB"):
-            	error = "source is not pulsar or calibrator"
-            #reset state to ready
-            	self._state_sensor.set_value(self.READY)
-            	raise EddPulsarPipelineError(error)
+        	pass
 
         ########NEED TO PUT IN THE LOGIC FOR _R here#############
         # try:
