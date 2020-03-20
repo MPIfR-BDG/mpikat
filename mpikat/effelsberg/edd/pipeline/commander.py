@@ -373,18 +373,18 @@ class EddCommander(AsyncDeviceServer):
                 scan_type = source_full_name[-1]
                 if scan_type == "R":
                     if pulsar_name[:1] != "B" and pulsar_name[:1] != "J":
-                        json_string = json.dumps({"source-name": "{}{}_R".format("J", pulsar_name), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
-                        json_string_fr = json.dumps({"source-name": "{}{}_R".format("J", pulsar_name), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string = json.dumps({"source-name": "{}{}_R".format("J", pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string_fr = json.dumps({"source-name": "{}{}_R".format("J", pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
                     else:
-                        json_string = json.dumps({"source-name": "{}_R".format(pulsar_name), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
-                        json_string_fr = json.dumps({"source-name": "{}_R".format(pulsar_name), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string = json.dumps({"source-name": "{}_R".format(pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string_fr = json.dumps({"source-name": "{}_R".format(pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
                 else:
                     if pulsar_name[:1] != "B" and pulsar_name[:1] != "J":
-                        json_string = json.dumps({"source-name": "{}{}".format("J", pulsar_name), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
-                        json_string_fr = json.dumps({"source-name": "{}{}".format("J", pulsar_name), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string = json.dumps({"source-name": "{}{}".format("J", pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string_fr = json.dumps({"source-name": "{}{}".format("J", pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
                     else:
-                        json_string = json.dumps({"source-name": "{}".format(pulsar_name), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
-                        json_string_fr = json.dumps({"source-name": "{}".format(pulsar_name), "nchannels": 2048, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string = json.dumps({"source-name": "{}".format(pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string_fr = json.dumps({"source-name": "{}".format(pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
                 log.debug(json_string)
                 log.debug(json_string_fr)
                 self.first_true = False
