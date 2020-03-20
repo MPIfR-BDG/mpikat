@@ -42,6 +42,7 @@ class FitsWriterConnectionManager(Thread):
         self._address = (ip, port)
         self._shutdown = Event()
         self._has_connection = Event()
+        self._is_measuring = Event()
 
         self.__output_queue = queue.PriorityQueue()
         self.__delay = 3         # keep a packet for self.__delay seconds in the queue, as there might be other packages arriving.
@@ -103,7 +104,7 @@ class FitsWriterConnectionManager(Thread):
         """
         Put new output pkg on local queue if there is a fits server connection. Drop packages otherwise.
         """
-        if self._has_connection.is_set():
+        if self._is_measuring.is_set():
             self.__output_queue.put([pkg.timestamp, pkg, time.time()])
         else:
             log.info("No FITS write connection, dropping package.")
@@ -140,6 +141,19 @@ class FitsWriterConnectionManager(Thread):
         self.send_data(0)
         #self.__output_queue.join()
 
+    def queue_is_empty(self):
+        return self.__output_queue.empty()
+
+
+    def clear_queue(self):
+        """
+        Empty queue without sending
+        """
+        while not self.__output_queue.empty():
+            self.__output_queue.get(timeout=1)
+            self.__output_queue.task_done()
+
+
     def stop(self):
         """
         @brief   Stop the server
@@ -162,10 +176,8 @@ class FitsWriterConnectionManager(Thread):
                 log.error("Exception during send data. Dropping connection, emtying queue")
                 log.exception(str(error))
                 self.drop_connection()
-                while not self.__output_queue.empty():
-                    self.__output_queue.get(timeout=1)
-                    self.__output_queue.task_done()
-
+                self._is_measuring.clear()
+                self.clear_queue()
                 continue
 
             time.sleep(0.1)
@@ -279,14 +291,27 @@ class FitsInterfaceServer(EDDPipeline):
     @coroutine
     def measurement_start(self):
         log.info("Starting FITS interface data transfer as soon as connection is established ...")
+        self._fw_connection_manager.clear_queue()
+        self._fw_connection_manager._is_measuring.set()
         pass
 
 
     @coroutine
     def measurement_stop(self):
         log.info("Stopping FITS interface data transfer")
-        self._fw_connection_manager.flush_queue()
-        self._fw_connection_manager.drop_connection()
+        yield self._fw_connection_manager._is_measuring.clear()
+        yield self._fw_connection_manager.flush_queue()
+        counter = 0
+        log.info("Waiting for emting output queue")
+        while not self._fw_connection_manager.queue_is_empty():
+            if counter > 50:
+                log.warning("Queue not empties after flush!")
+                break
+            yield time.sleep(0.1)
+            counter += 1
+        yield time.sleep(0.1)
+        log.info("Dropping connection.")
+        yield self._fw_connection_manager.drop_connection()
 
 
     @coroutine

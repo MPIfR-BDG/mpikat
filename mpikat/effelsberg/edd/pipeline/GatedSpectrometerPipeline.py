@@ -527,7 +527,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                     log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nic_params['ip'], nic_params['speed']))
                     physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
                     if self._config['idx1_modulo'] == 'auto':
-                        idx1modulo = 10*cfg["samples_per_block"] / stream_description["samples_per_heap"]
+                        idx1modulo = 23*cfg["samples_per_block"] / stream_description["samples_per_heap"]
                     else:
                         idx1modulo = self._config['idx1_modulo']
 
