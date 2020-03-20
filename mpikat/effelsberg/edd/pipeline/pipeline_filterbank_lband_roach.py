@@ -1050,6 +1050,47 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self.pulsar_flag_with_R = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:-2]))
 
 
+        dada_header_file = tempfile.NamedTemporaryFile(
+            mode="w",
+            prefix="edd_dada_header_",
+            suffix=".txt",
+            dir="/tmp/",
+            delete=False)
+        log.debug(
+            "Writing dada header file to {0}".format(
+                dada_header_file.name))
+        header_string = render_dada_header(header)
+        dada_header_file.write(header_string)
+        dada_key_file = tempfile.NamedTemporaryFile(
+            mode="w",
+            prefix="dada_keyfile_",
+            suffix=".key",
+            dir="/tmp/",
+            delete=False)
+        log.debug("Writing dada key file to {0}".format(
+            dada_key_file.name))
+        # key_string = make_dada_key_string(self._dada_key)
+        # dada_key_file.write(make_dada_key_string(self._dada_key))
+        key_string = make_dada_key_string(self._dadc_key)
+        dada_key_file.write(make_dada_key_string(self._dadc_key))
+        log.debug("Dada key file contains:\n{0}".format(key_string))
+        dada_header_file.close()
+        dada_key_file.close()
+
+        attempts = 0
+        retries = 5
+        while True:
+            if attempts >= retries:
+                error = "could not read dada_key_file"
+                raise EddPulsarPipelineError(error)
+            else:
+                time.sleep(1)
+                if is_accessible('{}'.format(dada_key_file.name)):
+                    log.debug('found {}'.format(dada_key_file.name))
+                    break
+                else:
+                    attempts += 1
+
         ####################################################
         #STARTING DSPSR                                    #
         ####################################################
