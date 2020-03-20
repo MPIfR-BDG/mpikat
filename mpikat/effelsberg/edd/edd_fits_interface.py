@@ -85,6 +85,7 @@ class FitsWriterConnectionManager(Thread):
         """
         @brief   Drop any current FITS writer connection and waits for new one.
         """
+        self._has_connection.clear()
         if not self._transmit_socket is None:
             log.debug("Dropping connection")
             try:
@@ -97,7 +98,6 @@ class FitsWriterConnectionManager(Thread):
                 log.error("Error closing socket.")
                 log.exception(E)
             self._transmit_socket = None
-        self._has_connection.clear()
 
 
     def put(self, pkg):
@@ -107,11 +107,11 @@ class FitsWriterConnectionManager(Thread):
         if self._is_measuring.is_set():
             self.__output_queue.put([pkg.timestamp, pkg, time.time()])
         else:
-            log.info("No FITS write connection, dropping package.")
+            log.info("Not measuring dropping package.")
 
 
 
-    def send_data(self, delay):
+    def send_data(self):
         """
         Send all packages in queue older than delay seconds.
         """
@@ -120,11 +120,17 @@ class FitsWriterConnectionManager(Thread):
 
         while not self.__output_queue.empty():
             ref_time, pkg, timestamp = self.__output_queue.get(timeout=1)
-            if (now - timestamp) < delay:
-                # Pkg. too young, there might be others. Put back and return
-                self.__output_queue.put([ref_time, pkg, timestamp])
-                self.__output_queue.task_done()
-                return
+            self.__output_queue.task_done()
+            if self._is_measuring.is_set():
+                if (now - timestamp) < self.__delay:
+                    # Pkg. too young, there might be others. Put back and
+                    # return.
+                    # But only during measurement - if no measurement, just
+                    # empty queue asap, as there cant be other packages.
+                    self.__output_queue.put([ref_time, pkg, timestamp])
+                    return
+            else:
+                log.debug("Flushing queue. Current size: {}".format(self.__output_queue.qsize()))
             if ref_time < self.__latestPackageTime:
                 log.warning("Package with ref_time {} in queue, but previously send {}. Dropping package.".format(ref_time,  self.__latestPackageTime))
             else:
@@ -132,14 +138,7 @@ class FitsWriterConnectionManager(Thread):
                 self.__latestPackageTime = ref_time
                 self._transmit_socket.send(bytearray(pkg))
                 self.__send_items += 1
-            self.__output_queue.task_done()
 
-    def flush_queue(self):
-        """
-        Send all remaining packages.
-        """
-        self.send_data(0)
-        #self.__output_queue.join()
 
     def queue_is_empty(self):
         return self.__output_queue.empty()
@@ -171,7 +170,7 @@ class FitsWriterConnectionManager(Thread):
                     log.exception(str(error))
                     continue
             try:
-                self.send_data(self.__delay)
+                self.send_data()
             except Exception as error:
                 log.error("Exception during send data. Dropping connection, emtying queue")
                 log.exception(str(error))
@@ -182,7 +181,6 @@ class FitsWriterConnectionManager(Thread):
 
             time.sleep(0.1)
 
-        self.flush_queue()
         self.drop_connection()
         self._server_socket.close()
 
@@ -293,19 +291,18 @@ class FitsInterfaceServer(EDDPipeline):
         log.info("Starting FITS interface data transfer as soon as connection is established ...")
         self._fw_connection_manager.clear_queue()
         self._fw_connection_manager._is_measuring.set()
-        pass
 
 
     @coroutine
     def measurement_stop(self):
         log.info("Stopping FITS interface data transfer")
         yield self._fw_connection_manager._is_measuring.clear()
-        yield self._fw_connection_manager.flush_queue()
         counter = 0
         log.info("Waiting for emting output queue")
         while not self._fw_connection_manager.queue_is_empty():
-            if counter > 50:
+            if counter > 150:
                 log.warning("Queue not empties after flush!")
+                self._fw_connection_manager.clear_queue()
                 break
             yield time.sleep(0.1)
             counter += 1
