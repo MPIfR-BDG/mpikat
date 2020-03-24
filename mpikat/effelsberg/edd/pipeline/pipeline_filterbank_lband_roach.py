@@ -79,14 +79,14 @@ CONFIG = {
         "frequency_mhz": 1393.75,
         "receiver_name": "P217",
         "mc_source": "239.2.1.154+3",
-        "bandwidth": 400,
+        "bandwidth": 100,
         "tsamp": 0.08,
         "mode": "PSR",
         "nbit": 8,
         "ndim": 2,
         "npol": 2,
-        "nchan": 32,
-        "idx2_list": "32,40,48,56",
+        "nchan": 8,
+        "idx2_list": "40",
         "resolution": 1,
         "dsb": 1,
         "ra": "123",
@@ -884,6 +884,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._create_transpose_ring_buffer.stdout_callbacks.add(
                 self._decode_capture_stdout)
             self._create_transpose_ring_buffer._process.wait()
+            if self.config_dict["reconfigure_roach"] == 1:
+                for i in range(180):
+                    log.info(
+                        "Sleeping for 180 seconds : {} seconds passed".format(i))
+                    time.sleep(1)
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
         else:
@@ -945,7 +950,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._source_config = json.loads(config_json)
             log.info("Unpacked config: {}".format(self._source_config))
             self.frequency_mhz =  1393.75
-            self.bandwidth = 400.0
+            self.bandwidth = 100.0
             self._central_freq.set_value(str(self.frequency_mhz))
             header = self._config["dada_header_params"]
             #header["ra"] = self._source_config["ra"]
@@ -955,12 +960,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
                          "ra"], self._source_config["dec"]), unit=(u.deg, u.deg))
             header["ra"] = c.to_string("hmsdms").split(" ")[0].replace("h", ":").replace("m", ":").replace("s", "")
             header["dec"] = c.to_string("hmsdms").split(" ")[1].replace("d", ":").replace("m", ":").replace("s", "")
-            header["idx2_list"] = "32,40,48,56"
+            header["idx2_list"] = "40"
             header["frequency_mhz"] = 1393.75
 
             #header['mode'] = self._source_config['mode']
             header["key"] = self._dada_key
-            header["mc_source"] = "239.2.1.154+3"
+            header["mc_source"] = "239.2.1.155"
             #header["frequency_mhz"] = self.frequency_mhz
             header["bandwidth"] = self.bandwidth
             header["mc_streaming_port"] = self.config_dict["mc_streaming_port"]
@@ -985,7 +990,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             header["sync_time"] = self.sync_epoch
             header["sample_clock"] = float(
                 self.config_dict["sampling_rate"]) / float(self.config_dict["predecimation_factor"])
-            header["tsamp"] = 32 * 1/ (self.bandwidth)
+            header["tsamp"] = 8 * 1/ (self.bandwidth)
         except:
         	pass
 
@@ -1170,7 +1175,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
-        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge -p 4 --log_level=info".format(
+        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach --log_level=info".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][1])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDPolnMerge")
@@ -1203,6 +1208,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
+        
         cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
             in_path, out_path)
         log.debug("Running command: {0}".format(cmd))
