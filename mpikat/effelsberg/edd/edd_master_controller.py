@@ -336,6 +336,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         Resets the EDD, i.e. flusing all data bases. Note that runing containers are not stopped.
         """
         self.__eddDataStore._dataStreams.flushdb()
+        self.__provisioned = None
 
 
     @request(Str())
@@ -522,9 +523,9 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                             "roles")})
             except Exception as E:
                 raise FailReply("Error in provisioning {}".format(E))
-            self.__provisioned = None
             self.__eddDataStore.updateProducts()
             self.__eddDataStore._dataStreams.flushdb()
+        self.__provisioned = None
 
 
 
