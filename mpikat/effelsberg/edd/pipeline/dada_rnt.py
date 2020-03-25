@@ -70,7 +70,7 @@ IBV_MAX_POLL 10
 BUFFER_SIZE 16777216
 #BUFFER_SIZE 1048576
 SAMPLE_CLOCK_START  unset # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock                     
-HEAP_NBYTES    4096i
+HEAP_NBYTES    4096
 SKIP_SLOTS 10
 DADA_NSLOTS        3
 #HEAP_SIZE    4096
