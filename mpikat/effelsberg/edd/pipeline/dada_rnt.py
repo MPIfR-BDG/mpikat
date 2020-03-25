@@ -54,6 +54,7 @@ DADA_MODE    4                       # The mode, 4=full dada functionality
 ORDER        FTP                       # Here we are only capturing one polarisation, so data is time only
 SYNC_TIME    {{sync_time}}
 CLOCK_SAMPLE  {{sample_clock}}
+SAMPLE_CLOCK {{sample_clock}}
 PACKET_SIZE 8400
 NTHREADS 32
 #NHEAPS 256
@@ -69,8 +70,10 @@ IBV_MAX_POLL 10
 BUFFER_SIZE 16777216
 #BUFFER_SIZE 1048576
 SAMPLE_CLOCK_START  unset # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock                     
-#HEAP_NBYTES    4096
-HEAP_SIZE    4096
+HEAP_NBYTES    4096i
+SKIP_SLOTS 10
+DADA_NSLOTS        3
+#HEAP_SIZE    4096
 #SPEAD specifcation for EDD packetiser data stream
 NINDICES    2   # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
 # The first index item is the running timestamp
