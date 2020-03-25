@@ -80,7 +80,6 @@ class DigitiserPacketiserClient(object):
         allowedFactors = [2,4,8,16] # Eddy Nussbaum, private communication
         if factor not in allowedFactors:
             raise RuntimeError("predicimation factor {} not in allowed factors {}".format(factor, allowedFactors))
-
         yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
 
     @coroutine
@@ -320,14 +319,6 @@ class DigitiserPacketiserClient(object):
         """
         log.warning("Not stopping data transmission")
         raise Return()
-        #yield self._safe_request("capture_stop", "vh")
-
-    @coroutine
-    def set_predecimation(self, factor):
-        """
-        @brief      Set predcimation factor
-        """
-        yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
 
 
     @coroutine
