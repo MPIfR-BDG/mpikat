@@ -482,7 +482,7 @@ class ExecuteCommand(object):
                 except Exception as error:
                     log.debug(error)
                     #log.debug("profile.png is not ready")
-                time.sleep(7)
+                time.sleep(10)
 
 
 class EddPulsarPipelineKeyError(Exception):
@@ -998,6 +998,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             in_path = os.path.join("/media/scratch/jason/dspsr_output/", tdate, self.source_name,
                                    str(self.frequency_mhz), tstr, "raw_data")
+            self.in_path = in_path
             out_path = os.path.join(
                 "/media/scratch/jason/dspsr_output/", tdate, self.source_name, str(self.frequency_mhz), tstr, "combined_data")
             self.out_path = out_path
@@ -1322,6 +1323,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     proc._process.kill()
             if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
                 os.remove("/tmp/t2pred.dat")
+
+            try:
+                os.remove("{}/core".format(self.in_path))
+            except:
+            	pass
 
 
             log.info("reset DADA buffer")
