@@ -482,7 +482,7 @@ class ExecuteCommand(object):
                 except Exception as error:
                     log.debug(error)
                     #log.debug("profile.png is not ready")
-                time.sleep(10)
+                time.sleep(7)
 
 
 class EddPulsarPipelineKeyError(Exception):
