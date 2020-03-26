@@ -95,8 +95,8 @@ CONFIG = {
 }
 
 NUMA_MODE = {
-    0: ("0-9", "10", "11,12,13,14"),
-    1: ("18-28", "29", "30,31,32,33")
+    0: ("0-3", "10", "11,12,13,14"),
+    1: ("18-21", "29", "30,31,32,33")
 }
 INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15",
              2: "10.10.1.16", 3: "10.10.1.17"}
@@ -1223,7 +1223,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
-        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_rnt --header {dada_header} --quiet".format(
+        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_rnt --header {dada_header} ".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
