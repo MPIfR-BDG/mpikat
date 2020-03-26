@@ -33,7 +33,7 @@ from astropy.time import Time
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
-from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
+from mpikat.effelsberg.edd.pipeline.dada_rnt import render_dada_header, make_dada_key_string
 from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig
 from katcp import Sensor
 import base64
@@ -109,8 +109,8 @@ DEFAULT_CONFIG = {
 }
 
 NUMA_MODE = {
-    0: ("0-9", "10", "11,12,13,14"),
-    1: ("18-28", "29", "30,31,32,33")
+    0: ("0-3", "10", "11,12,13,14"),
+    1: ("18-21", "29", "30,31,32,33")
 }
 INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15",
              2: "10.10.1.16", 3: "10.10.1.17"}
