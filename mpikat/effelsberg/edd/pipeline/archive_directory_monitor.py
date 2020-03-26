@@ -58,10 +58,10 @@ class ArchiveAdder(FileSystemEventHandler):
             self._syscall(
                 "pav -FY sum.fscrunch -g ../combined_data/fscrunch.png/png")
             log.info("removing {}".format(fscrunch_fname))
-            os.remove(fscrunch_fname)
+        os.remove(fscrunch_fname)
             #shutil.copy2("sum.fscrunch", self.output_dir)
             #shutil.copy2("sum.tscrunch", self.output_dir)
-            log.info("Accessing archive PNG files")
+        log.info("Accessing archive PNG files")
             
     def on_created(self, event):
         log.info("New file created: {}".format(event.src_path))
