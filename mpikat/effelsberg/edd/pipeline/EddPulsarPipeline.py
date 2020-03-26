@@ -553,13 +553,13 @@ class EddPulsarPipeline(EDDPipeline):
                 cuda_number=self.cuda_number,
                 keyfile=self.dada_key_file.name)
 
-        elif parse_tag(self._config['source_config']["source-name"]) == "FB":
-            cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 4 -F {nchan} -b8 -d 1 -I 0 -t {nbins} {keyfile}".format(
-                numa=self.numa_number,
-                nchan="{}".format(self._config['source_config']["nchannels"]),
-                nbin="{}".format(self._config['source_config']["nbins"]),
-                cpus=self.cpu_numbers,
-                keyfile=self.dada_key_file.name)
+#        elif parse_tag(self._config['source_config']["source-name"]) == "FB":
+#            cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 4 -F {nchan} -b8 -d 1 -I 0 -t {nbins} {keyfile}".format(
+#                numa=self.numa_number,
+##                nchan="{}".format(self._config['source_config']["nchannels"]),
+#                nbin="{}".format(self._config['source_config']["nbins"]),
+#                cpus=self.cpu_numbers,
+#                keyfile=self.dada_key_file.name)
         else:
             error = "source is unknown"
             raise EddPulsarPipelineError(error)
