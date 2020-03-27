@@ -54,7 +54,7 @@ ORDER        TFP                       # Here we are only capturing one polarisa
 SYNC_TIME    {{sync_time}}
 CLOCK_SAMPLE  {{sample_clock}}
 #PACKET_SIZE 9200
-NTHREADS 32
+NTHREADS 1
 #NHEAPS 256
 #NGROUPS_DATA  4096
 #NGROUPS_TEMP  2048
@@ -69,7 +69,7 @@ BUFFER_SIZE 16777216
 #BUFFER_SIZE 1048576
 SAMPLE_CLOCK_START  unset # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock                     
 HEAP_SIZE    262144
-
+HEAP_NBYTES 262144
 #SPEAD specifcation for EDD packetiser data stream
 NINDICES    2   # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
 # The first index item is the running timestamp
@@ -82,6 +82,8 @@ IDX2_ITEM   2
 IDX2_LIST {{idx2_list}}
 #IDX2_LIST   0,1
 #IDX2_MASK   0x1
+SLOTS_SKIP 10
+DADA_NSLOTS 4
 # end of header
 
 """
