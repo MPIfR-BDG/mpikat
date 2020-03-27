@@ -161,6 +161,7 @@ class DigitiserPacketiserClient(object):
         actions.append(ce function returns.
         """
         valid_modes = {
+            4096000000: ("virtex7_dk769b", "4.096GHz", 3),
             4000000000: ("virtex7_dk769b", "4.0GHz", 5),
             3600000000: ("virtex7_dk769b", "3.6GHz", 7),
             3520000000: ("virtex7_dk769b", "3.52GHz", 7),
@@ -169,6 +170,7 @@ class DigitiserPacketiserClient(object):
             2600000000: ("virtex7_dk769b", "2.6GHz", 3),
             2560000000: ("virtex7_dk769b", "2.56GHz", 2)
         }
+
         try:
             args = valid_modes[int(rate)]
         except KeyError as error:
