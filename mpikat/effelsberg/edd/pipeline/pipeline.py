@@ -1247,6 +1247,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             cmd, outpath=out_path, resident=True)
         self._archive_directory_monitor.stdout_callbacks.add(
             self._decode_capture_stdout)
+        #self._archive_directory_monitor.stderr_callbacks.add(
+        #    self._handle_eddpolnmerge_stderr)
         self._archive_directory_monitor.fscrunch_callbacks.add(
             self._add_fscrunch_to_sensor)
         self._archive_directory_monitor.tscrunch_callbacks.add(

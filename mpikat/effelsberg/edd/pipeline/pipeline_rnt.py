@@ -463,7 +463,7 @@ class ExecuteCommand(object):
         if RUN:
             while self._process.poll() == None:
                 # while not self._finish_event.isSet():
-                log.debug("Accessing archive PNG files")
+                log.debug("Accessing archive PNG files from : {}".format(self._outpath))
                 try:
                     with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
                         self.fscrunch = base64.b64encode(imageFile.read())
@@ -1248,6 +1248,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             cmd, outpath=out_path, resident=True)
         self._archive_directory_monitor.stdout_callbacks.add(
             self._decode_capture_stdout)
+        self._archive_directory_monitor.stderr_callbacks.add(
+            self._handle_eddpolnmerge_stderr)
         self._archive_directory_monitor.fscrunch_callbacks.add(
             self._add_fscrunch_to_sensor)
         self._archive_directory_monitor.tscrunch_callbacks.add(
