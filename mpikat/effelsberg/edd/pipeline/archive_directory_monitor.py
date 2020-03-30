@@ -5,6 +5,7 @@ import shlex
 import shutil
 import os
 import base64
+import time
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from subprocess import Popen, PIPE
@@ -71,6 +72,7 @@ class ArchiveAdder(FileSystemEventHandler):
             if fname.find('.ar.') != -1:
                 log.info(
                     "Passing archive file {} for processing".format(fname[0:-9]))
+                time.sleep(1) 
                 self.process(fname[0:-9])
         except Exception as error:
             log.error(error)
