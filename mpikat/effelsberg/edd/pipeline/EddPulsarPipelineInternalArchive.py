@@ -684,13 +684,13 @@ class EddPulsarPipeline(EDDPipeline):
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
 
-        archive_observer = Observer()
-        archive_observer.daemon = False
+        self.archive_observer = Observer()
+        self.archive_observer.daemon = False
         log.info("Input directory: {}".format(self.in_path))
         log.info("Output directory: {}".format(self.out_path))
         log.info("Setting up ArchiveAdder handler")
         handler = ArchiveAdder(self.out_path)
-        archive_observer.schedule(handler, self.in_path, recursive=False)
+        self.archive_observer.schedule(handler, self.in_path, recursive=False)
 
         # def shutdown(sig, func):
         #    log.info("Signal handler called on signal: {}".format(sig))
@@ -699,9 +699,9 @@ class EddPulsarPipeline(EDDPipeline):
         #    sys.exit()
 
         log.info("Starting directory monitor")
-        observer.start()
+        self.archive_observer.start()
         log.info("Parent thread entering 1 second polling loop")
-        while not observer.stopped_event.wait(1):
+        while not self.archive_observer.stopped_event.wait(1):
             pass
 
         # cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
@@ -731,8 +731,8 @@ class EddPulsarPipeline(EDDPipeline):
             self._subprocessMonitor.stop()
         log.debug("Stopping")
         self._png_monitor_callback.stop()
-        archive_observer.stop()
-        archive_observer.join()
+        self.archive_observer.stop()
+        self.archive_observer.join()
         process = [self._mkrecv_ingest_proc,
                    self._polnmerge_proc]
         for proc in process:
