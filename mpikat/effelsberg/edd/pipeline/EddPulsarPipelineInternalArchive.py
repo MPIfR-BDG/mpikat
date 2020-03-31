@@ -701,8 +701,8 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("Starting directory monitor")
         self.archive_observer.start()
         log.info("Parent thread entering 1 second polling loop")
-        while not self.archive_observer.stopped_event.wait(1):
-            pass
+        #while not self.archive_observer.stopped_event.wait(1):
+        #    pass
 
         # cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
         #    self.in_path, self.out_path)
