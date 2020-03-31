@@ -97,7 +97,10 @@ class DigitiserPacketiserClient(object):
         """
         @brief Set noise diode frequency to given value.
         """
-        yield self.set_noise_diode_firing_pattern(0.5, 1./frequency, "now")
+        if frequency == 0:
+            yield self.set_noise_diode_firing_pattern(0.0, 0.0, "now")
+        else:
+            yield self.set_noise_diode_firing_pattern(0.5, 1./frequency, "now")
 
     @coroutine
     def set_noise_diode_firing_pattern(self, percentage, period, start="now"):
@@ -413,13 +416,13 @@ if __name__ == "__main__":
     parser.add_argument('--sync-time', dest='sync_time', type=int,
         help='Use specified synctime, otherwise use current time')
     parser.add_argument('--noise-diode-frequency', dest='noise_diode_frequency', type=float,
-        help='Set the noise diode frequency')
+        help='Set the noise diode frequency', default=-1)
 
     parser.add_argument('--flip-spectrum', action="store_true", default=False, help="Flip the spectrum")
     args = parser.parse_args()
 
     if args.host in known_packetizers:
-        print("Found {} in known packetizers, use stored lookup ip and port.")
+        print("Found {} in known packetizers, use stored lookup ip and port.".format(args.host))
         args.port = known_packetizers[args.host]['port']
         args.host = known_packetizers[args.host]['ip']
     print("Configuring paketizer {}:{}".format(args.host, args.port))
@@ -443,8 +446,8 @@ if __name__ == "__main__":
         actions.append((client.set_predecimation, dict(factor=args.predecimation_factor)))
     # Always flip spectrum to either on or off
     actions.append((client.flip_spectrum, dict(flip=args.flip_spectrum)))
-    if args.noise_diode_frequency:
-        actions.append(client.set_noise_diode_frequency(args.noise_diode_frequency))
+    if args.noise_diode_frequency >= 0.:
+        actions.append((client.set_noise_diode_frequency, dict(frequency=args.noise_diode_frequency)))
 
     # Sync + capture start should come last
     if args.synchronize:
