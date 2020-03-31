@@ -335,6 +335,11 @@ class EddPulsarPipeline(EDDPipeline):
     def _png_monitor(self):
         log.info("reading png from : {}".format(self.out_path))
         try:
+        	processed_seconds = int(os.popen("ls {}/*ar | wc -l".format(self.in_path)).read())
+        	self._time_processed.set_value(processed_seconds)
+        	log.info("processed {}s".format(processed_seconds))
+
+        try:
             log.info("reading {}/fscrunch.png".format(self.out_path))
             with open("{}/fscrunch.png".format(self.out_path), "rb") as imageFile:
                 image_fscrunch = base64.b64encode(imageFile.read())
