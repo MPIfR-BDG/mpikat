@@ -171,6 +171,7 @@ class EddPulsarPipelineKeyError(Exception):
 class EddPulsarPipelineError(Exception):
     pass
 
+
 class ArchiveAdder(FileSystemEventHandler):
 
     def __init__(self, output_dir):
@@ -210,10 +211,10 @@ class ArchiveAdder(FileSystemEventHandler):
                 "pav -FY sum.fscrunch -g ../combined_data/fscrunch.png/png")
             log.info("removing {}".format(fscrunch_fname))
         os.remove(fscrunch_fname)
-            #shutil.copy2("sum.fscrunch", self.output_dir)
-            #shutil.copy2("sum.tscrunch", self.output_dir)
+        #shutil.copy2("sum.fscrunch", self.output_dir)
+        #shutil.copy2("sum.tscrunch", self.output_dir)
         log.info("Accessing archive PNG files")
-            
+
     def on_created(self, event):
         log.info("New file created: {}".format(event.src_path))
         try:
@@ -222,7 +223,7 @@ class ArchiveAdder(FileSystemEventHandler):
             if fname.find('.ar.') != -1:
                 log.info(
                     "Passing archive file {} for processing".format(fname[0:-9]))
-                time.sleep(1) 
+                time.sleep(1)
                 self.process(fname[0:-9])
         except Exception as error:
             log.error(error)
@@ -381,7 +382,8 @@ class EddPulsarPipeline(EDDPipeline):
                Adds and register an appropriate sensor to thw list
         """
         # always clear buffer first. Allow fail here
-        cmd = "numactl --cpubind={numa_node} --membind={numa_node} dbreset -k {key} --log_level debug".format(numa_node=numa_node, key=key)
+        cmd = "numactl --cpubind={numa_node} --membind={numa_node} dbreset -k {key} --log_level debug".format(
+            numa_node=numa_node, key=key)
         log.debug("Running command: {0}".format(cmd))
         yield command_watcher(cmd, allow_fail=True)
 
@@ -624,7 +626,7 @@ class EddPulsarPipeline(EDDPipeline):
 #        elif parse_tag(self._config['source_config']["source-name"]) == "FB":
 #            cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 4 -F {nchan} -b8 -d 1 -I 0 -t {nbins} {keyfile}".format(
 #                numa=self.numa_number,
-##                nchan="{}".format(self._config['source_config']["nchannels"]),
+# nchan="{}".format(self._config['source_config']["nchannels"]),
 #                nbin="{}".format(self._config['source_config']["nbins"]),
 #                cpus=self.cpu_numbers,
 #                keyfile=self.dada_key_file.name)
@@ -682,33 +684,32 @@ class EddPulsarPipeline(EDDPipeline):
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
 
+        archive_observer = Observer()
+        archive_observer.daemon = False
+        log.info("Input directory: {}".format(self.in_path))
+        log.info("Output directory: {}".format(self.out_path))
+        log.info("Setting up ArchiveAdder handler")
+        handler = ArchiveAdder(self.out_path)
+        archive_observer.schedule(handler, self.in_path, recursive=False)
 
-	    archive_observer = Observer()
-	    archive_observer.daemon = False
-	    log.info("Input directory: {}".format(self.in_path))
-	    log.info("Output directory: {}".format(self.out_path))
-	    log.info("Setting up ArchiveAdder handler")
-	    handler = ArchiveAdder(self.out_path)
-	    archive_observer.schedule(handler, self.in_path, recursive=False)
+        # def shutdown(sig, func):
+        #    log.info("Signal handler called on signal: {}".format(sig))
+        #    observer.stop()
+        #    observer.join()
+        #    sys.exit()
 
-	    #def shutdown(sig, func):
-	    #    log.info("Signal handler called on signal: {}".format(sig))
-	    #    observer.stop()
-	    #    observer.join()
-	    #    sys.exit()
+        log.info("Starting directory monitor")
+        observer.start()
+        log.info("Parent thread entering 1 second polling loop")
+        while not observer.stopped_event.wait(1):
+            pass
 
-	    log.info("Starting directory monitor")
-	    observer.start()
-	    log.info("Parent thread entering 1 second polling loop")
-	    while not observer.stopped_event.wait(1):
-	        pass
-
-        #cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
+        # cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
         #    self.in_path, self.out_path)
         #log.debug("Running command: {0}".format(cmd))
         #log.info("Staring archive monitor")
         #self._archive_directory_monitor = ManagedProcess(cmd)
-        #self._subprocessMonitor.add(
+        # self._subprocessMonitor.add(
         #    self._archive_directory_monitor, self._subprocess_error)
         self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
             self._png_monitor, 5000)
@@ -740,10 +741,10 @@ class EddPulsarPipeline(EDDPipeline):
             os.remove("/tmp/t2pred.dat")
         log.info("reset DADA buffer")
         log.info("Resetting dadc buffer")
-        #yield self._reset_ring_buffer("dadc", self.numa_number)
+        # yield self._reset_ring_buffer("dadc", self.numa_number)
         #cmd = "dbreset -k {0} --log_level debug".format("dadc")
         #log.debug("Running command: {0}".format(cmd))
-        #yield command_watcher(cmd)
+        # yield command_watcher(cmd)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
         del self._subprocessMonitor
         self._state = "ready"
