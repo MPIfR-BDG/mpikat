@@ -336,8 +336,8 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("reading png from : {}".format(self.out_path))
         try:
         	processed_seconds = int(os.popen("ls {}/*ar | wc -l".format(self.in_path)).read())
-        	self._time_processed.set_value(processed_seconds)
-        	log.info("processed {}s".format(processed_seconds))
+        	self._time_processed.set_value(processed_seconds*10)
+        	log.info("processed {}s".format(processed_seconds*10))
         except Exception as error:
             log.debug(error)
         try:
