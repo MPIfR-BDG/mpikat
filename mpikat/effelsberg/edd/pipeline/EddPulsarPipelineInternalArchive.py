@@ -196,7 +196,7 @@ class ArchiveAdder(FileSystemEventHandler):
         return fname.replace(".ar", ".fscrunch")
 
     def first_tscrunch(self, fname):
-    	self._syscall("paz -F '800 1100' -F '1209 1211' -F '1428 1434' -F '1541 1452' -F '1534 1600' -s 0 -e first {}".format(fname))
+    	self._syscall("paz -F '800 1100' -F '1209 1211' -F '1428 1434' -F '1541 1452' -F '1534 1600' -e first {}".format(fname))
 
     def process(self, fname):
         fscrunch_fname = self.fscrunch(fname)
@@ -216,7 +216,7 @@ class ArchiveAdder(FileSystemEventHandler):
             self._syscall(
                 "pav -DFTp sum.fscrunch -g ../combined_data/profile.png/png")
             self._syscall(
-                "pav -FYp sum.fscrunch -g ../combined_data/fscrunch.png/png")
+                "pav -FYp sum.fscrunch -y 1,`psrstat -Q -c nsubint combine | awk '{print $2-1}'` -g ../combined_data/fscrunch.png/png")
             log.info("removing {}".format(fscrunch_fname))
         os.remove(fscrunch_fname)
         os.remove(fscrunch_fname.replace(".fscrunch", ".zapped"))
