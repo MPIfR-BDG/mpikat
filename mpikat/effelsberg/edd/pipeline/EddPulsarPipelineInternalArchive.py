@@ -194,13 +194,17 @@ class ArchiveAdder(FileSystemEventHandler):
         self._syscall("pam -F -e fscrunch {}".format(fname.replace(".ar", ".zapped")))
 
         return fname.replace(".ar", ".fscrunch")
+    def first_tscrunch(self, fname):
+
+    	self._syscall("paz -F '800 1100' -F '1209 1211' -F '1428 1434' -F '1541 1452' -F '1534 1600' -e first {}".format(fname))
 
     def process(self, fname):
         fscrunch_fname = self.fscrunch(fname)
         if self.first_file:
             log.info("First file in set. Copying to sum.?scrunch.")
             shutil.copy2(fscrunch_fname, "sum.fscrunch")
-            shutil.copy2(fname, "sum.tscrunch")
+            shutil.copy2(fname.replace(".ar", ".first"), "sum.tscrunch")
+            os.remove(fname.replace(".ar", ".first"))
             self.first_file = False
         else:
             self._syscall("psradd -T -inplace sum.tscrunch {}".format(fname.replace(".ar", ".zapped")))
