@@ -216,7 +216,7 @@ class ArchiveAdder(FileSystemEventHandler):
             self._syscall(
                 "pav -DFTp sum.fscrunch -g ../combined_data/profile.png/png")
             self._syscall(
-                "pav -FYp sum.fscrunch -y 1,`psrstat -Q -c nsubint combine | awk '{print $2-1}'` -g ../combined_data/fscrunch.png/png")
+                "pav -FYp sum.fscrunch -y 1,`psrstat -Q -c nsubint sum.fscrunch | awk '{print $2-1}'` -g ../combined_data/fscrunch.png/png")
             log.info("removing {}".format(fscrunch_fname))
         os.remove(fscrunch_fname)
         os.remove(fscrunch_fname.replace(".fscrunch", ".zapped"))
