@@ -215,8 +215,9 @@ class ArchiveAdder(FileSystemEventHandler):
                 "psrplot -p freq+ -j dedisperse -D ../combined_data/tscrunch.png/png sum.tscrunch")
             self._syscall(
                 "pav -DFTp sum.fscrunch -g ../combined_data/profile.png/png")
+            #-y 1,`psrstat -Q -c nsubint sum.fscrunch | awk '{print $2-1}'`
             self._syscall(
-                "pav -FYp sum.fscrunch -y 1,`psrstat -Q -c nsubint sum.fscrunch | awk '{print $2-1}'` -g ../combined_data/fscrunch.png/png")
+                "pav -FYp sum.fscrunch  -g ../combined_data/fscrunch.png/png")
             log.info("removing {}".format(fscrunch_fname))
         os.remove(fscrunch_fname)
         os.remove(fscrunch_fname.replace(".fscrunch", ".zapped"))
