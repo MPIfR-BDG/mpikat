@@ -191,7 +191,7 @@ class ArchiveAdder(FileSystemEventHandler):
     def fscrunch(self, fname):
     	#so zap list goes here
     	self._syscall("paz -F '1209 1211' -F '1428 1434' -F '1541 1452' -F '1534 1600' -e zapped {}".format(fname))
-        self._syscall("pam -F -e fscrunch {}".format(fname.replace(".ar", ".pazi")))
+        self._syscall("pam -F -e fscrunch {}".format(fname.replace(".ar", ".zapped")))
         return fname.replace(".ar", ".fscrunch")
 
     def process(self, fname):
