@@ -192,6 +192,7 @@ class ArchiveAdder(FileSystemEventHandler):
     	#so zap list goes here
     	self._syscall("paz -F '800 1100' -F '1209 1211' -F '1428 1434' -F '1541 1452' -F '1534 1600' -e zapped {}".format(fname))
         self._syscall("pam -F -e fscrunch {}".format(fname.replace(".ar", ".zapped")))
+
         return fname.replace(".ar", ".fscrunch")
 
     def process(self, fname):
@@ -213,6 +214,7 @@ class ArchiveAdder(FileSystemEventHandler):
                 "pav -FY sum.fscrunch -g ../combined_data/fscrunch.png/png")
             log.info("removing {}".format(fscrunch_fname))
         os.remove(fscrunch_fname)
+        os.remove(fscrunch_fname.replace(".fscrunch", ".zapped"))
         #shutil.copy2("sum.fscrunch", self.output_dir)
         #shutil.copy2("sum.tscrunch", self.output_dir)
         log.info("Accessing archive PNG files")
