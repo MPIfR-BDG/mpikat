@@ -203,7 +203,7 @@ class ArchiveAdder(FileSystemEventHandler):
             shutil.copy2(fname, "sum.tscrunch")
             self.first_file = False
         else:
-            self._syscall("psradd -T -inplace sum.tscrunch {}".format(fname))
+            self._syscall("psradd -T -inplace sum.tscrunch {}".format(fname.replace(".ar", ".zapped")))
             self._syscall(
                 "psradd -inplace sum.fscrunch {}".format(fscrunch_fname))
             self._syscall(
