@@ -27,10 +27,11 @@ import ctypes as C
 import numpy as np
 import coloredlogs
 import signal
+import os
 from tornado.gen import coroutine, sleep, Return, TimeoutError
 from tornado.locks import Event, Condition
 from tornado.ioloop import IOLoop
-from optparse import OptionParser
+from argparse import ArgumentParser
 
 log = logging.getLogger("mpikat.mock_fw_client")
 
@@ -83,11 +84,16 @@ class MockFitsWriterClient(object):
     """
     Wrapper class for a KATCP client to a EddFitsWriterServer
     """
-    def __init__(self, address):
+    def __init__(self, address, record_dest):
         """
         @brief      Construct new instance
+                    If record_dest is not empty, create a folder named record_dest and record the received packages there.
         """
         self._address = address
+        self.__record_dest = record_dest
+        if record_dest:
+            if not os.path.isdir(record_dest):
+                os.makedirs(record_dest)
         self._ioloop = IOLoop.current()
         self._stop_event = Event()
         self._is_stopped = Condition()
@@ -173,6 +179,14 @@ class MockFitsWriterClient(object):
         else:
             self.__last_package = header.timestamp
 
+        if self.__record_dest:
+            filename = os.path.join(self.__record_dest, "FWP_{}.dat".format(header.timestamp))
+            while os.path.isfile(filename):
+                log.warning('Filename {} already exists. Add suffix _'.format(filename))
+                filename += '_'
+            log.info('Recording to file {}'.format(filename))
+            ofile = open(filename, 'wb')
+            ofile.write(raw_header)
 
         fw_data_type = header.channel_data_type.strip().upper()
         c_data_type, np_data_type = TYPE_MAP[fw_data_type]
@@ -181,14 +195,22 @@ class MockFitsWriterClient(object):
             log.debug("Receiving section {} of {}".format(
                 section+1, header.nsections))
             raw_section_header = yield self.recv_nbytes(C.sizeof(FWSectionHeader))
+            if self.__record_dest:
+                ofile.write(raw_section_header)
+
             section_header = FWSectionHeader.from_buffer_copy(raw_section_header)
             log.info("Section {} header: {}".format(section, section_header))
             log.debug("Receiving section data")
             raw_bytes = yield self.recv_nbytes(C.sizeof(c_data_type)
                                                * section_header.nchannels)
+            if self.__record_dest:
+                ofile.write(raw_bytes)
             data = np.frombuffer(raw_bytes, dtype=np_data_type)
             log.info("Section {} data: {}".format(section, data[:10]))
             sections.append((section_header, data))
+
+        if self.__record_dest:
+            ofile.close()
         raise Return((header, sections))
 
 
@@ -200,26 +222,27 @@ def on_shutdown(ioloop, client):
 
 
 if __name__ == "__main__":
-    usage = "usage: %prog [options]"
-    parser = OptionParser(usage=usage)
-    parser.add_option('-H', '--host', dest='host', type=str,
+    parser = ArgumentParser(description="Receive (and optionally record) tcp packages send by EDD Fits writer interface.")
+    parser.add_argument('-H', '--host', dest='host', type=str,
                       help='Host interface to connect to')
-    parser.add_option('-p', '--port', dest='port', type=int,
+    parser.add_argument ('-p', '--port', dest='port', type=int,
                       help='Port number to connect to')
-    parser.add_option('', '--log-level', dest='log_level', type=str,
-                      help='Log level', default="INFO")
-    (opts, args) = parser.parse_args()
+    parser.add_argument('--log-level', dest='log_level', type=str, help='Log level', default="INFO")
+
+    parser.add_argument('--record-to', dest='record_to', type=str,
+                      help='Destination to record data to. No recording if empty', default="")
+    args = parser.parse_args()
     logging.getLogger().addHandler(logging.NullHandler())
     logger = logging.getLogger('mpikat')
     logging.getLogger('katcp').setLevel(logging.DEBUG)
     coloredlogs.install(
         fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
              "- %(filename)s:%(lineno)s] %(message)s"),
-        level=opts.log_level.upper(),
+        level=args.log_level.upper(),
         logger=logger)
     ioloop = IOLoop.current()
     log.info("Starting MockFitsWriterClient instance")
-    client = MockFitsWriterClient((opts.host, opts.port))
+    client = MockFitsWriterClient((args.host, args.port), args.record_to)
     signal.signal(
         signal.SIGINT, lambda sig, frame: ioloop.add_callback_from_signal(
             on_shutdown, ioloop, client))
