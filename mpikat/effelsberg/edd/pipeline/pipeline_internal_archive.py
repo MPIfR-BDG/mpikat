@@ -158,7 +158,7 @@ class ArchiveAdder(FileSystemEventHandler):
         self.first_file = True
         self.freq_zap_list = ""
         self.time_zap_list = ""
-        
+
     def _syscall(self, cmd):
         log.info("Calling: {}".format(cmd))
         proc = Popen(shlex.split(cmd), stdout=PIPE, stderr=PIPE)
@@ -1421,7 +1421,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.info("Output directory: {}".format(self.out_path))
         log.info("Setting up ArchiveAdder handler")
         self.handler = ArchiveAdder(self.out_path)
-        self.handler.update_zaplist(self._zaplist_sensor.value())
+        self.handler.update_freq_zaplist(self._freq_zaplist_sensor.value())
+        self.handler.update_time_zaplist(self._time_zaplist_sensor.value())
         self.archive_observer.schedule(self.handler, self.in_path, recursive=False)
         log.info("Starting directory monitor")
         self.archive_observer.start()
