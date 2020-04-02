@@ -180,7 +180,7 @@ class ArchiveAdder(FileSystemEventHandler):
     def update_freq_zaplist(self, zaplist):
         self.freq_zap_list = "-F '0 1' "
         for item in range(len(zaplist.split(","))):
-            self.freq_zap_list = str(self.freq_zap_list) + "-F '{}'".format(zaplist.split(",")[item])
+            self.freq_zap_list = str(self.freq_zap_list) + " -F '{}' ".format(zaplist.split(",")[item])
 
         self.freq_zap_list = self.freq_zap_list.replace(":", " ")
         log.info("Latest frequency zaplist {}".format(self.freq_zap_list))
