@@ -211,6 +211,7 @@ class ArchiveAdder(FileSystemEventHandler):
             self._syscall("psradd -T -inplace sum.tscrunch {}".format(fname.replace(".ar", ".zapped")))
             self._syscall(
                 "psradd -inplace sum.fscrunch {}".format(fscrunch_fname))
+            self._syscall("paz -w 0 -m sum.fscrunch")
             self._syscall(
                 "psrplot -p freq+ -j dedisperse -D ../combined_data/tscrunch.png/png sum.tscrunch")
             self._syscall(
@@ -221,8 +222,6 @@ class ArchiveAdder(FileSystemEventHandler):
             log.info("removing {}".format(fscrunch_fname))
         os.remove(fscrunch_fname)
         os.remove(fscrunch_fname.replace(".fscrunch", ".zapped"))
-        #shutil.copy2("sum.fscrunch", self.output_dir)
-        #shutil.copy2("sum.tscrunch", self.output_dir)
         log.info("Accessing archive PNG files")
 
     def on_created(self, event):
