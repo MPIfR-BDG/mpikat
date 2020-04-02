@@ -1106,6 +1106,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                                    str(self.frequency_mhz), tstr, "raw_data")
             out_path = os.path.join(
                 "/media/scratch/jason/dspsr_output/", tdate, self.source_name, str(self.frequency_mhz), tstr, "combined_data")
+            self.in_path = in_path
             self.out_path = out_path
             log.debug("Creating directories")
             cmd = "mkdir -p {}".format(in_path)
