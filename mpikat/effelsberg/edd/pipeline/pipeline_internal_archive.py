@@ -187,10 +187,10 @@ class ArchiveAdder(FileSystemEventHandler):
 
     def update_time_zaplist(self, zaplist):
         self.time_zap_list = ""
-        for item in range(len(zaplist.split(","))):
-            self.time_zap_list = str(self.time_zap_list) + "{}".format(zaplist[item])
+        for item in range(len(zaplist.split(":"))):
+            self.time_zap_list = str(self.time_zap_list) + " {}".format(zaplist[item])
 
-        self.time_zap_list = self.time_zap_list.replace(":", " ")
+        #self.time_zap_list = self.time_zap_list.replace(":", " ")
         log.info("Latest time zaplist {}".format(self.time_zap_list))
 
     def process(self, fname):
