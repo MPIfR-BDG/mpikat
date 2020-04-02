@@ -156,8 +156,8 @@ class ArchiveAdder(FileSystemEventHandler):
         super(ArchiveAdder, self).__init__()
         self.output_dir = output_dir
         self.first_file = True
-        self.zap_list = ""
-
+        self.freq_zap_list = ""
+		self.time_zap_list = ""
     def _syscall(self, cmd):
         log.info("Calling: {}".format(cmd))
         proc = Popen(shlex.split(cmd), stdout=PIPE, stderr=PIPE)
@@ -168,24 +168,29 @@ class ArchiveAdder(FileSystemEventHandler):
             log.debug("Call success")
 
     def fscrunch(self, fname):
-    	#so zap list goes here
-    	self._syscall("paz {} -e zapped {}".format(self.zap_list, fname))
+    	#frequency scrunch done here all fscrunch archive
+    	self._syscall("paz {} -e zapped {}".format(self.freq_zap_list, fname))
         self._syscall("pam -F -e fscrunch {}".format(fname.replace(".ar", ".zapped")))
-
         return fname.replace(".ar", ".fscrunch")
 
     def first_tscrunch(self, fname):
-    	self._syscall("paz {} -e first {}".format(self.zap_list, fname))
+    	self._syscall("paz {} -e first {}".format(self.freq_zap_list, fname))
 
-    def update_zaplist(self, zaplist):
-        self.zap_list = "-F '0 1' "
-        zap_list_sensor = zaplist
+    def update_freq_zaplist(self, zaplist):
+        self.freq_zap_list = "-F '0 1' "
+        for item in range(len(zaplist.split(","))):
+            self.freq_zap_list = str(self.freq_zap_list) + "-F '{}'".format(zaplist.split(",")[item])
 
-        for item in range(len(zap_list_sensor.split(","))):
-            self.zap_list = str(self.zap_list) + "-F '{}'".format(zap_list_sensor.split(",")[item])
+        self.freq_zap_list = self.freq_zap_list.replace(":", " ")
+        log.info("Latest frequency zaplist {}".format(self.freq_zap_list))
 
-        self.zap_list = self.zap_list.replace(":", " ")
-        log.info("Latest zaplist {}".format(self.zap_list))
+    def update_time_zaplist(self, zaplist):
+        self.time_zap_list = ""
+        for item in range(len(zaplist.split(","))):
+            self.time_zap_list = str(self.time_zap_list) + "{}".format(zaplist[item])
+
+        self.time_zap_list = self.time_zap_list.replace(":", " ")
+        log.info("Latest time zaplist {}".format(self.time_zap_list))
 
     def process(self, fname):
         fscrunch_fname = self.fscrunch(fname)
@@ -198,15 +203,16 @@ class ArchiveAdder(FileSystemEventHandler):
             self.first_file = False
         else:
             self._syscall("psradd -T -inplace sum.tscrunch {}".format(fname.replace(".ar", ".zapped")))
-            self._syscall("paz {} -m sum.tscrunch".format(self.zap_list))
+            #update fscrunch here with the latest list, cannot go backward (i.e. cannot redo zap)
+            self._syscall("paz {} -m sum.tscrunch".format(self.freq_zap_list))
             self._syscall(
                 "psradd -inplace sum.fscrunch {}".format(fscrunch_fname))
-            self._syscall("paz -w 0 -m sum.fscrunch")
+            self._syscall("paz -w '{}' -m sum.fscrunch".format(self.time_zap_list))
             self._syscall(
                 "psrplot -p freq+ -j dedisperse -D ../combined_data/tscrunch.png/png sum.tscrunch")
             self._syscall(
                 "pav -DFTp sum.fscrunch  -g ../combined_data/profile.png/png")
-            #-y 1,`psrstat -Q -c nsubint sum.fscrunch | awk '{print $2-1}'`
+            #-y 1,`psrstat -Q -c nsubint sum.fscrunch | awk '{print $2-1}'` trying to grab the no of intergrations, failed
             self._syscall(
                 "pav -FYp sum.fscrunch  -g ../combined_data/fscrunch.png/png")
             log.info("removing {}".format(fscrunch_fname))
@@ -793,12 +799,19 @@ class EddPulsarPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._time_processed)
 
-        self._zaplist_sensor = Sensor.string(
-            "_zaplist",
-            description="_zaplist",
+        self._freq_zaplist_sensor = Sensor.string(
+            "_freq_zaplist",
+            description="_freq_zaplist",
             default="799:1100,1209:1211,1428:1434,1541:1452,1534:1600",
             initial_status=Sensor.UNKNOWN)
-        self.add_sensor(self._zaplist_sensor)
+        self.add_sensor(self._freq_zaplist_sensor)
+
+        self._time_zaplist_sensor = Sensor.string(
+            "_time_zaplist",
+            description="_time_zaplist",
+            default="0",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._time_zaplist_sensor)
 
     @property
     def sensors(self):
@@ -867,7 +880,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     @request(Str())
     @return_reply()
-    def request_zaplist(self, req, zaplist):
+    def request_freq_zaplist(self, req, zaplist):
         """
         @brief      Add freq zaplist
 
@@ -875,23 +888,50 @@ class EddPulsarPipeline(AsyncDeviceServer):
         @coroutine
         def zaplist_wrapper():
             try:
-                yield self.zaplist(zaplist)
+                yield self.freq_zaplist(zaplist)
             except Exception as error:
                 log.exception(str(error))
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                #self._pipeline_sensor_status.set_value("ready")
         self.ioloop.add_callback(zaplist_wrapper)
         raise AsyncReply
 
-    def zaplist(self, zaplist):
+    def freq_zaplist(self, zaplist):
     	"""
     	@brief     Add zap list to Katcp sensor
     	"""
-    	self._zaplist_sensor.set_value(zaplist)
-    	self.handler.update_zaplist(zaplist)
+    	self._freq_zaplist_sensor.set_value(zaplist)
+    	self.handler.update_freq_zaplist(zaplist)
     	return
+
+    @request(Str())
+    @return_reply()
+    def request_time_zaplist(self, req, zaplist):
+        """
+        @brief      Add freq zaplist
+
+        """
+        @coroutine
+        def zaplist_wrapper():
+            try:
+                yield self.time_zaplist(zaplist)
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(zaplist_wrapper)
+        raise AsyncReply
+
+    def time_zaplist(self, zaplist):
+    	"""
+    	@brief     Add zap list to Katcp sensor
+    	"""
+    	self._time_zaplist_sensor.set_value(zaplist)
+    	self.handler.update_time_zaplist(zaplist)
+    	return
+
 
 
     @request(Str())
