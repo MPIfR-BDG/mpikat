@@ -557,6 +557,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
                         self.watchdog_error)
                 wd.start()
                 self.__watchdogs.append(wd)
+            # Wait for one integration period before finishing to ensure
+            # streaming has started before OK
+            time.sleep(self._integration_time_status.value())
 
 
     @state_change(target="idle", allowed=["streaming"], intermediate="capture_stopping")
