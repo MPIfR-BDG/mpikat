@@ -198,6 +198,7 @@ class ArchiveAdder(FileSystemEventHandler):
             self.first_file = False
         else:
             self._syscall("psradd -T -inplace sum.tscrunch {}".format(fname.replace(".ar", ".zapped")))
+            self._syscall("paz {} -m sum.tscrunch".format(self.zap_list))
             self._syscall(
                 "psradd -inplace sum.fscrunch {}".format(fscrunch_fname))
             self._syscall("paz -w 0 -m sum.fscrunch")
@@ -795,7 +796,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._zaplist_sensor = Sensor.string(
             "_zaplist",
             description="_zaplist",
-            default="800:1100,1209:1211,1428:1434,1541:1452,1534:1600",
+            default="799:1100,1209:1211,1428:1434,1541:1452,1534:1600",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._zaplist_sensor)
 
