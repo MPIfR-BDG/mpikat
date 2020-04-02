@@ -384,7 +384,6 @@ class DigitiserPacketiserClient(object):
                 "samples_per_heap": 4096}
 
         dataStore.addDataFormatDefinition("MPIFR_EDD_Packetizer:1", descr)
-        raise Return()
 
 
 
