@@ -156,6 +156,7 @@ class ArchiveAdder(FileSystemEventHandler):
         super(ArchiveAdder, self).__init__()
         self.output_dir = output_dir
         self.first_file = True
+        self.zap_list = ""
 
     def _syscall(self, cmd):
         log.info("Calling: {}".format(cmd))
@@ -888,7 +889,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
     	@brief     Add zap list to Katcp sensor
     	"""
     	self._zaplist_sensor.set_value(zaplist)
-    	self.archive_observer.update_zaplist(zaplist)
+    	self.handler.update_zaplist(zaplist)
     	return
 
 
@@ -1377,12 +1378,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.info("Input directory: {}".format(self.in_path))
         log.info("Output directory: {}".format(self.out_path))
         log.info("Setting up ArchiveAdder handler")
-        handler = ArchiveAdder(self.out_path)
-        self.archive_observer.schedule(handler, self.in_path, recursive=False)
+        self.handler = ArchiveAdder(self.out_path)
+        self.handler.update_zaplist(self._zaplist_sensor.value())
+        self.archive_observer.schedule(self.handler, self.in_path, recursive=False)
         log.info("Starting directory monitor")
         self.archive_observer.start()
-        #init zap list
-        self.archive_observer.update_zaplist(self._zaplist_sensor.value())
+        ##init zap list
+        #self.archive_observer.update_zaplist(self._zaplist_sensor.value())
         log.info("Parent thread entering 1 second polling loop")
         self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
             self._png_monitor, 5000)
@@ -1430,6 +1432,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._png_monitor_callback.stop()
         self.archive_observer.stop()
         self.archive_observer.join()
+        del self.handler
         try:
             log.debug("Stopping")
             self._timeout = 10
@@ -1514,6 +1517,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._png_monitor_callback.stop()
         self.archive_observer.stop()
         self.archive_observer.join()
+        del self.handler
         try:
             log.debug("deleting buffers")
             cmd = "dada_db -d -k {0}".format(self._dada_key)
