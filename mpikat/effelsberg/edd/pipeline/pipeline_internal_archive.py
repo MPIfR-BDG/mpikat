@@ -176,18 +176,18 @@ class ArchiveAdder(FileSystemEventHandler):
     def first_tscrunch(self, fname):
     	self._syscall("paz {} -e first {}".format(self.zap_list, fname))
 
-    def process(self, fname):
-    	#update zap list 
+   	def update_zaplist(self, zaplist):
     	self.zap_list = "-F '0 1' "
-    	zap_list_sensor = self._zaplist_sensor.value()
+    	zap_list_sensor = zaplist
 
     	for item in range(len(zap_list_sensor.split(","))):
     		self.zap_list = str(self.zap_list) + "-F '{}'".format(zap_list_sensor.split(",")[item])
 
     	self.zap_list = self.zap_list.replace(":", " ")
     	log.info("Latest zaplist {}".format(self.zap_list))
-        fscrunch_fname = self.fscrunch(fname)
 
+    def process(self, fname):
+        fscrunch_fname = self.fscrunch(fname)
         if self.first_file:
             log.info("First file in set. Copying to sum.?scrunch.")
             shutil.copy2(fscrunch_fname, "sum.fscrunch")
@@ -865,6 +865,35 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     @request(Str())
     @return_reply()
+    def request_zaplist(self, req, zaplist):
+        """
+        @brief      Add freq zaplist
+
+        """
+        @coroutine
+        def zaplist_wrapper():
+            try:
+                yield self.zaplist(zaplist)
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+                #self._pipeline_sensor_status.set_value("ready")
+        self.ioloop.add_callback(zaplist_wrapper)
+        raise AsyncReply
+
+    def zaplist(self, zaplist):
+    	"""
+    	@brief     Add zap list to Katcp sensor
+    	"""
+    	self._zaplist_sensor.set_value(zaplist)
+    	self.archive_observer.update_zaplist(zaplist)
+    	return
+        
+
+    @request(Str())
+    @return_reply()
     def request_configure(self, req, config_json):
         """
         @brief      Configure pipeline
@@ -1350,9 +1379,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.info("Setting up ArchiveAdder handler")
         handler = ArchiveAdder(self.out_path)
         self.archive_observer.schedule(handler, self.in_path, recursive=False)
-
         log.info("Starting directory monitor")
         self.archive_observer.start()
+        #init zap list
+        self.archive_observer.update_zaplist(self._zaplist_sensor.value())
         log.info("Parent thread entering 1 second polling loop")
         self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
             self._png_monitor, 5000)
@@ -1369,32 +1399,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.info("Starting capture {}".format(
             self._pipeline_sensor_name.value()))
 
-    @request(Str())
-    @return_reply()
-    def request_zaplist(self, req, zaplist):
-        """
-        @brief      Add freq zaplist
-
-        """
-        @coroutine
-        def zaplist_wrapper():
-            try:
-                yield self.zaplist(zaplist)
-            except Exception as error:
-                log.exception(str(error))
-                req.reply("fail", str(error))
-            else:
-                req.reply("ok")
-                #self._pipeline_sensor_status.set_value("ready")
-        self.ioloop.add_callback(zaplist_wrapper)
-        raise AsyncReply
-
-    def zaplist(self, zaplist):
-    	"""
-    	@brief     Add zap list to Katcp sensor
-    	"""
-    	self._zaplist_sensor.set_value(zaplist)
-    	return
 
     @request()
     @return_reply(Str())
@@ -1532,7 +1536,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
             msg = "Couldn't deleting buffers {}".format(str(error))
             log.error(msg)
             raise EddPulsarPipelineError(msg)
-
         try:
             # self._pipeline_sensor_name.set_value(pipeline_name)
             log.info("Creating DADA buffer for mkrecv")
