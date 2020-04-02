@@ -157,7 +157,8 @@ class ArchiveAdder(FileSystemEventHandler):
         self.output_dir = output_dir
         self.first_file = True
         self.freq_zap_list = ""
-		self.time_zap_list = ""
+        self.time_zap_list = ""
+        
     def _syscall(self, cmd):
         log.info("Calling: {}".format(cmd))
         proc = Popen(shlex.split(cmd), stdout=PIPE, stderr=PIPE)
