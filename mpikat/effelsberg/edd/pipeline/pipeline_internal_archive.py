@@ -176,15 +176,15 @@ class ArchiveAdder(FileSystemEventHandler):
     def first_tscrunch(self, fname):
     	self._syscall("paz {} -e first {}".format(self.zap_list, fname))
 
-   	def update_zaplist(self, zaplist):
-    	self.zap_list = "-F '0 1' "
-    	zap_list_sensor = zaplist
+    def update_zaplist(self, zaplist):
+        self.zap_list = "-F '0 1' "
+        zap_list_sensor = zaplist
 
-    	for item in range(len(zap_list_sensor.split(","))):
-    		self.zap_list = str(self.zap_list) + "-F '{}'".format(zap_list_sensor.split(",")[item])
+        for item in range(len(zap_list_sensor.split(","))):
+            self.zap_list = str(self.zap_list) + "-F '{}'".format(zap_list_sensor.split(",")[item])
 
-    	self.zap_list = self.zap_list.replace(":", " ")
-    	log.info("Latest zaplist {}".format(self.zap_list))
+        self.zap_list = self.zap_list.replace(":", " ")
+        log.info("Latest zaplist {}".format(self.zap_list))
 
     def process(self, fname):
         fscrunch_fname = self.fscrunch(fname)
@@ -890,7 +890,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
     	self._zaplist_sensor.set_value(zaplist)
     	self.archive_observer.update_zaplist(zaplist)
     	return
-        
+
 
     @request(Str())
     @return_reply()
