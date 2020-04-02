@@ -19,7 +19,7 @@ if __name__ == "__main__":
         help='Port number to bind to', default=1235)
 
     parser.add_argument('-s', '--select-product', dest='select_product', type=str,
-        help='Select specific product', default=None)
+        help='Send only the sub dict of the selected product. Part of a config can be send directly to a single product by this.', default=None)
     parser.add_argument('configfile', help="Config json to process")
 
     args = parser.parse_args()
