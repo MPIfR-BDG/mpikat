@@ -526,8 +526,8 @@ class GatedSpectrometerPipeline(EDDPipeline):
                     fastest_nic, nic_params = numa.getFastestNic(numa_node)
                     log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nic_params['ip'], nic_params['speed']))
                     physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
-                    if self._config['idx1_modulo'] == 'auto':
-                        idx1modulo = 23*cfg["samples_per_block"] / stream_description["samples_per_heap"]
+                    if self._config['idx1_modulo'] == 'auto': # Align along output ranges
+                        idx1modulo = self._config['fft_length'] * self._config['naccumulate'] / stream_description['samples_per_heap']
                     else:
                         idx1modulo = self._config['idx1_modulo']
 
@@ -557,6 +557,9 @@ class GatedSpectrometerPipeline(EDDPipeline):
                         self.watchdog_error)
                 wd.start()
                 self.__watchdogs.append(wd)
+            # Wait for one integration period before finishing to ensure
+            # streaming has started before OK
+            time.sleep(self._integration_time_status.value())
 
 
     @state_change(target="idle", allowed=["streaming"], intermediate="capture_stopping")

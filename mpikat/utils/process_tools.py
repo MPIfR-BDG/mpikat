@@ -88,15 +88,19 @@ class ManagedProcess(object):
         @param stdout_handler Handler for ouptut written to stdout
         @param stderr_handler Handler for ouptut written to stderr
         """
-        environ = os.environ.copy()
-        environ.update(env)
+        # cmdlineargs to list of strings
         if isinstance(cmdlineargs, str):
             cmdlineargs = cmdlineargs.split()
+        cmdlineargs = map(str, cmdlineargs)
+        self._cmdl = " ".join(cmdlineargs)
 
         def preexec_fn():
             os.umask(umask)
 
-        self._proc = Popen(map(str, cmdlineargs), stdout=PIPE, stderr=PIPE,
+        environ = os.environ.copy()
+        environ.update(env)
+
+        self._proc = Popen(cmdlineargs, stdout=PIPE, stderr=PIPE,
                            shell=False, env=environ, close_fds=True, preexec_fn=preexec_fn)
         if stdout_handler:
             self._stdout_handler = stdout_handler
@@ -110,7 +114,6 @@ class ManagedProcess(object):
         self.stderr_monitor = None
         self.eop_monitor = None
         self._start_monitors()
-        self._cmdl = " ".join(map(str, cmdlineargs))
 
     @property
     def pid(self):

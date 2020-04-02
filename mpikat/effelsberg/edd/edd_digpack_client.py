@@ -7,6 +7,8 @@ from katcp import KATCPClientResource
 
 from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 
+known_packetizers = {"faraday_room":{"ip":"134.104.73.132","port":7147}, "focus_cabin":{"ip":"134.104.70.65","port":7147}}
+
 log = logging.getLogger("mpikat.edd_digpack_client")
 
 class DigitiserPacketiserError(Exception):
@@ -78,7 +80,6 @@ class DigitiserPacketiserClient(object):
         allowedFactors = [2,4,8,16] # Eddy Nussbaum, private communication
         if factor not in allowedFactors:
             raise RuntimeError("predicimation factor {} not in allowed factors {}".format(factor, allowedFactors))
-
         yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
 
     @coroutine
@@ -96,7 +97,10 @@ class DigitiserPacketiserClient(object):
         """
         @brief Set noise diode frequency to given value.
         """
-        yield self.set_noise_diode_firing_pattern(0.5, 1./frequency, "now")
+        if frequency == 0:
+            yield self.set_noise_diode_firing_pattern(0.0, 0.0, "now")
+        else:
+            yield self.set_noise_diode_firing_pattern(0.5, 1./frequency, "now")
 
     @coroutine
     def set_noise_diode_firing_pattern(self, percentage, period, start="now"):
@@ -160,6 +164,7 @@ class DigitiserPacketiserClient(object):
         actions.append(ce function returns.
         """
         valid_modes = {
+            4096000000: ("virtex7_dk769b", "4.096GHz", 3),
             4000000000: ("virtex7_dk769b", "4.0GHz", 5),
             3600000000: ("virtex7_dk769b", "3.6GHz", 7),
             3520000000: ("virtex7_dk769b", "3.52GHz", 7),
@@ -168,6 +173,7 @@ class DigitiserPacketiserClient(object):
             2600000000: ("virtex7_dk769b", "2.6GHz", 3),
             2560000000: ("virtex7_dk769b", "2.56GHz", 2)
         }
+
         try:
             args = valid_modes[int(rate)]
         except KeyError as error:
@@ -318,14 +324,6 @@ class DigitiserPacketiserClient(object):
         """
         log.warning("Not stopping data transmission")
         raise Return()
-        #yield self._safe_request("capture_stop", "vh")
-
-    @coroutine
-    def set_predecimation(self, factor):
-        """
-        @brief      Set predcimation factor
-        """
-        yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
 
 
     @coroutine
@@ -386,7 +384,6 @@ class DigitiserPacketiserClient(object):
                 "samples_per_heap": 4096}
 
         dataStore.addDataFormatDefinition("MPIFR_EDD_Packetizer:1", descr)
-        raise Return()
 
 
 
@@ -396,7 +393,7 @@ if __name__ == "__main__":
     from argparse import ArgumentParser
     parser = ArgumentParser(description="Configures edd digitiezer. By default, send syncronize and capture start along with the given options.")
     parser.add_argument('host', type=str,
-        help='Digitizer interface to bind to.')
+        help='Digitizer to bind to, either ip or one of [{}]'.format(", ".join(known_packetizers)))
     parser.add_argument('-p', '--port', dest='port', type=long,
         help='Port number to bind to', default=7147)
     parser.add_argument('--nbits', dest='nbits', type=long,
@@ -418,10 +415,15 @@ if __name__ == "__main__":
     parser.add_argument('--sync-time', dest='sync_time', type=int,
         help='Use specified synctime, otherwise use current time')
     parser.add_argument('--noise-diode-frequency', dest='noise_diode_frequency', type=float,
-        help='Set the noise diode frequency')
+        help='Set the noise diode frequency', default=-1)
 
     parser.add_argument('--flip-spectrum', action="store_true", default=False, help="Flip the spectrum")
     args = parser.parse_args()
+
+    if args.host in known_packetizers:
+        print("Found {} in known packetizers, use stored lookup ip and port.".format(args.host))
+        args.port = known_packetizers[args.host]['port']
+        args.host = known_packetizers[args.host]['ip']
     print("Configuring paketizer {}:{}".format(args.host, args.port))
     client = DigitiserPacketiserClient(args.host, port=args.port)
 
@@ -443,8 +445,8 @@ if __name__ == "__main__":
         actions.append((client.set_predecimation, dict(factor=args.predecimation_factor)))
     # Always flip spectrum to either on or off
     actions.append((client.flip_spectrum, dict(flip=args.flip_spectrum)))
-    if args.noise_diode_frequency:
-        actions.append(client.set_noise_diode_frequency(args.noise_diode_frequency))
+    if args.noise_diode_frequency >= 0.:
+        actions.append((client.set_noise_diode_frequency, dict(frequency=args.noise_diode_frequency)))
 
     # Sync + capture start should come last
     if args.synchronize:
