@@ -19,6 +19,19 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+
+
+import logging
+import signal
+import sys
+import shlex
+import shutil
+import os
+import base64
+import time
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+from subprocess import Popen, PIPE
 import logging
 import tempfile
 import json
@@ -29,7 +42,7 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord
 from subprocess import PIPE, Popen
 from mpikat.effelsberg.edd.edd_digpack_client import DigitiserPacketiserClient
-from mpikat.effelsberg.edd.pipeline.dada import render_dada_header, make_dada_key_string
+from mpikat.effelsberg.edd.pipeline.dada_rnt import render_dada_header, make_dada_key_string
 import shlex
 import threading
 import base64
@@ -95,8 +108,8 @@ CONFIG = {
 }
 
 NUMA_MODE = {
-    0: ("0-9", "10", "11,12,13,14"),
-    1: ("18-28", "29", "30,31,32,33")
+    0: ("0-3", "10", "11,12,13,14"),
+    1: ("18-21", "29", "30,31,32,33")
 }
 INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15",
              2: "10.10.1.16", 3: "10.10.1.17"}
@@ -136,138 +149,6 @@ def parse_tag(source_name):
         return "default"
     else:
         return split[-1]
-
-
-class KATCPToIGUIConverter(object):
-
-    def __init__(self, host, port):
-        """
-        @brief      Class for katcp to igui converter.
-
-        @param   host             KATCP host address
-        @param   port             KATCP port number
-        """
-        self.rc = KATCPClientResource(dict(
-            name="test-client",
-            address=(host, port),
-            controlled=True))
-        self.host = host
-        self.port = port
-        self.ioloop = None
-        self.ic = None
-        self.api_version = None
-        self.implementation_version = None
-        self.previous_sensors = set()
-        self.sensor_callbacks = set()
-        self.new_sensor_callbacks = set()
-        self._sensor = []
-
-    def sensor_notify(self):
-        for callback in self.sensor_callbacks:
-            callback(self._sensor, self)
-
-    @property
-    def sensor(self):
-        return self._sensor
-
-    @sensor.setter
-    def sensor(self, value):
-        self._sensor = value
-        self.sensor_notify()
-
-    def new_sensor_notify(self):
-        for callback in self.new_sensor_callbacks:
-            callback(self._new_sensor, self)
-
-    @property
-    def new_sensor(self):
-        return self._new_sensor
-
-    @new_sensor.setter
-    def new_sensor(self, value):
-        self._new_sensor = value
-        self.new_sensor_notify()
-
-    def start(self):
-        """
-        @brief      Start the instance running
-
-        @detail     This call will trigger connection of the KATCPResource client and
-                    will login to the iGUI server. Once both connections are established
-                    the instance will retrieve a mapping of the iGUI receivers, devices
-                    and tasks and will try to identify the parent of the device_id
-                    provided in the constructor.
-
-        @param      self  The object
-
-        @return     { description_of_the_return_value }
-        """
-        @tornado.gen.coroutine
-        def _start():
-            log.debug("Waiting on synchronisation with server")
-            yield self.rc.until_synced()
-            log.debug("Client synced")
-            log.debug("Requesting version info")
-            response = yield self.rc.req.version_list()
-            log.info("response {}".format(response))
-            self.ioloop.add_callback(self.update)
-        log.debug("Starting {} instance".format(self.__class__.__name__))
-        self.rc.start()
-        self.ic = self.rc._inspecting_client
-        self.ioloop = self.rc.ioloop
-        self.ic.katcp_client.hook_inform("interface-changed",
-                                         lambda message: self.ioloop.add_callback(self.update))
-        self.ioloop.add_callback(_start)
-
-    @tornado.gen.coroutine
-    def update(self):
-        """
-        @brief    Synchronise with the KATCP servers sensors and register new listners
-        """
-        log.debug("Waiting on synchronisation with server")
-        yield self.rc.until_synced()
-        log.debug("Client synced")
-        current_sensors = set(self.rc.sensor.keys())
-        log.debug("Current sensor set: {}".format(current_sensors))
-        removed = self.previous_sensors.difference(current_sensors)
-        log.debug("Sensors removed since last update: {}".format(removed))
-        added = current_sensors.difference(self.previous_sensors)
-        log.debug("Sensors added since last update: {}".format(added))
-        # for name in list(added):
-        for name in ["source_name", "observing", "timestamp"]:
-            # if name == 'observing':
-            #log.debug("Setting sampling strategy and callbacks on sensor '{}'".format(name))
-            # strat3 = ('event-rate', 2.0, 3.0)              #event-rate doesn't work
-            # self.rc.set_sampling_strategy(name, strat3)    #KATCPSensorError:
-            # Error setting strategy
-            # not sure that auto means here
-            self.rc.set_sampling_strategy(name, "auto")
-            #self.rc.set_sampling_strategy(name, ["period", (1)])
-        #self.rc.set_sampling_strategy(name, "event")
-            self.rc.set_sensor_listener(name, self._sensor_updated)
-            self.new_sensor = name
-            #log.debug("Setting new sensor with name = {}".format(name))
-        self.previous_sensors = current_sensors
-
-    def _sensor_updated(self, sensor, reading):
-        """
-        @brief      Callback to be executed on a sensor being updated
-
-        @param      sensor   The sensor
-        @param      reading  The sensor reading
-        """
-
-        # log.debug("Recieved sensor update for sensor '{}': {}".format(
-        #    sensor.name, repr(reading)))
-        self.sensor = sensor.name, sensor.value
-        #log.debug("Value of {} sensor {}".format(sensor.name, sensor.value))
-
-    def stop(self):
-        """
-        @brief      Stop the client
-        """
-        self.rc.stop()
-
 
 class ExecuteCommand(object):
 
@@ -459,30 +340,89 @@ class ExecuteCommand(object):
                 log.error("exited unexpectedly, cmd = {}".format(self._command))
                 self.error = True
 
-    def _png_monitor(self):
-        if RUN:
-            while self._process.poll() == None:
-                # while not self._finish_event.isSet():
-                log.debug("Accessing archive PNG files")
-                try:
-                    with open("{}/fscrunch.png".format(self._outpath), "rb") as imageFile:
-                        self.fscrunch = base64.b64encode(imageFile.read())
-                except Exception as error:
-                    log.debug(error)
-                    #log.debug("fscrunch.png is not ready")
-                try:
-                    with open("{}/tscrunch.png".format(self._outpath), "rb") as imageFile:
-                        self.tscrunch = base64.b64encode(imageFile.read())
-                except Exception as error:
-                    log.debug(error)
-                    #log.debug("tscrunch.png is not ready")
-                try:
-                    with open("{}/profile.png".format(self._outpath), "rb") as imageFile:
-                        self.profile = base64.b64encode(imageFile.read())
-                except Exception as error:
-                    log.debug(error)
-                    #log.debug("profile.png is not ready")
-                time.sleep(7)
+class ArchiveAdder(FileSystemEventHandler):
+
+    def __init__(self, output_dir):
+        super(ArchiveAdder, self).__init__()
+        self.output_dir = output_dir
+        self.first_file = True
+        self.freq_zap_list = ""
+        self.time_zap_list = ""
+
+    def _syscall(self, cmd):
+        log.info("Calling: {}".format(cmd))
+        proc = Popen(shlex.split(cmd), stdout=PIPE, stderr=PIPE)
+        proc.wait()
+        if proc.returncode != 0:
+            log.error(proc.stderr.read())
+        else:
+            log.debug("Call success")
+
+    def fscrunch(self, fname):
+    	#frequency scrunch done here all fscrunch archive
+    	self._syscall("paz {} -e zapped {}".format(self.freq_zap_list, fname))
+        self._syscall("pam -F -e fscrunch {}".format(fname.replace(".ar", ".zapped")))
+        return fname.replace(".ar", ".fscrunch")
+
+    def first_tscrunch(self, fname):
+    	self._syscall("paz {} -e first {}".format(self.freq_zap_list, fname))
+
+    def update_freq_zaplist(self, zaplist):
+        self.freq_zap_list = "-F '0 1' "
+        for item in range(len(zaplist.split(","))):
+            self.freq_zap_list = str(self.freq_zap_list) + " -F '{}' ".format(zaplist.split(",")[item])
+
+        self.freq_zap_list = self.freq_zap_list.replace(":", " ")
+        log.info("Latest frequency zaplist {}".format(self.freq_zap_list))
+
+    def update_time_zaplist(self, zaplist):
+        self.time_zap_list = ""
+        for item in range(len(zaplist.split(":"))):
+            self.time_zap_list = str(self.time_zap_list) + " {}".format(zaplist.split(":")[item])
+
+        #self.time_zap_list = self.time_zap_list.replace(":", " ")
+        log.info("Latest time zaplist {}".format(self.time_zap_list))
+
+    def process(self, fname):
+        fscrunch_fname = self.fscrunch(fname)
+        if self.first_file:
+            log.info("First file in set. Copying to sum.?scrunch.")
+            shutil.copy2(fscrunch_fname, "sum.fscrunch")
+            self.first_tscrunch(fname)
+            shutil.copy2(fname.replace(".ar", ".first"), "sum.tscrunch")
+            os.remove(fname.replace(".ar", ".first"))
+            self.first_file = False
+        else:
+            self._syscall("psradd -T -inplace sum.tscrunch {}".format(fname))
+            #update fscrunch here with the latest list, cannot go backward (i.e. cannot redo zap)
+            self._syscall("paz {} -m sum.tscrunch".format(self.freq_zap_list))
+            self._syscall(
+                "psradd -inplace sum.fscrunch {}".format(fscrunch_fname))
+            self._syscall("paz -w '{}' -m sum.fscrunch".format(self.time_zap_list))
+            self._syscall(
+                "psrplot -p freq+ -j dedisperse -D ../combined_data/tscrunch.png/png sum.tscrunch")
+            self._syscall(
+                "pav -DFTp sum.fscrunch  -g ../combined_data/profile.png/png")
+            #-y 1,`psrstat -Q -c nsubint sum.fscrunch | awk '{print $2-1}'` trying to grab the no of intergrations, failed
+            self._syscall(
+                "pav -FYp sum.fscrunch  -g ../combined_data/fscrunch.png/png")
+            log.info("removing {}".format(fscrunch_fname))
+        os.remove(fscrunch_fname)
+        os.remove(fscrunch_fname.replace(".fscrunch", ".zapped"))
+        log.info("Accessing archive PNG files")
+
+    def on_created(self, event):
+        log.info("New file created: {}".format(event.src_path))
+        try:
+            fname = event.src_path
+            log.info(fname.find('.ar.') != -1)
+            if fname.find('.ar.') != -1:
+                log.info(
+                    "Passing archive file {} for processing".format(fname[0:-9]))
+                time.sleep(1)
+                self.process(fname[0:-9])
+        except Exception as error:
+            log.error(error)
 
 
 class EddPulsarPipelineKeyError(Exception):
@@ -718,6 +658,20 @@ class EddPulsarPipeline(AsyncDeviceServer):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._time_processed)
 
+        self._freq_zaplist_sensor = Sensor.string(
+            "_freq_zaplist",
+            description="_freq_zaplist",
+            default="799:1100,1209:1211,1428:1434,1541:1452,1534:1600",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._freq_zaplist_sensor)
+
+        self._time_zaplist_sensor = Sensor.string(
+            "_time_zaplist",
+            description="_time_zaplist",
+            default="0",
+            initial_status=Sensor.UNKNOWN)
+        self.add_sensor(self._time_zaplist_sensor)
+
     @property
     def sensors(self):
         return self._sensors
@@ -726,9 +680,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug('{}'.format(str(stdout)))
 
     def _error_treatment(self, callback):
-        # pass
-        # log.debug('reconfigureing')
-        # self.stop_pipeline()
         self.stop_pipeline_with_mkrecv_crashed()
 
     def _save_capture_stdout(self, stdout, callback):
@@ -756,6 +707,98 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
     def _add_profile_to_sensor(self, png_blob, callback):
         self._profile.set_value(png_blob)
+
+    @coroutine
+    def _png_monitor(self):
+        log.info("reading png from : {}".format(self.out_path))
+#        try:
+#        	processed_seconds = int(os.popen("ls {}/*ar | wc -l".format(self.in_path)).read())
+#        	self._time_processed.set_value("{} s".format(processed_seconds*10))
+#        	log.info("processed {}s".format(processed_seconds*10))
+#        except Exception as error:
+#            log.debug(error)
+        try:
+            log.info("reading {}/fscrunch.png".format(self.out_path))
+            with open("{}/fscrunch.png".format(self.out_path), "rb") as imageFile:
+                image_fscrunch = base64.b64encode(imageFile.read())
+                self._fscrunch.set_value(image_fscrunch)
+        except Exception as error:
+            log.debug(error)
+        try:
+            log.info("reading {}/tscrunch.png".format(self.out_path))
+            with open("{}/tscrunch.png".format(self.out_path), "rb") as imageFile:
+                image_tscrunch = base64.b64encode(imageFile.read())
+                self._tscrunch.set_value(image_tscrunch)
+        except Exception as error:
+            log.debug(error)
+        try:
+            log.info("reading {}/profile.png".format(self.out_path))
+            with open("{}/profile.png".format(self.out_path), "rb") as imageFile:
+                image_profile = base64.b64encode(imageFile.read())
+                self._profile.set_value(image_profile)
+        except Exception as error:
+            log.debug(error)
+        return
+
+    @request(Str())
+    @return_reply()
+    def request_freq_zaplist(self, req, zaplist):
+        """
+        @brief      Add freq zaplist
+
+        """
+        @coroutine
+        def zaplist_wrapper():
+            try:
+                yield self.freq_zaplist(zaplist)
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(zaplist_wrapper)
+        raise AsyncReply
+
+    def freq_zaplist(self, zaplist):
+    	"""
+    	@brief     Add zap list to Katcp sensor
+    	"""
+    	self._freq_zaplist_sensor.set_value(zaplist)
+    	try:
+    		self.handler.update_freq_zaplist(zaplist)
+    	except:
+    		pass
+    	return
+
+    @request(Str())
+    @return_reply()
+    def request_time_zaplist(self, req, zaplist):
+        """
+        @brief      Add freq zaplist
+
+        """
+        @coroutine
+        def zaplist_wrapper():
+            try:
+                yield self.time_zaplist(zaplist)
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(zaplist_wrapper)
+        raise AsyncReply
+
+    def time_zaplist(self, zaplist):
+    	"""
+    	@brief     Add zap list to Katcp sensor
+    	"""
+    	self._time_zaplist_sensor.set_value(zaplist)
+        try:
+        	self.handler.update_time_zaplist(zaplist)
+       	except:
+       		pass
+    	return
 
     @request(Str())
     @return_reply()
@@ -998,6 +1041,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             in_path = os.path.join("/media/scratch/jason/dspsr_output/", tdate, self.source_name,
                                    str(self.frequency_mhz), tstr, "raw_data")
+            self.in_path = in_path
             out_path = os.path.join(
                 "/media/scratch/jason/dspsr_output/", tdate, self.source_name, str(self.frequency_mhz), tstr, "combined_data")
             self.out_path = out_path
@@ -1048,7 +1092,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug("{}".format(
             (parse_tag(self.source_name) == "default") & self.pulsar_flag))
         if (parse_tag(self.source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:])):
-            cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 24 2 3599.999999999"'.format(
+            cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 24 2 3599.99999999"'.format(
                 self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 1, Time.now().mjd + 1, float(self._pipeline_config["central_freq"]) - 200, float(self._pipeline_config["central_freq"]) + 200)
             log.debug("Command to run: {}".format(cmd))
             self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
@@ -1149,7 +1193,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 keyfile=dada_key_file.name)
 
         elif parse_tag(self.source_name) == "R":
-            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -B -500 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
+            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -B -500 -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
                 numa=self.numa_number,
                 args=self._config["dspsr_params"]["args"],
                 nchan="-F {}:D".format(self.nchannels),
@@ -1222,7 +1266,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
-        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_nt --header {dada_header} --dada-mode 4 --quiet".format(
+        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_rnt --header {dada_header}".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
@@ -1239,23 +1283,21 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
-        cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
-            in_path, out_path)
-        log.debug("Running command: {0}".format(cmd))
-        log.info("Staring archive monitor")
-        self._archive_directory_monitor = ExecuteCommand(
-            cmd, outpath=out_path, resident=True)
-        self._archive_directory_monitor.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._archive_directory_monitor.fscrunch_callbacks.add(
-            self._add_fscrunch_to_sensor)
-        self._archive_directory_monitor.tscrunch_callbacks.add(
-            self._add_tscrunch_to_sensor)
-        self._archive_directory_monitor.profile_callbacks.add(
-            self._add_profile_to_sensor)
-        self._archive_directory_monitor_pid = self._archive_directory_monitor.pid
-        log.debug("_archive_directory_monitor PID is {}".format(
-            self._archive_directory_monitor_pid))
+        self.archive_observer = Observer()
+        self.archive_observer.daemon = False
+        log.info("Input directory: {}".format(self.in_path))
+        log.info("Output directory: {}".format(self.out_path))
+        log.info("Setting up ArchiveAdder handler")
+        self.handler = ArchiveAdder(self.out_path)
+        self.handler.update_freq_zaplist(self._freq_zaplist_sensor.value())
+        self.handler.update_time_zaplist(self._time_zaplist_sensor.value())
+        self.archive_observer.schedule(self.handler, self.in_path, recursive=False)
+        log.info("Starting directory monitor")
+        self.archive_observer.start()
+        log.info("Parent thread entering 1 second polling loop")
+        self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
+            self._png_monitor, 5000)
+        self._png_monitor_callback.start()
 
         # except Exception as error:
         #    msg = "Couldn't start pipeline server {}".format(str(error))
@@ -1295,11 +1337,15 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.info("pipeline is not captureing, can't stop now, current state = {}".format(self.state))
             raise Exception("pipeline is not in CAPTURTING state, current state = {}".format(self.state))
         self._state_sensor.set_value(self.STOPPING)
+        self._png_monitor_callback.stop()
+        self.archive_observer.stop()
+        self.archive_observer.join()
+        del self.handler
         try:
             log.debug("Stopping")
             self._timeout = 10
             process = [self._mkrecv_ingest_proc,
-                       self._polnmerge_proc, self._archive_directory_monitor]
+                       self._polnmerge_proc]
             for proc in process:
                 time.sleep(2)
                 proc.set_finish_event()
@@ -1322,6 +1368,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     proc._process.kill()
             if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
                 os.remove("/tmp/t2pred.dat")
+
+            try:
+                os.remove("{}/core".format(self.in_path))
+            except:
+            	pass
 
 
             log.info("reset DADA buffer")
@@ -1370,10 +1421,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
             os.kill(self._polnmerge_proc_pid, signal.SIGTERM)
         except Exception as error:
             log.error("cannot kill _polnmerge_proc_pid, {}".format(error))
-        try:
-            os.kill(self._archive_directory_monitor_pid, signal.SIGTERM)
-        except Exception as error:
-            log.error("cannot kill _archive_directory_monitor, {}".format(error))
+        self._png_monitor_callback.stop()
+        self.archive_observer.stop()
+        self.archive_observer.join()
+        del self.handler
         try:
             os.kill(self._dspsr_pid, signal.SIGTERM)
         except Exception as error:
@@ -1403,9 +1454,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             msg = "Couldn't deleting buffers {}".format(str(error))
             log.error(msg)
             raise EddPulsarPipelineError(msg)
-
         try:
-            # self._pipeline_sensor_name.set_value(pipeline_name)
             log.info("Creating DADA buffer for mkrecv")
             cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dada_key,
                                                                      args=self._config["dada_db_params"]["args"])
@@ -1517,7 +1566,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
         except Exception as error:
             msg = "Couldn't deconfigure pipeline {}".format(str(error))
             log.error(msg)
-            #raise EddPulsarPipelineError(msg)
         else:
             log.info("Deconfigured pipeline {}".format(
                 self._pipeline_sensor_name.value()))
@@ -1528,14 +1576,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
 @coroutine
 def on_shutdown(ioloop, server):
     log.info('Shutting down server')
-    #if server._pipeline_sensor_status.value() == "running":
-    #    log.info("Pipeline still running, stopping pipeline")
-    #    yield server.stop_pipeline()
-    #    time.sleep(10)
-    #if server._pipeline_sensor_status.value() != "idle":
-    #    log.info("Pipeline still configured, deconfiguring pipeline")
-    #    yield server.deconfigure()
-#
     yield server.deconfigure()
     yield server.stop()
     ioloop.stop()
@@ -1545,9 +1585,9 @@ def main():
     usage = "usage: %prog [options]"
     parser = OptionParser(usage=usage)
     parser.add_option('-H', '--host', dest='host', type=str,
-                      help='Host interface to bind to', default="127.0.0.1")
+                      help='Host interface to bind to', default="0.0.0.0")
     parser.add_option('-p', '--port', dest='port', type=long,
-                      help='Port number to bind to', default=5000)
+                      help='Port number to bind to', default=10000)
     parser.add_option('', '--log_level', dest='log_level', type=str,
                       help='logging level', default="INFO")
     (opts, args) = parser.parse_args()
