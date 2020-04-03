@@ -378,27 +378,27 @@ class EddCommander(AsyncDeviceServer):
                 scan_type = source_full_name[-1]
                 if scan_type == "R":
                     if pulsar_name[:1] != "B" and pulsar_name[:1] != "J":
-                        json_string = json.dumps({"source-name": "{}{}_R".format("J", pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
-                        json_string_fr = json.dumps({"source-name": "{}{}_R".format("J", pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string = json.dumps({"source-name": "{}{}_R".format("J", pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string_fr = json.dumps({"source-name": "{}{}_R".format("J", pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
                     else:
-                        json_string = json.dumps({"source-name": "{}_R".format(pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
-                        json_string_fr = json.dumps({"source-name": "{}_R".format(pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string = json.dumps({"source-name": "{}_R".format(pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string_fr = json.dumps({"source-name": "{}_R".format(pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
                 else:
                     if pulsar_name[:1] != "B" and pulsar_name[:1] != "J":
-                        json_string = json.dumps({"source-name": "{}{}".format("J", pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
-                        json_string_fr = json.dumps({"source-name": "{}{}".format("J", pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string = json.dumps({"source-name": "{}{}".format("J", pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string_fr = json.dumps({"source-name": "{}{}".format("J", pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
                     else:
-                        json_string = json.dumps({"source-name": "{}".format(pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
-                        json_string_fr = json.dumps({"source-name": "{}".format(pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string = json.dumps({"source-name": "{}".format(pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string_fr = json.dumps({"source-name": "{}".format(pulsar_name), "nchannels": 4096, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
                 log.debug(json_string)
                 log.debug(json_string_fr)
                 self.first_true = False
                 self.last_value = True
                 # time.sleep(5)
                 self._edd00_numa1.req.start(json_string)
-                #self._edd01_numa0.req.start(json_string)
-                #time.sleep(5)
-                #self._edd01_numa1.req.start(json_string_fr)
+                self._edd01_numa0.req.start(json_string)
+                time.sleep(5)
+                self._edd01_numa1.req.start(json_string_fr)
                 # self._edd01_numa0.req.start(json_string)
                 # self._edd01_numa1.req.start(json_string_1mc)
 
@@ -407,8 +407,8 @@ class EddCommander(AsyncDeviceServer):
                 self.first_true = True
                 self.last_value = False
                 self._edd00_numa1.req.stop()
-                #self._edd01_numa0.req.stop()
-                #self._edd01_numa1.req.stop()
+                self._edd01_numa0.req.stop()
+                self._edd01_numa1.req.stop()
 
     def new_sensor(self, sensor_name, callback):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))
