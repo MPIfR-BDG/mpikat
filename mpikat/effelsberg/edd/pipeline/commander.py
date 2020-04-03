@@ -209,17 +209,17 @@ class EddCommander(AsyncDeviceServer):
             self.sensor_update)
         self._status_server.new_sensor_callbacks.add(
             self.new_sensor)
-        #self._edd01_numa0 = KATCPClientResource(dict(
-        #    name='_edd00_numa0-client',
-        #    address=("134.104.70.67", 10000),
-        #    controlled=True))
-        #self._edd01_numa0.start()
-        #log.debug("system init")
-        #self._edd01_numa1 = KATCPClientResource(dict(
-        #    name='_edd00_numa1-client',
-        #    address=("134.104.70.67", 10001),
-        #    controlled=True))
-        #self._edd01_numa1.start()
+        self._edd01_numa0 = KATCPClientResource(dict(
+            name='_edd01_numa0-client',
+            address=("134.104.70.67", 10000),
+            controlled=True))
+        self._edd01_numa0.start()
+        log.debug("system init")
+        self._edd01_numa1 = KATCPClientResource(dict(
+            name='_edd01_numa1-client',
+            address=("134.104.70.67", 10001),
+            controlled=True))
+        self._edd01_numa1.start()
         self._edd00_numa1 = KATCPClientResource(dict(
             name='_edd00_numa1-client',
             address=("134.104.70.66", 10001),
