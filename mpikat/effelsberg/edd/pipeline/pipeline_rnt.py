@@ -680,9 +680,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug('{}'.format(str(stdout)))
 
     def _error_treatment(self, callback):
-        # pass
-        # log.debug('reconfigureing')
-        # self.stop_pipeline()
         self.stop_pipeline_with_mkrecv_crashed()
 
     def _save_capture_stdout(self, stdout, callback):
@@ -714,12 +711,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
     @coroutine
     def _png_monitor(self):
         log.info("reading png from : {}".format(self.out_path))
-        try:
-        	processed_seconds = int(os.popen("ls {}/*ar | wc -l".format(self.in_path)).read())
-        	self._time_processed.set_value("{} s".format(processed_seconds*10))
-        	log.info("processed {}s".format(processed_seconds*10))
-        except Exception as error:
-            log.debug(error)
+#        try:
+#        	processed_seconds = int(os.popen("ls {}/*ar | wc -l".format(self.in_path)).read())
+#        	self._time_processed.set_value("{} s".format(processed_seconds*10))
+#        	log.info("processed {}s".format(processed_seconds*10))
+#        except Exception as error:
+#            log.debug(error)
         try:
             log.info("reading {}/fscrunch.png".format(self.out_path))
             with open("{}/fscrunch.png".format(self.out_path), "rb") as imageFile:
@@ -1095,8 +1092,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug("{}".format(
             (parse_tag(self.source_name) == "default") & self.pulsar_flag))
         if (parse_tag(self.source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:])):
-            cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 24 2 3599.999999999"'.format(
-                self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 1, Time.now().mjd + 1, float(self._pipeline_config["central_freq"]) - 200, float(self._pipeline_config["central_freq"]) + 200)
+            cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred "Effelsberg {} {} {} {} 24 2 599.99999999"'.format(
+                self.numa_number, NUMA_MODE[self.numa_number][1], self.source_name[1:], Time.now().mjd - 2, Time.now().mjd + 2, float(self._pipeline_config["central_freq"]) - 200, float(self._pipeline_config["central_freq"]) + 200)
             log.debug("Command to run: {}".format(cmd))
             self.tempo2 = ExecuteCommand(cmd, outpath=None, resident=False)
             self.tempo2_pid = self.tempo2.pid
