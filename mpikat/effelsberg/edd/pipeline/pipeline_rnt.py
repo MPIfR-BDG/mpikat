@@ -393,7 +393,7 @@ class ArchiveAdder(FileSystemEventHandler):
             os.remove(fname.replace(".ar", ".first"))
             self.first_file = False
         else:
-            self._syscall("psradd -T -inplace sum.tscrunch {}".format(fname.replace(".ar", ".zapped")))
+            self._syscall("psradd -T -inplace sum.tscrunch {}".format(fname))
             #update fscrunch here with the latest list, cannot go backward (i.e. cannot redo zap)
             self._syscall("paz {} -m sum.tscrunch".format(self.freq_zap_list))
             self._syscall(
