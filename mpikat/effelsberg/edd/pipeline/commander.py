@@ -215,16 +215,16 @@ class EddCommander(AsyncDeviceServer):
         #    controlled=True))
         #self._edd01_numa0.start()
         #log.debug("system init")
-        self._edd01_numa1 = KATCPClientResource(dict(
-            name='_edd01_numa1-client',
-            address=("134.104.70.67", 10001),
-            controlled=True))
-        self._edd01_numa1.start()
-        #self._edd00_numa1 = KATCPClientResource(dict(
-        #    name='_edd00_numa1-client',
-        #    address=("134.104.70.66", 10001),
+        #self._edd01_numa1 = KATCPClientResource(dict(
+        #    name='_edd01_numa1-client',
+        #    address=("134.104.70.67", 10001),
         #    controlled=True))
-        #self._edd00_numa1.start()
+        #self._edd01_numa1.start()
+        self._edd00_numa1 = KATCPClientResource(dict(
+            name='_edd00_numa1-client',
+            address=("134.104.70.66", 10001),
+            controlled=True))
+        self._edd00_numa1.start()
         """
         self._edd01_numa0 = KATCPClientResource(dict(
             name='_edd01_numa0-client',
@@ -395,10 +395,10 @@ class EddCommander(AsyncDeviceServer):
                 self.first_true = False
                 self.last_value = True
                 # time.sleep(5)
-                #self._edd00_numa1.req.start(json_string)
+                self._edd00_numa1.req.start(json_string)
                 #self._edd01_numa0.req.start(json_string)
                 #time.sleep(5)
-                self._edd01_numa1.req.start(json_string_fr)
+                #self._edd01_numa1.req.start(json_string_fr)
                 # self._edd01_numa0.req.start(json_string)
                 # self._edd01_numa1.req.start(json_string_1mc)
 
@@ -406,9 +406,9 @@ class EddCommander(AsyncDeviceServer):
                 log.debug("Should send a stop to the pipeline")
                 self.first_true = True
                 self.last_value = False
-                #self._edd00_numa1.req.stop()
+                self._edd00_numa1.req.stop()
                 #self._edd01_numa0.req.stop()
-                self._edd01_numa1.req.stop()
+                #self._edd01_numa1.req.stop()
 
     def new_sensor(self, sensor_name, callback):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))
