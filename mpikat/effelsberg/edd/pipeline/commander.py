@@ -406,7 +406,7 @@ class EddCommander(AsyncDeviceServer):
                 log.debug("Should send a stop to the pipeline")
                 self.first_true = True
                 self.last_value = False
-                3self._edd00_numa1.req.stop()
+                #self._edd00_numa1.req.stop()
                 #self._edd01_numa0.req.stop()
                 self._edd01_numa1.req.stop()
 
