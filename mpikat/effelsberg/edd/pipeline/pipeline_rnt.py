@@ -1337,72 +1337,105 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.info("pipeline is not captureing, can't stop now, current state = {}".format(self.state))
             raise Exception("pipeline is not in CAPTURTING state, current state = {}".format(self.state))
         self._state_sensor.set_value(self.STOPPING)
+        log.debug("Stopping")
         self._png_monitor_callback.stop()
         self.archive_observer.stop()
         self.archive_observer.join()
         del self.handler
+
         try:
-            log.debug("Stopping")
-            self._timeout = 10
-            process = [self._mkrecv_ingest_proc,
-                       self._polnmerge_proc]
-            for proc in process:
-                time.sleep(2)
-                proc.set_finish_event()
-                proc.finish()
-                log.debug(
-                    "Waiting {} seconds for proc to terminate...".format(self._timeout))
-                now = time.time()
-                while time.time() - now < self._timeout:
-                    retval = proc._process.poll()
-                    if retval is not None:
-                        log.debug(
-                            "Returned a return value of {}".format(retval))
-                        break
-                    else:
-                        time.sleep(0.5)
-                else:
-                    log.warning(
-                        "Failed to terminate proc in alloted time")
-                    log.info("Killing process")
-                    proc._process.kill()
-            if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
-                os.remove("/tmp/t2pred.dat")
-
-            try:
-                os.remove("{}/core".format(self.in_path))
-            except:
-            	pass
-
-
-            log.info("reset DADA buffer")
-            cmd = "dada_db -d -k {key}".format(numa=self.numa_number, key=self._dadc_key)
-            #cmd = "dada_dbscrubber -k {key}".format(numa=self.numa_number, key=self._dadc_key)
-            # cmd = "dada_db -k {key} {args}".format(**
-            #                                       self._config["dada_db_params"])
-            log.debug("Running command: {0}".format(cmd))
-            self._create_transpose_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._create_transpose_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._create_transpose_ring_buffer._process.wait()
-
-            
-            log.info("Creating DADA buffer for EDDPolnMerge")
-            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dadc_key,
-                                                                     args=self._config["dadc_db_params"]["args"])
-            # cmd = "dada_db -k {key} {args}".format(**
-            #                                       self._config["dada_db_params"])
-            log.debug("Running command: {0}".format(cmd))
-            self._create_transpose_ring_buffer = ExecuteCommand(
-                cmd, outpath=None, resident=False)
-            self._create_transpose_ring_buffer.stdout_callbacks.add(
-                self._decode_capture_stdout)
-            self._create_transpose_ring_buffer._process.wait()
-            
+            os.kill(self._polnmerge_proc_pid, signal.SIGKILL)
         except Exception as error:
-            raise EddPulsarPipelineError(str(error))
+            log.error("cannot kill _polnmerge_proc_pid, {}".format(error))
 
+        try:
+            os.kill(self._dspsr_pid, signal.SIGKILL)
+        except Exception as error:
+            log.error("cannot kill _dspsr, {}".format(error))
+
+#        try:
+#            log.debug("Stopping")
+#            self._timeout = 10
+#            process = [self._mkrecv_ingest_proc,
+#                       self._polnmerge_proc]
+#            for proc in process:
+#                time.sleep(2)
+#                proc.set_finish_event()
+#                proc.finish()
+#                log.debug(
+#                    "Waiting {} seconds for proc to terminate...".format(self._timeout))
+##               while time.time() - now < self._timeout:
+ #                   retval = proc._process.poll()
+  #                  if retval is not None:
+  #                      log.debug(
+  #                          "Returned a return value of {}".format(retval))
+  #                      break
+ #                   else:
+ #                       time.sleep(0.5)
+ #               else:
+ #                   log.warning(
+ #                       "Failed to terminate proc in alloted time")
+  #                  log.info("Killing process")
+  #                  proc._process.kill()
+  #          if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
+  #              os.remove("/tmp/t2pred.dat")#
+#
+ ###           try:
+  #              os.remove("{}/core".format(self.in_path))
+ #           except:
+#            	pass
+        try:
+	        log.info("reset DADA buffer")
+	        cmd = "dada_db -d -k {key}".format(numa=self.numa_number, key=self._dada_key)
+	        #cmd = "dada_dbscrubber -k {key}".format(numa=self.numa_number, key=self._dadc_key)
+	        # cmd = "dada_db -k {key} {args}".format(**
+	        #                                       self._config["dada_db_params"])
+	        log.debug("Running command: {0}".format(cmd))
+	        self._create_transpose_ring_buffer = ExecuteCommand(
+	            cmd, outpath=None, resident=False)
+	        self._create_transpose_ring_buffer.stdout_callbacks.add(
+	            self._decode_capture_stdout)
+	        self._create_transpose_ring_buffer._process.wait()
+
+	        
+	        log.info("Creating DADA buffer for input buffer")
+	        cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dada_key,
+	                                                                 args=self._config["dada_db_params"]["args"])
+	        # cmd = "dada_db -k {key} {args}".format(**
+	        #                                       self._config["dada_db_params"])
+	        log.debug("Running command: {0}".format(cmd))
+	        self._create_transpose_ring_buffer = ExecuteCommand(
+	            cmd, outpath=None, resident=False)
+	        self._create_transpose_ring_buffer.stdout_callbacks.add(
+	            self._decode_capture_stdout)
+	        self._create_transpose_ring_buffer._process.wait()
+
+
+	        log.info("reset DADA buffer")
+	        cmd = "dada_db -d -k {key}".format(numa=self.numa_number, key=self._dadc_key)
+	        #cmd = "dada_dbscrubber -k {key}".format(numa=self.numa_number, key=self._dadc_key)
+	        # cmd = "dada_db -k {key} {args}".format(**
+	        #                                       self._config["dada_db_params"])
+	        log.debug("Running command: {0}".format(cmd))
+	        self._create_transpose_ring_buffer = ExecuteCommand(
+	            cmd, outpath=None, resident=False)
+	        self._create_transpose_ring_buffer.stdout_callbacks.add(
+	            self._decode_capture_stdout)
+	        self._create_transpose_ring_buffer._process.wait()
+
+	        
+	        log.info("Creating DADA buffer for EDDPolnMerge")
+	        cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dadc_key,
+	                                                                 args=self._config["dadc_db_params"]["args"])
+	        # cmd = "dada_db -k {key} {args}".format(**
+	        #                                       self._config["dada_db_params"])
+	        log.debug("Running command: {0}".format(cmd))
+	        self._create_transpose_ring_buffer = ExecuteCommand(
+	            cmd, outpath=None, resident=False)
+	        self._create_transpose_ring_buffer.stdout_callbacks.add(
+	            self._decode_capture_stdout)
+	        self._create_transpose_ring_buffer._process.wait()
+	            
 
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
@@ -1418,7 +1451,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
     def stop_pipeline_with_mkrecv_crashed(self):
         """@brief stop the dada_junkdb and dspsr instances."""
         try:
-            os.kill(self._polnmerge_proc_pid, signal.SIGTERM)
+            os.kill(self._polnmerge_proc_pid, signal.SIGKILL)
         except Exception as error:
             log.error("cannot kill _polnmerge_proc_pid, {}".format(error))
         self._png_monitor_callback.stop()
@@ -1426,7 +1459,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self.archive_observer.join()
         del self.handler
         try:
-            os.kill(self._dspsr_pid, signal.SIGTERM)
+            os.kill(self._dspsr_pid, signal.SIGKILL)
         except Exception as error:
             log.error("cannot kill _dspsr, {}".format(error))
         if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
