@@ -150,6 +150,7 @@ def parse_tag(source_name):
     else:
         return split[-1]
 
+
 class ExecuteCommand(object):
 
     def __init__(self, command, outpath=None, resident=False):
@@ -340,6 +341,7 @@ class ExecuteCommand(object):
                 log.error("exited unexpectedly, cmd = {}".format(self._command))
                 self.error = True
 
+
 class ArchiveAdder(FileSystemEventHandler):
 
     def __init__(self, output_dir):
@@ -359,18 +361,20 @@ class ArchiveAdder(FileSystemEventHandler):
             log.debug("Call success")
 
     def fscrunch(self, fname):
-    	#frequency scrunch done here all fscrunch archive
-    	self._syscall("paz {} -e zapped {}".format(self.freq_zap_list, fname))
-        self._syscall("pam -F -e fscrunch {}".format(fname.replace(".ar", ".zapped")))
+        # frequency scrunch done here all fscrunch archive
+        self._syscall("paz {} -e zapped {}".format(self.freq_zap_list, fname))
+        self._syscall(
+            "pam -F -e fscrunch {}".format(fname.replace(".ar", ".zapped")))
         return fname.replace(".ar", ".fscrunch")
 
     def first_tscrunch(self, fname):
-    	self._syscall("paz {} -e first {}".format(self.freq_zap_list, fname))
+        self._syscall("paz {} -e first {}".format(self.freq_zap_list, fname))
 
     def update_freq_zaplist(self, zaplist):
         self.freq_zap_list = "-F '0 1' "
         for item in range(len(zaplist.split(","))):
-            self.freq_zap_list = str(self.freq_zap_list) + " -F '{}' ".format(zaplist.split(",")[item])
+            self.freq_zap_list = str(
+                self.freq_zap_list) + " -F '{}' ".format(zaplist.split(",")[item])
 
         self.freq_zap_list = self.freq_zap_list.replace(":", " ")
         log.info("Latest frequency zaplist {}".format(self.freq_zap_list))
@@ -378,7 +382,8 @@ class ArchiveAdder(FileSystemEventHandler):
     def update_time_zaplist(self, zaplist):
         self.time_zap_list = ""
         for item in range(len(zaplist.split(":"))):
-            self.time_zap_list = str(self.time_zap_list) + " {}".format(zaplist.split(":")[item])
+            self.time_zap_list = str(
+                self.time_zap_list) + " {}".format(zaplist.split(":")[item])
 
         #self.time_zap_list = self.time_zap_list.replace(":", " ")
         log.info("Latest time zaplist {}".format(self.time_zap_list))
@@ -394,11 +399,13 @@ class ArchiveAdder(FileSystemEventHandler):
             self.first_file = False
         else:
             self._syscall("psradd -T -inplace sum.tscrunch {}".format(fname))
-            #update fscrunch here with the latest list, cannot go backward (i.e. cannot redo zap)
+            # update fscrunch here with the latest list, cannot go backward
+            # (i.e. cannot redo zap)
             self._syscall("paz {} -m sum.tscrunch".format(self.freq_zap_list))
             self._syscall(
                 "psradd -inplace sum.fscrunch {}".format(fscrunch_fname))
-            self._syscall("paz -w '{}' -m sum.fscrunch".format(self.time_zap_list))
+            self._syscall(
+                "paz -w '{}' -m sum.fscrunch".format(self.time_zap_list))
             self._syscall(
                 "psrplot -p freq+ -j dedisperse -D ../combined_data/tscrunch.png/png sum.tscrunch")
             self._syscall(
@@ -444,7 +451,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
     PIPELINE_STATES = ["idle", "configuring", "ready",
                        "starting", "running", "stopping",
                        "deconfiguring", "error"]
-    STATES = ["idle", "preparing", "ready", "starting", "capturing", "stopping", "error"]
+    STATES = ["idle", "preparing", "ready",
+              "starting", "capturing", "stopping", "error"]
     IDLE, PREPARING, READY, STARTING, CAPTURING, STOPPING, ERROR = STATES
 
     def __init__(self, ip, port):
@@ -563,7 +571,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         @parma callback object return from the callback function from the pipeline
         """
         log.info('New state of the pipeline is {}'.format(str(state)))
-        #self._pipeline_sensor_status.set_value(str(state))
+        # self._pipeline_sensor_status.set_value(str(state))
 
     @coroutine
     def start(self):
@@ -595,11 +603,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
 
         self._state_sensor = Sensor.discrete(
             "state",
-            params = self.STATES,
-            description = "The current state of this worker instance",
-            default = self.IDLE,
-            initial_status = Sensor.NOMINAL)
-        #self._state_sensor.set_logger(log)
+            params=self.STATES,
+            description="The current state of this worker instance",
+            default=self.IDLE,
+            initial_status=Sensor.NOMINAL)
+        # self._state_sensor.set_logger(log)
         self.add_sensor(self._state_sensor)
 
         self._tscrunch = Sensor.string(
@@ -760,15 +768,15 @@ class EddPulsarPipeline(AsyncDeviceServer):
         raise AsyncReply
 
     def freq_zaplist(self, zaplist):
-    	"""
-    	@brief     Add zap list to Katcp sensor
-    	"""
-    	self._freq_zaplist_sensor.set_value(zaplist)
-    	try:
-    		self.handler.update_freq_zaplist(zaplist)
-    	except:
-    		pass
-    	return
+        """
+        @brief     Add zap list to Katcp sensor
+        """
+        self._freq_zaplist_sensor.set_value(zaplist)
+        try:
+            self.handler.update_freq_zaplist(zaplist)
+        except:
+            pass
+        return
 
     @request(Str())
     @return_reply()
@@ -790,15 +798,15 @@ class EddPulsarPipeline(AsyncDeviceServer):
         raise AsyncReply
 
     def time_zaplist(self, zaplist):
-    	"""
-    	@brief     Add zap list to Katcp sensor
-    	"""
-    	self._time_zaplist_sensor.set_value(zaplist)
+        """
+        @brief     Add zap list to Katcp sensor
+        """
+        self._time_zaplist_sensor.set_value(zaplist)
         try:
-        	self.handler.update_time_zaplist(zaplist)
-       	except:
-       		pass
-    	return
+            self.handler.update_time_zaplist(zaplist)
+        except:
+            pass
+        return
 
     @request(Str())
     @return_reply()
@@ -824,7 +832,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                #self._pipeline_sensor_status.set_value("ready")
+                # self._pipeline_sensor_status.set_value("ready")
         self.ioloop.add_callback(configure_wrapper)
         raise AsyncReply
 
@@ -916,7 +924,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         except Exception as error:
             raise EddPulsarPipelineError(str(error))
         else:
-            #self.state = "ready"dddd
+            # self.state = "ready"dddd
             self._state_sensor.set_value(self.READY)
             log.info("Pipeline instance {} configured".format(
                 self._pipeline_sensor_name.value()))
@@ -945,7 +953,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                #self._pipeline_sensor_status.set_value("running")
+                # self._pipeline_sensor_status.set_value("running")
         self.ioloop.add_callback(start_wrapper)
         raise AsyncReply
 
@@ -961,11 +969,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
         if not self.ready:
             log.debug("pipeline is not int ready state")
             if self.capturing:
-                log.debug("pipeline is still captureing, issuing stop now and will start shortly")
+                log.debug(
+                    "pipeline is still captureing, issuing stop now and will start shortly")
                 yield self.stop_pipeline()
             if self.starting:
                 log.debug("pipeline is starting, do not send multiple start")
-                #return
+                # return
                 raise Exception("fail pipeline is not in READY state")
         log.info("starting pipeline")
         self._state_sensor.set_value(self.STARTING)
@@ -982,8 +991,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
             # DSPSR RA DEC format gives me hell!
             c = SkyCoord("{} {}".format(self._source_config[
                          "ra"], self._source_config["dec"]), unit=(u.deg, u.deg))
-            header["ra"] = c.to_string("hmsdms").split(" ")[0].replace("h", ":").replace("m", ":").replace("s", "")
-            header["dec"] = c.to_string("hmsdms").split(" ")[1].replace("d", ":").replace("m", ":").replace("s", "")
+            header["ra"] = c.to_string("hmsdms").split(" ")[0].replace(
+                "h", ":").replace("m", ":").replace("s", "")
+            header["dec"] = c.to_string("hmsdms").split(" ")[1].replace(
+                "d", ":").replace("m", ":").replace("s", "")
 
             #header['mode'] = self._source_config['mode']
             header["key"] = self._dada_key
@@ -1016,11 +1027,12 @@ class EddPulsarPipeline(AsyncDeviceServer):
             header["tsamp"] = 1 / (2.0 * self.bandwidth)
         except:
             pass
-        self.pulsar_flag = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:]))
+        self.pulsar_flag = is_accessible(
+            '/tmp/epta/{}.par'.format(self.source_name[1:]))
         if ((parse_tag(self.source_name) == "default") or (parse_tag(self.source_name) != "R")) and (not self.pulsar_flag):
-            #if (parse_tag(self.source_name) != "FB"):
+            # if (parse_tag(self.source_name) != "FB"):
             error = "source is not pulsar or calibrator"
-            #reset state to ready
+            # reset state to ready
             self._state_sensor.set_value(self.READY)
             raise EddPulsarPipelineError(error)
 
@@ -1075,8 +1087,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #CREATING THE PREDICTOR WITH TEMPO2                #
         ####################################################
 
-
-        self.pulsar_flag_with_R = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:-2]))
+        self.pulsar_flag_with_R = is_accessible(
+            '/tmp/epta/{}.par'.format(self.source_name[1:-2]))
         """
         if self.pulsar_flag:
             header["mode"] = "Pulsar"
@@ -1202,7 +1214,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
 
-        #elif parse_tag(self.source_name) == "FB":
+        # elif parse_tag(self.source_name) == "FB":
         #    cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 4 -F {nchan} -b8 -d 1 -I 0 -t {nbins} {keyfile}".format(
         #        numa=self.numa_number,
         #        nchan="{}".format(self.nchannels),
@@ -1233,8 +1245,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     cpus=cpu_numbers,
                     cuda_number=cuda_number,
                     keyfile=dada_key_file.name)
-        """            
-
+        """
 
         #cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
         log.debug("Running command: {0}".format(cmd))
@@ -1291,7 +1302,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self.handler = ArchiveAdder(self.out_path)
         self.handler.update_freq_zaplist(self._freq_zaplist_sensor.value())
         self.handler.update_time_zaplist(self._time_zaplist_sensor.value())
-        self.archive_observer.schedule(self.handler, self.in_path, recursive=False)
+        self.archive_observer.schedule(
+            self.handler, self.in_path, recursive=False)
         log.info("Starting directory monitor")
         self.archive_observer.start()
         log.info("Parent thread entering 1 second polling loop")
@@ -1326,7 +1338,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                #self._pipeline_sensor_status.set_value("ready")
+                # self._pipeline_sensor_status.set_value("ready")
         self.ioloop.add_callback(stop_wrapper)
         raise AsyncReply
 
@@ -1334,14 +1346,21 @@ class EddPulsarPipeline(AsyncDeviceServer):
     def stop_pipeline(self):
         """@brief stop the dada_junkdb and dspsr instances."""
         if not self.capturing:
-            log.info("pipeline is not captureing, can't stop now, current state = {}".format(self.state))
-            raise Exception("pipeline is not in CAPTURTING state, current state = {}".format(self.state))
+            log.info("pipeline is not captureing, can't stop now, current state = {}".format(
+                self.state))
+            raise Exception(
+                "pipeline is not in CAPTURTING state, current state = {}".format(self.state))
         self._state_sensor.set_value(self.STOPPING)
         log.debug("Stopping")
         self._png_monitor_callback.stop()
         self.archive_observer.stop()
         self.archive_observer.join()
         del self.handler
+
+        try:
+            os.kill(self._mkrecv_ingest_proc_pid, signal.SIGKILL)
+        except Exception as error:
+            log.error("cannot kill _mkrecv_ingest_proc, {}".format(error))
 
         try:
             os.kill(self._polnmerge_proc_pid, signal.SIGKILL)
@@ -1364,7 +1383,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
 #                proc.finish()
 #                log.debug(
 #                    "Waiting {} seconds for proc to terminate...".format(self._timeout))
-##               while time.time() - now < self._timeout:
+# while time.time() - now < self._timeout:
  #                   retval = proc._process.poll()
   #                  if retval is not None:
   #                      log.debug(
@@ -1380,62 +1399,60 @@ class EddPulsarPipeline(AsyncDeviceServer):
   #          if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
   #              os.remove("/tmp/t2pred.dat")#
 #
- ###           try:
+ # try:
   #              os.remove("{}/core".format(self.in_path))
  #           except:
 #            	pass
         try:
-	        log.info("reset DADA buffer")
-	        cmd = "dada_db -d -k {key}".format(numa=self.numa_number, key=self._dada_key)
-	        #cmd = "dada_dbscrubber -k {key}".format(numa=self.numa_number, key=self._dadc_key)
-	        # cmd = "dada_db -k {key} {args}".format(**
-	        #                                       self._config["dada_db_params"])
-	        log.debug("Running command: {0}".format(cmd))
-	        self._create_transpose_ring_buffer = ExecuteCommand(
-	            cmd, outpath=None, resident=False)
-	        self._create_transpose_ring_buffer.stdout_callbacks.add(
-	            self._decode_capture_stdout)
-	        self._create_transpose_ring_buffer._process.wait()
+            log.info("reset DADA buffer")
+            cmd = "dada_db -d -k {key}".format(
+                numa=self.numa_number, key=self._dada_key)
+            #cmd = "dada_dbscrubber -k {key}".format(numa=self.numa_number, key=self._dadc_key)
+            # cmd = "dada_db -k {key} {args}".format(**
+            #                                       self._config["dada_db_params"])
+            log.debug("Running command: {0}".format(cmd))
+            self._create_transpose_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_transpose_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_transpose_ring_buffer._process.wait()
 
-	        
-	        log.info("Creating DADA buffer for input buffer")
-	        cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dada_key,
-	                                                                 args=self._config["dada_db_params"]["args"])
-	        # cmd = "dada_db -k {key} {args}".format(**
-	        #                                       self._config["dada_db_params"])
-	        log.debug("Running command: {0}".format(cmd))
-	        self._create_transpose_ring_buffer = ExecuteCommand(
-	            cmd, outpath=None, resident=False)
-	        self._create_transpose_ring_buffer.stdout_callbacks.add(
-	            self._decode_capture_stdout)
-	        self._create_transpose_ring_buffer._process.wait()
+            log.info("Creating DADA buffer for input buffer")
+            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dada_key,
+                                                                     args=self._config["dada_db_params"]["args"])
+            # cmd = "dada_db -k {key} {args}".format(**
+            #                                       self._config["dada_db_params"])
+            log.debug("Running command: {0}".format(cmd))
+            self._create_transpose_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_transpose_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_transpose_ring_buffer._process.wait()
 
+            log.info("reset DADA buffer")
+            cmd = "dada_db -d -k {key}".format(
+                numa=self.numa_number, key=self._dadc_key)
+            #cmd = "dada_dbscrubber -k {key}".format(numa=self.numa_number, key=self._dadc_key)
+            # cmd = "dada_db -k {key} {args}".format(**
+            #                                       self._config["dada_db_params"])
+            log.debug("Running command: {0}".format(cmd))
+            self._create_transpose_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_transpose_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_transpose_ring_buffer._process.wait()
 
-	        log.info("reset DADA buffer")
-	        cmd = "dada_db -d -k {key}".format(numa=self.numa_number, key=self._dadc_key)
-	        #cmd = "dada_dbscrubber -k {key}".format(numa=self.numa_number, key=self._dadc_key)
-	        # cmd = "dada_db -k {key} {args}".format(**
-	        #                                       self._config["dada_db_params"])
-	        log.debug("Running command: {0}".format(cmd))
-	        self._create_transpose_ring_buffer = ExecuteCommand(
-	            cmd, outpath=None, resident=False)
-	        self._create_transpose_ring_buffer.stdout_callbacks.add(
-	            self._decode_capture_stdout)
-	        self._create_transpose_ring_buffer._process.wait()
-
-	        
-	        log.info("Creating DADA buffer for EDDPolnMerge")
-	        cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dadc_key,
-	                                                                 args=self._config["dadc_db_params"]["args"])
-	        # cmd = "dada_db -k {key} {args}".format(**
-	        #                                       self._config["dada_db_params"])
-	        log.debug("Running command: {0}".format(cmd))
-	        self._create_transpose_ring_buffer = ExecuteCommand(
-	            cmd, outpath=None, resident=False)
-	        self._create_transpose_ring_buffer.stdout_callbacks.add(
-	            self._decode_capture_stdout)
-	        self._create_transpose_ring_buffer._process.wait()
-	            
+            log.info("Creating DADA buffer for EDDPolnMerge")
+            cmd = "numactl -m {numa} dada_db -k {key} {args}".format(numa=self.numa_number, key=self._dadc_key,
+                                                                     args=self._config["dadc_db_params"]["args"])
+            # cmd = "dada_db -k {key} {args}".format(**
+            #                                       self._config["dada_db_params"])
+            log.debug("Running command: {0}".format(cmd))
+            self._create_transpose_ring_buffer = ExecuteCommand(
+                cmd, outpath=None, resident=False)
+            self._create_transpose_ring_buffer.stdout_callbacks.add(
+                self._decode_capture_stdout)
+            self._create_transpose_ring_buffer._process.wait()
 
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
@@ -1531,7 +1548,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                #self._pipeline_sensor_status.set_value("ready")
+                # self._pipeline_sensor_status.set_value("ready")
         self.ioloop.add_callback(kill_wrapper)
         raise AsyncReply
 
@@ -1565,7 +1582,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 req.reply("fail", str(error))
             else:
                 req.reply("ok")
-                #self._pipeline_sensor_status.set_value("idle")
+                # self._pipeline_sensor_status.set_value("idle")
         self.ioloop.add_callback(deconfigure_wrapper)
         raise AsyncReply
 
@@ -1602,7 +1619,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         else:
             log.info("Deconfigured pipeline {}".format(
                 self._pipeline_sensor_name.value()))
-            self._state_sensor.set_value(self.IDLE) 
+            self._state_sensor.set_value(self.IDLE)
             self._pipeline_sensor_name.set_value("")
 
 
