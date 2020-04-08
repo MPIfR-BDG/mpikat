@@ -105,7 +105,7 @@ DADA_DEFAULTS = {
     "mode": "PSR",
     "calfreq": 1.0,
     "receiver_name": "lband",
-    "frequency_mhz": 1400.4,
+    "frequency_mhz": 1200,
     "bandwidth": 800,
     "tsamp": 0.000625,
     "mc_streaming_port" : 7148,
