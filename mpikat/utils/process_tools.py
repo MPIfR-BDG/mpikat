@@ -48,21 +48,60 @@ def process_watcher(process, name=None, timeout=120, allow_fail=False):
 
 
 @coroutine
-def command_watcher(cmd, **kwargs):
+def command_watcher(cmd, env={}, umask=0o000, **kwargs):
+    """
+    @brief Executes a command and watches the process result. Raises an error on non
+    zero returncode (except allow_fail is given), and logs command output to
+    debug, respectively eror output.
+
+    @param cmd  string or list of commandline arguments used to create the subprocess
+    @param env   Dict of environemnet variables set for the process
+    @param umask  Default permissions for files created byh this subprocess. Defaults to globally read and writeable!
+
+    """
+
+    def preexec_fn():
+        os.umask(umask)
+
+    log.debug("Executing command: {}".format(cmd))
     if isinstance(cmd, str):
         cmd = cmd.split()
-    proc = Popen(map(str, cmd), stdout=PIPE, stderr=PIPE, shell=False, close_fds=True)
+
+    environ = os.environ.copy()
+    environ.update(env)
+    if env.keys():
+        log.debug("Additional environment variabels set: {}".format(env))
+
+    proc = Popen(map(str, cmd), stdout=PIPE, stderr=PIPE, shell=False,
+            env=environ, close_fds=True, preexec_fn=preexec_fn)
     yield process_watcher(proc, name=" ".join(cmd), **kwargs)
 
 
 class ManagedProcess(object):
-    def __init__(self, cmdlineargs, env={}, stdout_handler=None, stderr_handler=None):
-        environ = os.environ.copy()
-        environ.update(env)
+    def __init__(self, cmdlineargs, env={}, umask=0o000, stdout_handler=None, stderr_handler=None):
+        """
+        @brief Manages a long running process and passes stdout and stderr to handlers.
+
+        @param cmdlineargs  string or list of commandline arguments used to create the subprocess
+        @param env   Dict of environemnet variables set for the process
+        @param umask  Default permissions for files created byh this subprocess. Defaults to globally read and writeable!
+        @param stdout_handler Handler for ouptut written to stdout
+        @param stderr_handler Handler for ouptut written to stderr
+        """
+        # cmdlineargs to list of strings
         if isinstance(cmdlineargs, str):
             cmdlineargs = cmdlineargs.split()
-        self._proc = Popen(map(str, cmdlineargs), stdout=PIPE, stderr=PIPE, 
-                           shell=False, env=environ, close_fds=True)
+        cmdlineargs = map(str, cmdlineargs)
+        self._cmdl = " ".join(cmdlineargs)
+
+        def preexec_fn():
+            os.umask(umask)
+
+        environ = os.environ.copy()
+        environ.update(env)
+
+        self._proc = Popen(cmdlineargs, stdout=PIPE, stderr=PIPE,
+                           shell=False, env=environ, close_fds=True, preexec_fn=preexec_fn)
         if stdout_handler:
             self._stdout_handler = stdout_handler
         else:
@@ -75,7 +114,6 @@ class ManagedProcess(object):
         self.stderr_monitor = None
         self.eop_monitor = None
         self._start_monitors()
-        self._cmdl = " ".join(map(str, cmdlineargs))
 
     @property
     def pid(self):

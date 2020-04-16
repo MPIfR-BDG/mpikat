@@ -18,7 +18,7 @@ def mkrecv_stdout_parser(line):
 
     tokens = line.split()
     params = {}
-    if tokens[0] in MKRECV_STDOUT_KEYS:
+    if tokens and (tokens[0] in MKRECV_STDOUT_KEYS):
         params = {}
         parser = MKRECV_STDOUT_KEYS[tokens[0]]
         for ii, (key, dtype) in enumerate(parser):

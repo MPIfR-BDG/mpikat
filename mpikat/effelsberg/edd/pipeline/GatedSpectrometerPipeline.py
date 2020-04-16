@@ -24,7 +24,7 @@ from mpikat.utils.process_monitor import SubprocessMonitor
 from mpikat.utils.sensor_watchdog import SensorWatchdog
 from mpikat.utils.db_monitor import DbMonitor
 from mpikat.utils.mkrecv_stdout_parser import MkrecvSensors
-from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig
+from mpikat.effelsberg.edd.pipeline.EDDPipeline import EDDPipeline, launchPipelineServer, updateConfig, state_change
 from mpikat.effelsberg.edd.EDDDataStore import EDDDataStore
 import mpikat.utils.numa as numa
 
@@ -159,6 +159,7 @@ DEFAULT_CONFIG = {
         "log_level": "debug",
 
         "output_rate_factor": 1.10,                         # True output date rate is multiplied by this factor for sending.
+        "idx1_modulo": "auto",
     }
 
 NON_EXPERT_KEYS = ["fft_length", "naccumulate", "output_bit_depth"]
@@ -181,6 +182,7 @@ BUFFER_SIZE         128000000
 SAMPLE_CLOCK_START  0 # This is updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock
 
 DADA_NSLOTS         3
+SLOTS_SKIP          4  # Skip the first four slots
 
 NTHREADS            32
 NHEAPS              64
@@ -212,7 +214,6 @@ IBV_MAX_POLL 10
 
 SYNC_TIME           unset  # Default value from mksend manual
 SAMPLE_CLOCK        unset  # Default value from mksend manual
-SAMPLE_CLOCK_START  0      # Default value from mksend manual
 UTC_START           unset  # Default value from mksend manual
 
 #number of heaps with the same time stamp.
@@ -223,6 +224,7 @@ HEAP_ID_STEP    13
 NSCI            1
 NITEMS          9
 ITEM1_ID        5632    # timestamp, slowest index
+ITEM1_SERIAL
 
 ITEM2_ID        5633    # polarization
 
@@ -332,7 +334,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
         """
         @brief Process a change in the buffer status
         """
-        pass
         for streamid, stream_description in self._config["input_data_streams"].iteritems():
             if status['key'] == stream_description['dada_key']:
                 self._polarization_sensors[streamid]["input-buffer-total-write"].set_value(status['written'])
@@ -343,6 +344,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 self._polarization_sensors[streamid]["output-buffer-total-read"].set_value(status['read'])
 
 
+    @state_change(target="configured", allowed=["idle"], intermediate="configuring")
     @coroutine
     def configure(self, config_json):
         """
@@ -361,12 +363,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
         log.info("Configuring EDD backend for processing")
         log.debug("Configuration string: '{}'".format(config_json))
 
-        if self.state != "idle":
-            log.warning("Configure received while in state: {} - deconfigureing first ...".format(self.state))
-        # alternatively we should automatically deconfigure
-        #yield self.deconfigure()
-
-        self.state = "configuring"
         yield self.set(config_json)
 
         cfs = json.dumps(self._config, indent=4)
@@ -437,13 +433,10 @@ class GatedSpectrometerPipeline(EDDPipeline):
             # we write nSlice blocks on each go
             yield self._create_ring_buffer(output_bufferSize, 8 * nSlices, ofname, numa_node)
 
-            # Configure + launch gated spectrometer
-            # here should be a smarter system to parse the options from the
-            # controller to the program without redundant typing of options
+            # Configure + launch 
             physcpu = numa.getInfo()[numa_node]['cores'][0]
             cmd = "taskset -c {physcpu} gated_spectrometer --nsidechannelitems=1 --input_key={dada_key} --speadheap_size={heapSize} --selected_sidechannel=0 --nbits={bit_depth} --fft_length={fft_length} --naccumulate={naccumulate} --input_level={input_level} --output_bit_depth={output_bit_depth} --output_level={output_level} -o {ofname} --log_level={log_level} --output_type=dada".format(dada_key=bufferName, ofname=ofname, heapSize=self.input_heapSize, numa_node=numa_node, physcpu=physcpu, bit_depth=stream_description['bit_depth'], **self._config)
             log.debug("Command to run: {}".format(cmd))
-
 
             cudaDevice = numa.getInfo()[numa_node]['gpus'][0]
             gated_cli = ManagedProcess(cmd, env={"CUDA_VISIBLE_DEVICES": cudaDevice})
@@ -474,9 +467,10 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 physcpu = ",".join(numa.getInfo()[numa_node]['cores'][1:2])
                 #select network interface
                 fastest_nic, nic_params = numa.getFastestNic(numa_node)
+                heap_id_start = 2 * i    # two output spectra per pol
 
                 log.info("Sending data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nic_params['ip'], nic_params['speed']))
-                cmd = "taskset -c {physcpu} mksend --header {mksend_header} --heap-id-start {heap_id_start} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_rate} --item1-step {timestep} --item2-list {polarization} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_rate} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, heap_id_start=i , timestep=timestep,
+                cmd = "taskset -c {physcpu} mksend --header {mksend_header} --heap-id-start {heap_id_start} --dada-key {ofname} --ibv-if {ibv_if} --port {port_tx} --sync-epoch {sync_time} --sample-clock {sample_rate} --item1-step {timestep} --item2-list {polarization} --item4-list {fft_length} --item6-list {sync_time} --item7-list {sample_rate} --item8-list {naccumulate} --rate {rate} --heap-size {heap_size} --nhops {nhops} {mcast_dest}".format(mksend_header=mksend_header_file.name, heap_id_start=heap_id_start , timestep=timestep,
                         ofname=ofname, polarization=i, nChannels=nChannels, physcpu=physcpu, integrationTime=integrationTime,
                         rate=rate, nhops=nhops, heap_size=output_heapSize, ibv_if=nic_params['ip'],
                         mcast_dest=" ".join(ip_range),
@@ -487,7 +481,7 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 ofpath = os.path.join(cfg["output_directory"], ofname)
                 log.debug("Writing output to {}".format(ofpath))
                 if not os.path.isdir(ofpath):
-                    os.mkdir(ofpath)
+                    os.makedirs(ofpath)
                 cmd = "dada_dbdisk -k {ofname} -D {ofpath} -W".format(ofname=ofname, ofpath=ofpath, **cfg)
             else:
                 log.warning("Selected null output. Not sending data!")
@@ -499,20 +493,15 @@ class GatedSpectrometerPipeline(EDDPipeline):
             self._subprocesses.append(mks)
 
         self._subprocessMonitor.start()
-        self.state = "ready"
 
 
+    @state_change(target="streaming", allowed=["configured"], intermediate="capture_starting")
     @coroutine
     def capture_start(self, config_json=""):
         """
         @brief start streaming spectrometer output
         """
         log.info("Starting EDD backend")
-        if self.state != "ready":
-            raise FailReply("pipleine state is not in state = ready, but in state = {} - cannot start the pipeline".format(self.state))
-            #return
-
-        self.state = "starting"
         try:
             for i, streamid in enumerate(self._config['input_data_streams']):
                 stream_description = self._config['input_data_streams'][streamid]
@@ -537,9 +526,14 @@ class GatedSpectrometerPipeline(EDDPipeline):
                     fastest_nic, nic_params = numa.getFastestNic(numa_node)
                     log.info("Receiving data for {} on NIC {} [ {} ] @ {} Mbit/s".format(streamid, fastest_nic, nic_params['ip'], nic_params['speed']))
                     physcpu = ",".join(numa.getInfo()[numa_node]['cores'][2:7])
-                    cmd = "taskset -c {physcpu} mkrecv_rnt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --heap-size {input_heap_size} --idx1-modulo {sample_rate} \
+                    if self._config['idx1_modulo'] == 'auto': # Align along output ranges
+                        idx1modulo = self._config['fft_length'] * self._config['naccumulate'] / stream_description['samples_per_heap']
+                    else:
+                        idx1modulo = self._config['idx1_modulo']
+
+                    cmd = "taskset -c {physcpu} mkrecv_rnt --quiet --header {mkrecv_header} --idx1-step {samples_per_heap} --heap-size {input_heap_size} --idx1-modulo {idx1modulo} \
                     --dada-key {dada_key} --sync-epoch {sync_time} --sample-clock {sample_rate} \
-                    --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nic_params['ip'], input_heap_size=self.input_heapSize,
+                    --ibv-if {ibv_if} --port {port} {ip}".format(mkrecv_header=mkrecvheader_file.name, physcpu=physcpu,ibv_if=nic_params['ip'], input_heap_size=self.input_heapSize, idx1modulo=idx1modulo,
                             **cfg )
                     mk = ManagedProcess(cmd, stdout_handler=self._polarization_sensors[streamid]["mkrecv_sensors"].stdout_handler)
                 else:
@@ -552,11 +546,10 @@ class GatedSpectrometerPipeline(EDDPipeline):
                 self.mkrec_cmd.append(mk)
                 self._subprocessMonitor.add(mk, self._subprocess_error)
 
-        except Exception as e:
-            log.error("Error starting pipeline: {}".format(e))
-            self.state = "error"
+        except Exception as E:
+            log.error("Error starting pipeline: {}".format(E))
+            raise E
         else:
-            self.state = "running"
             self.__watchdogs = []
             for i, k in enumerate(self._config['input_data_streams']):
                 wd = SensorWatchdog(self._polarization_sensors[streamid]["input-buffer-total-write"],
@@ -564,46 +557,49 @@ class GatedSpectrometerPipeline(EDDPipeline):
                         self.watchdog_error)
                 wd.start()
                 self.__watchdogs.append(wd)
+            # Wait for one integration period before finishing to ensure
+            # streaming has started before OK
+            time.sleep(self._integration_time_status.value())
 
 
+    @state_change(target="idle", allowed=["streaming"], intermediate="capture_stopping")
     @coroutine
     def capture_stop(self):
         """
         @brief Stop streaming of data
         """
         log.info("Stoping EDD backend")
-        if self.state != 'running':
-            log.warning("pipleine state is not in state = running but in state {}".format(self.state))
-            # return
-        log.debug("Stopping")
         for wd in self.__watchdogs:
             wd.stop_event.set()
+            yield
         if self._subprocessMonitor is not None:
             self._subprocessMonitor.stop()
+            yield
 
         # stop mkrec process
         log.debug("Stopping mkrecv processes ...")
         for proc in self.mkrec_cmd:
             proc.terminate()
+            yield
         # This will terminate also the gated spectromenter automatically
 
         yield self.deconfigure()
 
 
+    @state_change(target="idle", intermediate="deconfiguring", error='panic')
     @coroutine
     def deconfigure(self):
         """
         @brief deconfigure the gated spectrometer pipeline.
         """
         log.info("Deconfiguring EDD backend")
-        if self.state == 'runnning':
+        if self.previous_state == 'streaming':
             yield self.capture_stop()
 
-        self.state = "deconfiguring"
         if self._subprocessMonitor is not None:
-            self._subprocessMonitor.stop()
+            yield self._subprocessMonitor.stop()
         for proc in self._subprocesses:
-            proc.terminate()
+            yield proc.terminate()
 
         self.mkrec_cmd = []
 
@@ -615,9 +611,6 @@ class GatedSpectrometerPipeline(EDDPipeline):
             yield command_watcher(cmd)
 
         self._dada_buffers = []
-        self.state = "idle"
-
-
 
     @coroutine
     def populate_data_store(self, host, port):

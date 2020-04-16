@@ -41,7 +41,24 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
 
         @note       Suports SCPI request: 'EDD:CONFIGURE'
         """
-        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.configure))
+
+        @coroutine
+        def wrapper():
+            try:
+                F = self.__controller.configure()
+
+                @coroutine
+                def cb(f):
+                    yield self.__controller.capture_start()
+                F.add_done_callback(cb)
+                yield F
+            except Exception as E:
+                log.error(E)
+                req.error(E)
+            else:
+                req.ok()
+        self._ioloop.add_callback(wrapper)
+
 
     @scpi_request()
     def request_edd_deconfigure(self, req):
@@ -54,6 +71,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         """
         self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.deconfigure))
 
+
     @scpi_request()
     def request_edd_start(self, req):
         """
@@ -64,6 +82,7 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         @note       Suports SCPI request: 'EDD:START'
         """
         self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_start))
+
 
     @scpi_request()
     def request_edd_stop(self, req):
@@ -77,32 +96,44 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         self.__controller.measurement_stop()
         self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.measurement_stop))
 
-    @scpi_request(str)
-    def request_edd_set(self, req, message):
+
+    @scpi_request(str, str)
+    def request_edd_set(self, req, product_option, value):
         """
         @brief     Set an option for an edd backend component.
 
         @param      req   An ScpiRequst object
 
         @note       Suports SCPI request: 'EDD:SET ID:OPTION VALUE'
+                    VALUE needs to be valid json, i.e. strings are marked with ""
         """
-        # json from message with unravvelled colons
-        d = {}
-        g = d
-        p, o  = message.split()
-        for i in p.split(':')[:-1]:
-            d[i] = {}
-            d = d[i]
-        d[p[-1]] = o
-        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.set, g))
+        log.debug(" Received {} {}".format(product_option, value))
+        # Create nested option dict from colon seperateds tring
+        try:
+            d = {}
+            g = d
+            option_list = product_option.split(':')
+            for el in option_list[:-1]:
+                d[el] = {}
+                d = d[el]
+            d[option_list[-1]] = json.loads(value)
+        except Exception as E:
+            em = "Error parsing command: {} {}\n{}".format(product_option, value, E)
+            log.error(em)
+            req.error(em)
+        else:
+            log.debug(" - {}".format(g))
+            self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.set, g))
+
 
     @scpi_request(str)
-    def request_edd_construct(self, req, message):
-        req.error("NOT IMPLEMENTED YET")
+    def request_edd_provision(self, req, message):
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.provision, message))
+
 
     @scpi_request()
-    def request_edd_teardown(self, req, message):
-        req.error("NOT IMPLEMENTED YET")
+    def request_edd_deprovision(self, req):
+        self._ioloop.add_callback(self._make_coroutine_wrapper(req, self.__controller.deprovision))
 
 
 if __name__ == "__main__":
