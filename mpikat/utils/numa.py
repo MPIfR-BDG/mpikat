@@ -15,7 +15,19 @@ def updateInfo():
     global __numaInfo
     __numaInfo = {}
     nodes = open("/sys/devices/system/node/possible").read().strip().split('-')
-    nodes = [str(n) for n in range(int(nodes[0]), int(nodes[1]) + 1)]
+    nodes = [str(n) for n in range(int(nodes[0]), int(nodes[-1]) + 1)]
+    if os.getenv('EDD_ALLOWED_NUMA_NODES'):
+        logging.debug("Restricting numa nodes to nodes listed in EDD_ALLOWED_NUMA_NODES")
+        allowed_nodes = set()
+        nodes = set(nodes)
+        for noderange in os.getenv('EDD_ALLOWED_NUMA_NODES').split(','):
+            noderange = noderange.split('-')
+            allowed_nodes.update([str(n) for n in range(int(noderange[0]), int(noderange[-1]) + 1)])
+        for node in allowed_nodes.difference(nodes):
+            logging.warning("Node {} in EDD_ALLOWED_NUMA_NODES, but not available on host!".format(node))
+        nodes.intersection_update(allowed_nodes)
+        nodes = list(nodes)
+
 
     for node in nodes:
         logging.debug("Preparing node {} of {}".format(node, len(nodes)))
