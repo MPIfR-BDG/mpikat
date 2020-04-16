@@ -15,6 +15,7 @@ def updateInfo():
     global __numaInfo
     __numaInfo = {}
     nodes = open("/sys/devices/system/node/possible").read().strip().split('-')
+    nodes = [str(n) for n in range(int(nodes[0]), int(nodes[1]) + 1)]
 
     for node in nodes:
         logging.debug("Preparing node {} of {}".format(node, len(nodes)))
