@@ -7,6 +7,18 @@ import logging
 __numaInfo = None
 
 
+def expandlistrange(lr):
+    """
+    Expands '1,2,3-5' to list [1,2,3,4,5]
+    """
+    output = set()
+    for ir in lr.split(','):
+        il = ir.split('-')
+        output.update([str(n) for n in range(int(il[0]), int(il[-1]) + 1)])
+    return output
+
+
+
 def updateInfo():
     """
     @brief Updates the info dictionary.
@@ -15,6 +27,19 @@ def updateInfo():
     global __numaInfo
     __numaInfo = {}
     nodes = open("/sys/devices/system/node/possible").read().strip().split('-')
+    nodes = [str(n) for n in range(int(nodes[0]), int(nodes[-1]) + 1)]
+    if os.getenv('EDD_ALLOWED_NUMA_NODES'):
+        logging.debug("Restricting numa nodes to nodes listed in EDD_ALLOWED_NUMA_NODES")
+        allowed_nodes = expandlistrange(os.getenv('EDD_ALLOWED_NUMA_NODES'))
+        for noderange in os.getenv('EDD_ALLOWED_NUMA_NODES').split(','):
+            noderange = noderange.split('-')
+            allowed_nodes.update([str(n) for n in range(int(noderange[0]), int(noderange[-1]) + 1)])
+        for node in allowed_nodes.difference(nodes):
+            logging.warning("Node {} in EDD_ALLOWED_NUMA_NODES, but not available on host!".format(node))
+        allowed_nodes.intersection_update(des)
+        nodes = list(allowed_nodes)
+
+    isolated_cpus = expandlistrange(open('/sys/devices/system/cpu/isolated').read())
 
     for node in nodes:
         logging.debug("Preparing node {} of {}".format(node, len(nodes)))
@@ -22,6 +47,7 @@ def updateInfo():
 
         cpurange = open('/sys/devices/system/node/node' + node + '/cpulist').read().strip().split('-')
         __numaInfo[node]['cores'] = map(str, range(int(cpurange[0]), int(cpurange[1])+1))
+        __numaInfo[node]['isolated_cores'] = list(isolated_cpus.intersection(__numaInfo[node]['cores']))
         __numaInfo[node]['gpus'] = []
         __numaInfo[node]["net_devices"] = {}
         logging.debug("  found {} Cores.".format(len(__numaInfo[node]['cores'])))
@@ -108,6 +134,7 @@ if __name__ == "__main__":
     for node, res in getInfo().items():
         print("NUMA Node: {}".format(node))
         print("  CPU Cores: {}".format(", ".join(res['cores'])))
+        print("  Isolated CPU Cores: {}".format(", ".join(res['isolated_cores'])))
         print("  GPUs: {}".format(", ".join(map(str, res['gpus']))))
         print("  Network interfaces:")
         for nic, info in res['net_devices'].items():
