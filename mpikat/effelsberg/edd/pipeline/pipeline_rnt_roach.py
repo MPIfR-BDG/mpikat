@@ -1006,8 +1006,8 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._timer = Time.now()
             self._source_config = json.loads(config_json)
             log.info("Unpacked config: {}".format(self._source_config))
-            self.frequency_mhz, self.bandwidth = self._pipeline_config[
-                "central_freq"], self._pipeline_config["bandwidth"]
+            self.frequency_mhz = BAND[self._band_number][0]
+            self.bandwidth = self._pipeline_config["bandwidth"]
             self._central_freq.set_value(str(self.frequency_mhz))
             header = self._config["dada_header_params"]
             self._band_number = self._source_config["band"]
