@@ -69,19 +69,23 @@ BUFFER_SIZE 16777216
 #BUFFER_SIZE 1048576
 SAMPLE_CLOCK_START  unset # This should be updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock                     
 HEAP_SIZE    262144
-
+HEAP_NBYTES 262144
 #SPEAD specifcation for EDD packetiser data stream
 NINDICES    2   # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
 # The first index item is the running timestamp
 IDX1_ITEM   0      # First item of a SPEAD heap
 IDX1_STEP   1048576   # The difference between successive timestamps
-IDX1_MODULO 3200000000
+#IDX1_MODULO 3200000000
 
 # The second index item distinguish between both polarizations
 IDX2_ITEM   2
 IDX2_LIST {{idx2_list}}
 #IDX2_LIST   0,1
 #IDX2_MASK   0x1
+
+SLOTS_SKIP 8
+DADA_NSLOTS 4
+
 # end of header
 
 """
