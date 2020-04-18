@@ -676,7 +676,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         self._freq_zaplist_sensor = Sensor.string(
             "_freq_zaplist",
             description="_freq_zaplist",
-            default="799:1100,1209:1211,1428:1434,1541:1452,1534:1600",
+            default="799:1100",
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._freq_zaplist_sensor)
 
