@@ -46,6 +46,8 @@ from astropy.time import Time
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 from katcp import Sensor
+from katcp.kattypes import request, return_reply, Int, Str
+
 import astropy.units as units
 import tornado
 from tornado.gen import coroutine
