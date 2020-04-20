@@ -503,14 +503,14 @@ class EddPulsarPipeline(EDDPipeline):
                 log.debug("pipeline is starting, do not send multiple start")
                 return
         self._subprocessMonitor = SubprocessMonitor()
-        self.state = "starting"
-        yield self.set(config_json)
-        cfs = json.dumps(self._config, indent=4)
+        self.state = "measurement_starting"
+        config_json = json.loads(config_json)
+        cfs = json.dumps(config_json, indent=4)
         log.info("Final configuration:\n" + cfs)
         #
-        self._source_name = self._config['source_config']["source-name"]
-        self.nchans = self._config['source_config']["nchannels"]
-        self.nbins = self._config['source_config']["nbins"]
+        self._source_name = config_json["source-name"]
+        self.nchan = config_json["nchannels"]
+        self.nbins = config_json["nbins"]
         central_freq = self._config['input_data_streams'][
             'polarization_0']["central_freq"]
         #Check if source is a pulsar or calibrator, if not error
@@ -522,7 +522,7 @@ class EddPulsarPipeline(EDDPipeline):
                 raise EddPulsarPipelineError(error)
 
         log.info("starting pipeline")
-        self._state = "starting"
+        self._state = "measurement_starting"
         self._timer = Time.now()
 
         #Setting blank image
@@ -568,10 +568,10 @@ class EddPulsarPipeline(EDDPipeline):
         #SETTING UP THE INPUT AND SCRUNCH DATA DIRECTORIES #
         ####################################################
         try:
-            self.in_path = os.path.join("/media/scratch/jason/dspsr_output/",
+            self.in_path = os.path.join("/mnt/dspsr_output/",
                                         tdate, self._source_name, str(central_freq), tstr, "raw_data")
             self.out_path = os.path.join(
-                "/media/scratch/jason/dspsr_output/", tdate, self._source_name, str(central_freq), tstr, "combined_data")
+                "/mnt/dspsr_output/", tdate, self._source_name, str(central_freq), tstr, "combined_data")
             log.debug("Creating directories")
             log.debug("in path {}".format(self.in_path))
             log.debug("in path {}".format(self.out_path))
@@ -681,7 +681,7 @@ class EddPulsarPipeline(EDDPipeline):
                 log.debug(
                     "pipeline is still running, issuing stop now and will start shortly")
                 yield self.stop_pipeline()
-            if self._state == "starting":
+            if self._state == "measurement_starting":
                 log.debug("pipeline is starting, do not send multiple start")
                 return
         ####################################################
