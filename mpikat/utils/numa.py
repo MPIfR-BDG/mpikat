@@ -36,7 +36,7 @@ def updateInfo():
             allowed_nodes.update([str(n) for n in range(int(noderange[0]), int(noderange[-1]) + 1)])
         for node in allowed_nodes.difference(nodes):
             logging.warning("Node {} in EDD_ALLOWED_NUMA_NODES, but not available on host!".format(node))
-        allowed_nodes.intersection_update(des)
+        allowed_nodes.intersection_update(nodes)
         nodes = list(allowed_nodes)
 
     isolated_cpus = expandlistrange(open('/sys/devices/system/cpu/isolated').read())
@@ -60,6 +60,10 @@ def updateInfo():
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         if os.path.isfile(d):
             node = open(d).read().strip()
+            if node not in __numaInfo:
+                logging.debug("Device on node {}, but node not in list of nodes. Possible node was deacitvated.".format(node))
+                continue
+
             __numaInfo[node]["net_devices"][device] = {}
             logging.debug("  - found node {}".format(node))
             __numaInfo[node]["net_devices"][device]['ip'] = ""
@@ -92,6 +96,9 @@ def updateInfo():
 
         d = '/sys/bus/pci/devices/' + pciInfo.busId + "/numa_node"
         node = open(d).read().strip()
+        if node not in __numaInfo:
+            logging.debug("Device on node {}, but node not in list of nodes. Possible node was deacitvated.".format(node))
+            continue
         __numaInfo[node]['gpus'].append(str(i))
 
 
