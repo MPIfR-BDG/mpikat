@@ -129,9 +129,6 @@ DEFAULT_CONFIG = {
             }
 }
 
-INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15",
-             2: "10.10.1.16", 3: "10.10.1.17"}
-
 """
 Central frequency of each band should be with BW of 162.5
 239.2.1.150 2528.90625
@@ -372,12 +369,12 @@ class EddPulsarPipeline(EDDPipeline):
         self.add_sensor(self._time_processed)
 
         if "F1" in values:
-        	spin_period = 1000.0 / float(values["F"])
+            spin_period = 1000.0 / float(values["F"])
             self._spin_period.set_value(spin_period) # spin period in ms 
         if "DM" in values:
-        	self._dm.set_value(float(values["DM"]))
+            self._dm.set_value(float(values["DM"]))
         if "PB" in values:
-        	self._pb.set_value(24.0 * float(values["PB"])) # obrital period in hrs
+            self._pb.set_value(24.0 * float(values["PB"])) # obrital period in hrs
 
     def _decode_capture_stdout(self, stdout, callback):
         log.debug('{}'.format(str(stdout)))
@@ -628,12 +625,12 @@ class EddPulsarPipeline(EDDPipeline):
             spin_period = 1000.0 / float(values["F"])
             self._spin_period.set_value(spin_period) # spin period in ms 
         if "F1" in values:
-        	spin_period = 1000.0 / float(values["F"])
+            spin_period = 1000.0 / float(values["F"])
             self._spin_period.set_value(spin_period) # spin period in ms 
         if "DM" in values:
-        	self._dm.set_value(float(values["DM"]))
+            self._dm.set_value(float(values["DM"]))
         if "PB" in values:
-        	self._pb.set_value(24.0 * float(values["PB"])) # obrital period in hrs
+            self._pb.set_value(24.0 * float(values["PB"])) # obrital period in hrs
 
         self.dada_header_file = tempfile.NamedTemporaryFile(
             mode="w",
