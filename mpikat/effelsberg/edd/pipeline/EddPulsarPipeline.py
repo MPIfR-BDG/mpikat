@@ -370,13 +370,13 @@ class EddPulsarPipeline(EDDPipeline):
             initial_status=Sensor.UNKNOWN)
         self.add_sensor(self._time_processed)
 
-        if "F1" in values:
-            spin_period = 1000.0 / float(values["F"])
-            self._spin_period.set_value(spin_period) # spin period in ms 
-        if "DM" in values:
-            self._dm.set_value(float(values["DM"]))
-        if "PB" in values:
-            self._pb.set_value(24.0 * float(values["PB"])) # obrital period in hrs
+#        if "F1" in values:
+#            spin_period = 1000.0 / float(values["F"])
+#            self._spin_period.set_value(spin_period) # spin period in ms 
+#        if "DM" in values:
+#            self._dm.set_value(float(values["DM"]))
+#        if "PB" in values:
+#            self._pb.set_value(24.0 * float(values["PB"])) # obrital period in hrs
 
     def _decode_capture_stdout(self, stdout, callback):
         log.debug('{}'.format(str(stdout)))
@@ -485,8 +485,6 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("Final configuration:\n" + cfs)
         self.sync_epoch = self._config["input_data_streams"]["polarization_0"]["sync_time"]
         log.info("sync_epoch = {}".format(self.sync_epoch))
-        yield self._digpack_client.stop()
-        self._config["pipeline_config"]["numa"]
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
         self.state = "ready"
