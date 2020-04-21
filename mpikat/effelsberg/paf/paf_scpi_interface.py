@@ -115,7 +115,11 @@ class PafScpiInterface(ScpiAsyncDeviceServer):
 
         @param      req    An ScpiRequest object
         """
-        self._config["search_spectrometer"]= int("zoomband0" in self._config)
+#        self._config["search_spectrometer"]= int("zoomband0" in self._config)
+	if self._config['mode'] == "search2beamlow":
+	    self._config['search_spectrometer'] = 0
+	else : 
+	    self._config['search_spectrometer'] = 1 
         self._ioloop.add_callback(self._make_coroutine_wrapper(req,
             self._mc.configure, json.dumps(self._config)))
 

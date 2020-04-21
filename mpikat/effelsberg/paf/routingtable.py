@@ -35,7 +35,11 @@ CONFIG1BEAM = {"nbeam":           18,  # Expected number from configuration, the
 PARAMIKO_BUFSZ = 102400
 TOSSIX_USERNAME = "pulsar"
 TOSSIX_IP = "134.104.74.36"
+#TOSSIX_IP = "134.104.73.75"
 TOSSIX_SCRIPT_ROOT = "/home/pulsar/aaron/askap-trunk/"
+#TOSSIX_SCRIPT_ROOT = "/home/pulsar/streaming/osl_svn/"
+
+
 
 
 
@@ -264,17 +268,29 @@ class RoutingTable(object):
 
         # Copy table to tossix
         log.debug("Secure copying routing table")
+	#for old TOSSIX setup
         tossix.scp(self.fname, join("{}/Code/Components/OSL/scripts/ade/files/stream_setup".format(
             TOSSIX_SCRIPT_ROOT), self.fname.split("/")[-1]))
+        #for new TOSSIX setup stream_setup is missing so I created one
+	#tossix.scp(self.fname, join("{}/ade/files/stream_setup".format(
+        #    TOSSIX_SCRIPT_ROOT), self.fname.split("/")[-1]))
+	
 
         # Initial the tossix
         log.info("Applying routing table on Tossix")
-        tossix.control("bash")
+        #for old TOSSIX setup
+	tossix.control("bash")
         tossix.control(". {}/initaskap.sh".format(TOSSIX_SCRIPT_ROOT))
         tossix.control(
             ". {}/Code/Components/OSL/scripts/osl_init_env.sh".format(TOSSIX_SCRIPT_ROOT))
         tossix.control(
             "cd {}/Code/Components/OSL/scripts/ade".format(TOSSIX_SCRIPT_ROOT))
+
+	#new TOSSIX setup
+	#tossix.control(
+        #    ". {}/osl_init_env.sh".format(TOSSIX_SCRIPT_ROOT))
+        #tossix.control(
+        #    "cd {}/ade".format(TOSSIX_SCRIPT_ROOT))
 
         # Configure metadata and streaming
         #tossix.control("python osl_a_metadata_streaming.py")

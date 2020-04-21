@@ -149,21 +149,26 @@ class PafProductController(ProductController):
                          "(this warning should not exist in production mode)"))
         else:
             log.info("Routing table upload complete")
-        be4 = RemoteAccess()
-        try:
-            be4.connect("134.104.64.134", "obseff")
-        except PasswordRequiredException:
-            log.warning(("Unable to upload routing table due to encrypted key "
-                         "(this warning should not exist in production mode)"))
-        try:
-            #beam_alt_d, beam_az_d = be4.readfile(config_dict['beam_pos_fname'])
-            beam_offset_file = "/home/obseff/paf_test/Scripts/hexpack36"
-            beam_az_d, beam_alt_d = be4.readbeamfile(beam_offset_file)
+#        be4 = RemoteAccess()
+#        try:
+#            be4.connect("134.104.64.134", "obseff")
+#        except PasswordRequiredException:
+#            log.warning(("Unable to upload routing table due to encrypted key "
+#                         "(this warning should not exist in production mode)"))
+#        try:
+#            #beam_alt_d, beam_az_d = be4.readfile(config_dict['beam_pos_fname'])
+#            beam_offset_file = "/home/obseff/paf_test/Scripts/hexpack36"
+#            beam_az_d, beam_alt_d = be4.readbeamfile(beam_offset_file)
+#
+#        except PafBeamFileError:
+#            log.warning("Unable to read beamfile")
+#        else:
+#            log.info("Routing table upload complete")
 
-        except PafBeamFileError:
-            log.warning("Unable to read beamfile")
-        else:
-            log.info("Routing table upload complete")
+	beam_az_d= [0, -0.1, -0.2, -0.3, 0.1, 0.2, 0.3, -0.1, -0.2, -0.3, -0.11, -0.21, -0.31, 0.11, 0.21, 0.31, -0.12, -0.22, -0.32, -0.12, -0.22, -0.32, 0.12, 0.22, 0.32, -0.12, -0.22, -0.32, -0.13, -0.23, -0.33, -0.13, -0.23, -0.33, 0.13, 0.23, 0.33, -0.13, -0.23]
+        beam_alt_d = [0, -0.1, -0.2, -0.3, -0.1, -0.2, -0.3, 0.1, 0.2, 0.3, -0.11, -0.21, -0.31, -0.11, -0.21, -0.31, 0.12, 0.22, 0.32, -0.12, -0.22, -0.32, -0.12, -0.22, -0.32, 0.12, 0.22, 0.32, 0.13, 0.23, 0.33, -0.13, -0.23, -0.33, -0.13, -0.23, -0.33, 0.13, 0.23]
+	#beam_alt_d = [0] * 37
+	#beam_az_d = [0] * 37
         start_time = Time.now()
         start_time.format = 'isot'
         start_time = start_time + 27.0 * units.s
