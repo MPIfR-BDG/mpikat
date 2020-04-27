@@ -77,7 +77,7 @@ class DigitiserPacketiserClient(object):
         """
         @brief Set a predecimation factor for the paketizer - for e.g. factor=2 only every second sample is used.
         """
-        allowedFactors = [2,4,8,16] # Eddy Nussbaum, private communication
+        allowedFactors = [1,2,4,8,16] # Eddy Nussbaum, private communication
         if factor not in allowedFactors:
             raise RuntimeError("predicimation factor {} not in allowed factors {}".format(factor, allowedFactors))
         yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
