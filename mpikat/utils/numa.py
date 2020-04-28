@@ -12,9 +12,16 @@ def expandlistrange(lr):
     Expands '1,2,3-5' to list [1,2,3,4,5]
     """
     output = set()
-    for ir in lr.split(','):
-        il = ir.split('-')
-        output.update([str(n) for n in range(int(il[0]), int(il[-1]) + 1)])
+    if not lr.isspace():
+        for ir in lr.split(','):
+            try:
+                il = ir.split('-')
+                output.update([str(n) for n in range(int(il[0]), int(il[-1]) + 1)])
+            except Exception as E:
+                print("lr: {}".format(lr))
+                print("ir: {}".format(ir))
+                print("il: {}".format(il))
+                raise E
     return output
 
 
