@@ -435,10 +435,10 @@ if __name__ == "__main__":
         logger=logger)
 
     actions = []
-    if args.nbits:
-        actions.append((client.set_bit_width, dict(nbits=args.nbits)))
     if args.sampling_rate:
         actions.append((client.set_sampling_rate, dict(rate=args.sampling_rate)))
+    if args.nbits:
+        actions.append((client.set_bit_width, dict(nbits=args.nbits)))
     if args.v_destinations:
         actions.append((client.set_destinations, dict(v_dest=args.v_destinations, h_dest=args.h_destinations)))
     if args.predecimation_factor:
