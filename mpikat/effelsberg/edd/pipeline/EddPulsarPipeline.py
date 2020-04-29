@@ -536,6 +536,7 @@ class EddPulsarPipeline(EDDPipeline):
         #Check if source is a pulsar or calibrator, if not error
 
         epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
+        log.debug("Checking epta file {}".format(epta_file))
         self.pulsar_flag = is_accessible(epta_file)
         if ((parse_tag(self._source_name) == "default") or (parse_tag(self._source_name) != "R")) and (not self.pulsar_flag):
             if (parse_tag(self._source_name) != "FB"):
@@ -557,7 +558,6 @@ class EddPulsarPipeline(EDDPipeline):
         self._nchannels.set_value(self.nchan)
         self._nbins.set_value(self.nbins)
 
-        self.cpu_numbers = self.__core_sets['dspsr']
         self.cuda_number = numa.getInfo()[self.numa_number]['gpus'][0]
         c = SkyCoord("{} {}".format(self._config['source_config'][
                      "ra"], self._config['source_config']["dec"]), unit=(u.deg, u.deg))
@@ -643,16 +643,16 @@ class EddPulsarPipeline(EDDPipeline):
             for line in fh:
                 par, value = filter(None, line.strip().split(' '))[0:2]
                 values[par] = value.strip()
-        if "F" in values:
-            spin_period = 1000.0 / float(values["F"])
-            self._spin_period.set_value(spin_period) # spin period in ms
-        if "F1" in values:
-            spin_period = 1000.0 / float(values["F"])
-            self._spin_period.set_value(spin_period) # spin period in ms
-        if "DM" in values:
-            self._dm.set_value(float(values["DM"]))
-        if "PB" in values:
-            self._pb.set_value(24.0 * float(values["PB"])) # obrital period in hrs
+        #if "F" in values:
+        #    spin_period = 1000.0 / float(values["F"])
+        #    self._spin_period.set_value(spin_period) # spin period in ms
+        #if "F1" in values:
+        #    spin_period = 1000.0 / float(values["F1"])
+        #    self._spin_period.set_value(spin_period) # spin period in ms
+        #if "DM" in values:
+        #    self._dm.set_value(float(values["DM"]))
+        #if "PB" in values:
+        #    self._pb.set_value(24.0 * float(values["PB"])) # obrital period in hrs
 
         self.dada_header_file = tempfile.NamedTemporaryFile(
             mode="w",
@@ -725,7 +725,7 @@ class EddPulsarPipeline(EDDPipeline):
                 name=self._source_name,
                 predictor="/tmp/t2pred.dat",
                 parfile=epta_file,
-                cpus=self.cpu_numbers,
+                cpus=",".join(self.__core_sets['dspsr']),
                 cuda_number=self.cuda_number,
                 keyfile=self.dada_key_file.name)
 
@@ -736,7 +736,7 @@ class EddPulsarPipeline(EDDPipeline):
                 nchan="-F {}:D".format(
                     self.nchan),
                 name=self._source_name,
-                cpus=self.cpu_numbers,
+                cpus=",".join(self.__core_sets['dspsr']),
                 cuda_number=self.cuda_number,
                 keyfile=self.dada_key_file.name)
 
@@ -791,7 +791,7 @@ class EddPulsarPipeline(EDDPipeline):
         #STARTING MKRECV                                   #
         ####################################################
         cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_rnt --header {dada_header} --quiet".format(
-            numa=self.numa_number, cpu=self.__core_sets['mkrecv'], dada_header=self.dada_header_file.name)
+            numa=self.numa_number, cpu=",".join(self.__core_sets['mkrecv']), dada_header=self.dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
         self._mkrecv_ingest_proc = ManagedProcess(cmd)
@@ -810,8 +810,8 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("Output directory: {}".format(self.out_path))
         log.info("Setting up ArchiveAdder handler")
         self.handler = ArchiveAdder(self.out_path)
-        self.handler.update_freq_zaplist(self._freq_zaplist_sensor.value())
-        self.handler.update_time_zaplist(self._time_zaplist_sensor.value())
+#        self.handler.update_freq_zaplist(self._freq_zaplist_sensor.value())
+#        self.handler.update_time_zaplist(self._time_zaplist_sensor.value())
         self.archive_observer.schedule(
             self.handler, self.in_path, recursive=False)
         log.info("Starting directory monitor")
