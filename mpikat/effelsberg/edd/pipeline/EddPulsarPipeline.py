@@ -62,6 +62,7 @@ log.setLevel('DEBUG')
 DEFAULT_CONFIG = {
     "id": "PulsarPipeline",
     "type": "PulsarPipeline",
+    "epta_directory": "epta",                       # Data will be read from /mnt/epta_directory
     "input_data_streams":
     {
         "polarization_0":
@@ -499,6 +500,12 @@ class EddPulsarPipeline(EDDPipeline):
         log.info("sync_epoch = {}".format(self.sync_epoch))
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dada", self.numa_number)
         yield self._create_ring_buffer(self._config["db_params"]["size"], self._config["db_params"]["number"], "dadc", self.numa_number)
+
+        self.epta_dir = os.path.join("/mnt/", self._config["epta_directory"])
+        if not os.path.isdir(self.epta_dir):
+            log.error("Not a directory {} !".format(self.epta_dir))
+            raise RuntimeError("Epta directory is no directory: {}".format(self.epta_dir))
+
         self.state = "ready"
         log.info("Pipeline configured")
 
@@ -527,8 +534,9 @@ class EddPulsarPipeline(EDDPipeline):
         central_freq = self._config['input_data_streams'][
             'polarization_0']["central_freq"]
         #Check if source is a pulsar or calibrator, if not error
-        self.pulsar_flag = is_accessible(
-            '/tmp/epta/{}.par'.format(self._source_name[1:]))
+
+        epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
+        self.pulsar_flag = is_accessible(epta_file)
         if ((parse_tag(self._source_name) == "default") or (parse_tag(self._source_name) != "R")) and (not self.pulsar_flag):
             if (parse_tag(self._source_name) != "FB"):
                 error = "source is not pulsar or calibrator"
@@ -603,13 +611,14 @@ class EddPulsarPipeline(EDDPipeline):
         ####################################################
         #CREATING THE PREDICTOR WITH TEMPO2                #
         ####################################################
-        self.pulsar_flag_with_R = is_accessible(
-            '/tmp/epta/{}.par'.format(self._source_name[1:-2]))
-        log.debug("{}".format(
-            (parse_tag(self._source_name) == "default") & self.pulsar_flag))
-        if (parse_tag(self._source_name) == "default") & is_accessible('/tmp/epta/{}.par'.format(self._source_name[1:])):
-            cmd = 'numactl -m {} taskset -c {} tempo2 -f /tmp/epta/{}.par -pred'.format(
-                self.numa_number, self.__core_sets['single'], self._source_name[1:]).split()
+        self.pulsar_flag_with_R = is_accessible(os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:-2])))
+        log.debug("{}".format((parse_tag(self._source_name) == "default") & self.pulsar_flag))
+        if (parse_tag(self._source_name) == "default") & is_accessible(epta_file):
+            cmd = 'numactl -m {} taskset -c {} tempo2 -f {} -pred'.format(
+                self.numa_number, self.__core_sets['single'],
+                epta_file).split()
+
+            # ToDo: Hardcoded values for Effelsberg have to go
             cmd.append("Effelsberg {} {} {} {} 24 2 3599.999999999".format(Time.now().mjd - 1, Time.now().mjd + 1, float(
                 central_freq) - 200, float(central_freq) + 200))
             log.debug("Command to run: {}".format(cmd))
@@ -630,7 +639,7 @@ class EddPulsarPipeline(EDDPipeline):
 
         #porting pulsar pars to katcp sensors by reading the par file.
         values = {}
-        with open("/tmp/epta/{}.par".format(self._source_name[1:])) as fh:
+        with open(epta_file) as fh:
             for line in fh:
                 par, value = filter(None, line.strip().split(' '))[0:2]
                 values[par] = value.strip()
@@ -706,6 +715,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("source_name = {}".format(
             self._source_name))
 
+        epta_file = os.path.join(self.epta_dir, '{}.par'.format(self._source_name[1:]))
         if (parse_tag(self._source_name) == "default") and self.pulsar_flag:
             cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
                 numa=self.numa_number,
@@ -714,8 +724,7 @@ class EddPulsarPipeline(EDDPipeline):
                 nbin="-b {}".format(self.nbins),
                 name=self._source_name,
                 predictor="/tmp/t2pred.dat",
-                parfile="/tmp/epta/{}.par".format(
-                    self._source_name[1:]),
+                parfile=epta_file,
                 cpus=self.cpu_numbers,
                 cuda_number=self.cuda_number,
                 keyfile=self.dada_key_file.name)
