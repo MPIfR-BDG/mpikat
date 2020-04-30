@@ -45,9 +45,11 @@ def updateInfo():
         logging.debug("Preparing node {} of {}".format(node, len(nodes)))
         __numaInfo[node] = {"net_devices":{} }
 
-        cpurange = open('/sys/devices/system/node/node' + node + '/cpulist').read().strip().split('-')
-        __numaInfo[node]['cores'] = map(str, range(int(cpurange[0]), int(cpurange[1])+1))
-        __numaInfo[node]['isolated_cores'] = list(isolated_cpus.intersection(__numaInfo[node]['cores']))
+        cpulist = expandlistrange(open('/sys/devices/system/node/node' + node + '/cpulist').read())
+
+        __numaInfo[node]['cores'] = list(cpulist.difference(isolated_cpus))
+        __numaInfo[node]['isolated_cores'] = list(isolated_cpus.intersection(cpulist))
+
         __numaInfo[node]['gpus'] = []
         __numaInfo[node]["net_devices"] = {}
         logging.debug("  found {} Cores.".format(len(__numaInfo[node]['cores'])))
