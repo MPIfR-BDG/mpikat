@@ -70,7 +70,7 @@ DEFAULT_CONFIG = {
             "source": "",
             "description": "",
             "format": "MPIFR_EDD_Packetizer:1",
-            "ip": "225.0.0.152+3",
+            "ip": "225.0.0.150+3",
             "port": "7148",
             "bit_depth": 8,
             "sample_rate": 3200000000,
@@ -85,7 +85,7 @@ DEFAULT_CONFIG = {
             "source": "",
             "description": "",
             "format": "MPIFR_EDD_Packetizer:1",
-            "ip": "225.0.0.156+3",
+            "ip": "225.0.0.154+3",
             "port": "7148",
             "bit_depth": 8,
             "sample_rate": 3200000000,
@@ -297,6 +297,9 @@ class EddPulsarPipeline(EDDPipeline):
         self.__core_sets['single'] = numa.getInfo()[self.numa_number]['cores'][5]
         self.__core_sets['dspsr'] = numa.getInfo()[self.numa_number]['cores'][6:10]
 
+        log.debug("Subprocess core settings:")
+        for k,v in self.__core_sets.items():
+            log.debug(" - {}: {}".format(k, ",".join(v)))
 
     def setup_sensors(self):
         """
@@ -638,11 +641,11 @@ class EddPulsarPipeline(EDDPipeline):
                         attempts += 1
 
         #porting pulsar pars to katcp sensors by reading the par file.
-        values = {}
-        with open(epta_file) as fh:
-            for line in fh:
-                par, value = filter(None, line.strip().split(' '))[0:2]
-                values[par] = value.strip()
+        #values = {}
+        #with open(epta_file) as fh:
+        #    for line in fh:
+        #        par, value = filter(None, line.strip().split(' '))[0:2]
+        #        values[par] = value.strip()
         #if "F" in values:
         #    spin_period = 1000.0 / float(values["F"])
         #    self._spin_period.set_value(spin_period) # spin period in ms
@@ -842,8 +845,7 @@ class EddPulsarPipeline(EDDPipeline):
         log.debug("Stopping")
         self._png_monitor_callback.stop()
         process = [self._mkrecv_ingest_proc,
-                   self._polnmerge_proc,
-                   self._archive_directory_monitor]
+                   self._polnmerge_proc]
         for proc in process:
             proc.terminate(timeout=1)
         if (parse_tag(self._source_name) == "default") & self.pulsar_flag:
