@@ -41,6 +41,18 @@ class PafProductStateError(Exception):
                    expected_states, current_state)
         super(PafProductStateError, self).__init__(message)
 
+def readbeamfile(src):
+    beamfile = open(src)
+    beamlist = []
+    beam_alt_d = []
+    beam_az_d = []
+    for line in beamfile:
+        value = line.split()
+        beamlist.append((float(value[0]), float(value[1])))
+    for i in range(1, len(beamlist)):
+        beam_alt_d.append(beamlist[i][0]), beam_az_d.append(beamlist[i][1])
+    return beam_alt_d, beam_az_d
+
 
 class PafProductError(Exception):
     pass
@@ -155,19 +167,19 @@ class PafProductController(ProductController):
 #        except PasswordRequiredException:
 #            log.warning(("Unable to upload routing table due to encrypted key "
 #                         "(this warning should not exist in production mode)"))
-#        try:
+        try:
 #            #beam_alt_d, beam_az_d = be4.readfile(config_dict['beam_pos_fname'])
-#            beam_offset_file = "/home/obseff/paf_test/Scripts/hexpack36"
-#            beam_az_d, beam_alt_d = be4.readbeamfile(beam_offset_file)
-#
-#        except PafBeamFileError:
-#            log.warning("Unable to read beamfile")
-#        else:
-#            log.info("Routing table upload complete")
+            beam_offset_file = "/mnt/obseff/paf_test/Scripts/hexpack36"
+            beam_az_d, beam_alt_d = readbeamfile(beam_offset_file)
 
-	beam_az_d= [0, -0.1, -0.2, -0.3, 0.1, 0.2, 0.3, -0.1, -0.2, -0.3, -0.11, -0.21, -0.31, 0.11, 0.21, 0.31, -0.12, -0.22, -0.32, -0.12, -0.22, -0.32, 0.12, 0.22, 0.32, -0.12, -0.22, -0.32, -0.13, -0.23, -0.33, -0.13, -0.23, -0.33, 0.13, 0.23, 0.33, -0.13, -0.23]
-        beam_alt_d = [0, -0.1, -0.2, -0.3, -0.1, -0.2, -0.3, 0.1, 0.2, 0.3, -0.11, -0.21, -0.31, -0.11, -0.21, -0.31, 0.12, 0.22, 0.32, -0.12, -0.22, -0.32, -0.12, -0.22, -0.32, 0.12, 0.22, 0.32, 0.13, 0.23, 0.33, -0.13, -0.23, -0.33, -0.13, -0.23, -0.33, 0.13, 0.23]
-	#beam_alt_d = [0] * 37
+        except PafBeamFileError:
+            log.warning("Unable to read beamfile")
+        else:
+            log.info("Routing table upload complete")
+
+#	beam_az_d= [0, -0.1, -0.2, -0.3, 0.1, 0.2, 0.3, -0.1, -0.2, -0.3, -0.11, -0.21, -0.31, 0.11, 0.21, 0.31, -0.12, -0.22, -0.32, -0.12, -0.22, -0.32, 0.12, 0.22, 0.32, -0.12, -0.22, -0.32, -0.13, -0.23, -0.33, -0.13, -0.23, -0.33, 0.13, 0.23, 0.33, -0.13, -0.23]
+#        beam_alt_d = [0, -0.1, -0.2, -0.3, -0.1, -0.2, -0.3, 0.1, 0.2, 0.3, -0.11, -0.21, -0.31, -0.11, -0.21, -0.31, 0.12, 0.22, 0.32, -0.12, -0.22, -0.32, -0.12, -0.22, -0.32, 0.12, 0.22, 0.32, 0.13, 0.23, 0.33, -0.13, -0.23, -0.33, -0.13, -0.23, -0.33, 0.13, 0.23]
+#	#beam_alt_d = [0] * 37
 	#beam_az_d = [0] * 37
         start_time = Time.now()
         start_time.format = 'isot'
