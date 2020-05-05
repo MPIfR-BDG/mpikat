@@ -279,7 +279,7 @@ class RoutingTable(object):
         # Initial the tossix
         log.info("Applying routing table on Tossix")
         #for old TOSSIX setup
-	tossix.control("bash")
+        tossix.control("bash")
         tossix.control(". {}/initaskap.sh".format(TOSSIX_SCRIPT_ROOT))
         tossix.control(
             ". {}/Code/Components/OSL/scripts/osl_init_env.sh".format(TOSSIX_SCRIPT_ROOT))
