@@ -63,12 +63,12 @@ CONFIG = {
     },
     "dada_db_params":
     {
-        "args": "-n 24 -b 1048576000 -p -l",
+        "args": "-n 8 -b 1048576000 -p -l",
         "key": "dada"
     },
     "dadc_db_params":
     {
-        "args": "-n 24 -b 1048576000 -p -l",
+        "args": "-n 8 -b 1048576000 -p -l",
         "key": "dadc"
     },
     "dada_header_params":
@@ -85,8 +85,8 @@ CONFIG = {
         "nbit": 8,
         "ndim": 2,
         "npol": 2,
-        "nchan": 8,
-        "idx2_list": "40",
+        "nchan": 32,
+        "idx2_list": "32,40,48,56",
         "resolution": 1,
         "dsb": 1,
         "ra": "123",
@@ -96,8 +96,8 @@ CONFIG = {
 }
 
 NUMA_MODE = {
-    0: ("0-3", "5", "11,12,13,14,15,16,17,18"),
-    1: ("18-21", "24", "30,31,32,33,34,35,36,37")
+    0: ("18", "19", "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35"),
+    1: ("18", "19", "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35")
 }
 INTERFACE = {0: "10.10.1.14", 1: "10.10.1.15",
              2: "10.10.1.16", 3: "10.10.1.17"}
@@ -137,137 +137,6 @@ def parse_tag(source_name):
         return "default"
     else:
         return split[-1]
-
-
-class KATCPToIGUIConverter(object):
-
-    def __init__(self, host, port):
-        """
-        @brief      Class for katcp to igui converter.
-
-        @param   host             KATCP host address
-        @param   port             KATCP port number
-        """
-        self.rc = KATCPClientResource(dict(
-            name="test-client",
-            address=(host, port),
-            controlled=True))
-        self.host = host
-        self.port = port
-        self.ioloop = None
-        self.ic = None
-        self.api_version = None
-        self.implementation_version = None
-        self.previous_sensors = set()
-        self.sensor_callbacks = set()
-        self.new_sensor_callbacks = set()
-        self._sensor = []
-
-    def sensor_notify(self):
-        for callback in self.sensor_callbacks:
-            callback(self._sensor, self)
-
-    @property
-    def sensor(self):
-        return self._sensor
-
-    @sensor.setter
-    def sensor(self, value):
-        self._sensor = value
-        self.sensor_notify()
-
-    def new_sensor_notify(self):
-        for callback in self.new_sensor_callbacks:
-            callback(self._new_sensor, self)
-
-    @property
-    def new_sensor(self):
-        return self._new_sensor
-
-    @new_sensor.setter
-    def new_sensor(self, value):
-        self._new_sensor = value
-        self.new_sensor_notify()
-
-    def start(self):
-        """
-        @brief      Start the instance running
-
-        @detail     This call will trigger connection of the KATCPResource client and
-                    will login to the iGUI server. Once both connections are established
-                    the instance will retrieve a mapping of the iGUI receivers, devices
-                    and tasks and will try to identify the parent of the device_id
-                    provided in the constructor.
-
-        @param      self  The object
-
-        @return     { description_of_the_return_value }
-        """
-        @tornado.gen.coroutine
-        def _start():
-            log.debug("Waiting on synchronisation with server")
-            yield self.rc.until_synced()
-            log.debug("Client synced")
-            log.debug("Requesting version info")
-            response = yield self.rc.req.version_list()
-            log.info("response {}".format(response))
-            self.ioloop.add_callback(self.update)
-        log.debug("Starting {} instance".format(self.__class__.__name__))
-        self.rc.start()
-        self.ic = self.rc._inspecting_client
-        self.ioloop = self.rc.ioloop
-        self.ic.katcp_client.hook_inform("interface-changed",
-                                         lambda message: self.ioloop.add_callback(self.update))
-        self.ioloop.add_callback(_start)
-
-    @tornado.gen.coroutine
-    def update(self):
-        """
-        @brief    Synchronise with the KATCP servers sensors and register new listners
-        """
-        log.debug("Waiting on synchronisation with server")
-        yield self.rc.until_synced()
-        log.debug("Client synced")
-        current_sensors = set(self.rc.sensor.keys())
-        log.debug("Current sensor set: {}".format(current_sensors))
-        removed = self.previous_sensors.difference(current_sensors)
-        log.debug("Sensors removed since last update: {}".format(removed))
-        added = current_sensors.difference(self.previous_sensors)
-        log.debug("Sensors added since last update: {}".format(added))
-        # for name in list(added):
-        for name in ["source_name", "observing", "timestamp"]:
-            # if name == 'observing':
-            #log.debug("Setting sampling strategy and callbacks on sensor '{}'".format(name))
-            # strat3 = ('event-rate', 2.0, 3.0)              #event-rate doesn't work
-            # self.rc.set_sampling_strategy(name, strat3)    #KATCPSensorError:
-            # Error setting strategy
-            # not sure that auto means here
-            self.rc.set_sampling_strategy(name, "auto")
-            #self.rc.set_sampling_strategy(name, ["period", (1)])
-        #self.rc.set_sampling_strategy(name, "event")
-            self.rc.set_sensor_listener(name, self._sensor_updated)
-            self.new_sensor = name
-            #log.debug("Setting new sensor with name = {}".format(name))
-        self.previous_sensors = current_sensors
-
-    def _sensor_updated(self, sensor, reading):
-        """
-        @brief      Callback to be executed on a sensor being updated
-
-        @param      sensor   The sensor
-        @param      reading  The sensor reading
-        """
-
-        # log.debug("Recieved sensor update for sensor '{}': {}".format(
-        #    sensor.name, repr(reading)))
-        self.sensor = sensor.name, sensor.value
-        #log.debug("Value of {} sensor {}".format(sensor.name, sensor.value))
-
-    def stop(self):
-        """
-        @brief      Stop the client
-        """
-        self.rc.stop()
 
 
 class ExecuteCommand(object):
@@ -950,7 +819,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             self._source_config = json.loads(config_json)
             log.info("Unpacked config: {}".format(self._source_config))
             self.frequency_mhz =  1393.75
-            self.bandwidth = 100.0
+            self.bandwidth = 400.0
             self._central_freq.set_value(str(self.frequency_mhz))
             header = self._config["dada_header_params"]
             #header["ra"] = self._source_config["ra"]
@@ -960,20 +829,19 @@ class EddPulsarPipeline(AsyncDeviceServer):
                          "ra"], self._source_config["dec"]), unit=(u.deg, u.deg))
             header["ra"] = c.to_string("hmsdms").split(" ")[0].replace("h", ":").replace("m", ":").replace("s", "")
             header["dec"] = c.to_string("hmsdms").split(" ")[1].replace("d", ":").replace("m", ":").replace("s", "")
-            header["idx2_list"] = "40"
+            header["idx2_list"] = "32,40,48,56"
             header["frequency_mhz"] = 1393.75
 
             #header['mode'] = self._source_config['mode']
             header["key"] = self._dada_key
-            header["mc_source"] = "239.2.1.155"
+            header["mc_source"] = "239.2.1.154+3"
             #header["frequency_mhz"] = self.frequency_mhz
             header["bandwidth"] = self.bandwidth
-            header["mc_streaming_port"] = self.config_dict["mc_streaming_port"]
+            #header["mc_streaming_port"] = self.config_dict["mc_streaming_port"]
             header["interface"] = INTERFACE[self._pipeline_config["interface"]]
-            self.source_name = self._source_config[
-                "source-name"]
-            self.nchannels = self._source_config["nchannels"]
-            self.nbins = self._source_config["nbins"]
+            self.source_name = self._source_config["source-name"]
+            self.nchannels = 960
+            self.nbins = 8
             self._source_name_sensor.set_value(self.source_name)
             self._nchannels.set_value(self.nchannels)
             self._nbins.set_value(self.nbins)
@@ -990,7 +858,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             header["sync_time"] = self.sync_epoch
             header["sample_clock"] = float(
                 self.config_dict["sampling_rate"]) / float(self.config_dict["predecimation_factor"])
-            header["tsamp"] = 8 * 1/ (self.bandwidth)
+            header["tsamp"] = 32 * 1/ (self.bandwidth)
         except:
         	pass
 
@@ -1045,7 +913,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
 
 
-        self.pulsar_flag_with_R = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:-2]))
+#       self.pulsar_flag_with_R = is_accessible('/tmp/epta/{}.par'.format(self.source_name[1:-2]))
 
 
         dada_header_file = tempfile.NamedTemporaryFile(
@@ -1096,69 +964,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
         #log.debug("pulsar_flag = {}".format(self.pulsar_flag))
         log.debug("source_name = {}".format(self.source_name))
 
-        cmd = "numactl -m {numa} taskset -c 6-18 digifil -threads 12 -F 512 -b-32 -d 1 -t 50 {keyfile}".format(
+        cmd = "numactl -m {numa} taskset -c {cpus} digifil -F {nchan}:32 -b-32 -d 1 -t 20 -threads 26 -r {keyfile}".format(
             numa=self.numa_number,
             cpus=NUMA_MODE[self.numa_number][2],
             nchan="{}".format(self.nchannels),
-            nbins="{}".format(self.nbins),
             keyfile=dada_key_file.name)
-
-#        if (parse_tag(self.source_name) == "default") and self.pulsar_flag:
-#            cmd = "numactl -m {numa} dspsr {args} {nchan} {nbin} -fft-bench -x 8192 -cpu {cpus} -cuda {cuda_number} -P {predictor} -N {name} -E {parfile} {keyfile}".format(
-#                numa=self.numa_number,
-#                args=self._config["dspsr_params"]["args"],
-#                #xlength = self._source_config["xlength"],
-#                nchan="-F {}:D".format(self.nchannels),
-#                nbin="-b {}".format(self.nbins),
-#                name=self.source_name,
-#                predictor="/tmp/t2pred.dat",
-#                parfile="/tmp/epta/{}.par".format(self.source_name[1:]),
-#                cpus=cpu_numbers,
-#                cuda_number=cuda_number,
-#                keyfile=dada_key_file.name)
-
-#        elif parse_tag(self.source_name) == "R":
-#            cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
-#                numa=self.numa_number,
-#                args=self._config["dspsr_params"]["args"],
-#                nchan="-F {}:D".format(self.nchannels),
-#                name=self.source_name,
-#                cpus=cpu_numbers,
-#                cuda_number=cuda_number,
-#                keyfile=dada_key_file.name)
-
-#        elif parse_tag(self.source_name) == "FB":
-#            cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 4 -F {nchan} -b8 -d 1 -I 0 -t {nbin} {keyfile}".format(
-#                numa=self.numa_number,
-#                nchan="{}".format(self.nchannels),
-#                nbin="{}".format(self.nbins),
-#                cpus=cpu_numbers,
-#                keyfile=dada_key_file.name)
-#        else:
-#            error = "source is unknown"
-#            self._state_sensor.set_value(self.READY)
-#            raise EddPulsarPipelineError(error)
-        """
-        elif (parse_tag(self.source_name) == "R") and (not self.pulsar_flag) and (not self.pulsar_flag_with_R):
-            if (self.source_name[:2] == "3C" and self.source_name[-3:] == "O_R") or (self.source_name[:3] == "NGC" and self.source_name[-4:]=="ON_R"):
-                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-On -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
-                    numa=self.numa_number,
-                    args=self._config["dspsr_params"]["args"],
-                    nchan="-F {}:D".format(self.nchannels),
-                    name=self.source_name,
-                    cpus=cpu_numbers,
-                    cuda_number=cuda_number,
-                    keyfile=dada_key_file.name)
-            elif (self.source_name[:3] == "NGC" and self.source_name[-5:] == "OFF_R") or (self.source_name[:2] == "3C" and self.source_name[-3:] == "N_R") or (self.source_name[:2] == "3C" and self.source_name[-3:] == "S_R"):
-                cmd = "numactl -m {numa} dspsr -L 10 -c 1.0 -D 0.0001 -r -minram 1024 -set type=FluxCal-Off -fft-bench {nchan} -cpu {cpus} -N {name} -cuda {cuda_number}  {keyfile}".format(
-                    numa=self.numa_number,
-                    args=self._config["dspsr_params"]["args"],
-                    nchan="-F {}:D".format(self.nchannels),
-                    name=self.source_name,
-                    cpus=cpu_numbers,
-                    cuda_number=cuda_number,
-                    keyfile=dada_key_file.name)
-        """            
 
 
         #cmd = "numactl -m {} dbnull -k dadc".format(self.numa_number)
@@ -1175,7 +985,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING EDDPolnMerge                             #
         ####################################################
-        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach --log_level=info".format(
+        cmd = "numactl -m {numa} taskset -c {cpu} edd_roach_merge -p 4 --log_level=info".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][1])
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring EDDPolnMerge")
@@ -1191,7 +1001,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING MKRECV                                   #
         ####################################################
-        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_nt --header {dada_header} --dada-mode 4 --quiet".format(
+        cmd = "numactl -m {numa} taskset -c {cpu} mkrecv_rnt --header {dada_header} --quiet".format(
             numa=self.numa_number, cpu=NUMA_MODE[self.numa_number][0], dada_header=dada_header_file.name)
         log.debug("Running command: {0}".format(cmd))
         log.info("Staring MKRECV")
@@ -1205,33 +1015,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
         log.debug("_mkrecv_ingest_proc PID is {}".format(
             self._mkrecv_ingest_proc_pid))
 
-        ####################################################
-        #STARTING ARCHIVE MONITOR                          #
-        ####################################################
-        
-        cmd = "python /src/mpikat/mpikat/effelsberg/edd/pipeline/archive_directory_monitor.py -i {} -o {}".format(
-            in_path, out_path)
-        log.debug("Running command: {0}".format(cmd))
-        log.info("Staring archive monitor")
-        self._archive_directory_monitor = ExecuteCommand(
-            cmd, outpath=out_path, resident=True)
-        self._archive_directory_monitor.stdout_callbacks.add(
-            self._decode_capture_stdout)
-        self._archive_directory_monitor.fscrunch_callbacks.add(
-            self._add_fscrunch_to_sensor)
-        self._archive_directory_monitor.tscrunch_callbacks.add(
-            self._add_tscrunch_to_sensor)
-        self._archive_directory_monitor.profile_callbacks.add(
-            self._add_profile_to_sensor)
-        self._archive_directory_monitor_pid = self._archive_directory_monitor.pid
-        log.debug("_archive_directory_monitor PID is {}".format(
-            self._archive_directory_monitor_pid))
-
-        # except Exception as error:
-        #    msg = "Couldn't start pipeline server {}".format(str(error))
-        #    log.error(msg)
-        #    raise EddPulsarPipelineError(msg)
-        # else:
         self._timer = Time.now() - self._timer
         log.info("Took {} s to start".format(self._timer * 86400))
         self._state_sensor.set_value(self.CAPTURING)
@@ -1269,7 +1052,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
             log.debug("Stopping")
             self._timeout = 10
             process = [self._mkrecv_ingest_proc,
-                       self._polnmerge_proc, self._archive_directory_monitor]
+                       self._polnmerge_proc, self._dspsr]
             for proc in process:
                 time.sleep(2)
                 proc.set_finish_event()
@@ -1338,10 +1121,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
             os.kill(self._polnmerge_proc_pid, signal.SIGTERM)
         except Exception as error:
             log.error("cannot kill _polnmerge_proc_pid, {}".format(error))
-        try:
-            os.kill(self._archive_directory_monitor_pid, signal.SIGTERM)
-        except Exception as error:
-            log.error("cannot kill _archive_directory_monitor, {}".format(error))
         try:
             os.kill(self._dspsr_pid, signal.SIGTERM)
         except Exception as error:
@@ -1512,7 +1291,7 @@ def main():
     parser = OptionParser(usage=usage)
     parser.add_option('-H', '--host', dest='host', type=str,
                       help='Host interface to bind to', default="127.0.0.1")
-    parser.add_option('-p', '--port', dest='port', type=long,
+    parser.add_option('-p', '--port', dest='port', type=str,
                       help='Port number to bind to', default=5000)
     parser.add_option('', '--log_level', dest='log_level', type=str,
                       help='logging level', default="INFO")
