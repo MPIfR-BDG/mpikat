@@ -1100,9 +1100,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 self._decode_capture_stdout)
             self._create_transpose_ring_buffer._process.wait()
             
-        except Exception as error:
-            raise EddPulsarPipelineError(str(error))
-
 
         except Exception as error:
             msg = "Couldn't stop pipeline {}".format(str(error))
@@ -1120,11 +1117,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
         try:
             os.kill(self._polnmerge_proc_pid, signal.SIGTERM)
         except Exception as error:
-            log.error("cannot kill _polnmerge_proc_pid, {}".format(error))
+            log.debug("cannot kill _polnmerge_proc_pid, {}".format(error))
         try:
             os.kill(self._dspsr_pid, signal.SIGTERM)
         except Exception as error:
-            log.error("cannot kill _dspsr, {}".format(error))
+            log.debug("cannot kill _dspsr, {}".format(error))
 
         try:
             log.debug("deleting buffers")
