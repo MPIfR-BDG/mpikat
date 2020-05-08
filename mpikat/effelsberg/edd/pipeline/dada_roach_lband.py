@@ -82,7 +82,7 @@ IDX2_ITEM   2
 IDX2_LIST {{idx2_list}}
 #IDX2_LIST   0,1
 #IDX2_MASK   0x1
-SLOTS_SKIP 2
+SLOTS_SKIP 10
 #DADA_NSLOTS 4
 # end of header
 
