@@ -75,15 +75,15 @@ NINDICES    2   # Although there is more than one index, we are only receiving o
 # The first index item is the running timestamp
 IDX1_ITEM   0      # First item of a SPEAD heap
 IDX1_STEP   1048576   # The difference between successive timestamps
-IDX1_MODULO 3200000000
+#IDX1_MODULO 3200000000
 
 # The second index item distinguish between both polarizations
 IDX2_ITEM   2
 IDX2_LIST {{idx2_list}}
 #IDX2_LIST   0,1
 #IDX2_MASK   0x1
-SLOTS_SKIP 10
-DADA_NSLOTS 4
+SLOTS_SKIP 2
+#DADA_NSLOTS 4
 # end of header
 
 """
@@ -102,13 +102,13 @@ DADA_DEFAULTS = {
     "instrument": "EDD",
     "receiver_name": "lband",
     "frequency_mhz": 1300.0,
-    "bandwidth": 200,
+    "bandwidth": 400,
     "tsamp": 0.08,
     "nbit": 8,
     "ndim": 2,
     "npol": 2,
     "nchan": 32,
-    "idx2_list": "0x18,0x20",
+    "idx2_list": "32,40,48,56",
     "resolution": 1,
     "dsb": 0,
     "key": "dada"
