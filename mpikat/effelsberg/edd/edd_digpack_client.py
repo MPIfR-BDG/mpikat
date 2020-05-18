@@ -396,7 +396,7 @@ if __name__ == "__main__":
         help='Digitizer to bind to, either ip or one of [{}]'.format(", ".join(known_packetizers)))
     parser.add_argument('-p', '--port', dest='port', type=long,
         help='Port number to bind to', default=7147)
-    parser.add_argument('--nbits', dest='nbits', type=long,
+    parser.add_argument('--nbits', dest='nbits', type=long, default=8,
         help='The number of bits per output sample')
     parser.add_argument('--sampling-rate', dest='sampling_rate', type=float,
         help='The digitiser sampling rate (Hz)')
@@ -410,8 +410,8 @@ if __name__ == "__main__":
         help='Predecimation factor')
     parser.add_argument('--sync', dest='synchronize', action='store_true',
         help='Send sync command.')
-    parser.add_argument('--capture-start', dest='capture_start', action='store_true',
-        help='Send capture start command.')
+    parser.add_argument('--no-capture-start', dest='capture_start', action='store_false',
+        help='Do not send capture start command.')
     parser.add_argument('--sync-time', dest='sync_time', type=int,
         help='Use specified synctime, otherwise use current time')
     parser.add_argument('--noise-diode-frequency', dest='noise_diode_frequency', type=float,
