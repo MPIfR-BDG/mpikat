@@ -134,8 +134,8 @@ DEFAULT_CONFIG = {
             }
         },
 
-        "fft_length": 1024 * 1024 * 2 * 8,
-        "naccumulate": 32,
+        "fft_length": 1024 * 1024 * 2 / 2,
+        "naccumulate": 512,
         "output_bit_depth": 32,
 
         "input_level": 100,
@@ -170,11 +170,10 @@ BUFFER_SIZE         128000000
 SAMPLE_CLOCK_START  0 # This is updated with the sync-time of the packetiser to allow for UTC conversion from the sample clock
 
 DADA_NSLOTS         3
+
 SLOTS_SKIP          4  # Skip the first four slots
 
-NTHREADS            32
-NHEAPS              64
-NGROUPS_TEMP        65536
+NTHREADS            8
 
 #SPEAD specifcation for EDD packetiser data stream
 NINDICES            2      # Although there is more than one index, we are only receiving one polarisation so only need to specify the time index
