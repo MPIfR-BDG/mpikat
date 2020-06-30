@@ -278,7 +278,7 @@ class FitsInterfaceServer(EDDPipeline):
         log.info("Capturing on interface {}, ip: {}, speed: {} Mbit/s".format(nic_name, nic_description['ip'], nic_description['speed']))
         affinity = numa.getInfo()[nic_description['node']]['cores']
 
-        handler = GatedSpectrometerSpeadHandler(self._fw_connection_manager)
+        handler = GatedSpectrometerSpeadHandler(self._fw_connection_manager, len(self._config['input_data_streams']))
         self._capture_thread = SpeadCapture(self.mc_interface,
                                            self.mc_port,
                                            self._capture_interface,
@@ -347,12 +347,12 @@ class SpeadCapture(Thread):
         pool = spead2.MemoryPool(16384, ((32*4*1024**2)+1024), max_free=64, initial=64)
         self.stream.set_memory_allocator(pool)
 
-        #ToDo: fix magic numbers for parameters in spead stream
-        thread_pool = spead2.ThreadPool(threads=4)
-        self.stream = spead2.recv.Stream(thread_pool, spead2.BUG_COMPAT_PYSPEAD_0_5_2, max_heaps=64, ring_heaps=64, contiguous_only = False)
-        pool = spead2.MemoryPool(16384, ((32*4*1024**2)+1024), max_free=64, initial=64)
-        self.stream.set_memory_allocator(pool)
-        self.rb = self.stream.ringbuffer
+        ##ToDo: fix magic numbers for parameters in spead stream
+        #thread_pool = spead2.ThreadPool(threads=4)
+        #self.stream = spead2.recv.Stream(thread_pool, spead2.BUG_COMPAT_PYSPEAD_0_5_2, max_heaps=64, ring_heaps=64, contiguous_only = False)
+        #pool = spead2.MemoryPool(16384, ((32*4*1024**2)+1024), max_free=64, initial=64)
+        #self.stream.set_memory_allocator(pool)
+        #self.rb = self.stream.ringbuffer
 
 
     def stop(self):
@@ -464,8 +464,9 @@ class GatedSpectrometerSpeadHandler(object):
     polarizations.
     Heaps above a max age will be dropped.
     Complete packages are passed to the fits interface queue
+    number of input streams tro handle. half per gate.
     """
-    def __init__(self, fits_interface, max_age = 10):
+    def __init__(self, fits_interface, number_input_streams, max_age = 10):
 
         self.__max_age = max_age
         self.__fits_interface = fits_interface
@@ -483,6 +484,7 @@ class GatedSpectrometerSpeadHandler(object):
 
         # Queue for aggregated objects
         self.__packages_in_preparation = {}
+        self.__number_of_input_streams = number_input_streams
 
         # Now is the latest checked package
         self.__now = 0
@@ -535,9 +537,12 @@ class GatedSpectrometerSpeadHandler(object):
             self.__now = packet.reference_time
 
         if packet.reference_time not in self.__packages_in_preparation:
-            fw_pkt = fw_factory(2, int(self.nchannels) - 1)
+            fw_pkt = fw_factory(self.__number_of_input_streams // 2, int(self.nchannels) - 1)
+            counter = 1
         else:
-            fw_pkt = self.__packages_in_preparation[packet.reference_time]
+            fw_pkt, counter = self.__packages_in_preparation[packet.reference_time]
+            counter += 1
+        log.debug("   This is {} / {} parts for reference_time: {}".format(counter , self.__number_of_input_streams / 2, packet.reference_time))
 
         # Copy data and drop DC channel - Direct numpy copy behaves weired as memory alignment is expected
         # but ctypes may not be aligned
@@ -550,9 +555,9 @@ class GatedSpectrometerSpeadHandler(object):
         ctypes.memmove(ctypes.byref(fw_pkt.sections[int(sec_id)].data), packet.data.ctypes.data + 4,
                 packet.data.size * 4 - 4)
 
-        if packet.reference_time in self.__packages_in_preparation:
+        if counter == self.__number_of_input_streams / 2:
             # Fill header fields + output data
-            log.debug("Received two polarizations for refernce_time: {}".format(packet.reference_time))
+            log.debug("Got all parts for reference_time {} - Finalizing".format(packet.reference_time))
 
             # Convert timestamp to datetimestring in UTC
             def local_to_utc(t):
@@ -583,7 +588,7 @@ class GatedSpectrometerSpeadHandler(object):
             self.__fits_interface.put(self.__packages_in_preparation.pop(packet.reference_time))
 
         else:
-            self.__packages_in_preparation[packet.reference_time] = fw_pkt
+            self.__packages_in_preparation[packet.reference_time] = [fw_pkt, counter]
             # Cleanup old packages
             tooold_packages = []
             log.debug('Checking {} packages for age restriction'.format(len(self.__packages_in_preparation)))
@@ -591,7 +596,7 @@ class GatedSpectrometerSpeadHandler(object):
                 age = self.__now - p
                 #log.debug(" Package with timestamp {}: now: {} age: {}".format(p, self.__now, age) )
                 if age > self.__max_age:
-                    log.warning("Age of package {} exceeded maximum age {} - Incomplete package will be dropped.".format(age, self.__max_age))
+                    log.warning("   Age of package {} exceeded maximum age {} - Incomplete package will be dropped.".format(age, self.__max_age))
                     tooold_packages.append(p)
             for p in tooold_packages:
                 self.__packages_in_preparation.pop(p)
