@@ -77,7 +77,7 @@ class DigitiserPacketiserClient(object):
         """
         @brief Set a predecimation factor for the paketizer - for e.g. factor=2 only every second sample is used.
         """
-        allowedFactors = [2,4,8,16] # Eddy Nussbaum, private communication
+        allowedFactors = [1,2,4,8,16] # Eddy Nussbaum, private communication
         if factor not in allowedFactors:
             raise RuntimeError("predicimation factor {} not in allowed factors {}".format(factor, allowedFactors))
         yield self._safe_request("rxs_packetizer_edd_predecimation", factor)
@@ -396,7 +396,7 @@ if __name__ == "__main__":
         help='Digitizer to bind to, either ip or one of [{}]'.format(", ".join(known_packetizers)))
     parser.add_argument('-p', '--port', dest='port', type=long,
         help='Port number to bind to', default=7147)
-    parser.add_argument('--nbits', dest='nbits', type=long,
+    parser.add_argument('--nbits', dest='nbits', type=long, default=8,
         help='The number of bits per output sample')
     parser.add_argument('--sampling-rate', dest='sampling_rate', type=float,
         help='The digitiser sampling rate (Hz)')
@@ -410,8 +410,8 @@ if __name__ == "__main__":
         help='Predecimation factor')
     parser.add_argument('--sync', dest='synchronize', action='store_true',
         help='Send sync command.')
-    parser.add_argument('--capture-start', dest='capture_start', action='store_true',
-        help='Send capture start command.')
+    parser.add_argument('--no-capture-start', dest='capture_start', action='store_false',
+        help='Do not send capture start command.')
     parser.add_argument('--sync-time', dest='sync_time', type=int,
         help='Use specified synctime, otherwise use current time')
     parser.add_argument('--noise-diode-frequency', dest='noise_diode_frequency', type=float,
@@ -435,10 +435,10 @@ if __name__ == "__main__":
         logger=logger)
 
     actions = []
-    if args.nbits:
-        actions.append((client.set_bit_width, dict(nbits=args.nbits)))
     if args.sampling_rate:
         actions.append((client.set_sampling_rate, dict(rate=args.sampling_rate)))
+    if args.nbits:
+        actions.append((client.set_bit_width, dict(nbits=args.nbits)))
     if args.v_destinations:
         actions.append((client.set_destinations, dict(v_dest=args.v_destinations, h_dest=args.h_destinations)))
     if args.predecimation_factor:
