@@ -62,6 +62,7 @@ class EDDDataStore:
                 continue
 
             for p in facts['edd_container']:
+                log.debug("  Found {}".format(p))
                 facts['edd_container'][p]['hostname'] = facts['ansible_hostname']
                 facts['edd_container'][p]['address'] = facts["ansible_default_ipv4"]['address']
                 self._products[p] = json.dumps(facts['edd_container'][p])
