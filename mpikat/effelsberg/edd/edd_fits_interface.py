@@ -585,7 +585,7 @@ class GatedSpectrometerSpeadHandler(object):
             fw_pkt.blank_phases = int(2 - packet.noise_diode_status)
             log.debug("   Noise diode status: {}, Blank phase: {}".format(packet.noise_diode_status, fw_pkt.blank_phases))
 
-            self.__fits_interface.put(self.__packages_in_preparation.pop(packet.reference_time))
+            self.__fits_interface.put(self.__packages_in_preparation.pop(packet.reference_time)[0])
 
         else:
             self.__packages_in_preparation[packet.reference_time] = [fw_pkt, counter]
