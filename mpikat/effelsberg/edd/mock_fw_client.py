@@ -143,8 +143,8 @@ class MockFitsWriterClient(object):
         except StopEvent:
             log.debug("Notifying that recv calls have stopped")
             self._is_stopped.notify()
-        except Exception:
-            log.exception("Failure while receiving packet")
+        except Exception as E:
+            log.exception("Failure while receiving packet: {}".format(E))
         else:
             self._ioloop.add_callback(self.recv_loop)
 
