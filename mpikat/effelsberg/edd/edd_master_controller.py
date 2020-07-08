@@ -442,6 +442,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         """
         Ensures config has products and packaetizers
         """
+        log.debug("Sanitze config")
         if 'packetisers' in config:
             config['packetizers'] = config.pop('packetisers')
         elif "packetizers" not in config:
@@ -487,7 +488,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
                     cfg.update(product)
                     self.__controller[product['id']] = EddServerProductController(cfg['id'], cfg["address"], cfg["port"])
                 else:
-                    log.warning("Manual setup of product {} - require address and port properties")
+                    log.warning("Manual setup of product {} - require address and port properties".format(product['id']))
                     self.__controller[product['id']] = EddServerProductController(product['id'], product["address"], product["port"])
 
 
