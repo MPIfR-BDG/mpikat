@@ -118,50 +118,7 @@ class DigitiserPacketiserClient(object):
         @param      rate    The sampling rate in samples per second (e.g. 2.6 GHz should be passed as 2600000000.0)
 
         @detail     To allow time for reinitialisation of the packetiser firmware during this call we enforce a 10
-                    second sleep before th
-    import coloredlogs
-    from argparse import ArgumentParser
-    parser = ArgumentParser(description="Configures edd digitiezer. By default, send syncronize and capture start along with the given options.")
-    parser.add_argument('host', type=str,
-        help='Digitizer interface to bind to.')
-    parser.add_argument('-p', '--port', dest='port', type=long,
-        help='Port number to bind to', default=7147)
-    parser.add_argument('--nbits', dest='nbits', type=long,
-        help='The number of bits per output sample')
-    parser.add_argument('--sampling-rate', dest='sampling_rate', type=float,
-        help='The digitiser sampling rate (Hz)')
-    parser.add_argument('--v-destinations', dest='v_destinations', type=str,
-        help='V polarisation destinations')
-    parser.add_argument('--h-destinations', dest='h_destinations', type=str,
-        help='H polarisation destinations')
-    parser.add_argument('--log-level',dest='log_level',type=str,
-        help='Logging level',default="INFO")
-    parser.add_argument('--predecimation-factor', dest='predecimation_factor', type=int,
-        help='Predecimation factor')
-    parser.add_argument('--sync', dest='synchronize', action='store_true',
-        help='Send sync command.')
-    parser.add_argument('--capture-start', dest='capture_start', action='store_true',
-        help='Send capture start command.')
-    parser.add_argument('--sync-time', dest='sync_time', type=int,
-        help='Use specified synctime, otherwise use current time')
-    parser.add_argument('--noise-diode-frequency', dest='noise_diode_frequency', type=float,
-        help='Set the noise diode frequency')
-
-    parser.add_argument('--flip-spectrum', action="store_true", default=False, help="Flip the spectrum")
-    args = parser.parse_args()
-    print("Configuring paketizer {}:{}".format(args.host, args.port))
-    client = DigitiserPacketiserClient(args.host, port=args.port)
-
-    logging.getLogger().addHandler(logging.NullHandler())
-    logger = logging.getLogger('mpikat')
-    coloredlogs.install(
-        fmt="[ %(levelname)s - %(asctime)s - %(name)s - %(filename)s:%(lineno)s] %(message)s",
-        level=args.log_level.upper(),
-        logger=logger)
-
-    actions = []
-    if args.nbits:
-        actions.append(ce function returns.
+                    second sleep before the function returns.
         """
         valid_modes = {
             4096000000: ("virtex7_dk769b", "4.096GHz", 3),
@@ -324,6 +281,7 @@ class DigitiserPacketiserClient(object):
         """
         log.warning("Not stopping data transmission")
         raise Return()
+        #yield self._safe_request("capture_stop", "vh")
 
 
     @coroutine
@@ -384,6 +342,7 @@ class DigitiserPacketiserClient(object):
                 "samples_per_heap": 4096}
 
         dataStore.addDataFormatDefinition("MPIFR_EDD_Packetizer:1", descr)
+        raise Return()
 
 
 
