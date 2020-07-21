@@ -1399,7 +1399,8 @@ class Fold(Pipeline):
         self._sub_scan_num = self._status_info["subscannum"]
         self._utc_start_process = Time(
             self._status_info["utc_start_process"], format='isot', scale='utc')
-        self._source_name = self._status_info["source-name"]
+        #self._source_name = self._status_info["source-name"]
+	self._source_name = "".join([i if i.isalnum() else "-" for i in self._status_info["source-name"]])
         self._source_ra, self._source_dec = float(
             self._status_info['ra']), float(self._status_info['dec'])
 
@@ -2111,7 +2112,8 @@ class Search(Pipeline):
         self._sub_scan_num = self._status_info["subscannum"]
         self._utc_start_process = Time(
             self._status_info["utc_start_process"], format='isot', scale='utc')
-        self._source_name = self._status_info["source-name"]
+        #self._source_name = self._status_info["source-name"]
+        self._source_name = "".join([i if i.isalnum() else "-" for i in self._status_info["source-name"]])
         self._source_ra, self._source_dec = float(
             self._status_info['ra']), float(self._status_info['dec'])
 
@@ -2941,7 +2943,8 @@ class Spectrometer(Pipeline):
         self._sub_scan_num = self._status_info["subscannum"]
         self._utc_start_process = Time(
             self._status_info["utc_start_process"], format='isot', scale='utc')
-        self._source_name = self._status_info["source-name"]
+        #self._source_name = self._status_info["source-name"]
+        self._source_name = "".join([i if i.isalnum() else "-" for i in self._status_info["source-name"]])
         self._source_ra, self._source_dec = float(
             self._status_info['ra']), float(self._status_info['dec'])
 
