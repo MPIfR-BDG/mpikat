@@ -202,7 +202,7 @@ class EddCommander(AsyncDeviceServer):
         self._source_config = None
         self._dspsr = None
         self._mkrecv_ingest_proc = None
-        self._status_server = KATCPToIGUIConverter("134.104.64.51", 6000)
+        self._status_server = KATCPToIGUIConverter("134.104.70.66", 12000)
         #self._status_server = KATCPToIGUIConverter("134.104.70.66", 7000)
         self._status_server.start()
         self._status_server.sensor_callbacks.add(
@@ -220,23 +220,23 @@ class EddCommander(AsyncDeviceServer):
         #    address=("134.104.70.67", 10001),
         #    controlled=True))
         #self._edd01_numa1.start()
-        self._edd00_numa1 = KATCPClientResource(dict(
-            name='_edd00_numa1-client',
-            address=("134.104.70.66", 10001),
-            controlled=True))
-        self._edd00_numa1.start()
-        """
+        #self._edd00_numa1 = KATCPClientResource(dict(
+        #    name='_edd00_numa1-client',
+        #    address=("134.104.70.66", 10001),
+        #    controlled=True))
+        #self._edd00_numa1.start()
+        
         self._edd01_numa0 = KATCPClientResource(dict(
             name='_edd01_numa0-client',
-            address=("134.104.70.67", 6000),
+            address=("134.104.70.67", 10000),
             controlled=True))
         self._edd01_numa0.start()
         self._edd01_numa1 = KATCPClientResource(dict(
             name='_edd01_numa1-client',
-            address=("134.104.70.67", 5001),
+            address=("134.104.70.67", 10001),
             controlled=True))
         self._edd01_numa1.start()
-        """
+        
         self.first_true = True
         self.last_value = False
 
@@ -378,20 +378,20 @@ class EddCommander(AsyncDeviceServer):
                 scan_type = source_full_name[-1]
                 if scan_type == "R":
                     if pulsar_name[:1] != "B" and pulsar_name[:1] != "J":
-                        json_string = json.dumps({"source-name": "{}{}_R".format("J", pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string = json.dumps({"source-name": "{}{}_R".format("J", pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(), "band": 1})
                         #json_string_band0 = json.dumps({"source-name": "{}{}_R".format("J", pulsar_name), "nchannels": 8192, "nbins": 128, "band": 0, "ra": self._ra.value(), "dec": self._dec.value()})
                         #json_string_band1 = json.dumps({"source-name": "{}{}_R".format("J", pulsar_name), "nchannels": 8192, "nbins": 128, "band": 1, "ra": self._ra.value(), "dec": self._dec.value()})
                     else:
-                        json_string = json.dumps({"source-name": "{}_R".format(pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string = json.dumps({"source-name": "{}_R".format(pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(),"band": 1})
                         #json_string_band0 = json.dumps({"source-name": "{}_R".format(pulsar_name), "nchannels": 8192, "nbins": 128, "band": 0, "ra": self._ra.value(), "dec": self._dec.value()})
                         #json_string_band1 = json.dumps({"source-name": "{}_R".format(pulsar_name), "nchannels": 8192, "nbins": 128, "band": 1, "ra": self._ra.value(), "dec": self._dec.value()})
                 else:
                     if pulsar_name[:1] != "B" and pulsar_name[:1] != "J":
-                        json_string = json.dumps({"source-name": "{}{}".format("J", pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string = json.dumps({"source-name": "{}{}".format("J", pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(),"band": 1})
                         #json_string_band0 = json.dumps({"source-name": "{}{}".format("J", pulsar_name), "nchannels": 8192, "nbins": 128, "band": 0, "ra": self._ra.value(), "dec": self._dec.value()})
                         #json_string_band1 = json.dumps({"source-name": "{}{}".format("J", pulsar_name), "nchannels": 8192, "nbins": 128, "band": 1, "ra": self._ra.value(), "dec": self._dec.value()})
                     else:
-                        json_string = json.dumps({"source-name": "{}".format(pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value()})
+                        json_string = json.dumps({"source-name": "{}".format(pulsar_name), "nchannels": 1024, "nbins": 1024, "ra": self._ra.value(), "dec": self._dec.value(),"band": 1})
                         #json_string_band0 = json.dumps({"source-name": "{}".format(pulsar_name), "nchannels": 8192, "nbins": 128, "band": 0, "ra": self._ra.value(), "dec": self._dec.value()})
                         #json_string_band1 = json.dumps({"source-name": "{}".format(pulsar_name), "nchannels": 8192, "nbins": 128, "band": 1, "ra": self._ra.value(), "dec": self._dec.value()})
                 log.debug(json_string)
@@ -400,14 +400,15 @@ class EddCommander(AsyncDeviceServer):
                 self.first_true = False
                 self.last_value = True
                 # time.sleep(5)
-                self._edd00_numa1.req.start(json_string)
+                #self._edd00_numa1.req.start(json_string)
                 #self._edd01_numa1.req.start(json_string)
                 #time.sleep(5)
                 #self._edd00_numa0.req.start(json_string_band0)
                 
                 
-                # self._edd01_numa0.req.start(json_string)
-                # self._edd01_numa1.req.start(json_string_1mc)
+                self._edd01_numa0.req.start(json_string)
+                time.sleep(1)
+                self._edd01_numa1.req.start(json_string)
 
             elif bool(self._observing.value() == 'False') & bool(self.last_value == True):
                 log.debug("Should send a stop to the pipeline")
