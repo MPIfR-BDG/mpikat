@@ -414,9 +414,9 @@ class EddCommander(AsyncDeviceServer):
                 log.debug("Should send a stop to the pipeline")
                 self.first_true = True
                 self.last_value = False
-                self._edd00_numa1.req.stop()
-                #self._edd00_numa0.req.stop()
-                #self._edd01_numa1.req.stop()
+                #self._edd00_numa1.req.stop()
+                self._edd01_numa0.req.stop()
+                self._edd01_numa1.req.stop()
 
     def new_sensor(self, sensor_name, callback):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))
