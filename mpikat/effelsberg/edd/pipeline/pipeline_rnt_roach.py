@@ -90,7 +90,7 @@ CONFIG = {
         "telescope": "Effelsberg",
         "instrument": "EDD",
         "frequency_mhz": 1200.0,
-        "receiver_name": "P217",
+        "receiver_name": "P217_ROACH2",
         "mc_source": "225.0.0.110+3,225.0.0.114+3",
         "bandwidth": 200,
         "tsamp": 0.000625,
