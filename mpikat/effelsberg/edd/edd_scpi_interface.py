@@ -26,7 +26,8 @@ class EddScpiInterface(ScpiAsyncDeviceServer):
         @note If no IOLoop instance is specified the current instance is used.
         """
 
-        log.info("Master ast {}:{}".format(master_ip, master_port))
+        log.info("Listening at {}:{}".format(interface, port))
+        log.info("Master at {}:{}".format(master_ip, master_port))
         super(EddScpiInterface, self).__init__(interface, port, ioloop)
         self.address = (master_ip, master_port)
         self.__controller = EddServerProductController("MASTER", master_ip, master_port)
@@ -144,5 +145,12 @@ if __name__ == "__main__":
     parser.add_argument('--master-controller-port', dest='master_port', type=int, default=7147,
                       help='The port number for the master controller')
     args = parser.parse_args()
+
+    EDDPipeline.setup_logger(log, args.log_level.upper())
+
     server = EddScpiInterface(args.host, args.port, args.master_ip, args.master_port)
+    #Scpi Server is not an EDDPipieline, but launcher work nevertheless
     EDDPipeline.launchPipelineServer(server, args)
+
+
+

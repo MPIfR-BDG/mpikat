@@ -58,7 +58,7 @@ class EddServerProductController(object):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        logging.debug("Send cfg to {}".format(self.__product_id))
+        log.debug("Send cfg to {}".format(self.__product_id))
         yield self._safe_request("configure", json.dumps(config), timeout=120.0)
 
     @coroutine
@@ -96,7 +96,7 @@ class EddServerProductController(object):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        logging.debug("Send set to {}".format(self.__product_id))
+        log.debug("Send set to {}".format(self.__product_id))
         yield self._safe_request("set", json.dumps(config), timeout=120.0)
 
 
@@ -105,7 +105,7 @@ class EddServerProductController(object):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        logging.debug("Send provision to {}".format(self.__product_id))
+        log.debug("Send provision to {}".format(self.__product_id))
         yield self._safe_request("provision", config, timeout=120.0)
 
 
@@ -114,7 +114,7 @@ class EddServerProductController(object):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        logging.debug("Send deprovision to {}".format(self.__product_id))
+        log.debug("Send deprovision to {}".format(self.__product_id))
         yield self._safe_request("deprovision", timeout=120.0)
 
 
@@ -123,7 +123,7 @@ class EddServerProductController(object):
         """
         @brief      A no-op method for supporting the product controller interface.
         """
-        logging.debug("Send get config to {}".format(self.__product_id))
+        log.debug("Send get config to {}".format(self.__product_id))
         f = self._client.list_sensors()
         R = yield self._safe_request("sensor_value", "current-config")
         raise Return(json.loads(R.informs[0].arguments[-1]))
