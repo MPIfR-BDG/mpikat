@@ -339,15 +339,19 @@ class EDDPipeline(AsyncDeviceServer):
         @return     katcp reply object [[[ !configure ok | (fail [error description]) ]]]
         """
 
-        try:
-            self.set(config_json)
-        except FailReply as fr:
-            req.reply("fail", str(fr))
-        except Exception as error:
-            log.exception(str(error))
-            req.reply("fail", str(error))
-        else:
-            req.reply("ok")
+        @coroutine
+        def wrapper():
+            try:
+                yield self.set(config_json)
+            except FailReply as fr:
+                log.error(str(fr))
+                req.reply("fail", str(fr))
+            except Exception as error:
+                log.exception(str(error))
+                req.reply("fail", str(error))
+            else:
+                req.reply("ok")
+        self.ioloop.add_callback(wrapper)
         raise AsyncReply
 
 
@@ -685,6 +689,19 @@ def getArgumentParser():
     return parser
 
 
+def setup_logger(log, level):
+    logging.getLogger().addHandler(logging.NullHandler())
+    logger = logging.getLogger('mpikat')
+    logger.setLevel(level)
+    log.setLevel(level)
+    coloredlogs.install(
+        fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
+             "- %(filename)s:%(lineno)s] %(message)s"),
+        level=level,
+        logger=logger)
+
+
+
 def launchPipelineServer(Pipeline, args=None):
     """
     @brief Launch a Pipeline server.
@@ -696,15 +713,7 @@ def launchPipelineServer(Pipeline, args=None):
         parser = getArgumentParser()
         args = parser.parse_args()
 
-    logging.getLogger().addHandler(logging.NullHandler())
-    logger = logging.getLogger('mpikat')
-    logger.setLevel(args.log_level.upper())
-    log.setLevel(args.log_level.upper())
-    coloredlogs.install(
-        fmt=("[ %(levelname)s - %(asctime)s - %(name)s "
-             "- %(filename)s:%(lineno)s] %(message)s"),
-        level=args.log_level.upper(),
-        logger=logger)
+    setup_logger(log, args.log_level.upper())
 
     if (type(Pipeline) == types.ClassType) or isinstance(Pipeline, type):
         log.info("Created Pipeline instance")
@@ -725,7 +734,7 @@ def launchPipelineServer(Pipeline, args=None):
         server.start()
         log.debug("Started Pipeline server")
         log.info(
-            "Listening at {0}, Ctrl-C to terminate server".format(
+            "Listening at {-1}, Ctrl-C to terminate server".format(
                 server.bind_address))
 
     ioloop.add_callback(start_and_display)
