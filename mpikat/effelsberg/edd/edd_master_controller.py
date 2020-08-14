@@ -398,7 +398,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
             raise FailReply("cannot find config file {}".format(basic_config_file))
 
         try:
-            yield command_watcher("ansible-playbook -i site.yml {}".format(playbook_file),
+            yield command_watcher("ansible-playbook {}".format(playbook_file),
                     env={"ANSIBLE_ROLES_PATH":os.path.join(self.__edd_ansible_git_repository_folder,
                         "roles")})
         except Exception as E:
@@ -519,7 +519,7 @@ class EddMasterController(EDDPipeline.EDDPipeline):
         log.debug("Deprovision {}".format(self.__provisioned))
         if self.__provisioned:
             try:
-                yield command_watcher("ansible-playbook -i site.yml {} --tags=stop".format(self.__provisioned),
+                yield command_watcher("ansible-playbook -{} --tags=stop".format(self.__provisioned),
                         env={"ANSIBLE_ROLES_PATH":os.path.join(self.__edd_ansible_git_repository_folder,
                             "roles")})
             except Exception as E:
