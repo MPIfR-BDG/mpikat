@@ -92,7 +92,7 @@ DADA_NSLOTS 4
 
 DADA_DEFAULTS = {
     "obs_id": "unset",
-    "filesize": 320000000000,
+    "filesize": 409600000,
     "mjd": 57000,
     "sync_time": 1574181085.0,
     "sample_clock": 3200000000,
