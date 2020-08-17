@@ -1210,7 +1210,7 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 keyfile=dada_key_file.name)
 
         elif parse_tag(self.source_name) == "BB":
-        	cmd = "numactl -m {} taskset -c {} dada_dbdisk -k {} -D {}".format(self.numa_number, cpu_numbers, self._dadc_key, self.in_path)
+        	cmd = "numactl -m {} dada_dbdisk -b {} -k {} -o -D {}".format(self.numa_number, cpu_numbers, self._dadc_key, self.in_path)
 
 
         # elif parse_tag(self.source_name) == "FB":
