@@ -86,7 +86,7 @@ CONFIG = {
     },
     "dada_header_params":
     {
-        "filesize": 409600000,
+        "filesize": 4096000000,
         "telescope": "Effelsberg",
         "instrument": "EDD",
         "frequency_mhz": 1200.0,
