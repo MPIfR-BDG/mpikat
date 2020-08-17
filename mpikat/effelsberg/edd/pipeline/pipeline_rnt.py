@@ -1029,18 +1029,17 @@ class EddPulsarPipeline(AsyncDeviceServer):
             pass
         self.pulsar_flag = is_accessible(
             '/tmp/epta/{}.par'.format(self.source_name[1:]))
-        if ((parse_tag(self.source_name) == "default") or (parse_tag(self.source_name) != "R")) and (not self.pulsar_flag):
-            # if (parse_tag(self.source_name) != "FB"):
-            error = "source is not pulsar or calibrator"
-            # reset state to ready
-            self._state_sensor.set_value(self.READY)
-            raise EddPulsarPipelineError(error)
 
-        ########NEED TO PUT IN THE LOGIC FOR _R here#############
-        # try:
-        #    self.source_name = self.source_name.split("_")[0]
-        # except Exception as error:
-        #    raise EddPulsarPipelineError(str(error))
+        if parse_tag(self.source_name) == "BB":
+        	log.info("Baseband recording")
+        elif parse_tag(self.source_name) == "R":
+        	log.info("Calbrator recording")
+        elif (not self.pulsar_flag) and (parse_tag(self.source_name) == "default"):
+        	error = "Can't find par file for {}".format(self.source_name)
+        	log.error(error)
+        	self._state_sensor.set_value(self.READY)
+            raise EddPulsarPipelineError(error)
+        #Filterbank recording will be available for roach2/skarab output only
         header["source_name"] = self.source_name
 
         header["obs_id"] = "{0}_{1}".format(
@@ -1137,10 +1136,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
                     else:
                         attempts += 1
 
-            # while True:
-            #    if is_accessible('{}/t2pred.dat'.format(os.getcwd())):
-            #        log.debug('{}/t2pred.dat'.format(os.getcwd()))
-            #        break
         ####################################################
         #CREATING THE DADA HEADERFILE                      #
         ####################################################
@@ -1213,6 +1208,10 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 cpus=cpu_numbers,
                 cuda_number=cuda_number,
                 keyfile=dada_key_file.name)
+
+        elif parse_tag(self.source_name) == "BB":
+        	cmd = "dada_dbdisk -k {} -D {}".format(self._dadc_key, self.in_path)
+
 
         # elif parse_tag(self.source_name) == "FB":
         #    cmd = "numactl -m {numa} taskset -c {cpus} digifil -threads 4 -F {nchan} -b8 -d 1 -I 0 -t {nbins} {keyfile}".format(
@@ -1294,22 +1293,23 @@ class EddPulsarPipeline(AsyncDeviceServer):
         ####################################################
         #STARTING ARCHIVE MONITOR                          #
         ####################################################
-        self.archive_observer = Observer()
-        self.archive_observer.daemon = False
-        log.info("Input directory: {}".format(self.in_path))
-        log.info("Output directory: {}".format(self.out_path))
-        log.info("Setting up ArchiveAdder handler")
-        self.handler = ArchiveAdder(self.out_path)
-        self.handler.update_freq_zaplist(self._freq_zaplist_sensor.value())
-        self.handler.update_time_zaplist(self._time_zaplist_sensor.value())
-        self.archive_observer.schedule(
-            self.handler, self.in_path, recursive=False)
-        log.info("Starting directory monitor")
-        self.archive_observer.start()
-        log.info("Parent thread entering 1 second polling loop")
-        self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
-            self._png_monitor, 5000)
-        self._png_monitor_callback.start()
+        if parse_tag(self.source_name) != "BB":
+	        self.archive_observer = Observer()
+	        self.archive_observer.daemon = False
+	        log.info("Input directory: {}".format(self.in_path))
+	        log.info("Output directory: {}".format(self.out_path))
+	        log.info("Setting up ArchiveAdder handler")
+	        self.handler = ArchiveAdder(self.out_path)
+	        self.handler.update_freq_zaplist(self._freq_zaplist_sensor.value())
+	        self.handler.update_time_zaplist(self._time_zaplist_sensor.value())
+	        self.archive_observer.schedule(
+	            self.handler, self.in_path, recursive=False)
+	        log.info("Starting directory monitor")
+	        self.archive_observer.start()
+	        log.info("Parent thread entering 1 second polling loop")
+	        self._png_monitor_callback = tornado.ioloop.PeriodicCallback(
+	            self._png_monitor, 5000)
+	        self._png_monitor_callback.start()
 
         # except Exception as error:
         #    msg = "Couldn't start pipeline server {}".format(str(error))
@@ -1352,10 +1352,11 @@ class EddPulsarPipeline(AsyncDeviceServer):
                 "pipeline is not in CAPTURTING state, current state = {}".format(self.state))
         self._state_sensor.set_value(self.STOPPING)
         log.debug("Stopping")
-        self._png_monitor_callback.stop()
-        self.archive_observer.stop()
-        self.archive_observer.join()
-        del self.handler
+        if parse_tag(self.source_name) != "BB":        
+	        self._png_monitor_callback.stop()
+	        self.archive_observer.stop()
+	        self.archive_observer.join()
+	        del self.handler
 
         try:
             os.kill(self._mkrecv_ingest_proc_pid, signal.SIGKILL)
@@ -1372,37 +1373,6 @@ class EddPulsarPipeline(AsyncDeviceServer):
         except Exception as error:
             log.error("cannot kill _dspsr, {}".format(error))
 
-#        try:
-#            log.debug("Stopping")
-#            self._timeout = 10
-#            process = [self._mkrecv_ingest_proc,
-#                       self._polnmerge_proc]
-#            for proc in process:
-#                time.sleep(2)
-#                proc.set_finish_event()
-#                proc.finish()
-#                log.debug(
-#                    "Waiting {} seconds for proc to terminate...".format(self._timeout))
-# while time.time() - now < self._timeout:
- #                   retval = proc._process.poll()
-  #                  if retval is not None:
-  #                      log.debug(
-  #                          "Returned a return value of {}".format(retval))
-  #                      break
- #                   else:
- #                       time.sleep(0.5)
- #               else:
- #                   log.warning(
- #                       "Failed to terminate proc in alloted time")
-  #                  log.info("Killing process")
-  #                  proc._process.kill()
-  #          if (parse_tag(self.source_name) == "default") & self.pulsar_flag:
-  #              os.remove("/tmp/t2pred.dat")#
-#
- # try:
-  #              os.remove("{}/core".format(self.in_path))
- #           except:
-#            	pass
         try:
             log.info("reset DADA buffer")
             cmd = "dada_db -d -k {key}".format(
