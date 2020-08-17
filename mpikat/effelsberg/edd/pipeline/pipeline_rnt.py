@@ -1031,13 +1031,13 @@ class EddPulsarPipeline(AsyncDeviceServer):
             '/tmp/epta/{}.par'.format(self.source_name[1:]))
 
         if parse_tag(self.source_name) == "BB":
-        	log.info("Baseband recording")
+            log.info("Baseband recording")
         elif parse_tag(self.source_name) == "R":
-        	log.info("Calbrator recording")
+            log.info("Calbrator recording")
         elif (not self.pulsar_flag) and (parse_tag(self.source_name) == "default"):
-        	error = "Can't find par file for {}".format(self.source_name)
-        	log.error(error)
-        	self._state_sensor.set_value(self.READY)
+            error = "Can't find par file for {}".format(self.source_name)
+            log.error(error)
+            self._state_sensor.set_value(self.READY)
             raise EddPulsarPipelineError(error)
         #Filterbank recording will be available for roach2/skarab output only
         header["source_name"] = self.source_name
