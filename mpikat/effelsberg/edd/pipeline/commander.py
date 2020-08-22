@@ -231,12 +231,13 @@ class EddCommander(AsyncDeviceServer):
             address=("134.104.70.67", 10000),
             controlled=True))
         self._edd01_numa0.start()
+        """
         self._edd01_numa1 = KATCPClientResource(dict(
             name='_edd01_numa1-client',
             address=("134.104.70.67", 10001),
             controlled=True))
         self._edd01_numa1.start()
-        """
+        
         self.first_true = True
         self.last_value = False
 
@@ -408,7 +409,7 @@ class EddCommander(AsyncDeviceServer):
                 
                 #self._edd01_numa0.req.start(json_string)
                 #time.sleep(1)
-                #self._edd01_numa1.req.start(json_string)
+                self._edd01_numa1.req.start(json_string)
 
             elif bool(self._observing.value() == 'False') & bool(self.last_value == True):
                 log.debug("Should send a stop to the pipeline")
@@ -416,7 +417,7 @@ class EddCommander(AsyncDeviceServer):
                 self.last_value = False
                 self._edd00_numa1.req.stop()
                 #self._edd01_numa0.req.stop()
-                #self._edd01_numa1.req.stop()
+                self._edd01_numa1.req.stop()
 
     def new_sensor(self, sensor_name, callback):
         #log.debug('New sensor reporting = {}'.format(str(sensor_name)))
