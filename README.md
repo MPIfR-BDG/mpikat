@@ -1,2 +1,3 @@
 # mpikat
-Interfaces for the APSUSE and FBFUSE instruments on MeerKAT
+
+This is the archived read-only version. You find the current version at [MPCDF gitlab server](https://gitlab.mpcdf.mpg.de/mpifr-bdg/mpikat).
